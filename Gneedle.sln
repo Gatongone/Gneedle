@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gneedle.Core", "Gneedle.Core\Gneedle.Core.csproj", "{F84BE3EB-1982-4085-8A30-C54E898B9EF3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gneedle.Inject", "Gneedle.Inject\Gneedle.Inject.csproj", "{F84BE3EB-1982-4085-8A30-C54E898B9EF3}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gneedle.Test", "Gneedle.Test\Gneedle.Test.csproj", "{CE561C83-0DF0-4609-840D-20FADF13556F}"
 EndProject
