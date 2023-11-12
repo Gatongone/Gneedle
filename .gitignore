@@ -1,0 +1,11 @@
+# IDE configs
+/.idea
+/.vs
+
+# Build results
+[Dd]ebug
+[Rr]elease
+[Rr]eleases
+[Bb]in
+[Oo]bj
+[Ll]og
