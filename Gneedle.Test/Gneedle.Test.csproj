@@ -20,7 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Gneedle.Core\Gneedle.Core.csproj" />
+      <ProjectReference Include="..\Gneedle.Inject\Gneedle.Inject.csproj" />
     </ItemGroup>
 
 </Project>
