@@ -11,7 +11,4 @@ namespace Gneedle.Inject;
 /// <summary>
 /// Exception with any not supported case.
 /// </summary>
-public class NotSupportException : Exception
-{
-    public NotSupportException(string message) : base(message) { }
-}
+public class NotSupportException(string message) : Exception(message);

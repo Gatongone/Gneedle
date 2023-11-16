@@ -26,7 +26,7 @@ public abstract class AssemblyWriter
     /// <summary>
     /// Convert target file or memories to <see cref="System.Reflection.Assembly"/>.
     /// </summary>
-    /// <returns></returns>
+    /// <returns>Reflection assembly.</returns>
     public abstract System.Reflection.Assembly ToReflectionAssembly();
     
     /// <param name="source">Source assembly definition which need to write.</param>

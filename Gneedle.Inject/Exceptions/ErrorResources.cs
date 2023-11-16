@@ -10,8 +10,6 @@ namespace Gneedle.Inject;
 
 /// <summary>
 /// String resources for exceptions message.
-/// Rules:
-/// 
 /// </summary>
 internal static class ErrorResources
 {

@@ -11,7 +11,4 @@ namespace Gneedle.Inject;
 /// <summary>
 /// Exception with any not supported case.
 /// </summary>
-public class DirtyOperationException : Exception
-{
-    public DirtyOperationException(string message) : base(message) { }
-}
+public class DirtyOperationException(string message) : Exception(message);

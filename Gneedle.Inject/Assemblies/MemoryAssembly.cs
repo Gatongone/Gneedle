@@ -96,10 +96,7 @@ public class MemoryAssembly : AssemblyWriter
     /// </summary>
     protected override void OnDefaultSave() => SaveTo(out m_AssemblyCache);
 
-    /// <summary>
-    /// Convert to <see cref="Mono.Cecil.AssemblyDefinition"/> from memories.
-    /// </summary>
-    /// <returns></returns>
+    /// <inheritdoc cref="AssemblyWriter.ToReflectionAssembly()"/>
     public override System.Reflection.Assembly ToReflectionAssembly()
     {
         if (m_AssemblyCache == null || m_AssemblyCache.Length == 0)

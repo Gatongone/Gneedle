@@ -10,16 +10,18 @@ using System.Reflection;
 
 namespace Gneedle.Inject;
 
-public class FileAssembly : AssemblyWriter
+public class FileAssembly(string path) : AssemblyWriter(AssemblyDefinition.ReadAssembly(path))
 {
     /// <summary>
     /// Assembly path.
     /// </summary>
-    private readonly string m_Path;
-
-    public FileAssembly(string path) : base(AssemblyDefinition.ReadAssembly(path)) => m_Path = path;
-
+    private readonly string m_Path = path;
+    
+    /// <inheritdoc cref="AssemblyWriter.ToReflectionAssembly()"/>
     public override Assembly ToReflectionAssembly() => Assembly.LoadFile(m_Path);
-
+    
+    /// <summary>
+    /// Save assembly to path.
+    /// </summary>
     protected override void OnDefaultSave() => Source.Write();
 }
