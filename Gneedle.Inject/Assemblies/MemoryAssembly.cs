@@ -9,9 +9,9 @@
 namespace Gneedle.Inject;
 
 /// <summary>
-/// 
+/// Assembly which reading and writing from memories.
 /// </summary>
-public class MemoryAssembly : AssemblyWriter
+public sealed class MemoryAssembly : AssemblyWriter
 {
     /// <summary>
     /// Default assembly version.

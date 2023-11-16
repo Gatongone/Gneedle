@@ -10,7 +10,11 @@ using System.Reflection;
 
 namespace Gneedle.Inject;
 
-public class FileAssembly(string path) : AssemblyWriter(AssemblyDefinition.ReadAssembly(path))
+/// <summary>
+/// Assembly which reading and writing from local file.
+/// </summary>
+/// <param name="path">Assembly path.</param>
+public sealed class FileAssembly(string path) : AssemblyWriter(AssemblyDefinition.ReadAssembly(path))
 {
     /// <summary>
     /// Assembly path.
