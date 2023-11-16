@@ -11,7 +11,7 @@ namespace Gneedle.Inject;
 /// <summary>
 /// Provider with System.Private.CoreLib importer.
 /// </summary>
-internal class SPCLReflectionImporterProvider : IReflectionImporterProvider
+internal sealed class SPCLReflectionImporterProvider : IReflectionImporterProvider
 {
     /// <summary>
     /// Singleton instance.
