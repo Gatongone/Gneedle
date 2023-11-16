@@ -24,7 +24,7 @@ internal sealed class SPCLReflectionImporterProvider : IReflectionImporterProvid
     /// <summary>
     /// System.Private.CoreLib importer with netstandard2.0.
     /// </summary>
-    private class SPCLReflectionImporter : DefaultReflectionImporter
+    private sealed class SPCLReflectionImporter : DefaultReflectionImporter
     {
         /// <summary>
         /// SPCL Assembly name.
