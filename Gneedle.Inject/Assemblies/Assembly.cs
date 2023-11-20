@@ -33,13 +33,14 @@ public abstract class Assembly
     protected Assembly(AssemblyDefinition source) => Source = source;
 
     /// <summary>
-    /// Save assembly with default way.
+    /// Set assembly state to dirty.
     /// </summary>
-    public void Save()
-    {
-        OnDefaultSave();
-        SetFresh();
-    }
+    internal void SetDirty() => State = AssemblyState.Dirty;
+    
+    /// <summary>
+    /// Set assembly state to fresh.
+    /// </summary>
+    private void SetFresh() => State = AssemblyState.Fresh;
     
     /// <summary>
     /// Save assembly with implementation way.
@@ -65,12 +66,11 @@ public abstract class Assembly
     }
     
     /// <summary>
-    /// Set assembly state to dirty.
+    /// Save assembly with default way.
     /// </summary>
-    internal void SetDirty() => State = AssemblyState.Dirty;
-    
-    /// <summary>
-    /// Set assembly state to fresh.
-    /// </summary>
-    private void SetFresh() => State = AssemblyState.Fresh;
+    public void Save()
+    {
+        OnDefaultSave();
+        SetFresh();
+    }
 }
