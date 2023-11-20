@@ -23,8 +23,8 @@ internal static class ErrorMessages
     internal const string INVALID_CONSTRAINT = "The type of constraint is invalid. Type: {0}.";
     
     // Invalid arguments:
-    internal const string IS_NOT_NON_GENERIC_PARAMETER_TYPE = "The type is should contains any generic parameters or arguments. Type: {0}";
-    internal const string IS_NOT_PARAMETERIZED_GENERIC_TYPE = "The type is not parameterized generic type. Type: {0}";
+    internal const string IS_NOT_NON_GENERIC_PARAMETER_TYPE = "The type is should contains any generic parameters or arguments. Type: {0}.";
+    internal const string IS_NOT_PARAMETERIZED_GENERIC_TYPE = "The type is not parameterized generic type. Type: {0}.";
     internal const string INVALID_TYPE_NAME = "Invalid type name.";
-    internal const string ASSEMBLY_CYCLE_REFERENCE = "Assembly contains cycle reference. Assembly: {0},{1}";
+    internal const string ASSEMBLY_CYCLE_REFERENCE = "Assembly contains cycle reference. Assembly: {0},{1}.";
 }
