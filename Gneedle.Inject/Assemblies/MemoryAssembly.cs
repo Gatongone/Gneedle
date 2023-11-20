@@ -101,7 +101,7 @@ public sealed class MemoryAssembly : Assembly
     {
         if (m_AssemblyCache == null || m_AssemblyCache.Length == 0)
         {
-            throw new DirtyOperationException(ErrorResources.DIRTY_ASSEMBLY_OPERATION);
+            throw new DirtyOperationException(ErrorMessages.DIRTY_ASSEMBLY_OPERATION);
         }
         return System.Reflection.Assembly.Load(m_AssemblyCache);
     }

@@ -23,6 +23,6 @@ internal static class SystemInfo
         System.Runtime.InteropServices.Architecture.X64   => TargetArchitecture.IA64,
         System.Runtime.InteropServices.Architecture.Arm   => TargetArchitecture.ARM,
         System.Runtime.InteropServices.Architecture.Arm64 => TargetArchitecture.ARM64,
-        _                                                 => throw new NotSupportException(ErrorResources.ARCHITECTURE_NOT_SUPPORTED)
+        _                                                 => throw new NotSupportException(ErrorMessages.ARCHITECTURE_NOT_SUPPORTED)
     };
 }
