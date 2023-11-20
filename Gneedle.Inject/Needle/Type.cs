@@ -61,7 +61,7 @@ public sealed class NongenericType : IType
     public NongenericType(Type type)
     {
         if (type.IsGenericType)
-            throw new ArgumentException(string.Format(ErrorResources.IS_NOT_NON_GENERIC_PARAMETER_TYPE, type.FullName));
+            throw new ArgumentException(string.Format(ErrorMessages.IS_NOT_NON_GENERIC_PARAMETER_TYPE, type.FullName));
         Type = type;
     }
 
@@ -135,7 +135,7 @@ public sealed class GenericType : IType
     public GenericType(Type type, params IType[] genericArguments)
     {
         if (!type.IsGenericType)
-            throw new ArgumentException(string.Format(ErrorResources.IS_NOT_PARAMETERIZED_GENERIC_TYPE, type.FullName));
+            throw new ArgumentException(string.Format(ErrorMessages.IS_NOT_PARAMETERIZED_GENERIC_TYPE, type.FullName));
         Type = type.GetGenericTypeDefinition();
         GenericArguments = genericArguments;
     }
