@@ -11,7 +11,7 @@ namespace Gneedle.Inject;
 /// <summary>
 /// Writing for <see cref="Mono.Cecil.AssemblyDefinition"/> to target file or memories.
 /// </summary>
-public abstract class AssemblyWriter
+public abstract class Assembly
 {
     /// <summary>
     /// Target assembly definition.
@@ -30,7 +30,7 @@ public abstract class AssemblyWriter
     public abstract System.Reflection.Assembly ToReflectionAssembly();
     
     /// <param name="source">Source assembly definition which need to write.</param>
-    protected AssemblyWriter(AssemblyDefinition source) => Source = source;
+    protected Assembly(AssemblyDefinition source) => Source = source;
 
     /// <summary>
     /// Save assembly with default way.
