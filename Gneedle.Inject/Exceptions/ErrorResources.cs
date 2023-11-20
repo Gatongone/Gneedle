@@ -18,4 +18,12 @@ internal static class ErrorResources
     
     // Not supported exceptions:
     internal const string ARCHITECTURE_NOT_SUPPORTED = "Not supported architecture.";
+    
+    // Invalid operation exceptions:
+    internal const string INVALID_CONSTRAINT = "The type of constraint is invalid. Type: {0}.";
+    
+    // Invalid arguments:
+    internal const string IS_NOT_NON_GENERIC_PARAMETER_TYPE = "The type is should contains any generic parameters or arguments. Type: {0}";
+    internal const string IS_NOT_PARAMETERIZED_GENERIC_TYPE = "The type is not parameterized generic type. Type: {0}";
+    internal const string INVALID_TYPE_NAME = "Invalid type name.";
 }
