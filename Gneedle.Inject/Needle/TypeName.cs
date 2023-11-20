@@ -149,7 +149,7 @@ public readonly struct TypeName : IEquatable<TypeName>
 
                 break;
             }
-            default: throw new ArgumentException(string.Format(ErrorResources.INVALID_TYPE_NAME));
+            default: throw new ArgumentException(string.Format(ErrorMessages.INVALID_TYPE_NAME));
         }
     }
 

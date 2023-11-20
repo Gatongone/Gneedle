@@ -11,7 +11,7 @@ namespace Gneedle.Inject;
 /// <summary>
 /// String resources for exceptions message.
 /// </summary>
-internal static class ErrorResources
+internal static class ErrorMessages
 {
     // Dirty operation exceptions:
     internal const string DIRTY_ASSEMBLY_OPERATION = "The assembly still dirty.";
@@ -26,4 +26,5 @@ internal static class ErrorResources
     internal const string IS_NOT_NON_GENERIC_PARAMETER_TYPE = "The type is should contains any generic parameters or arguments. Type: {0}";
     internal const string IS_NOT_PARAMETERIZED_GENERIC_TYPE = "The type is not parameterized generic type. Type: {0}";
     internal const string INVALID_TYPE_NAME = "Invalid type name.";
+    internal const string ASSEMBLY_CYCLE_REFERENCE = "Assembly contains cycle reference. Assembly: {0},{1}";
 }
