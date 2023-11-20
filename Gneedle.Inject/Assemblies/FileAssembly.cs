@@ -14,15 +14,15 @@ namespace Gneedle.Inject;
 /// Assembly which reading and writing from local file.
 /// </summary>
 /// <param name="path">Assembly path.</param>
-public sealed class FileAssembly(string path) : AssemblyWriter(AssemblyDefinition.ReadAssembly(path))
+public sealed class FileAssembly(string path) : Assembly(AssemblyDefinition.ReadAssembly(path))
 {
     /// <summary>
     /// Assembly path.
     /// </summary>
     private readonly string m_Path = path;
     
-    /// <inheritdoc cref="AssemblyWriter.ToReflectionAssembly()"/>
-    public override Assembly ToReflectionAssembly() => Assembly.LoadFile(m_Path);
+    /// <inheritdoc cref="Assembly.ToReflectionAssembly()"/>
+    public override System.Reflection.Assembly ToReflectionAssembly() => System.Reflection.Assembly.LoadFile(m_Path);
     
     /// <summary>
     /// Save assembly to path.

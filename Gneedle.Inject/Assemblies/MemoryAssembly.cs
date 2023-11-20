@@ -11,7 +11,7 @@ namespace Gneedle.Inject;
 /// <summary>
 /// Assembly which reading and writing from memories.
 /// </summary>
-public sealed class MemoryAssembly : AssemblyWriter
+public sealed class MemoryAssembly : Assembly
 {
     /// <summary>
     /// Default assembly version.
@@ -96,7 +96,7 @@ public sealed class MemoryAssembly : AssemblyWriter
     /// </summary>
     protected override void OnDefaultSave() => SaveTo(out m_AssemblyCache);
 
-    /// <inheritdoc cref="AssemblyWriter.ToReflectionAssembly()"/>
+    /// <inheritdoc cref="Assembly.ToReflectionAssembly()"/>
     public override System.Reflection.Assembly ToReflectionAssembly()
     {
         if (m_AssemblyCache == null || m_AssemblyCache.Length == 0)
