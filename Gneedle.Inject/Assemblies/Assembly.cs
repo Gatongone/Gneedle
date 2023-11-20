@@ -16,7 +16,7 @@ public abstract class Assembly
     /// <summary>
     /// Target assembly definition.
     /// </summary>
-    public readonly AssemblyDefinition Source;
+    internal readonly AssemblyDefinition Source;
     
     /// <summary>
     /// Assembly dirty flags. 
