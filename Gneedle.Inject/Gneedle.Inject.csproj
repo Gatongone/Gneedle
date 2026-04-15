@@ -3,13 +3,27 @@
     <PropertyGroup>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <TargetFrameworks>net5.0;net6.0;netstandard2.1;net472;net471</TargetFrameworks>
+        <RootNamespace>Gneedle.Inject</RootNamespace>
         <Version>0.0.1</Version>
-        <LangVersion>12</LangVersion>
+        <LangVersion>preview</LangVersion>
+        <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Mono.Cecil" Version="0.11.5" />
     </ItemGroup>
 
+    <ItemGroup>
+      <TypeScriptCompile Update="Needle\Symbols\Generic.tt">
+        <Generator>TextTemplatingFileGenerator</Generator>
+        <LastGenOutput>Generic.cs</LastGenOutput>
+      </TypeScriptCompile>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Update="Needle\Symbols\Generic.cs">
+        <DependentUpon>Generic.tt</DependentUpon>
+      </Compile>
+    </ItemGroup>
 </Project>

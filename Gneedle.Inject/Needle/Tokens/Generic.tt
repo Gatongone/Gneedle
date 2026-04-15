@@ -1,0 +1,27 @@
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ output extension=".cs" #>
+namespace Gneedle.Inject;
+<#
+for (int i = 0; i <= 20; i++)
+{
+#>
+
+/// <summary>
+/// The generic parameter type of the type that the index of <#=i#>.
+/// </summary>
+public sealed class T_<#=i#> : Instance;
+<#
+}#>
+<#
+for (int i = 0; i <= 20; i++)
+{
+#>
+
+/// <summary>
+/// The generic parameter type of the method that the index of <#=i#>.
+/// </summary>
+public sealed class M_<#=i#> : Instance;
+<#
+}
+#>

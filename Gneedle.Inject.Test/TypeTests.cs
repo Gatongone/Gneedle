@@ -1,15 +1,6 @@
-﻿/*
- * Copyright ©2023 Gatongone
- * Author: Gatongone
- * Email: gatongone@gmail.com
- * Created On: 2023/11/18-12:26:46
- * Github: https://github.com/Gatongone
- */
+﻿using Mono.Cecil;
 
-using Mono.Cecil;
-using GenericParameterType = Gneedle.Inject.GenericParameterType;
-
-namespace Gneedle.Test;
+namespace Gneedle.Inject.Test;
 
 [TestFixture]
 public class TypeTests
@@ -18,7 +9,6 @@ public class TypeTests
     public void ToGneedleType_With_GenericType()
     {
         // Type with generic parameter.
-        var t = typeof(GenericTestClass<>);
         var genericType = typeof(GenericTestClass<>).ToGneedleType() as GenericType;
         Assert.That(genericType, Is.Not.Null);
         Assert.That(genericType.Type == typeof(GenericTestClass<>), Is.True);
@@ -29,8 +19,7 @@ public class TypeTests
         // Type with generic argument.
         var genericType2 = typeof(GenericTestClass<string>).ToGneedleType() as GenericType;
         Assert.That(genericType2, Is.Not.Null);
-        Assert.That(genericType2.Type == typeof(GenericTestClass<>), Is.True);
-        Console.WriteLine(genericType2.Type.FullName);
+        Assert.That(genericType2.Type, Is.EqualTo(typeof(GenericTestClass<>)));
         var argument = genericType2.GenericArguments[0] as NongenericType;
         Assert.That(argument, Is.Not.Null);
         Assert.That(argument.Type, Is.EqualTo(typeof(string)));
@@ -50,7 +39,7 @@ public class TypeTests
     [Test]
     public void CreateGenericType_With_NonGenericType()
     {
-        Assert.Catch(() => { new GenericType(typeof(NonGenericTestClass), new GenericParameterType("Test")); });
+        Assert.Catch(() => _ = new GenericType(typeof(NonGenericTestClass), new GenericParameterType("Test")));
     }
 
     [Test]
@@ -61,18 +50,18 @@ public class TypeTests
         var arg1 = type1.GenericArguments[0] as GenericType;
         Assert.That(arg1, Is.Not.Null);
         Assert.That(arg1.Type, Is.EqualTo(typeof(GenericTestClass<>)));
-        var subArg_1 = arg1.GenericArguments[0] as NongenericType;
-        Assert.That(subArg_1, Is.Not.Null);
-        Assert.That(subArg_1.Type, Is.EqualTo(typeof(int)));
+        var subArg1 = arg1.GenericArguments[0] as NongenericType;
+        Assert.That(subArg1, Is.Not.Null);
+        Assert.That(subArg1.Type, Is.EqualTo(typeof(int)));
 
         // Type with generic argument.
         var type2 = new GenericType(typeof(GenericTestClass<>), typeof(GenericTestClass<>));
         var arg2 = type2.GenericArguments[0] as GenericType;
         Assert.That(arg2, Is.Not.Null);
         Assert.That(arg2.Type, Is.EqualTo(typeof(GenericTestClass<>)));
-        var subArg_2 = arg2.GenericArguments[0] as GenericParameterType;
-        Assert.That(subArg_2, Is.Not.Null);
-        Assert.That(subArg_2.TypeName, Is.EqualTo("T"));
+        var subArg2 = arg2.GenericArguments[0] as GenericParameterType;
+        Assert.That(subArg2, Is.Not.Null);
+        Assert.That(subArg2.TypeName, Is.EqualTo("T"));
     }
 
     [Test]
@@ -122,7 +111,7 @@ public class TypeTests
         Assert.That(type4.GetTypeName(), Is.EqualTo(new TypeName(typeof(GenericTestClass<,>)
             .MakeGenericType(typeof(GenericTestClass<,>), typeof(GenericTestClass<,>)))));
     }
-    
+
     [Test]
     public void GetTypeName_With_OneArgument_GenericInstanceType()
     {

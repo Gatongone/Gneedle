@@ -1,0 +1,8 @@
+<Project>
+   <PropertyGroup>
+      <DissectId>Gneedle.Dissect</DissectId>
+      <DissectProjPath>..</DissectProjPath>
+      <DissectOutPath Condition="$(MSBuildRuntimeType) == 'Core'">$(DissectProjPath)\lib\net472</DissectOutPath>
+      <DissectOutPath Condition="$(MSBuildRuntimeType) != 'Core'">$(DissectProjPath)\lib\netstandard2.1</DissectOutPath>
+   </PropertyGroup>
+</Project>

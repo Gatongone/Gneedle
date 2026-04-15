@@ -1,11 +1,4 @@
-﻿/*
- * Copyright ©2023 Gatongone
- * Author: Gatongone
- * Email: gatongone@gmail.com
- * Created On: 2023/11/18-11:48:01
- * Github: https://github.com/Gatongone
- */
-
+﻿using System.Diagnostics;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
 
 namespace Gneedle.Inject;
@@ -14,11 +7,16 @@ namespace Gneedle.Inject;
 /// Constraints inform the compiler about the capabilities a type argument must have.<para/>
 /// Without any constraints, the type argument could be any type.<para/>
 /// The compiler can only assume the members of System.Object, which is the ultimate base class for any .NET type.<para/>
-/// For more information, see Why use constraints.<para/>
 /// If client code uses a type that doesn't satisfy a constraint, the compiler issues an error. Constraints are specified by using the where contextual keyword.
 /// </summary>
 public struct Constraint
 {
+    /// <summary>
+    /// Indicates whether the constraint is from self type, which means the constraint is from the type itself,
+    /// not from any of its generic parameters or base types.
+    /// </summary>
+    internal bool IsSelfType = false;
+
     /// <summary>
     /// The constraint name, it could be any type name type where constraint form or constraints informing.
     /// </summary>
@@ -35,21 +33,22 @@ public struct Constraint
     public readonly GenericParameterAttributes GenericParameterAttributes;
 
     /// <summary>
-    /// Create a constraint type from type.
+    /// Create a constraint type from any type.
     /// </summary>
-    /// <param name="type"><see cref="Gneedle.Inject.IType"/></param>
+    /// <param name="type">Type constraint to.</param>
     /// <param name="genericParameterAttributes">Generic parameter attributes.</param>
     public Constraint(IType type, GenericParameterAttributes genericParameterAttributes = GenericParameterAttributes.None)
     {
         Type = type;
-        Name = type.ToString();
+        Name = type.ToString()!;
+        Debug.Assert(type.ToString() != null);
 
         GenericParameterAttributes = genericParameterAttributes | type switch
         {
             GenericParameterType genericParameterType => genericParameterType.Constraints.Combined(),
-            GenericType genericType => genericType.Type.GenericParameterAttributes,
-            NongenericType nonGenericType => nonGenericType.Type.GenericParameterAttributes,
-            _ => GenericParameterAttributes = GenericParameterAttributes.None
+            GenericType genericType                   => genericType.Type.GenericParameterAttributes,
+            NongenericType nonGenericType             => nonGenericType.Type.GenericParameterAttributes,
+            _                                         => GenericParameterAttributes = GenericParameterAttributes.None
         };
     }
 
@@ -64,12 +63,12 @@ public struct Constraint
         Name = name;
         GenericParameterAttributes = genericParameterAttributes;
     }
-    
+
     /// <summary>
     /// Create a constraint which from a system type.
     /// </summary>
     /// <param name="name">Type name.</param>
-    /// <param name="type">The type which constraint to.</param>
+    /// <param name="type">The type that constraint to.</param>
     /// <param name="genericParameterAttributes">Generic parameter attributes.</param>
     private Constraint(string name, IType type, GenericParameterAttributes genericParameterAttributes)
     {
@@ -77,6 +76,29 @@ public struct Constraint
         Name = name;
         GenericParameterAttributes = genericParameterAttributes;
     }
+
+    /// <summary>
+    /// Create a constraint type from type itself.
+    /// </summary>
+    public static Constraint FromSelf() => new(new SelfType()) {IsSelfType = true};
+
+    /// <summary>
+    /// Create a constraint type from type itself.
+    /// </summary>
+    /// <param name="genericParameterNames">Type's generic parameter names.</param>
+    public static Constraint FromSelf(params string[] genericParameterNames) => new(new SelfType(genericParameterNames)) {IsSelfType = true};
+
+    /// <summary>
+    /// Create a constraint type from type itself.
+    /// </summary>
+    /// <param name="genericArguments">Type's generic arguments.</param>
+    public static Constraint FromSelf(params IType[] genericArguments) => new(new SelfType(genericArguments)) {IsSelfType = true};
+
+    /// <summary>
+    /// Create a constraint type from type itself.
+    /// </summary>
+    /// <param name="genericArguments">Type's generic arguments.</param>
+    public static Constraint FromSelf(params Type[] genericArguments) => new(new SelfType(genericArguments)) {IsSelfType = true};
 
     /// <summary>
     /// Create a constraint type from type.
@@ -88,7 +110,10 @@ public struct Constraint
     /// </summary>
     public static Constraint FromType<T>() => new(typeof(T).ToGneedleType());
 
-    /// <inheritdoc cref="Gneedle.Inject.Constraint(IType)"/>
+    /// <summary>
+    /// Create a constraint type from type.
+    /// </summary>
+    /// <param name="type"></param>
     public static Constraint FromType(IType type) => new(type);
 
     /// <summary>
@@ -141,10 +166,10 @@ public struct Constraint
 /// <summary>
 /// Extensions for <see cref="Constraint"/>.
 /// </summary>
-public static class ConstraintExtension
+internal static class ConstraintExtension
 {
     /// <summary>
     /// Combined constraint's GenericParameterAttributes.
     /// </summary>
-    public static GenericParameterAttributes Combined(this IEnumerable<Constraint> constraints) => constraints.Aggregate(new GenericParameterAttributes(), (current, constraint) => current | constraint.GenericParameterAttributes);
+    internal static GenericParameterAttributes Combined(this IEnumerable<Constraint> constraints) => constraints.Aggregate(new GenericParameterAttributes(), (current, constraint) => current | constraint.GenericParameterAttributes);
 }

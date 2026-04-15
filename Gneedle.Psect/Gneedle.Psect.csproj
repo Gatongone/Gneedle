@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RootNamespace>Gneedle.Psect</RootNamespace>
+        <Version>0.0.1</Version>
+        <LangVersion>12</LangVersion>
+        <TargetFrameworks>net5.0;net6.0;netstandard2.1;net472;net471</TargetFrameworks>
+    </PropertyGroup>
+
+</Project>
