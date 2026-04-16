@@ -155,7 +155,7 @@ partial class MethodHandler
         // This stack is used to cache the types of 'stloc' operand during scanning the method body.
         var localStack = new TypeReference[bodyInstructions.Count];
 
-        // TODO: Maybe we could cache the scanning result that wouldn't simulate parameter balance every time.
+        // TODO: Maybe we could cache all scanning results that wouldn't simulate parameter balance every time.
         // Scanning method body.
         for (var i = 0; i < bodyInstructions.Count; i++)
         {

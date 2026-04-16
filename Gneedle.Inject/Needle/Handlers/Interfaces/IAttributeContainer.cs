@@ -3,6 +3,7 @@
 public interface IAttributeContainer
 {
     bool ContainsAttribute(IType attributeType);
+    void AddAttribute(IType attributeType, params object[] arguments);
 }
 
 public static class AttributeExtensions

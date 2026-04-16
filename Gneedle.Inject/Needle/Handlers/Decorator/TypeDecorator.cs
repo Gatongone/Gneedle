@@ -16,7 +16,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     private readonly TypeDefinition m_TypeDefinition;
 
     /// <summary>
-    /// Callback on <c>Build()</c> method.
+    /// Callback on <see cref="GetHandler"/> method.
     /// </summary>
     private readonly Func<TypeDefinition, Implementation, IClassHandler> m_BuildCallback;
 
@@ -62,7 +62,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
             case {IsValueType              : true}: throw new ArgumentException(ErrorMessages.TYPE_IS_VALUE_TYPE);
             case {IsSealed                 : true}: throw new ArgumentException(ErrorMessages.TYPE_IS_SEALED);
             case {IsInterface              : true}: throw new ArgumentException(ErrorMessages.TYPE_IS_INTERFACE);
-            case {ContainsGenericParameters: true}: throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithBaseType(IType).");
+            case {ContainsGenericParameters: true}: throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithBaseType(IType) instead.");
         }
 
         // Import and append to base type.
@@ -95,7 +95,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         {
             case null:                               throw new NullReferenceException(nameof(type));
             case {IsInterface              : false}: throw new ArgumentException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
-            case {ContainsGenericParameters: true}:  throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType).");
+            case {ContainsGenericParameters: true}:  throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
         }
 
         // Import and append to collections.
@@ -115,7 +115,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         }
 
         // Build and append to module.
-        return (IClassHandler) m_BuildCallback.Invoke(m_TypeDefinition, m_Implementation);
+        return m_BuildCallback.Invoke(m_TypeDefinition, m_Implementation);
     }
 
     /// <summary>
@@ -136,7 +136,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
             {
                 var genericArguments = selfType.GenericArguments;
                 var resolvedArguments = new TypeReference[genericArguments.Length];
-                // Resolve every arguments.
+                // Resolve every argument.
                 for (var index = 0; index < genericArguments.Length; index++)
                 {
                     resolvedArguments[index] = m_AssemblyHandler.ResolveParameterType(m_TypeDefinition, genericArguments[index]);
@@ -144,7 +144,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
 
                 constraintType = m_TypeDefinition.MakeGenericInstanceType(resolvedArguments);
             }
-            // Or we just constraint to itself.
+            // Or we just constrain to itself.
             else constraintType = m_TypeDefinition;
         }
         else
@@ -241,16 +241,16 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     private readonly TypeDefinition m_TypeDefinition;
 
     /// <summary>
-    /// Callback on <c>Build()</c> method.
+    /// Callback on <see cref="GetHandler"/> method.
     /// </summary>
-    private readonly Func<TypeDefinition, Implementation, TypeHandler> m_BuildCallback;
+    private readonly Func<TypeDefinition, Implementation, IStructHandler> m_BuildCallback;
 
     /// <summary>
     /// Describing information.
     /// </summary>
     private Implementation m_Implementation;
 
-    internal StructDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, Implementation implementation, Func<TypeDefinition, Implementation, TypeHandler> buildCallback)
+    internal StructDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, Implementation implementation, Func<TypeDefinition, Implementation, IStructHandler> buildCallback)
     {
         m_AssemblyHandler = assemblyHandler;
         m_TypeDefinition  = typeDefinition;
@@ -294,7 +294,7 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
         {
             case null:                               throw new NullReferenceException(nameof(type));
             case {IsInterface              : false}: throw new ArgumentException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
-            case {ContainsGenericParameters: true}:  throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType).");
+            case {ContainsGenericParameters: true}:  throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
         }
 
         // Import and append to collections.
@@ -305,22 +305,18 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     }
 
     /// <inheritdoc/>
-    public IEnumHandler AsEnum(EnumFlags flags = EnumFlags.Public)
+    public IStructHandler GetHandler()
     {
-        throw new NotImplementedException();
-    }
+        // Default from object inheritance.
+        if (m_Implementation.BaseType == null || m_Implementation.BaseType.FullName == typeof(ValueType).FullName)
+        {
+            // Import and append to base type.
+            var module = m_AssemblyHandler.Assembly.Source.MainModule;
+            m_Implementation.BaseType = module.ImportReference(m_AssemblyHandler.GetCecilType(typeof(ValueType)).Reference);
+        }
 
-    /// <inheritdoc/>
-    public IStructHandler AsStruct(StructFlags flags = StructFlags.Public)
-    {
-        throw new NotImplementedException();
-    }
-
-    /// <inheritdoc/>
-    public IStructHandler GetHandler(ClassFlags flags = ClassFlags.Public)
-    {
         // Build and append to module.
-        return (IStructHandler) m_BuildCallback.Invoke(m_TypeDefinition, m_Implementation);
+        return m_BuildCallback.Invoke(m_TypeDefinition, m_Implementation);
     }
 
     /// <summary>
@@ -368,7 +364,7 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     /// </summary>
     public interface ITypeDecorator
     {
-        IStructHandler GetHandler(ClassFlags flags = ClassFlags.Public);
+        IStructHandler GetHandler();
     }
 
     /// <summary>

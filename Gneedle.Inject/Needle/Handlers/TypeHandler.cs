@@ -36,6 +36,13 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
 
     public bool ContainsAttribute(IType attributeType) => Source.CustomAttributes.Any(attribute => TypeName.HasSameName(attribute.AttributeType, attributeType));
 
+    public void AddAttribute(IType attributeType, params object[] arguments)
+    {
+        var typeDef = AssemblyHandler.GetCecilType(attributeType).Definition;
+        var attribute = typeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
+        typeDef.CustomAttributes.Add(attribute);
+    }
+
     public IMethodHandler? GetMethod(string methodName, params IType[] parameterTypes)
     {
         var curType = Source;
@@ -55,6 +62,35 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
         }
 
         return methodDef == null ? null : new MethodHandler(methodDef, this);
+    }
+
+    public IMethodHandler AddMethod(string methodName, IType returnType, IType[] parameterTypes)
+    {
+        var methodDef = new MethodDefinition(methodName, MethodAttributes.Public | MethodAttributes.HideBySig, AssemblyHandler.GetCecilType(returnType).Reference);
+        foreach (var parameter in parameterTypes)
+        {
+            methodDef.Parameters.Add(new ParameterDefinition(AssemblyHandler.GetCecilType(parameter).Reference));
+        }
+
+        Source.Methods.Add(methodDef);
+        return new MethodHandler(methodDef, this);
+    }
+
+    public IMethodHandler AddMethod(string methodName, IType returnType, Constraint[] genericArguments, IType[] parameterTypes)
+    {
+        var methodDef = new MethodDefinition(methodName, MethodAttributes.Public | MethodAttributes.HideBySig, AssemblyHandler.GetCecilType(returnType).Reference);
+        foreach (var parameter in parameterTypes)
+        {
+            methodDef.Parameters.Add(new ParameterDefinition(AssemblyHandler.GetCecilType(parameter).Reference));
+        }
+
+        foreach (var genericArgument in genericArguments)
+        {
+            methodDef.GenericParameters.Add(new GenericParameter(genericArgument.Name, methodDef));
+        }
+
+        Source.Methods.Add(methodDef);
+        return new MethodHandler(methodDef, this);
     }
 
     /// <summary>
