@@ -16,7 +16,7 @@ public interface ITypeHandler : IAttributeContainer
     string Name { get; set; }
     string Namespace { get; set; }
     bool TryGetRuntimeType(out Type? type);
-    IMethodHandler AddMethod(string methodName, IType returnType, Constraint[] genericArguments, IType[] parameterTypes, MethodFlags methodFlags = MethodFlags.Public);
+    IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, IType[] parameterTypes, MethodFlags methodFlags = MethodFlags.Public);
 }
 
 public interface IClassHandler : ITypeHandler, IBaseTypeContainer, IInterfaceContainer;

@@ -222,4 +222,49 @@ internal static class CecilExtensions
             return true;
         }
     }
+
+    /// <param name="genericParameter">Constraint provider.</param>
+    extension(GenericParameter genericParameter)
+    {
+        /// <summary>
+        /// Set the generic parameter constraint which from type.
+        /// </summary>
+        /// <param name="typeDefinition">The type definition which the generic parameter belongs to. It is used for resolving constraint type reference.</param>
+        /// <param name="assemblyHandler">Assembly handler for resolving constraint type reference.</param>
+        /// <param name="constraint">Constraint witch from type.</param>
+        internal void SetConstraintFromType(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, Constraint constraint)
+        {
+            if (constraint.Type == null) return;
+
+            // Process parameter constraint.
+            TypeReference constraintType;
+            if (constraint.Type is SelfType selfType)
+            {
+                // If self type is generic type, then we make generic instance type.
+                if (selfType.GenericArguments.Length > 0)
+                {
+                    var genericArguments = selfType.GenericArguments;
+                    var resolvedArguments = new TypeReference[genericArguments.Length];
+                    // Resolve every argument.
+                    for (var index = 0; index < genericArguments.Length; index++)
+                    {
+                        resolvedArguments[index] = assemblyHandler.ResolveParameterType(typeDefinition, genericArguments[index]);
+                    }
+
+                    constraintType = typeDefinition.MakeGenericInstanceType(resolvedArguments);
+                }
+                // Or we just constrain to itself.
+                else constraintType = typeDefinition;
+            }
+            else
+            {
+                // Resolve constraint type.
+                var resolvedType = assemblyHandler.ResolveParameterType(typeDefinition, constraint.Type);
+                constraintType = assemblyHandler.Assembly.Source.MainModule.ImportReference(resolvedType);
+            }
+
+            // Append to constraint collections.
+            genericParameter.Constraints.Add(new GenericParameterConstraint(constraintType));
+        }
+    }
 }

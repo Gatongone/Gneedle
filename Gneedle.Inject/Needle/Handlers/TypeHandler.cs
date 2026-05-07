@@ -32,38 +32,6 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
         return type == null;
     }
 
-    public IMethodHandler AddMethod(string methodName, IType returnType, Constraint[] genericArguments, IType[] parameterTypes, MethodFlags methodFlags)
-    {
-        var methodAttribute = methodName switch
-        {
-            ".ctor" =>
-                methodFlags.HasFlag(MethodFlags.Static)
-                    ? throw new ArgumentException("Instance constructor with static attribute.")
-                    : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
-                        ? throw new ArgumentException("Instance constructor with abstract or virtual attribute.")
-                        : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
-            ".cctor" => methodFlags.HasFlag(MethodFlags.Protected) || methodFlags.HasFlag(MethodFlags.Internal)
-                ? throw new ArgumentException("Static constructor can only be private.")
-                : !methodFlags.HasFlag(MethodFlags.Static)
-                    ? throw new ArgumentException("Static constructor must have static attribute.")
-                    : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
-                        ? throw new ArgumentException("Static constructor with abstract or virtual attribute.")
-                        : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
-            _ => methodFlags.ToMethodAttributes()
-        };
-
-        var method = new MethodDefinition(methodName, methodAttribute, AssemblyHandler.GetCecilType(returnType).Reference)
-        {
-            DeclaringType = Source
-        };
-        foreach (var parameter in parameterTypes)
-        {
-            method.Parameters.Add(new ParameterDefinition(AssemblyHandler.GetCecilType(parameter).Reference));
-        }
-        Source.Methods.Add(method);
-        return new MethodHandler(method, this);
-    }
-
     public bool ContainsInterface(IType interfaceType) => Source.Interfaces.Any(implementation => TypeName.HasSameName(implementation.InterfaceType, interfaceType));
 
     public bool ContainsAttribute(IType attributeType) => Source.CustomAttributes.Any(attribute => TypeName.HasSameName(attribute.AttributeType, attributeType));
@@ -96,33 +64,71 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
         return methodDef == null ? null : new MethodHandler(methodDef, this);
     }
 
-    public IMethodHandler AddMethod(string methodName, IType returnType, IType[] parameterTypes)
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="methodName"></param>
+    /// <param name="returnType"></param>
+    /// <param name="genericParameters"></param>
+    /// <param name="parameterTypes"></param>
+    /// <param name="methodFlags"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    public IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, IType[] parameterTypes, MethodFlags methodFlags)
     {
-        var methodDef = new MethodDefinition(methodName, MethodAttributes.Public | MethodAttributes.HideBySig, AssemblyHandler.GetCecilType(returnType).Reference);
-        foreach (var parameter in parameterTypes)
+        // Set method attributes, and check the validity of method attributes according to method name.
+        var methodAttribute = methodName switch
         {
-            methodDef.Parameters.Add(new ParameterDefinition(AssemblyHandler.GetCecilType(parameter).Reference));
-        }
+            ".ctor" => // Instance constructor cannot be static, abstract or virtual, and can only be public, private or protected.
+                methodFlags.HasFlag(MethodFlags.Static)
+                    ? throw new ArgumentException("Instance constructor with static attribute.")
+                    : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
+                        ? throw new ArgumentException("Instance constructor with abstract or virtual attribute.")
+                        : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            ".cctor" => // Static constructor must be static, and can only be private, and cannot be abstract or virtual.
+                methodFlags.HasFlag(MethodFlags.Protected) || methodFlags.HasFlag(MethodFlags.Internal)
+                    ? throw new ArgumentException("Static constructor can only be private.")
+                    : !methodFlags.HasFlag(MethodFlags.Static)
+                        ? throw new ArgumentException("Static constructor must have static attribute.")
+                        : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
+                            ? throw new ArgumentException("Static constructor with abstract or virtual attribute.")
+                            : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            _ => methodFlags.ToMethodAttributes()
+        };
 
-        Source.Methods.Add(methodDef);
-        return new MethodHandler(methodDef, this);
-    }
-
-    public IMethodHandler AddMethod(string methodName, IType returnType, Constraint[] genericArguments, IType[] parameterTypes)
-    {
-        var methodDef = new MethodDefinition(methodName, MethodAttributes.Public | MethodAttributes.HideBySig, AssemblyHandler.GetCecilType(returnType).Reference);
-        foreach (var parameter in parameterTypes)
+        // Use void as default return type, and set correct return type after processing generic parameters, because generic parameters may be used in return type.
+        var methodReturnType = Source.Module.TypeSystem.Void;
+        var method = new MethodDefinition(methodName, methodAttribute, methodReturnType)
         {
-            methodDef.Parameters.Add(new ParameterDefinition(AssemblyHandler.GetCecilType(parameter).Reference));
-        }
-
-        foreach (var genericArgument in genericArguments)
+            DeclaringType = Source
+        };
+        // Add generic parameters.
+        method.GenericParameters.AddRange(genericParameters.Select(genericParameter =>
         {
-            methodDef.GenericParameters.Add(new GenericParameter(genericArgument.Name, methodDef));
-        }
+            var genericParams = new GenericParameter(genericParameter.TypeName, method)
+            {
+                // Append generic parameter attributes to constraint.
+                Attributes = genericParameter.GetGenericParameterAttributes()
+            };
+            method.GenericParameters.Add(genericParams);
 
-        Source.Methods.Add(methodDef);
-        return new MethodHandler(methodDef, this);
+            // Process every constraint from type.
+            foreach (var constraint in genericParameter.Constraints)
+            {
+                genericParams.SetConstraintFromType(AssemblyHandler, Source, constraint);
+            }
+
+            return genericParams;
+        }));
+
+        // Add method parameters.
+        method.Parameters.AddRange(parameterTypes.Select(parameter => new ParameterDefinition(AssemblyHandler.ResolveParameterType(Source, parameter, method.GenericParameters))));
+
+        // Set method return type.
+        method.ReturnType = AssemblyHandler.ResolveParameterType(Source, returnType, method.GenericParameters);
+
+        Source.Methods.Add(method);
+        return new MethodHandler(method, this);
     }
 
     /// <summary>

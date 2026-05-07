@@ -47,7 +47,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         // Process every constraint from type.
         foreach (var constraint in constraints)
         {
-            SetConstraintFromType(genericParameter, constraint);
+            genericParameter.SetConstraintFromType(m_AssemblyHandler, m_TypeDefinition, constraint);
         }
 
         return this;
@@ -116,46 +116,6 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
 
         // Build and append to module.
         return m_BuildCallback.Invoke(m_TypeDefinition, m_Implementation);
-    }
-
-    /// <summary>
-    /// Set the generic parameter constraint which from type.
-    /// </summary>
-    /// <param name="genericParameter">Constraint provider.</param>
-    /// <param name="constraint">Constraint witch from type.</param>
-    private void SetConstraintFromType(GenericParameter genericParameter, Constraint constraint)
-    {
-        if (constraint.Type == null) return;
-
-        // Process parameter constraint.
-        TypeReference constraintType;
-        if (constraint.Type is SelfType selfType)
-        {
-            // If self type is generic type, then we make generic instance type.
-            if (selfType.GenericArguments.Length > 0)
-            {
-                var genericArguments = selfType.GenericArguments;
-                var resolvedArguments = new TypeReference[genericArguments.Length];
-                // Resolve every argument.
-                for (var index = 0; index < genericArguments.Length; index++)
-                {
-                    resolvedArguments[index] = m_AssemblyHandler.ResolveParameterType(m_TypeDefinition, genericArguments[index]);
-                }
-
-                constraintType = m_TypeDefinition.MakeGenericInstanceType(resolvedArguments);
-            }
-            // Or we just constrain to itself.
-            else constraintType = m_TypeDefinition;
-        }
-        else
-        {
-            // Resolve constraint type.
-            var resolvedType = m_AssemblyHandler.ResolveParameterType(m_TypeDefinition, constraint.Type);
-            constraintType = m_AssemblyHandler.Assembly.Source.MainModule.ImportReference(resolvedType);
-        }
-
-        // Append to constraint collections.
-        genericParameter.Constraints.Add(new GenericParameterConstraint(constraintType));
     }
 
     /// <summary>
