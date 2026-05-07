@@ -32,6 +32,38 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
         return type == null;
     }
 
+    public IMethodHandler AddMethod(string methodName, IType returnType, Constraint[] genericArguments, IType[] parameterTypes, MethodFlags methodFlags)
+    {
+        var methodAttribute = methodName switch
+        {
+            ".ctor" =>
+                methodFlags.HasFlag(MethodFlags.Static)
+                    ? throw new ArgumentException("Instance constructor with static attribute.")
+                    : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
+                        ? throw new ArgumentException("Instance constructor with abstract or virtual attribute.")
+                        : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            ".cctor" => methodFlags.HasFlag(MethodFlags.Protected) || methodFlags.HasFlag(MethodFlags.Internal)
+                ? throw new ArgumentException("Static constructor can only be private.")
+                : !methodFlags.HasFlag(MethodFlags.Static)
+                    ? throw new ArgumentException("Static constructor must have static attribute.")
+                    : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
+                        ? throw new ArgumentException("Static constructor with abstract or virtual attribute.")
+                        : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            _ => methodFlags.ToMethodAttributes()
+        };
+
+        var method = new MethodDefinition(methodName, methodAttribute, AssemblyHandler.GetCecilType(returnType).Reference)
+        {
+            DeclaringType = Source
+        };
+        foreach (var parameter in parameterTypes)
+        {
+            method.Parameters.Add(new ParameterDefinition(AssemblyHandler.GetCecilType(parameter).Reference));
+        }
+        Source.Methods.Add(method);
+        return new MethodHandler(method, this);
+    }
+
     public bool ContainsInterface(IType interfaceType) => Source.Interfaces.Any(implementation => TypeName.HasSameName(implementation.InterfaceType, interfaceType));
 
     public bool ContainsAttribute(IType attributeType) => Source.CustomAttributes.Any(attribute => TypeName.HasSameName(attribute.AttributeType, attributeType));

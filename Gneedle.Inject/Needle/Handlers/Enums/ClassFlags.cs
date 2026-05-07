@@ -37,14 +37,14 @@ internal static class ClassFlagExtensions
             var typeAttributes = DEFAULT_ATTRIBUTE;
 
             // Check access level.
-            typeAttributes |= (classFlags & ClassFlags.Internal) != 0 ? TypeAttributes.NotPublic : TypeAttributes.Public;
+            typeAttributes |= classFlags.HasFlag(ClassFlags.Internal) ? TypeAttributes.NotPublic : TypeAttributes.Public;
 
             // Process method type.
             typeAttributes |= classFlags switch
             {
-                _ when (classFlags & ClassFlags.Abstract) != 0 => TypeAttributes.Abstract,
-                _ when (classFlags & ClassFlags.Sealed) != 0   => TypeAttributes.Sealed,
-                _ when (classFlags & ClassFlags.Static) != 0   => TypeAttributes.Abstract | TypeAttributes.Sealed,
+                _ when classFlags.HasFlag(ClassFlags.Abstract) => TypeAttributes.Abstract,
+                _ when classFlags.HasFlag(ClassFlags.Sealed)   => TypeAttributes.Sealed,
+                _ when classFlags.HasFlag(ClassFlags.Static)   => TypeAttributes.Abstract | TypeAttributes.Sealed,
                 _                                              => 0
             };
 
@@ -62,19 +62,21 @@ internal static class ClassFlagExtensions
             // Check access level.
             typeAttributes |= classFlags switch
             {
-                _ when (classFlags & ClassFlags.Public) != 0    => TypeAttributes.NestedPublic,
-                _ when (classFlags & ClassFlags.Internal) != 0  => TypeAttributes.NestedAssembly,
-                _ when (classFlags & ClassFlags.Protected) != 0 => TypeAttributes.NestedFamily,
-                _ when (classFlags & ClassFlags.Private) != 0   => TypeAttributes.NestedPrivate,
-                _                                               => 0 // No access modifier flag is set
+                _ when classFlags.HasFlag(ClassFlags.Public)                                               => TypeAttributes.NestedPublic,
+                _ when classFlags.HasFlag(ClassFlags.Protected) && classFlags.HasFlag(ClassFlags.Internal) => TypeAttributes.NestedFamORAssem,
+                _ when classFlags.HasFlag(ClassFlags.Private) && classFlags.HasFlag(ClassFlags.Protected)  => TypeAttributes.NestedFamANDAssem,
+                _ when classFlags.HasFlag(ClassFlags.Internal)                                             => TypeAttributes.NestedAssembly,
+                _ when classFlags.HasFlag(ClassFlags.Protected)                                            => TypeAttributes.NestedFamily,
+                _ when classFlags.HasFlag(ClassFlags.Private)                                              => TypeAttributes.NestedPrivate,
+                _                                                                                          => 0 // No access modifier flag is set
             };
 
             // Process method type.
             typeAttributes |= classFlags switch
             {
-                _ when (classFlags & ClassFlags.Abstract) != 0 => TypeAttributes.Abstract,
-                _ when (classFlags & ClassFlags.Sealed) != 0   => TypeAttributes.Sealed,
-                _ when (classFlags & ClassFlags.Static) != 0   => TypeAttributes.Abstract | TypeAttributes.Sealed,
+                _ when classFlags.HasFlag(ClassFlags.Abstract) => TypeAttributes.Abstract,
+                _ when classFlags.HasFlag(ClassFlags.Sealed)   => TypeAttributes.Sealed,
+                _ when classFlags.HasFlag(ClassFlags.Static)   => TypeAttributes.Abstract | TypeAttributes.Sealed,
                 _                                              => 0 // No method type flag is set
             };
 
