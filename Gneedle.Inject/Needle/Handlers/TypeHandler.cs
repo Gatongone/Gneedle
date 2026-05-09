@@ -26,6 +26,7 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
         Source          = source;
     }
 
+    /// <inheritdoc/>
     public bool TryGetRuntimeType(out Type? type)
     {
         type = Type.GetType(new TypeName(Source));
@@ -34,8 +35,10 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
 
     public bool ContainsInterface(IType interfaceType) => Source.Interfaces.Any(implementation => TypeName.HasSameName(implementation.InterfaceType, interfaceType));
 
+    /// <inheritdoc/>
     public bool ContainsAttribute(IType attributeType) => Source.CustomAttributes.Any(attribute => TypeName.HasSameName(attribute.AttributeType, attributeType));
 
+    /// <inheritdoc/>
     public void AddAttribute(IType attributeType, params object[] arguments)
     {
         var typeDef = AssemblyHandler.GetCecilType(attributeType).Definition;
@@ -43,6 +46,7 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
         typeDef.CustomAttributes.Add(attribute);
     }
 
+    /// <inheritdoc/>
     public IMethodHandler? GetMethod(string methodName, params IType[] parameterTypes)
     {
         var curType = Source;
@@ -64,16 +68,7 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
         return methodDef == null ? null : new MethodHandler(methodDef, this);
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="methodName"></param>
-    /// <param name="returnType"></param>
-    /// <param name="genericParameters"></param>
-    /// <param name="parameterTypes"></param>
-    /// <param name="methodFlags"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <inheritdoc/>
     public IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, IType[] parameterTypes, MethodFlags methodFlags)
     {
         // Set method attributes, and check the validity of method attributes according to method name.
