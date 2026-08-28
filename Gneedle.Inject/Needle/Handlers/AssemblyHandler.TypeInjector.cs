@@ -20,14 +20,14 @@ partial class AssemblyHandler
 
     public ITypeHandler GetType(TypeDefinition typeDefinition)
     {
+        if (typeDefinition.IsValueType && !typeDefinition.IsEnum)
+        {
+            return new StructHandler(this, typeDefinition);
+        }
         if (typeDefinition.IsClass)
         {
             return new ClassHandler(this, typeDefinition);
         }
-        // if (typeDefinition.IsValueType && !typeDefinition.IsEnum)
-        // {
-        //     return new StructHandler(this, typeDefinition);
-        // }
         // if (typeDefinition.IsEnum)
         // {
         //     return new EnumHandler(this, typeDefinition);
@@ -36,11 +36,6 @@ partial class AssemblyHandler
         return new TypeHandler(this, typeDefinition);
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="filter"></param>
-    /// <returns></returns>
     public ITypeHandler[] GetTypes(Func<TypeDefinition, bool> filter)
     {
         var handlers = new List<ITypeHandler>();
@@ -55,10 +50,6 @@ partial class AssemblyHandler
         return handlers.ToArray<ITypeHandler>();
     }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <returns></returns>
     public ITypeHandler[] GetTypes()
     {
         var handlers = new List<ITypeHandler>();
@@ -78,11 +69,6 @@ partial class AssemblyHandler
     /// <summary>
     /// Add a class to the assembly.
     /// </summary>
-    /// <param name="typeName"></param>
-    /// <param name="typeNamespace"></param>
-    /// <param name="classFlags"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
     public ClassDecorator AddClass(string typeName, string typeNamespace, ClassFlags classFlags)
     {
         var fullName = $"{typeNamespace}.{typeName}";
@@ -91,7 +77,7 @@ partial class AssemblyHandler
         if (m_TypeCache.ContainsKey(fullName)) throw new ArgumentException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
 
         // Create type definition from context.
-        var typeDef = new TypeDefinition(typeName, typeNamespace, classFlags.ToTypeAttributes());
+        var typeDef = new TypeDefinition(typeNamespace, typeName, classFlags.ToTypeAttributes());
         var context = new Implementation();
         return new ClassDecorator(this, typeDef, context, AddClassCallback);
 
@@ -103,6 +89,9 @@ partial class AssemblyHandler
             // Add type to module.
             Assembly.Source.MainModule.Types.Add(type);
 
+            // Track for redefinition check.
+            m_TypeCache[fullName] = new CecilType(type, type);
+
             return new ClassHandler(this, type);
         }
     }
@@ -110,11 +99,6 @@ partial class AssemblyHandler
     /// <summary>
     /// Add a class to the assembly.
     /// </summary>
-    /// <param name="typeName"></param>
-    /// <param name="typeNamespace"></param>
-    /// <param name="structFlags"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
     public StructDecorator AddStruct(string typeName, string typeNamespace, StructFlags structFlags)
     {
         var fullName = $"{typeNamespace}.{typeName}";
@@ -123,23 +107,25 @@ partial class AssemblyHandler
         if (m_TypeCache.ContainsKey(fullName)) throw new ArgumentException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
 
         // Create type definition from context.
-        var typeDef = new TypeDefinition(typeName, typeNamespace, structFlags.ToTypeAttributes())
-        {
-            IsValueType = true
-        };
+        var typeDef = new TypeDefinition(typeNamespace, typeName, structFlags.ToTypeAttributes());
         var context = new Implementation();
 
         if (structFlags.HasFlag(StructFlags.Ref))
         {
+            var module = Assembly.Source.MainModule;
             // Add IsByRefLike attribute.
-            typeDef.CustomAttributes.Add(typeDef.CreateCustomAttribute(Assembly.Source.MainModule, typeof(IsByRefLikeAttribute)));
+            var byRefLikeDef = GetCecilType(typeof(IsByRefLikeAttribute)).Definition;
+            typeDef.CustomAttributes.Add(byRefLikeDef.CreateCustomAttribute(module));
             // Add Obsolete attribute to prevent using this type in field, which is not allowed for ref struct.
-            typeDef.CustomAttributes.Add(typeDef.CreateCustomAttribute(Assembly.Source.MainModule, typeof(ObsoleteAttribute), "This type is a ref struct and cannot be used as a field.", true));
+            var obsoleteDef = GetCecilType(typeof(ObsoleteAttribute)).Definition;
+            typeDef.CustomAttributes.Add(obsoleteDef.CreateCustomAttribute(module, "This type is a ref struct and cannot be used as a field.", true));
         }
         if (structFlags.HasFlag(StructFlags.ReadOnly))
         {
+            var module = Assembly.Source.MainModule;
             // Add IsReadOnly attribute.
-            typeDef.CustomAttributes.Add(typeDef.CreateCustomAttribute(Assembly.Source.MainModule, typeof(IsReadOnlyAttribute)));
+            var readOnlyDef = GetCecilType(typeof(IsReadOnlyAttribute)).Definition;
+            typeDef.CustomAttributes.Add(readOnlyDef.CreateCustomAttribute(module));
         }
 
         return new StructDecorator(this, typeDef, context, AddStructCallback);
@@ -152,8 +138,10 @@ partial class AssemblyHandler
             // Add type to module.
             Assembly.Source.MainModule.Types.Add(type);
 
-            // return new StructHandler(this, typeDef);
-            return default;
+            // Track for redefinition check.
+            m_TypeCache[fullName] = new CecilType(type, type);
+
+            return new StructHandler(this, type);
         }
     }
 }

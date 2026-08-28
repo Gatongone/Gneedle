@@ -106,6 +106,14 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         return fieldDef;
     }
 
+    /// <summary>
+    /// Get method from target type, if the target type does not contain a matching method, recursively fetch it from its base type.
+    /// </summary>
+    /// <param name="target">The target type.</param>
+    /// <param name="methodName">Name of the method.</param>
+    /// <param name="parameters">Parameters of the method.</param>
+    /// <param name="throwWhenNotFound">Whether to throw an exception when the method is not found. Default is true.</param>
+    /// <returns>The method from target type or its base type. Returns null if there is no matching method in the target type and its base types.</returns>
     internal MethodDefinition? GetMethodFromType(TypeDefinition target, string methodName, IReadOnlyList<TypeReference> parameters, bool throwWhenNotFound = true)
     {
         var curType = target;
@@ -120,6 +128,12 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         return methodDef == null && throwWhenNotFound ? null : methodDef!;
     }
 
+    /// <summary>
+    /// Get property from target type, if the target type does not contain a matching property, recursively fetch it from its base type.
+    /// </summary>
+    /// <param name="target">The target type.</param>
+    /// <param name="propertyName">Name of the property.</param>
+    /// <returns>The property from target type or its base type. Returns null if there is no matching property in the target type and its base types.</returns>
     internal PropertyDefinition? GetPropertyFromType(TypeDefinition target, string propertyName)
     {
         var curType = target;

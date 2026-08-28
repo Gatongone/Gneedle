@@ -105,7 +105,6 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
                 // Append generic parameter attributes to constraint.
                 Attributes = genericParameter.GetGenericParameterAttributes()
             };
-            method.GenericParameters.Add(genericParams);
 
             // Process every constraint from type.
             foreach (var constraint in genericParameter.Constraints)
@@ -189,11 +188,11 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
         => AssemblyHandler.GetPropertyFromType(Source, propertyName);
 
     internal PropertyDefinition? GetPropertyInBase(string propertyName)
-        => AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetCecilType(Source.DeclaringType.BaseType).Definition, propertyName);
+        => AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, propertyName);
 
     internal MethodDefinition? GetMethodInThis(string methodName, IReadOnlyList<TypeReference> parameters)
         => AssemblyHandler.GetMethodFromType(Source, methodName, parameters);
 
     internal MethodDefinition? GetMethodInBase(string methodName, IReadOnlyList<TypeReference> parameters)
-        => AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.DeclaringType.BaseType).Definition, methodName, parameters);
+        => AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, methodName, parameters);
 }

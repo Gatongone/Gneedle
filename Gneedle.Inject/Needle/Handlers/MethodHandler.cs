@@ -117,7 +117,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // Replace operand.
             if (instruction.Operand != null)
             {
-                ReplaceOperand(index, filter);
+                ReplaceOperand(index, filter, targetDef);
             }
         }
 
@@ -165,7 +165,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="currentIndex">Index of the instruction to replace operand.</param>
     /// <param name="filter">The instruction filter to replace the instruction.</param>
-    private void ReplaceOperand(int currentIndex, InstructionFilter filter)
+    /// <param name="targetDef">The method definition being scanned (source of the instructions).</param>
+    private void ReplaceOperand(int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         var bodyInstructions = filter.Target;
         var currentIns = bodyInstructions[currentIndex];
@@ -205,7 +206,7 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         if (memberFlag is not MemberSymbols.None && currentIns.Operand is MethodReference)
         {
-            ParseMember(memberName, memberFlag, currentIndex, filter);
+            ParseMember(memberName, memberFlag, currentIndex, filter, targetDef);
         }
         else
         {
@@ -250,7 +251,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="memberSymbol">Member flags about the member kind and its property.</param>
     /// <param name="currentIndex">Index of the instruction of `ldstr {member_name}`.</param>
     /// <param name="filter"></param>
-    private void ParseMember(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter)
+    /// <param name="targetDef">The method definition being scanned (source of the instructions).</param>
+    private void ParseMember(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         if (memberSymbol.HasFlag(MemberSymbols.Field))
         {
@@ -264,7 +266,7 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         else if (memberSymbol.HasFlag(MemberSymbols.Method))
         {
-            ParseMethod(memberName, memberSymbol, currentIndex, filter);
+            ParseMethod(memberName, memberSymbol, currentIndex, filter, targetDef);
         }
     }
 

@@ -76,9 +76,9 @@ partial class MethodHandler
         filter.Skip(currentIndex + 1);
 
         filter.Replace(callvirtIndex, isGet
-            // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> stfld/stsfld class {field_type} {declaring_type}::{field_name}
-            ? Instruction.Create(isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, fieldRef)
             // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> ldfld/ldsfld class {field_type} {declaring_type}::{field_name}
+            ? Instruction.Create(isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, fieldRef)
+            // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> stfld/stsfld class {field_type} {declaring_type}::{field_name}
             : Instruction.Create(isStatic ? OpCodes.Stsfld : OpCodes.Stfld, fieldRef));
     }
 }

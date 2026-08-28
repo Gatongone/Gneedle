@@ -46,9 +46,9 @@ public struct Constraint
         GenericParameterAttributes = genericParameterAttributes | type switch
         {
             GenericParameterType genericParameterType => genericParameterType.Constraints.Combined(),
-            GenericType genericType                   => genericType.Type.GenericParameterAttributes,
-            NongenericType nonGenericType             => nonGenericType.Type.GenericParameterAttributes,
-            _                                         => GenericParameterAttributes = GenericParameterAttributes.None
+            GenericType genericType when genericType.Type.IsGenericParameter       => genericType.Type.GenericParameterAttributes,
+            NongenericType nonGenericType when nonGenericType.Type.IsGenericParameter => nonGenericType.Type.GenericParameterAttributes,
+            _                                         => GenericParameterAttributes.None
         };
     }
 

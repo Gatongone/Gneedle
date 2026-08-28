@@ -30,7 +30,7 @@ partial class MethodHandler
     /// <param name="filter">The final instruction's container.</param>
     /// <exception cref="InvalidILException">Thrown when the nearest 'callvirt' to `Ldstr {field_name}` doesn't exist.</exception>
     /// <exception cref="ArgumentException">Thrown when the method is invalid.</exception>
-    private void ParseMethod(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter)
+    private void ParseMethod(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         if ((filter.Target[currentIndex + 1].Operand as GenericInstanceMethod)?.GenericArguments.FirstOrDefault() is not { } delegateRef)
         {
@@ -42,22 +42,26 @@ partial class MethodHandler
             delegateDef = DeclaringTypeHandler.AssemblyHandler.GetCecilType(delegateRef).Definition;
         }
 
-        // Get method parameter from delegation.
+        // Generic instance arguments used to resolve open generic parameters in the Invoke signature.
+        var genericArguments = (delegateRef as GenericInstanceType)?.GenericArguments;
+
+        // Get method parameter from delegation. When the delegate is a generic instance (e.g. Func<int,int,int>),
+        // the Invoke signature uses open generic parameters (T1,T2), so we map them to the actual arguments.
         var parameters = delegateDef.Methods
                                     .First(method => method.Name.Equals("Invoke"))
                                     .Parameters
-                                    .Select(p => Source.Module.ImportReference(p.ParameterType))
+                                    .Select(p => Source.Module.ImportReference(ResolveDelegateParameterType(p.ParameterType, genericArguments)))
                                     .ToArray();
 
         // var methodDef = memberSymbol.HasFlag(MemberSymbols.Base) ? GetMethodInBase(memberName, parameters) : GetMethodInThis(memberName, parameters);
-        var methodDef = GetMethod(memberSymbol, memberName, currentIndex, filter.Target, parameters);
+        var methodDef = GetMethod(memberSymbol, memberName, currentIndex, filter.Target, parameters, targetDef);
         if (methodDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
         }
 
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
-        if (TryGetNextInvoke(filter.Target, currentIndex + 1, delegateRef, parameters, out var callvirtIndex))
+        if (TryGetNextInvoke(filter.Target, currentIndex + 1, delegateRef, targetDef, out var callvirtIndex))
         {
             if (!methodDef.IsStatic)
             {
@@ -100,7 +104,7 @@ partial class MethodHandler
         }
     }
 
-    private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, IReadOnlyList<Instruction> instructions, IReadOnlyList<TypeReference> parameters)
+    private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, IReadOnlyList<Instruction> instructions, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef)
     {
         if (memberSymbol.HasFlag(MemberSymbols.Base))
         {
@@ -114,7 +118,7 @@ partial class MethodHandler
 
         if (memberSymbol.HasFlag(MemberSymbols.Object))
         {
-            var argType = GetArgType(instructions[currentIndex - 1]) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+            var argType = GetArgType(instructions[currentIndex - 1], targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
             if (argType is GenericParameter parameter)
             {
                 return GetMethodFromConstraint(parameter, methodName, parameters);
@@ -148,7 +152,7 @@ partial class MethodHandler
         return methodDef ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
     }
 
-    private bool TryGetNextInvoke(IReadOnlyList<Instruction> bodyInstructions, int callIndex, TypeReference delegateType, TypeReference[] parameters, out int index)
+    private bool TryGetNextInvoke(IReadOnlyList<Instruction> bodyInstructions, int callIndex, TypeReference delegateType, MethodDefinition targetDef, out int index)
     {
         // This stack is used to ensure that the method parameters are of the same type as the method signature before they're all pushed to the stack.
         var paramStack = new ParameterStack();
@@ -169,23 +173,63 @@ partial class MethodHandler
                 return true;
             }
 
-            // Skip it because we are going to replace it.
-            if (i == callIndex) continue;
-
             // Keep the stack balanced until we match the target delegate invoke.
-            BalanceStack(ins, paramStack, localStack);
+            // The placeholder `call This::Method<TDelegate>(string)` at callIndex is balanced like
+            // any other static call: it pops the string argument and pushes the returned delegate.
+            BalanceStack(ins, paramStack, localStack, targetDef);
         }
 
         index = -1;
         return false;
 
-        bool MatchTargetInvoke(Instruction ins) =>
-            (ins.OpCode == OpCodes.Callvirt || ins.OpCode == OpCodes.Call)  // It's no double that the instruction must be 'call' type.
-            && ins.Operand is MethodReference {Name: "Invoke"} callMethod   // We only check the 'invoke' method from Delegate.
-            && TypeName.HasSameName(delegateType, callMethod.DeclaringType) // Make sure declaring types are the same.
-            && callMethod.Parameters.SameWith(paramStack.Types)             // Make sure the method parameters types has same types with the stack.
-            && callMethod.Parameters.SameWith(parameters);                  // Make sure paramStack has same types with the delegate parameters.
+        // The delegate Invoke expects the stack to hold [delegate-receiver, arg1, ...argN].
+        // We only compare the top N entries (the arguments) against the delegate's Invoke
+        // parameters, ignoring the receiver sitting below them.
+        bool MatchTargetInvoke(Instruction ins)
+            => (ins.OpCode == OpCodes.Callvirt || ins.OpCode == OpCodes.Call)   // It's not double that the instruction must be 'call' type.
+                && ins.Operand is MethodReference {Name: "Invoke"} callMethod   // We only check the 'invoke' method from Delegate.
+                && TypeName.HasSameName(delegateType, callMethod.DeclaringType) // Make sure declaring types are the same.
+                && TopOfStackMatches(callMethod);                               // Make sure the top-of-stack types match the invoke parameters.
+
+        bool TopOfStackMatches(MethodReference callMethod)
+        {
+            var invokeParameters = callMethod.Parameters;
+            var count = invokeParameters.Count;
+            if (paramStack.Types.Count < count) return false;
+            // When the delegate is a generic instance, Invoke's parameters are open generic
+            // parameters (!0,!1); resolve them to the actual generic arguments before comparing.
+            var invokeGenericArguments = (callMethod.DeclaringType as GenericInstanceType)?.GenericArguments;
+            var offset = paramStack.Types.Count - count;
+            for (var i = 0; i < count; i++)
+            {
+                var expected = ResolveDelegateParameterType(invokeParameters[i].ParameterType, invokeGenericArguments);
+                if (!StackTypeMatches(expected, paramStack.Types[offset + i])) return false;
+            }
+
+            return true;
+        }
     }
+
+    /// <summary>
+    /// Compare an expected parameter type against a type inferred from the evaluation stack.
+    /// Integer-family types (bool/char/[s]byte/[u]short/int) are all loaded via <c>ldc.i4.*</c>
+    /// and therefore indistinguishable on the stack, so they are treated as compatible.
+    /// </summary>
+    private static bool StackTypeMatches(TypeReference expected, TypeReference actual) => TypeName.HasSameName(expected, actual) || (IsI4Compatible(expected) && IsI4Compatible(actual));
+
+    /// <summary>
+    /// Whether the type is represented as a 4-byte integer on the CLR evaluation stack,
+    /// i.e. loaded via the <c>ldc.i4.*</c> opcodes and thus not distinguishable by opcode alone.
+    /// </summary>
+    private static bool IsI4Compatible(TypeReference type)
+        => type.MetadataType is MetadataType.Boolean
+            or MetadataType.Char
+            or MetadataType.SByte
+            or MetadataType.Byte
+            or MetadataType.Int16
+            or MetadataType.UInt16
+            or MetadataType.Int32
+            or MetadataType.UInt32;
 
     /// <summary>
     /// Consider how the instruction should pop from or push into <c>paramStack</c>.
@@ -194,7 +238,7 @@ partial class MethodHandler
     /// <param name="paramStack">Parameter stack of current method body scanning.</param>
     /// <param name="localStack"></param>
     /// <exception cref="ArgumentException"></exception>
-    private void BalanceStack(Instruction ins, ParameterStack paramStack, TypeReference[] localStack)
+    private void BalanceStack(Instruction ins, ParameterStack paramStack, TypeReference[] localStack, MethodDefinition targetDef)
     {
         // When any method call, the parameters stack should reduce by the same amount as the method parameters count.
         if ((ins.OpCode == OpCodes.Callvirt || ins.OpCode == OpCodes.Call) && ins.Operand is MethodReference callMethod)
@@ -208,7 +252,7 @@ partial class MethodHandler
         }
 
         // When the instruction push any variable to the method stack, it should be appended to the parameters stack.
-        if (TryGetStackType(ins, out var type))
+        if (TryGetStackType(ins, targetDef, out var type))
         {
             // Sanity check.
             if (type == null)
@@ -231,7 +275,7 @@ partial class MethodHandler
         }
     }
 
-    private bool TryGetStackType(Instruction ins, out TypeReference? type)
+    private bool TryGetStackType(Instruction ins, MethodDefinition targetDef, out TypeReference? type)
     {
         var module = Source.Module;
         var typeSystem = module.TypeSystem;
@@ -257,20 +301,20 @@ partial class MethodHandler
             Code.Ldfld or Code.Ldsfld when ins.Operand is FieldReference field                     => field.FieldType,                    // Field
             Code.Newobj when ins.Operand is MethodReference ctor                                   => ctor.DeclaringType,                 // Newobj
             Code.Call or Code.Callvirt or Code.Ldftn when ins.Operand is MethodReference methodRef => ResolveMethodReturnType(methodRef), // Call
-            _                                                                                      => GetArgType(ins)                     // Args
+            _                                                                                      => GetArgType(ins, targetDef)          // Args
         };
 
         return type != null && type != typeSystem.Void;
     }
 
-    private TypeReference? GetArgType(Instruction instruction)
+    private TypeReference? GetArgType(Instruction instruction, MethodDefinition targetDef)
     {
-        var isStatic = Source.IsStatic;
+        var isStatic = targetDef.IsStatic;
         if (instruction.OpCode == OpCodes.Ldarg_S && instruction.Operand is ParameterReference parameter) return parameter.ParameterType;
         if (!instruction.TryGetLdargIndex(out var index)) return null;
         return !isStatic && index == 0
-            ? Source.DeclaringType
-            : Source.Parameters[index + (isStatic ? -1 : 0)].ParameterType;
+            ? targetDef.DeclaringType
+            : targetDef.Parameters[index + (isStatic ? 0 : -1)].ParameterType;
     }
 
     private static TypeReference ResolveMethodReturnType(MethodReference methodRef)
@@ -282,6 +326,15 @@ partial class MethodHandler
             return genericType.GenericArguments[parameter.Position];
         return methodRef.ReturnType;
     }
+
+    /// <summary>
+    /// Resolve a delegate Invoke parameter type. When the delegate is a generic instance,
+    /// open generic parameters (e.g. T1) are mapped to the actual generic arguments (e.g. Int32).
+    /// </summary>
+    private static TypeReference ResolveDelegateParameterType(TypeReference parameterType, Mono.Collections.Generic.Collection<TypeReference>? genericArguments)
+        => parameterType is GenericParameter parameter && genericArguments != null && parameter.Position < genericArguments.Count
+            ? genericArguments[parameter.Position]
+            : parameterType;
 
     private class ParameterStack
     {
