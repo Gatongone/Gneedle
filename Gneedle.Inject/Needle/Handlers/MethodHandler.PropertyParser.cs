@@ -38,17 +38,81 @@ partial class MethodHandler
     /// <param name="filter">The final instruction's container.</param>
     /// <exception cref="InvalidILException">Thrown when the nearest 'callvirt' to `Ldstr {field_name}` doesn't exist.</exception>
     /// <exception cref="ArgumentException">Thrown when the property is invalid.</exception>
-    private void ParseProperty(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter)
+    private void ParseProperty(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         if (!TryGetNextGetOrSet(filter.Target, currentIndex + 2, out var isGet, out var callvirtIndex))
         {
             throw new InvalidILException();
         }
 
-        var propertyDef = memberSymbol.HasFlag(MemberSymbols.Base) ? DeclaringTypeHandler.GetPropertyInBase(memberName) : DeclaringTypeHandler.GetPropertyInThis(memberName);
+        // Detect Object/Static patterns to determine skip count and declaring type.
+        var skipArrayInitCount = 0;
+        var skipStaticFromCount = 0;
+        TypeDefinition? declaringTypeFromPattern = null;
+
+        if (memberSymbol.HasFlag(MemberSymbols.Object) && currentIndex >= 1)
+        {
+            var prevIns = filter.Target[currentIndex - 1];
+            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
+                && declType.FullName == Object.TYPE_NAME)
+            {
+                var baseIdx = currentIndex - 7;
+                if (baseIdx >= 0
+                    && filter.Target[baseIdx].OpCode.Code == Code.Ldc_I4_1
+                    && filter.Target[baseIdx + 1].OpCode == OpCodes.Newarr
+                    && filter.Target[baseIdx + 2].OpCode == OpCodes.Dup
+                    && filter.Target[baseIdx + 3].OpCode.Code == Code.Ldc_I4_0
+                    && (filter.Target[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S)
+                    && filter.Target[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
+                {
+                    skipArrayInitCount = 7;
+                    var instanceIns = filter.Target[baseIdx + 4];
+                    var argType = GetArgType(instanceIns, targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName));
+                    declaringTypeFromPattern = argType.Resolve();
+                }
+            }
+        }
+        else if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
+        {
+            var callFromIns = filter.Target[currentIndex - 1];
+            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference { Name: "From", DeclaringType: var declType }
+                && declType.FullName == Static.TYPE_NAME)
+            {
+                var ldstrIns = filter.Target[currentIndex - 2];
+                if (ldstrIns.OpCode == OpCodes.Ldstr && ldstrIns.Operand is string fullTypeName)
+                {
+                    skipStaticFromCount = 2;
+                    declaringTypeFromPattern = DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition;
+                }
+            }
+        }
+
+        var propertyDef = memberSymbol.HasFlag(MemberSymbols.Base)
+            ? DeclaringTypeHandler.GetPropertyInBase(memberName)
+            : memberSymbol.HasFlag(MemberSymbols.Object) || memberSymbol.HasFlag(MemberSymbols.Static)
+                ? DeclaringTypeHandler.AssemblyHandler.GetPropertyFromType(declaringTypeFromPattern ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName)), memberName)
+                : DeclaringTypeHandler.GetPropertyInThis(memberName);
         if (propertyDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName));
+        }
+
+        // Skip the array init sequence if this is Object.Property with new Object(param).
+        if (skipArrayInitCount > 0)
+        {
+            for (int i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
+            {
+                filter.Skip(i);
+            }
+        }
+
+        // Skip the Static.From sequence if this is Static.Property.
+        if (skipStaticFromCount > 0)
+        {
+            for (int i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
+            {
+                filter.Skip(i);
+            }
         }
 
         if (propertyDef.GetMethod is not {IsStatic: true} || propertyDef.SetMethod is not {IsStatic: true})

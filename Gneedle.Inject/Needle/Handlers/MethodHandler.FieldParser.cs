@@ -38,7 +38,7 @@ partial class MethodHandler
     /// <param name="filter">The final instruction's container.</param>
     /// <exception cref="InvalidILException">Thrown when the nearest 'callvirt' to `Ldstr {field_name}` doesn't exist.</exception>
     /// <exception cref="ArgumentException">Thrown when the field is invalid.</exception>
-    private void ParseField(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter)
+    private void ParseField(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         // Can't convert 'callvirt' to `Ldstr {field_name}`, because it doesn't even exist.
         if (!TryGetNextGetOrSet(filter.Target, currentIndex + 2, out var isGet, out var callvirtIndex))
@@ -46,9 +46,55 @@ partial class MethodHandler
             throw new InvalidILException();
         }
 
-        var declaringType = DeclaringTypeHandler.Source;
+        // Detect Object/Static patterns to determine skip count and declaring type.
+        var skipArrayInitCount = 0;
+        var skipStaticFromCount = 0;
+        TypeDefinition? declaringTypeFromPattern = null;
 
-        var field = memberSymbol.HasFlag(MemberSymbols.Base) ? DeclaringTypeHandler.GetFieldInBase(memberName) : DeclaringTypeHandler.GetFieldInThis(memberName);
+        if (memberSymbol.HasFlag(MemberSymbols.Object) && currentIndex >= 1)
+        {
+            var prevIns = filter.Target[currentIndex - 1];
+            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
+                && declType.FullName == Object.TYPE_NAME)
+            {
+                var baseIdx = currentIndex - 7;
+                if (baseIdx >= 0
+                    && filter.Target[baseIdx].OpCode.Code == Code.Ldc_I4_1
+                    && filter.Target[baseIdx + 1].OpCode == OpCodes.Newarr
+                    && filter.Target[baseIdx + 2].OpCode == OpCodes.Dup
+                    && filter.Target[baseIdx + 3].OpCode.Code == Code.Ldc_I4_0
+                    && (filter.Target[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S)
+                    && filter.Target[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
+                {
+                    skipArrayInitCount = 7;
+                    var instanceIns = filter.Target[baseIdx + 4];
+                    var argType = GetArgType(instanceIns, targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
+                    declaringTypeFromPattern = argType.Resolve();
+                }
+            }
+        }
+        else if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
+        {
+            var callFromIns = filter.Target[currentIndex - 1];
+            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference { Name: "From", DeclaringType: var declType }
+                && declType.FullName == Static.TYPE_NAME)
+            {
+                var ldstrIns = filter.Target[currentIndex - 2];
+                if (ldstrIns.OpCode == OpCodes.Ldstr && ldstrIns.Operand is string fullTypeName)
+                {
+                    skipStaticFromCount = 2;
+                    declaringTypeFromPattern = DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition;
+                }
+            }
+        }
+
+        var declaringType = declaringTypeFromPattern ?? DeclaringTypeHandler.Source;
+
+        var field = memberSymbol.HasFlag(MemberSymbols.Base)
+            ? DeclaringTypeHandler.GetFieldInBase(memberName)
+            : memberSymbol.HasFlag(MemberSymbols.Object) || memberSymbol.HasFlag(MemberSymbols.Static)
+                ? DeclaringTypeHandler.AssemblyHandler.GetFieldFromType(declaringType, memberName)
+                : DeclaringTypeHandler.GetFieldInThis(memberName);
         if (field == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
@@ -60,6 +106,24 @@ partial class MethodHandler
             // Otherwise we can directly import the field definition as reference.
             : Source.Module.ImportReference(field);
         var isStatic = field.Resolve().IsStatic;
+
+        // Skip the array init sequence if this is Object.Field with new Object(param).
+        if (skipArrayInitCount > 0)
+        {
+            for (int i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
+            {
+                filter.Skip(i);
+            }
+        }
+
+        // Skip the Static.From sequence if this is Static.Field.
+        if (skipStaticFromCount > 0)
+        {
+            for (int i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
+            {
+                filter.Skip(i);
+            }
+        }
 
         if (!isStatic)
         {

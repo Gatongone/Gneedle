@@ -53,6 +53,45 @@ partial class MethodHandler
                                     .Select(p => Source.Module.ImportReference(ResolveDelegateParameterType(p.ParameterType, genericArguments)))
                                     .ToArray();
 
+        // Detect Object.Method with new Object(param) syntax: need to skip the array init sequence.
+        var skipArrayInitCount = 0;
+        if (memberSymbol.HasFlag(MemberSymbols.Object) && currentIndex >= 1)
+        {
+            var prevIns = filter.Target[currentIndex - 1];
+            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
+                && declType.FullName == Object.TYPE_NAME)
+            {
+                // Verify the full array init pattern exists.
+                var baseIdx = currentIndex - 7;
+                if (baseIdx >= 0
+                    && filter.Target[baseIdx].OpCode.Code == Code.Ldc_I4_1
+                    && filter.Target[baseIdx + 1].OpCode == OpCodes.Newarr
+                    && filter.Target[baseIdx + 2].OpCode == OpCodes.Dup
+                    && filter.Target[baseIdx + 3].OpCode.Code == Code.Ldc_I4_0
+                    && (filter.Target[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S)
+                    && filter.Target[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
+                {
+                    skipArrayInitCount = 7; // ldc.i4.1 through newobj
+                }
+            }
+        }
+
+        // Detect Static.Method with Static.From("typename"): need to skip ldstr+call Static::From.
+        var skipStaticFromCount = 0;
+        if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
+        {
+            var callFromIns = filter.Target[currentIndex - 1];
+            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference { Name: "From", DeclaringType: var declType }
+                && declType.FullName == Static.TYPE_NAME)
+            {
+                var ldstrIns = filter.Target[currentIndex - 2];
+                if (ldstrIns.OpCode == OpCodes.Ldstr)
+                {
+                    skipStaticFromCount = 2; // ldstr + call Static::From
+                }
+            }
+        }
+
         // var methodDef = memberSymbol.HasFlag(MemberSymbols.Base) ? GetMethodInBase(memberName, parameters) : GetMethodInThis(memberName, parameters);
         var methodDef = GetMethod(memberSymbol, memberName, currentIndex, filter.Target, parameters, targetDef);
         if (methodDef == null)
@@ -63,6 +102,24 @@ partial class MethodHandler
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
         if (TryGetNextInvoke(filter.Target, currentIndex + 1, delegateRef, targetDef, out var callvirtIndex))
         {
+            // Skip the array init sequence if this is Object.Method with new Object(param).
+            if (skipArrayInitCount > 0)
+            {
+                for (int i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
+                {
+                    filter.Skip(i);
+                }
+            }
+
+            // Skip the Static.From sequence if this is Static.Method.
+            if (skipStaticFromCount > 0)
+            {
+                for (int i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
+                {
+                    filter.Skip(i);
+                }
+            }
+
             if (!methodDef.IsStatic)
             {
                 // ldstr {method_name} -> ldarg.0
@@ -118,7 +175,38 @@ partial class MethodHandler
 
         if (memberSymbol.HasFlag(MemberSymbols.Object))
         {
-            var argType = GetArgType(instructions[currentIndex - 1], targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+            // The instruction before ldstr memberName may be:
+            // 1. ldarg (direct parameter use) or
+            // 2. newobj Object::.ctor(object[]) — from new Object(instance) syntax.
+            //    Pattern: ldc.i4.1, newarr Object, dup, ldc.i4.0, ldarg.X, stelem.ref, newobj
+            var prevIns = instructions[currentIndex - 1];
+            Instruction? instanceIns = null;
+
+            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
+                && declType.FullName == Object.TYPE_NAME)
+            {
+                // Backtrack to find the ldarg in the array initializer sequence.
+                // Expected: [currentIndex-7] ldc.i4.1, [-6] newarr, [-5] dup, [-4] ldc.i4.0, [-3] ldarg.X, [-2] stelem.ref, [-1] newobj
+                var baseIdx = currentIndex - 7;
+                if (baseIdx >= 0
+                    && instructions[baseIdx].OpCode.Code == Code.Ldc_I4_1
+                    && instructions[baseIdx + 1].OpCode == OpCodes.Newarr
+                    && instructions[baseIdx + 2].OpCode == OpCodes.Dup
+                    && instructions[baseIdx + 3].OpCode.Code == Code.Ldc_I4_0
+                    && instructions[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S
+                    && instructions[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
+                {
+                    instanceIns = instructions[baseIdx + 4]; // The ldarg
+                }
+            }
+            else if (prevIns.OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S)
+            {
+                instanceIns = prevIns;
+            }
+
+            var argType = (instanceIns != null ? GetArgType(instanceIns, targetDef) : null)
+                          ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+
             if (argType is GenericParameter parameter)
             {
                 return GetMethodFromConstraint(parameter, methodName, parameters);
@@ -132,6 +220,24 @@ partial class MethodHandler
             }
 
             return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(originType, (string) instructions[currentIndex].Operand, parameters);
+        }
+
+        if (memberSymbol.HasFlag(MemberSymbols.Static))
+        {
+            // Static.From("FullTypeName").Method<D>("methodName") pattern:
+            // [currentIndex-2]: ldstr "FullTypeName"
+            // [currentIndex-1]: call Static::From
+            // [currentIndex]:   ldstr "methodName"
+            if (currentIndex < 2) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+            var typeNameIns = instructions[currentIndex - 2];
+            if (typeNameIns.OpCode != OpCodes.Ldstr || typeNameIns.Operand is not string fullTypeName)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+            }
+
+            // Resolve the type using GetCecilType (checks cache + Type.GetType reflection + current assembly).
+            var staticType = DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition;
+            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(staticType, (string) instructions[currentIndex].Operand, parameters);
         }
 
         return null;

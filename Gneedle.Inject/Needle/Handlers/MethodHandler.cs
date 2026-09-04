@@ -256,12 +256,12 @@ internal sealed partial class MethodHandler : IMethodHandler
     {
         if (memberSymbol.HasFlag(MemberSymbols.Field))
         {
-            ParseField(memberName, memberSymbol, currentIndex, filter);
+            ParseField(memberName, memberSymbol, currentIndex, filter, targetDef);
         }
 
         else if (memberSymbol.HasFlag(MemberSymbols.Property))
         {
-            ParseProperty(memberName, memberSymbol, currentIndex, filter);
+            ParseProperty(memberName, memberSymbol, currentIndex, filter, targetDef);
         }
 
         else if (memberSymbol.HasFlag(MemberSymbols.Method))
