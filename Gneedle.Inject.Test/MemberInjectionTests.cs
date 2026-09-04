@@ -22,6 +22,15 @@ public class MemberInjectionTests
 
         public static int ReadInstanceProperty() => This.Property<int>("Prop").Get();
         public static void WriteInstanceProperty(int v) => This.Property<int>("Prop").Set(v);
+
+        // Generic field on a Host<T>: exercises the field.ContainsGenericParameter branch
+        // that builds a FieldReference via MakeGenericInstanceType (cecil issue #954).
+        public static T_0 ReadGenericField() => This.Field<T_0>("value").Get();
+        public static void WriteGenericField(T_0 v) => This.Field<T_0>("value").Set(v);
+
+        // Generic property on a Host<T>: ImportReference handles generic context automatically.
+        public static T_0 ReadGenericProp() => This.Property<T_0>("Prop").Get();
+        public static void WriteGenericProp(T_0 v) => This.Property<T_0>("Prop").Set(v);
     }
 
     private static TypeHandler NewHostWithField(string fieldName, bool isStatic)
@@ -183,6 +192,115 @@ public class MemberInjectionTests
         var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [typeof(int).ToGneedleType()], MethodFlags.Public);
 
         Assert.Catch<System.ArgumentException>(() => method.SetBody(Template(nameof(Templates.WriteInstanceProperty))));
+    }
+
+    // endregion
+
+    // region Generic field rewriting (Host<T> with a field of type T)
+
+    private static TypeHandler NewGenericHostWithField(string fieldName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create("MemberInjectionGenericAssembly").Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
+                                        .WithGenericParameter("T")
+                                        .GetHandler();
+        var gp = host.Source.GenericParameters[0];
+        host.Source.Fields.Add(new FieldDefinition(fieldName, FieldAttributes.Public, gp));
+        return host;
+    }
+
+    [Test]
+    public void ReadGenericField_Rewrites_To_Ldfld_On_GenericInstanceType()
+    {
+        var host = NewGenericHostWithField("value");
+        var method = host.AddMethod("Get", new GenericParameterType("T"), [], [], MethodFlags.Public);
+        method.SetBody(Template(nameof(Templates.ReadGenericField)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        var ldfld = ins.FirstOrDefault(i => i.OpCode == OpCodes.Ldfld);
+        Assert.That(ldfld, Is.Not.Null);
+        // The field reference's declaring type must be the generic instance Host<T>, not the open definition.
+        Assert.That(((FieldReference) ldfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>());
+    }
+
+    [Test]
+    public void WriteGenericField_Rewrites_To_Stfld_On_GenericInstanceType()
+    {
+        var host = NewGenericHostWithField("value");
+        var method = host.AddMethod("Set", typeof(void).ToGneedleType(), [], [new GenericParameterType("T")], MethodFlags.Public);
+        method.SetBody(Template(nameof(Templates.WriteGenericField)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        var stfld = ins.FirstOrDefault(i => i.OpCode == OpCodes.Stfld);
+        Assert.That(stfld, Is.Not.Null);
+        Assert.That(((FieldReference) stfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>());
+    }
+
+    // endregion
+
+    // region Generic property rewriting (Host<T> with a property of type T)
+
+    private static TypeHandler NewGenericHostWithProperty(string propertyName, bool withGetter, bool withSetter)
+    {
+        var handler = (AssemblyHandler) Assembly.Create("MemberInjectionGenericPropAssembly").Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
+                                        .WithGenericParameter("T")
+                                        .GetHandler();
+        var gp = host.Source.GenericParameters[0];
+        var module = host.Source.Module;
+        var prop = new PropertyDefinition(propertyName, PropertyAttributes.None, gp);
+        var methodAttrs = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+
+        if (withGetter)
+        {
+            var getter = new MethodDefinition($"get_{propertyName}", methodAttrs, gp) { DeclaringType = host.Source };
+            getter.Body.GetILProcessor().Emit(OpCodes.Ret);
+            prop.GetMethod = getter;
+            host.Source.Methods.Add(getter);
+        }
+
+        if (withSetter)
+        {
+            var setter = new MethodDefinition($"set_{propertyName}", methodAttrs, module.TypeSystem.Void) { DeclaringType = host.Source };
+            setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, gp));
+            setter.Body.GetILProcessor().Emit(OpCodes.Ret);
+            prop.SetMethod = setter;
+            host.Source.Methods.Add(setter);
+        }
+
+        host.Source.Properties.Add(prop);
+        return host;
+    }
+
+    [Test]
+    public void ReadGenericProp_Rewrites_To_Call_Getter_With_Correct_Signature()
+    {
+        var host = NewGenericHostWithProperty("Prop", withGetter: true, withSetter: true);
+        var method = host.AddMethod("Get", new GenericParameterType("T"), [], [], MethodFlags.Public);
+        method.SetBody(Template(nameof(Templates.ReadGenericProp)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        var call = ins.FirstOrDefault(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                                            && ((MethodReference) i.Operand).Name == "get_Prop");
+        Assert.That(call, Is.Not.Null);
+        // The getter's return type should be the generic parameter T.
+        Assert.That(((MethodReference) call!.Operand).ReturnType, Is.InstanceOf<GenericParameter>());
+    }
+
+    [Test]
+    public void WriteGenericProp_Rewrites_To_Call_Setter_With_Correct_Signature()
+    {
+        var host = NewGenericHostWithProperty("Prop", withGetter: true, withSetter: true);
+        var method = host.AddMethod("Set", typeof(void).ToGneedleType(), [], [new GenericParameterType("T")], MethodFlags.Public);
+        method.SetBody(Template(nameof(Templates.WriteGenericProp)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        var call = ins.FirstOrDefault(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                                            && ((MethodReference) i.Operand).Name == "set_Prop");
+        Assert.That(call, Is.Not.Null);
+        // The setter's parameter type should be the generic parameter T.
+        var param = ((MethodReference) call!.Operand).Parameters[0];
+        Assert.That(param.ParameterType, Is.InstanceOf<GenericParameter>());
     }
 
     // endregion
