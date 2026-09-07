@@ -54,7 +54,83 @@ internal sealed partial class MethodHandler : IMethodHandler
         return sb.ToString();
     }
 
-    public void SetBody(DefaultMethodBody defaultMethodBody) { } // TODO: implement default method body behavior.
+    public void SetBody(DefaultMethodBody defaultMethodBody)
+    {
+        Source.Body = new MethodBody(Source);
+        var il = Source.Body.GetILProcessor();
+
+        switch (defaultMethodBody)
+        {
+            case DefaultMethodBody.CallFromBase:
+                SetBodyCallFromBase(il);
+                break;
+            case DefaultMethodBody.ThrowException:
+                SetBodyThrowException(il);
+                break;
+            case DefaultMethodBody.WithDefaultReturn:
+                SetBodyWithDefaultReturn(il);
+                break;
+        }
+    }
+
+    private void SetBodyCallFromBase(ILProcessor il)
+    {
+        // Find the base type's method with the same name and parameter types.
+        var baseType = Source.DeclaringType.BaseType;
+        if (baseType == null) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
+
+        var baseMethod = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(
+            DeclaringTypeHandler.AssemblyHandler.GetCecilType(baseType).Definition,
+            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray());
+        if (baseMethod == null)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
+        }
+
+        // Load arguments, call base method, return.
+        var isStatic = Source.IsStatic;
+        for (var i = 0; i < Source.Parameters.Count; i++)
+        {
+            il.Emit(OpCodes.Ldarg, i + (isStatic ? 0 : 1));
+        }
+
+        il.Emit(baseMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, Source.Module.ImportReference(baseMethod));
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void SetBodyThrowException(ILProcessor il)
+    {
+        var module = Source.Module;
+        var ctor = module.ImportReference(typeof(NotSupportedException).GetConstructor(Type.EmptyTypes));
+        il.Emit(OpCodes.Newobj, ctor);
+        il.Emit(OpCodes.Throw);
+    }
+
+    private void SetBodyWithDefaultReturn(ILProcessor il)
+    {
+        var returnType = Source.ReturnType;
+        if (returnType.MetadataType == MetadataType.Void)
+        {
+            il.Emit(OpCodes.Ret);
+            return;
+        }
+
+        // Load default value: null for reference types, default for value types.
+        if (returnType.IsValueType)
+        {
+            var variable = new VariableDefinition(returnType);
+            Source.Body.Variables.Add(variable);
+            il.Emit(OpCodes.Ldloca, variable);
+            il.Emit(OpCodes.Initobj, returnType);
+            il.Emit(OpCodes.Ldloc, variable);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        il.Emit(OpCodes.Ret);
+    }
 
     /// <summary>
     /// Set the method body of source method definition to be the same as the target method definition.
