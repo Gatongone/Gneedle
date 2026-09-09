@@ -90,7 +90,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
 
     public void SetSetter(DefaultPropertyBody body)
     {
-        if (Source.GetMethod == null)
+        if (Source.SetMethod == null)
         {
             var methodDef = new MethodDefinition($"set_{Name}", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, Source.Module.TypeSystem.Void);
             // If the property name is "Item", we treat it as an indexer setter,
@@ -116,9 +116,9 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             return;
         }
 
-        // Indexer is not supported for WithFieldOperation, because it doesn't have a default behaviour for setter method with parameters,
-        // and the default property body with field operation only supports parameterless setter method.
-        if (m_Setter.Source.Parameters.Count > 0)
+        // Indexer is not supported for WithFieldOperation. A normal setter has a single
+        // "value" parameter; only an indexer setter adds an extra "index" parameter.
+        if (m_Setter.Source.Parameters.Count > 1)
         {
             throw new ArgumentException("The default property body with field operation does not support indexer.");
         }

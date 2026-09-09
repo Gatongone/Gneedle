@@ -69,6 +69,15 @@ internal class TypeHandler : ITypeHandler, IEquatable<TypeHandler>
     }
 
     /// <inheritdoc/>
+    public MethodDecorator AddMethod(string methodName) => new(this, methodName);
+
+    /// <inheritdoc/>
+    public FieldDecorator AddField(string fieldName) => new(this, fieldName);
+
+    /// <inheritdoc/>
+    public PropertyDecorator AddProperty(string propertyName) => new(this, propertyName);
+
+    /// <inheritdoc/>
     public IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, IType[] parameterTypes, MethodFlags methodFlags)
     {
         // Set method attributes, and check the validity of method attributes according to method name.

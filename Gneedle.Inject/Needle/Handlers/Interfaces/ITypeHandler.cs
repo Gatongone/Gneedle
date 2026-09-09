@@ -17,6 +17,21 @@ public interface ITypeHandler : IAttributeContainer
     string Namespace { get; set; }
     bool TryGetRuntimeType(out Type? type);
     IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, IType[] parameterTypes, MethodFlags methodFlags = MethodFlags.Public);
+
+    /// <summary>
+    /// Start building a method through a chainable <see cref="MethodDecorator"/>.
+    /// </summary>
+    MethodDecorator AddMethod(string methodName);
+
+    /// <summary>
+    /// Start building a field through a chainable <see cref="FieldDecorator"/>.
+    /// </summary>
+    FieldDecorator AddField(string fieldName);
+
+    /// <summary>
+    /// Start building a property through a chainable <see cref="PropertyDecorator"/>.
+    /// </summary>
+    PropertyDecorator AddProperty(string propertyName);
 }
 
 public interface IClassHandler : ITypeHandler, IBaseTypeContainer, IInterfaceContainer;
