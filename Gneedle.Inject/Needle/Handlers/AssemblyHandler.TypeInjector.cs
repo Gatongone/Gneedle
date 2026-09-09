@@ -24,14 +24,14 @@ partial class AssemblyHandler
         {
             return new StructHandler(this, typeDefinition);
         }
+        if (typeDefinition.IsEnum)
+        {
+            return new EnumHandler(this, typeDefinition);
+        }
         if (typeDefinition.IsClass)
         {
             return new ClassHandler(this, typeDefinition);
         }
-        // if (typeDefinition.IsEnum)
-        // {
-        //     return new EnumHandler(this, typeDefinition);
-        // }
 
         return new TypeHandler(this, typeDefinition);
     }
@@ -143,5 +143,32 @@ partial class AssemblyHandler
 
             return new StructHandler(this, type);
         }
+    }
+
+    /// <summary>
+    /// Add an enum to the assembly.
+    /// </summary>
+    /// <param name="typeName">Type name of the enum.</param>
+    /// <param name="typeNamespace">Namespace of the enum.</param>
+    /// <param name="enumFlags">Enum flags.</param>
+    /// <returns>Decorator for describing the enum.</returns>
+    /// <exception cref="ArgumentException">Thrown when the type has been defined.</exception>
+    public EnumDecorator AddEnum(string typeName, string typeNamespace, EnumFlags enumFlags)
+    {
+        var fullName = $"{typeNamespace}.{typeName}";
+
+        // Check type redefined.
+        if (m_TypeCache.ContainsKey(fullName)) throw new ArgumentException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
+
+        // Create type definition from context.
+        var typeDef = new TypeDefinition(typeNamespace, typeName, enumFlags.ToTypeAttributes());
+
+        // Default underlying type is int.
+        var underlyingType = Assembly.Source.MainModule.TypeSystem.Int32;
+
+        // Register the type in the cache immediately so the decorator can build on it.
+        m_TypeCache[fullName] = new CecilType(typeDef, typeDef);
+
+        return new EnumDecorator(this, typeDef, underlyingType);
     }
 }

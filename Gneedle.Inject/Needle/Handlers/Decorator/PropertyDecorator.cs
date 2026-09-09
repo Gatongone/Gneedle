@@ -18,30 +18,35 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         m_PropertyName = propertyName;
     }
 
+    /// <inheritdoc/>
     public IAccessorDecorator WithType(IType propertyType)
     {
         m_PropertyType = propertyType;
         return this;
     }
 
+    /// <inheritdoc/>
     public IAccessorDecorator WithType(Type propertyType)
     {
         m_PropertyType = propertyType.ToGneedleType();
         return this;
     }
 
+    /// <inheritdoc/>
     public IAccessorDecorator WithGetter(DefaultPropertyBody body)
     {
         m_GetterBody = body;
         return this;
     }
 
+    /// <inheritdoc/>
     public IAccessorDecorator WithSetter(DefaultPropertyBody body)
     {
         m_SetterBody = body;
         return this;
     }
 
+    /// <inheritdoc/>
     public IPropertyHandler GetHandler()
     {
         var propertyType = m_TypeHandler.AssemblyHandler.ResolveParameterType(m_TypeHandler.Source, m_PropertyType);

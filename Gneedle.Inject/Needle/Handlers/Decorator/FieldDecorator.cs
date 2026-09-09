@@ -20,30 +20,35 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
         m_FieldName   = fieldName;
     }
 
+    /// <inheritdoc/>
     public IModifierDecorator WithType(IType fieldType)
     {
         m_FieldType = fieldType;
         return this;
     }
 
+    /// <inheritdoc/>
     public IModifierDecorator WithType(Type fieldType)
     {
         m_FieldType = fieldType.ToGneedleType();
         return this;
     }
 
+    /// <inheritdoc/>
     public ITypeDecorator AsStatic()
     {
         m_IsStatic = true;
         return this;
     }
 
+    /// <inheritdoc/>
     public ITypeDecorator WithAttributes(FieldAttributes attributes)
     {
         m_Attributes = attributes;
         return this;
     }
 
+    /// <inheritdoc/>
     public IFieldHandler GetHandler()
     {
         var fieldType = m_TypeHandler.AssemblyHandler.ResolveParameterType(m_TypeHandler.Source, m_FieldType);

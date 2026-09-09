@@ -20,48 +20,56 @@ public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
         m_MethodName  = methodName;
     }
 
+    /// <inheritdoc/>
     public IParameterDecorator WithReturnType(IType returnType)
     {
         m_ReturnType = returnType;
         return this;
     }
 
+    /// <inheritdoc/>
     public IParameterDecorator WithReturnType(Type returnType)
     {
         m_ReturnType = returnType.ToGneedleType();
         return this;
     }
 
-    public IFlagsDecorator WithParameter(IType parameterType)
+    /// <inheritdoc/>
+    public IParameterDecorator WithParameter(IType parameterType)
     {
         m_ParameterTypes.Add(parameterType);
         return this;
     }
 
-    public IFlagsDecorator WithParameter(Type parameterType)
+    /// <inheritdoc/>
+    public IParameterDecorator WithParameter(Type parameterType)
     {
         m_ParameterTypes.Add(parameterType.ToGneedleType());
         return this;
     }
 
-    public IFlagsDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints)
+    /// <inheritdoc/>
+    public IParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints)
     {
         m_GenericParameters.Add(new GenericParameterType(genericParameterName, constraints));
         return this;
     }
 
-    public IFlagsDecorator WithBody(DefaultMethodBody body)
+    /// <inheritdoc/>
+    public IParameterDecorator WithBody(DefaultMethodBody body)
     {
         m_Body = body;
         return this;
     }
 
+    /// <inheritdoc/>
     public ITypeDecorator WithFlags(MethodFlags methodFlags)
     {
         m_MethodFlags = methodFlags;
         return this;
     }
 
+    /// <inheritdoc/>
     public IMethodHandler GetHandler()
     {
         var handler = m_TypeHandler.AddMethod(
@@ -94,7 +102,7 @@ public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
     /// <summary>
     /// Decorator for describing method flags.
     /// </summary>
-    public interface IFlagsDecorator : ITypeDecorator
+    public interface IParameterDecorator : ITypeDecorator
     {
         /// <summary>
         /// Set method flags.
@@ -108,14 +116,14 @@ public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
         /// </summary>
         /// <param name="parameterType">Parameter type.</param>
         /// <returns>Result for chains calling.</returns>
-        IFlagsDecorator WithParameter(IType parameterType);
+        IParameterDecorator WithParameter(IType parameterType);
 
         /// <summary>
         /// Append parameter to the method from <see cref="System.Type"/>.
         /// </summary>
         /// <param name="parameterType">Parameter type.</param>
         /// <returns>Result for chains calling.</returns>
-        IFlagsDecorator WithParameter(Type parameterType);
+        IParameterDecorator WithParameter(Type parameterType);
 
         /// <summary>
         /// Append generic parameter to the method.
@@ -123,32 +131,14 @@ public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
         /// <param name="genericParameterName">Generic parameter name.</param>
         /// <param name="constraints">Generic parameter constrains.</param>
         /// <returns>Result for chains calling.</returns>
-        IFlagsDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
+        IParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
 
         /// <summary>
         /// Append default body to the method.
         /// </summary>
         /// <param name="body">Default method body.</param>
         /// <returns>Result for chains calling.</returns>
-        IFlagsDecorator WithBody(DefaultMethodBody body);
-    }
-
-    /// <summary>
-    /// Decorator for describing method parameters.
-    /// </summary>
-    public interface IParameterDecorator : IFlagsDecorator
-    {
-        /// <inheritdoc cref="IFlagsDecorator.WithParameter(IType)"/>
-        IFlagsDecorator WithParameter(IType parameterType);
-
-        /// <inheritdoc cref="IFlagsDecorator.WithParameter(Type)"/>
-        IFlagsDecorator WithParameter(Type parameterType);
-
-        /// <inheritdoc cref="IFlagsDecorator.WithGenericParameter(string, Constraint[])"/>
-        IFlagsDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
-
-        /// <inheritdoc cref="IFlagsDecorator.WithBody(DefaultMethodBody)"/>
-        IFlagsDecorator WithBody(DefaultMethodBody body);
+        IParameterDecorator WithBody(DefaultMethodBody body);
     }
 
     /// <summary>
