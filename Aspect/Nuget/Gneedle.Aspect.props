@@ -1,0 +1,8 @@
+<Project>
+   <PropertyGroup>
+      <AspectId>Gneedle.Aspect.Nuget</AspectId>
+      <AspectProjPath>..</AspectProjPath>
+      <AspectOutPath Condition="$(MSBuildRuntimeType) == 'Core'">$(AspectProjPath)\lib\net472</AspectOutPath>
+      <AspectOutPath Condition="$(MSBuildRuntimeType) != 'Core'">$(AspectProjPath)\lib\netstandard2.1</AspectOutPath>
+   </PropertyGroup>
+</Project>

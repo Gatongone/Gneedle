@@ -1,6 +1,0 @@
-<Project>
-    <UsingTask TaskName="$(DissectId).AssemblyInject" AssemblyFile="$(DissectOutPath)\$(DissectId).dll"/>
-    <Target Name="GneedleTarget" AfterTargets="PostBuildEvent">
-        <AssemblyInject ProjectPath="$(ProjectPath)" TargetPath="$(TargetPath)"/>
-    </Target>
-</Project>
