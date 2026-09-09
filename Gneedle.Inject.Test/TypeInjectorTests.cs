@@ -129,4 +129,28 @@ public class TypeInjectorTests
         var handler = CreateHandler();
         Assert.That(handler.GetType($"{Ns}.DoesNotExist"), Is.Null);
     }
+
+    [Test]
+    public void AddStruct_WithInterface_Type_Adds_Interface()
+    {
+        var handler = CreateHandler();
+        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public)
+                                   .WithInterface(typeof(System.IDisposable))
+                                   .GetHandler();
+
+        var def = ((StructHandler) structHandler).Source;
+        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(System.IDisposable).FullName), Is.True);
+    }
+
+    [Test]
+    public void AddStruct_WithInterface_IType_Adds_Interface()
+    {
+        var handler = CreateHandler();
+        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public)
+                                   .WithInterface(typeof(System.IComparable).ToGneedleType())
+                                   .GetHandler();
+
+        var def = ((StructHandler) structHandler).Source;
+        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(System.IComparable).FullName), Is.True);
+    }
 }
