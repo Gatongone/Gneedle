@@ -53,20 +53,54 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
         return new FieldHandler(fieldDef, m_TypeHandler);
     }
 
+    /// <summary>
+    /// Decorator for create type definition to current module.
+    /// </summary>
     public interface ITypeDecorator
     {
+        /// <summary>
+        /// Build field definition to module.
+        /// </summary>
+        /// <returns>Handler for field.</returns>
         IFieldHandler GetHandler();
     }
 
+    /// <summary>
+    /// Decorator for describing field modifier.
+    /// </summary>
     public interface IModifierDecorator : ITypeDecorator
     {
+        /// <summary>
+        /// Append static modifier to the field.
+        /// </summary>
+        /// <returns>Result for chains calling.</returns>
         ITypeDecorator AsStatic();
+
+        /// <summary>
+        /// Append custom field attributes to the field.
+        /// </summary>
+        /// <param name="attributes">Field attributes.</param>
+        /// <returns>Result for chains calling.</returns>
         ITypeDecorator WithAttributes(FieldAttributes attributes);
     }
 
+    /// <summary>
+    /// Decorator for describing field type.
+    /// </summary>
     public interface IFieldTypeDecorator : IModifierDecorator
     {
+        /// <summary>
+        /// Append field type from <see cref="IType"/>.
+        /// </summary>
+        /// <param name="fieldType">Field type of type.</param>
+        /// <returns>Result for chains calling.</returns>
         IModifierDecorator WithType(IType fieldType);
+
+        /// <summary>
+        /// Append field type from <see cref="System.Type"/>.
+        /// </summary>
+        /// <param name="fieldType">Field type of type.</param>
+        /// <returns>Result for chains calling.</returns>
         IModifierDecorator WithType(Type fieldType);
     }
 }

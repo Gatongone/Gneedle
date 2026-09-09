@@ -54,6 +54,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         return sb.ToString();
     }
 
+    /// <inheritdoc/>
     public void SetBody(DefaultMethodBody defaultMethodBody)
     {
         Source.Body = new MethodBody(Source);
@@ -73,6 +74,11 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
     }
 
+    /// <summary>
+    /// Set the method body to call the base type's method with the same name and parameters.
+    /// </summary>
+    /// <param name="il">The IL processor of the source method body.</param>
+    /// <exception cref="ArgumentException">Thrown when the base type or method is not found.</exception>
     private void SetBodyCallFromBase(ILProcessor il)
     {
         // Find the base type's method with the same name and parameter types.
@@ -98,6 +104,10 @@ internal sealed partial class MethodHandler : IMethodHandler
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Set the method body to throw a <see cref="NotSupportedException"/>.
+    /// </summary>
+    /// <param name="il">The IL processor of the source method body.</param>
     private void SetBodyThrowException(ILProcessor il)
     {
         var module = Source.Module;
@@ -106,6 +116,10 @@ internal sealed partial class MethodHandler : IMethodHandler
         il.Emit(OpCodes.Throw);
     }
 
+    /// <summary>
+    /// Set the method body to return the default value of the return type.
+    /// </summary>
+    /// <param name="il">The IL processor of the source method body.</param>
     private void SetBodyWithDefaultReturn(ILProcessor il)
     {
         var returnType = Source.ReturnType;

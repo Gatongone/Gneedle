@@ -62,20 +62,55 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         return handler;
     }
 
+    /// <summary>
+    /// Decorator for create type definition to current module.
+    /// </summary>
     public interface ITypeDecorator
     {
+        /// <summary>
+        /// Build property definition to module.
+        /// </summary>
+        /// <returns>Handler for property.</returns>
         IPropertyHandler GetHandler();
     }
 
+    /// <summary>
+    /// Decorator for describing property accessors.
+    /// </summary>
     public interface IAccessorDecorator : ITypeDecorator
     {
+        /// <summary>
+        /// Append getter to the property.
+        /// </summary>
+        /// <param name="body">The default body of the getter.</param>
+        /// <returns>Result for chains calling.</returns>
         IAccessorDecorator WithGetter(DefaultPropertyBody body);
+
+        /// <summary>
+        /// Append setter to the property.
+        /// </summary>
+        /// <param name="body">The default body of the setter.</param>
+        /// <returns>Result for chains calling.</returns>
         IAccessorDecorator WithSetter(DefaultPropertyBody body);
     }
 
+    /// <summary>
+    /// Decorator for describing property type.
+    /// </summary>
     public interface IPropertyTypeDecorator : IAccessorDecorator
     {
+        /// <summary>
+        /// Append property type from <see cref="IType"/>.
+        /// </summary>
+        /// <param name="propertyType">Property type of type.</param>
+        /// <returns>Result for chains calling.</returns>
         IAccessorDecorator WithType(IType propertyType);
+
+        /// <summary>
+        /// Append property type from <see cref="System.Type"/>.
+        /// </summary>
+        /// <param name="propertyType">Property type of type.</param>
+        /// <returns>Result for chains calling.</returns>
         IAccessorDecorator WithType(Type propertyType);
     }
 }
