@@ -152,6 +152,93 @@ internal static class CecilExtensions
         }
     }
 
+    /// <summary>
+    /// The pattern of the <c>Gneedle.Inject.T_[0-20]</c> token, which stands for the generic parameter of the type.
+    /// </summary>
+    /// <remarks>
+    /// The token must be the whole type name. Otherwise a type which merely contains a token as its generic argument,
+    /// just like <c>List&lt;Gneedle.Inject.T_0&gt;</c>, would be taken as the token itself.
+    /// </remarks>
+    private static readonly Regex s_GenericTypeNamePattern = new(@$"^{nameof(Gneedle)}\.{nameof(Inject)}\.T_(1[1-9]|20|[0-9])$");
+
+    /// <inheritdoc cref="s_GenericTypeNamePattern"/>
+    private static readonly Regex s_GenericMethodNamePattern = new(@$"^{nameof(Gneedle)}\.{nameof(Inject)}\.M_(1[1-9]|20|[0-9])$");
+
+    /// <summary>
+    /// Try to parse the index which the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] token of <paramref name="typeName"/> holds.
+    /// </summary>
+    /// <param name="typeName">The full name of the type which could be a token.</param>
+    /// <param name="index">The index held by the token.</param>
+    /// <param name="isFromMethod">Whether the token stands for the generic parameter of the method rather than of the declaring type.</param>
+    /// <returns>Whether the <paramref name="typeName"/> is a token.</returns>
+    private static bool TryGetParsedTokenIndex(string typeName, out int index, out bool isFromMethod)
+    {
+        index        = 0;
+        isFromMethod = false;
+
+        // Match type.
+        var matcher = s_GenericTypeNamePattern.Match(typeName);
+        if (matcher.Success && int.TryParse(matcher.Groups[1].Value, out index)) return true;
+
+        // Match method.
+        matcher = s_GenericMethodNamePattern.Match(typeName);
+        if (!matcher.Success || !int.TryParse(matcher.Groups[1].Value, out index)) return false;
+        isFromMethod = true;
+        return true;
+    }
+
+    /// <summary>
+    /// Try to parse the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] token of <paramref name="type"/> to the
+    /// generic parameter of the type declared by <paramref name="typeProvider"/> or of the method held by <paramref name="methodParameters"/>.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="TryGetParsedGenericParameter(IMemberDefinition, out GenericParameter?)"/>, which reads the token of a
+    /// type of a module, this one reads the token of an <see cref="IType"/> declared through the public API. The token is a
+    /// <see cref="System.Type"/> there, and the generic parameters of the method are not held by a method definition yet.
+    /// </remarks>
+    /// <param name="type">The type which could be a token.</param>
+    /// <param name="typeProvider">Holder of the generic parameters of the declaring type.</param>
+    /// <param name="methodParameters">Generic parameters of the method.</param>
+    /// <param name="parameter">The generic parameter which the token stands for.</param>
+    /// <returns>Whether the <paramref name="type"/> is a token which could be resolved.</returns>
+    /// <exception cref="IndexOutOfRangeException">Throw when the token index out of the generic parameters count.</exception>
+    internal static bool TryResolveGenericParameter(Type type, IMemberDefinition? typeProvider, IEnumerable<GenericParameter>? methodParameters,
+                                                    out GenericParameter? parameter)
+    {
+        parameter = null;
+        if (type.FullName == null || !TryGetParsedTokenIndex(type.FullName, out var index, out var isFromMethod)) return false;
+
+        // The token stands for the generic parameter of the method.
+        if (isFromMethod)
+        {
+            var parameters = methodParameters?.ToArray();
+            if (parameters == null) return false;
+            if (index > parameters.Length - 1)
+            {
+                throw new IndexOutOfRangeException($"'M_{index}' index out of Generic parameters count from {type.FullName}");
+            }
+
+            parameter = parameters[index];
+            return true;
+        }
+
+        // The token stands for the generic parameter of the declaring type.
+        var typeDef = typeProvider switch
+        {
+            TypeDefinition typeDefinition     => typeDefinition,
+            MethodDefinition methodDefinition => methodDefinition.DeclaringType,
+            _                                 => null
+        };
+        if (typeDef == null) return false;
+        if (index > typeDef.GenericParameters.Count - 1)
+        {
+            throw new IndexOutOfRangeException($"'T_{index}' index out of Generic parameters count from {typeDef.FullName}");
+        }
+
+        parameter = typeDef.GenericParameters[index];
+        return true;
+    }
+
     /// <param name="typeReference">The type reference which could be Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20].</param>
     extension(TypeReference typeReference)
     {
@@ -176,19 +263,11 @@ internal static class CecilExtensions
         /// <exception cref="IndexOutOfRangeException">Throw when the <c>typeReference</c> index out of the <c>provider</c>'s GenericParameters count.</exception>
         internal bool TryGetParsedGenericParameter(IMemberDefinition provider, out GenericParameter? parameter, out int index, out bool isFromMethod)
         {
-            index        = 0;
-            parameter    = default;
-            isFromMethod = false;
-
-            // The token must be the whole type name. Otherwise a type which merely contains a token as its generic argument,
-            // just like List<Gneedle.Inject.T_0>, would be taken as the token itself.
-            const string genericTypeNamePattern   = @$"^{nameof(Gneedle)}\.{nameof(Inject)}\.T_(1[1-9]|20|[0-9])$";
-            const string genericMethodNamePattern = @$"^{nameof(Gneedle)}\.{nameof(Inject)}\.M_(1[1-9]|20|[0-9])$";
-            var typeName = typeReference.FullName;
-            var matcher = Regex.Match(typeName, genericTypeNamePattern);
+            parameter = default;
+            if (!TryGetParsedTokenIndex(typeReference.FullName, out index, out isFromMethod)) return false;
 
             // Match type.
-            if (matcher.Success && int.TryParse(matcher.Groups[1].Value, out index))
+            if (!isFromMethod)
             {
                 var typeDef = provider switch
                 {
@@ -204,14 +283,11 @@ internal static class CecilExtensions
                     throw new IndexOutOfRangeException($"'T_{index}' index out of Generic parameters count from {typeDef.FullName}");
                 }
 
-                parameter    = typeParameters[index];
-                isFromMethod = false;
+                parameter = typeParameters[index];
                 return true;
             }
 
             // Match method.
-            matcher = Regex.Match(typeName, genericMethodNamePattern);
-            if (!matcher.Success || !int.TryParse(matcher.Groups[1].Value, out index)) return false;
             if (provider is not MethodDefinition methodDef) return false;
             var methodParameters = methodDef.GenericParameters;
             if (index > methodParameters.Count - 1)
@@ -219,8 +295,7 @@ internal static class CecilExtensions
                 throw new IndexOutOfRangeException($"'M_{index}' index out of Generic parameters count from {methodDef.FullName}");
             }
 
-            parameter    = methodParameters[index];
-            isFromMethod = true;
+            parameter = methodParameters[index];
             return true;
         }
 
@@ -397,12 +472,9 @@ internal static class CecilExtensions
                 // Or we just constrain to itself.
                 else constraintType = typeDefinition;
             }
-            else
-            {
-                // Resolve constraint type.
-                var resolvedType = assemblyHandler.ResolveParameterType(typeDefinition, constraint.Type);
-                constraintType = assemblyHandler.Assembly.Source.MainModule.ImportReference(resolvedType);
-            }
+            // Resolve constraint type. ResolveParameterType returns a reference which is owned by the target module
+            // already, so it can be appended as it is.
+            else constraintType = assemblyHandler.ResolveParameterType(typeDefinition, constraint.Type);
 
             // Append to constraint collections.
             genericParameter.Constraints.Add(new GenericParameterConstraint(constraintType));

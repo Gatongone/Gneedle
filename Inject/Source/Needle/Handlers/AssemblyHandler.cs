@@ -38,18 +38,28 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// <exception cref="ArgumentException">Thrown when there is assembly cycle referenced (target assembly referenced current assembly).</exception>
     internal void AddReference(AssemblyDefinition targetAssembly)
     {
-        var references = Assembly.Source.MainModule.AssemblyReferences;
         // Check repeat.
-        if (targetAssembly.MainModule.AssemblyReferences.Any(nameRef => nameRef.FullName.Equals(Assembly.Source.FullName)))
-        {
-            // Cycle reference.
-            throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, targetAssembly.FullName));
-        }
+        VerifyReferenceCycle(targetAssembly);
 
         // Append target reference to collections.
+        var references = Assembly.Source.MainModule.AssemblyReferences;
         if (!references.Any(nameRef => nameRef.FullName.Equals(targetAssembly.FullName)))
         {
             references.Add(targetAssembly.Name);
+        }
+    }
+
+    /// <summary>
+    /// Verify that referencing <paramref name="targetAssembly"/> does not make the assemblies reference each other,
+    /// which cannot be represented in metadata.
+    /// </summary>
+    /// <param name="targetAssembly">The assembly need to be referenced.</param>
+    /// <exception cref="ArgumentException">Thrown when the target assembly references current assembly.</exception>
+    private void VerifyReferenceCycle(AssemblyDefinition targetAssembly)
+    {
+        if (targetAssembly.MainModule.AssemblyReferences.Any(nameRef => nameRef.FullName.Equals(Assembly.Source.FullName)))
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, targetAssembly.FullName));
         }
     }
 
@@ -81,7 +91,8 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
 
         void AddType(TypeReference typeReference)
         {
-            m_TypeCache.Add(new TypeName(typeReference), new CecilType(typeReference.Resolve(), typeReference));
+            // The type system of the module owns the reference, so it is a valid reference of the target assembly.
+            m_TypeCache[new TypeName(typeReference).ToString()] = new CecilType(typeReference.Resolve(), typeReference);
         }
     }
 

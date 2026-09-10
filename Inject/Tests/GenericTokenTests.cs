@@ -9,6 +9,9 @@ namespace Gneedle.Inject.Test;
 /// The tokens are parsed by <c>CecilExtensions.TryGetParsedGenericParameter</c>, and consumed by
 /// <see cref="MethodHandler.ParseReturnType(IType)"/> (rewrites the return type of the injected method)
 /// and <c>MethodHandler.CopyVariables</c> (rewrites the local variable types of the injected method).
+/// They are parsed as well when a type is declared through the public API, by
+/// <c>AssemblyHandler.ResolveParameterType</c>, which covers the parameters and the return type of a method,
+/// the field and property types, the base type, the interfaces and the generic constraints.
 /// <para/>
 /// <c>T_X</c> stands for the X-th generic parameter of the method's declaring type,
 /// <c>M_X</c> stands for the X-th generic parameter of the method itself.
@@ -499,19 +502,6 @@ public class GenericTokenTests
     }
 
     [Test]
-    [Ignore("Pending decision: the types declared through the public API are not token parsed, so a token parameter stays "
-          + "a literal Gneedle.Inject.T_0 in the emitted signature. Parsing them would make `typeof(T_0)` another spelling of "
-          + "`new GenericParameterType(\"T\")`, which is a public API semantic change.")]
-    public void AddMethod_Parses_The_Token_Of_The_Parameter_Type()
-    {
-        var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(T_0).ToGneedleType()], MethodFlags.Public);
-
-        // The token parameter has to be the generic parameter of the host, just like the one from `new GenericParameterType("T")`.
-        Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
-    }
-
-    [Test]
     public void ObjectMethod_With_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_First_Generic_Parameter()
     {
         var host = NewConstrainedHost();
@@ -542,6 +532,73 @@ public class GenericTokenTests
                              .FirstOrDefault(reference => reference.Name == nameof(NamedSecondHelperBase.Name));
         Assert.That(call, Is.Not.Null);
         Assert.That(call!.DeclaringType.Name, Is.EqualTo(nameof(NamedSecondHelperBase)));
+    }
+
+    // endregion
+
+    // region Tokens on the public API path
+    //
+    // A token passed to the public API stands for a generic parameter just like it does in a template, even though the
+    // parameter is a System.Type there. Parsing it must happen before the type is imported, because importing a token
+    // type appends a Gneedle.Inject assembly reference to the target module and leaves the produced assembly depending
+    // on the weaver.
+
+    [Test]
+    public void AddMethod_Parses_The_Token_Of_The_Parameter_Type()
+    {
+        var host = NewHost("T0");
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(T_0).ToGneedleType()], MethodFlags.Public);
+
+        // The token parameter has to be the generic parameter of the host, just like the one from `new GenericParameterType("T")`.
+        Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
+    }
+
+    [Test]
+    public void AddMethod_Parses_The_Token_Of_The_Method_Generic_Parameter()
+    {
+        var host = NewHost();
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [new GenericParameterType("U")],
+                                                    [typeof(M_0).ToGneedleType()], MethodFlags.Public);
+
+        Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(method.Source.GenericParameters[0]));
+    }
+
+    [Test]
+    public void AddMethod_Parses_The_Token_Nested_In_The_Parameter_Type()
+    {
+        var host = NewHost("T0");
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new GenericType(typeof(List<>), typeof(T_0))],
+                                                    MethodFlags.Public);
+
+        var parameterType = method.Source.Parameters[0].ParameterType;
+        Assert.That(parameterType, Is.InstanceOf<GenericInstanceType>());
+        Assert.That(((GenericInstanceType) parameterType).GenericArguments[0], Is.SameAs(host.Source.GenericParameters[0]));
+    }
+
+    [Test]
+    public void AddMethod_With_Unresolvable_Token_Parameter_Throws()
+    {
+        var host = NewHost("T0");
+
+        Assert.Throws<IndexOutOfRangeException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(T_1).ToGneedleType()],
+                                                                    MethodFlags.Public));
+    }
+
+    [Test]
+    public void AddMethod_With_Token_Parameter_Does_Not_Reference_The_Weaver_Assembly()
+    {
+        var assembly = Assembly.Create("GenericTokenParameterAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler)
+                                 .AddClass("Host", Ns, ClassFlags.Public)
+                                 .WithGenericParameter("T0")
+                                 .GetHandler();
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(T_0).ToGneedleType()], MethodFlags.Public);
+
+        // Resolving the token through GetCecilType would load the assembly which declares Gneedle.Inject.T_0, and
+        // hence append a Gneedle.Inject reference to the target module. The produced assembly would then depend on
+        // the weaver at runtime even though the token itself is replaced.
+        Assert.That(host.Source.Module.AssemblyReferences.Any(reference => reference.Name.StartsWith(nameof(Gneedle))), Is.False);
+        Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
     }
 
     // endregion

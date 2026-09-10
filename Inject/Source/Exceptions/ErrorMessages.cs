@@ -9,8 +9,7 @@ internal static class ErrorMessages
     internal const string DIRTY_ASSEMBLY_OPERATION = "The assembly still dirty.";
 
     // Not supported exceptions:
-    internal const string ARCHITECTURE_NOT_SUPPORTED     = "Not supported architecture.";
-    internal const string TARGET_FRAMEWORK_NOT_SUPPORTED = "Not supported target framework.";
+    internal const string ARCHITECTURE_NOT_SUPPORTED = "Not supported architecture.";
 
     // Invalid operation exceptions:
     internal const string INVALID_CONSTRAINT = "The type of constraint is invalid. Type: {0}.";

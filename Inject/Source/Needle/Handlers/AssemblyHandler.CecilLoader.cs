@@ -2,10 +2,6 @@
 
 partial class AssemblyHandler
 {
-#if NETFRAMEWORK || NETCOREAPP
-    // Cache for assembly definition which is imported from current assembly definition.
-    private static System.Reflection.MethodInfo? s_GetAssemblyRawBytes;
-#endif
     /// <summary>
     /// Convert the parameter type to TypeReference from target type.
     /// </summary>
@@ -18,8 +14,18 @@ partial class AssemblyHandler
         switch (parameterType)
         {
             case NongenericType nongenericType:
-                // NongenericType just return definition.
-                return GetCecilType(nongenericType.Type).Definition;
+                // A token stands for a generic parameter of the target type or of the method, so it is parsed before
+                // GetCecilType. GetCecilType would append a Gneedle.Inject assembly reference to the target module,
+                // which leaves the produced assembly depending on the weaver even though the token itself is replaced.
+                if (CecilExtensions.TryResolveGenericParameter(nongenericType.Type, target as IMemberDefinition, methodGenericParameters,
+                    out var tokenParameter))
+                {
+                    return tokenParameter!;
+                }
+
+                // The reference is the one which may be assigned to the target assembly, while the definition is owned by
+                // the module which declares the type and would make Cecil throw at write time. See CecilType.Reference.
+                return GetCecilType(nongenericType.Type).Reference;
             case GenericParameterType genericParameterType:
                 // Get generic parameter from method or target type.
                 return methodGenericParameters?.FirstOrDefault(param => genericParameterType.TypeName.Equals(param.FullName))
@@ -41,12 +47,19 @@ partial class AssemblyHandler
     }
 
     /// <summary>
-    /// Get cecil type from type's type name which was imported from current assembly definition.
+    /// Get cecil type from <see cref="IType"/> which was imported from current assembly definition.
     /// If the type's assembly was never been referenced, then it would be appended.
     /// </summary>
     /// <param name="type">The type which need to be converted.</param>
     /// <returns>The cecil type from current definition.</returns>
-    internal CecilType GetCecilType(IType type) => GetCecilType(type.GetTypeName());
+    internal CecilType GetCecilType(IType type) => type switch
+    {
+        // A type which is backed by a System.Type is resolved through the type rather than through its name, because a
+        // name alone cannot tell which assembly declares the type.
+        NongenericType nongenericType => GetCecilType(nongenericType.Type),
+        GenericType genericType       => GetCecilType(genericType.Type),
+        _                             => GetCecilType(type.GetTypeName())
+    };
 
     /// <summary>
     /// Get cecil type from type name which was imported from current assembly definition.
@@ -69,12 +82,27 @@ partial class AssemblyHandler
         // Check assembly has be appended to cache.
         if (m_TypeCache.TryGetValue(typeName, out var cecilType)) return cecilType;
 
+        // Type.GetType searches the assembly which calls it and the corlib only, so this resolves the types of the weaver
+        // itself and of the corlib. A type of any other assembly is resolved through its System.Type instead, which the
+        // callers which hold one pass in by GetCecilType(IType).
         var type = Type.GetType(typeName);
 
         if (type != null) return GetCecilType(type);
 
-        var typeDef = Assembly.Source.Modules.SelectMany(module => module.Types).FirstOrDefault(t => typeName == t.Name);
-        return typeDef != null ? GetCecilType(typeDef) : throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);
+        // A type which the target assembly declares is not loadable by its name yet, so it is looked up by its full name.
+        // It has to be the full name and the nested types as well, just like GetType(string) looks it up.
+        foreach (var module in Assembly.Source.Modules)
+        {
+            foreach (var typeDefinition in module.Types)
+            {
+                if (typeDefinition.FullName == typeName) return GetCecilType(typeDefinition);
+
+                var nestedType = typeDefinition.NestedTypes.FirstOrDefault(nested => nested.FullName == typeName);
+                if (nestedType != null) return GetCecilType(nestedType);
+            }
+        }
+
+        throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);
     }
 
     /// <summary>
@@ -102,9 +130,10 @@ partial class AssemblyHandler
             AddReference(assemblyDef);
         }
 
-        // Import type ref and add to type cache.
-        cecilType = new CecilType(typeRef.Resolve(), typeRef);
-        m_TypeCache.Add(new TypeName(typeRef).ToString(), cecilType);
+        // Import type ref into the current assembly definition, and add to type cache. A reference which belongs to
+        // another module cannot be written to the produced assembly, so Reference must be owned by the current one.
+        cecilType                                     = new CecilType(typeRef.Resolve(), Assembly.Source.MainModule.ImportReference(typeRef));
+        m_TypeCache[new TypeName(typeRef).ToString()] = cecilType;
         return cecilType;
     }
 
@@ -119,79 +148,22 @@ partial class AssemblyHandler
         // If has imported, then return from cache.
         if (m_TypeCache.TryGetValue(new TypeName(type), out var cecilType)) return cecilType;
 
-        // Load assembly from location or cache.
-        var assemblyName = type.Assembly.GetName().FullName;
-
-        // Check assembly has be appended to cache.
-        if (!m_AssemblyCache.TryGetValue(assemblyName, out var assemblyDef))
+        // A reference cycle cannot be represented in metadata, so it is rejected before the type is imported. The
+        // assembly of the type does not have to be read for it, because the reflection type knows its references.
+        if (type.Assembly.GetReferencedAssemblies().Any(name => name.FullName.Equals(Assembly.Source.FullName)))
         {
-            // Get bytes that is a COFF-based image containing an emitted assembly.
-            if (!TryGetAssemblyRawBytes(type.Assembly, out var rawBytes))
-            {
-                throw new NotSupportException(ErrorMessages.TARGET_FRAMEWORK_NOT_SUPPORTED);
-            }
-
-            // Create assembly definition from raw bytes.
-            using var memoryStream = new MemoryStream(rawBytes);
-            assemblyDef = AssemblyDefinition.ReadAssembly(memoryStream, new ReaderParameters
-            {
-                InMemory    = true,
-                ReadWrite   = false,
-                ReadingMode = ReadingMode.Deferred
-            });
-            memoryStream.Close();
-
-            // Append to cache.
-            m_AssemblyCache[assemblyName] = assemblyDef;
-            // Reference target assembly.
-            AddReference(assemblyDef);
+            throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, type.Assembly.FullName));
         }
 
-        // Import type ref and add to type cache.
-        var targetTypeRef = assemblyDef.MainModule.ImportReference(type);
-        cecilType = new CecilType(targetTypeRef.Resolve(), targetTypeRef);
-        m_TypeCache.Add(new TypeName(type).ToString(), cecilType);
+        // Import type ref into the current assembly definition. The import registers the assembly reference which the
+        // type is resolved through as well, and that one may differ from the assembly which declares the type, because
+        // the reflection importer maps the corlib to another assembly.
+        var targetTypeRef = Assembly.Source.MainModule.ImportReference(type);
+
+        // The definition is the one for looking the members up. An assembly which only exists in memory cannot be read
+        // back, so it is not available for a type of such an assembly.
+        cecilType                                  = new CecilType(targetTypeRef.Resolve(), targetTypeRef);
+        m_TypeCache[new TypeName(type).ToString()] = cecilType;
         return cecilType;
-    }
-
-    /// <summary>
-    /// Get bytes from which is a COFF-based image containing an emitted assembly.
-    /// </summary>
-    /// <param name="assembly">The assembly which need to get raw bytes.</param>
-    /// <param name="rawBytes">Bytes that is a COFF-based image containing an emitted assembly.</param>
-    /// <returns>True when there is any way to get raw bytes.</returns>
-    private static bool TryGetAssemblyRawBytes(System.Reflection.Assembly assembly, out byte[] rawBytes)
-    {
-        rawBytes = Array.Empty<byte>();
-#if NETFRAMEWORK // On .NET Framework, GetRawBytes is a non-public method of System.Reflection.Assembly, which can be used to get raw bytes of assembly.
-        s_GetAssemblyRawBytes ??= assembly.GetType().GetMethod("GetRawBytes", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        rawBytes = s_GetAssemblyRawBytes?.Invoke(assembly, null) as byte[] ?? rawBytes;
-        if (rawBytes is {Length: > 0}) return true;
-#elif NETCOREAPP // On .NET Core, GetPEReader is a non-public method of System.Reflection.Module, which can be used to get PEReader of assembly, and then get raw bytes from PEReader.
-        var module = assembly.Modules.FirstOrDefault();
-        s_GetAssemblyRawBytes ??= module?.GetType().GetMethod("GetPEReader", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        if (s_GetAssemblyRawBytes != null)
-        {
-            using var peReader = (System.Reflection.PortableExecutable.PEReader?) s_GetAssemblyRawBytes.Invoke(module, null);
-            if (peReader is {HasMetadata: true})
-            {
-                unsafe
-                {
-                    var peImage = peReader.GetEntireImage();
-                    if (peImage.Length > 0)
-                    {
-                        rawBytes = new byte[peImage.Length];
-                        System.Runtime.InteropServices.Marshal.Copy((IntPtr) peImage.Pointer, rawBytes, 0, peImage.Length);
-                        return true;
-                    }
-                }
-            }
-        }
-#endif
-        // Get raw data from assembly location.
-        var location = assembly.Location;
-        if (string.IsNullOrEmpty(location)) return false;
-        rawBytes = File.ReadAllBytes(location);
-        return true;
     }
 }

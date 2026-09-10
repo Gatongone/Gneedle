@@ -69,6 +69,27 @@ public class MethodTests
         Assert.That(def.Parameters[0].ParameterType.Name, Is.EqualTo("T"));
     }
 
+    [Test]
+    public void AddMethod_WithDeclaredTypes_Produces_Valid_Assembly()
+    {
+        // A declared type which the target module does not own has to be imported into it, otherwise Cecil asks the module
+        // which declares it for its metadata token at write time and throws "Member ... is declared in another module and
+        // needs to be imported". The return type is void, whose definition is owned by the corlib, and the parameter is a
+        // type of another assembly, so both of the shapes which are not importable as-is are covered here.
+        var assembly = Assembly.Create("DeclaredTypeAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new NongenericType(typeof(MethodTests))], MethodFlags.Public);
+
+        using var stream = new MemoryStream();
+        assembly.SaveTo(stream);
+
+        stream.Position = 0;
+        var reread = AssemblyDefinition.ReadAssembly(stream);
+        var emitted = reread.MainModule.GetType($"{Ns}.Host")!.Methods.First(method => method.Name == "Run");
+        Assert.That(emitted.ReturnType.FullName, Is.EqualTo(typeof(void).FullName));
+        Assert.That(emitted.Parameters[0].ParameterType.FullName, Is.EqualTo(typeof(MethodTests).FullName));
+    }
+
     // endregion
 
     // region Constructor validation

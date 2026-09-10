@@ -65,9 +65,8 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
             case {ContainsGenericParameters: true}: throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithBaseType(IType) instead.");
         }
 
-        // Import and append to base type.
-        var module = m_AssemblyHandler.Assembly.Source.MainModule;
-        m_Implementation.BaseType = module.ImportReference(m_AssemblyHandler.GetCecilType(type).Reference);
+        // CecilType.Reference is owned by the target module already, so it can be appended as it is.
+        m_Implementation.BaseType = m_AssemblyHandler.GetCecilType(type).Reference;
         return this;
     }
 
@@ -98,9 +97,8 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
             case {ContainsGenericParameters: true}:  throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
         }
 
-        // Import and append to collections.
-        var module = m_AssemblyHandler.Assembly.Source.MainModule;
-        var implementation = new InterfaceImplementation(module.ImportReference(m_AssemblyHandler.GetCecilType(type).Reference));
+        // CecilType.Reference is owned by the target module already, so it can be appended as it is.
+        var implementation = new InterfaceImplementation(m_AssemblyHandler.GetCecilType(type).Reference);
         m_TypeDefinition.Interfaces.Add(implementation);
         return this;
     }
@@ -257,9 +255,8 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
             case {ContainsGenericParameters: true}:  throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
         }
 
-        // Import and append to collections.
-        var module = m_AssemblyHandler.Assembly.Source.MainModule;
-        var implementation = new InterfaceImplementation(module.ImportReference(m_AssemblyHandler.GetCecilType(type).Reference));
+        // CecilType.Reference is owned by the target module already, so it can be appended as it is.
+        var implementation = new InterfaceImplementation(m_AssemblyHandler.GetCecilType(type).Reference);
         m_TypeDefinition.Interfaces.Add(implementation);
         return this;
     }
@@ -270,9 +267,8 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
         // Default from object inheritance.
         if (m_Implementation.BaseType == null || m_Implementation.BaseType.FullName == typeof(ValueType).FullName)
         {
-            // Import and append to base type.
-            var module = m_AssemblyHandler.Assembly.Source.MainModule;
-            m_Implementation.BaseType = module.ImportReference(m_AssemblyHandler.GetCecilType(typeof(ValueType)).Reference);
+            // CecilType.Reference is owned by the target module already, so it can be appended as it is.
+            m_Implementation.BaseType = m_AssemblyHandler.GetCecilType(typeof(ValueType)).Reference;
         }
 
         // Build and append to module.

@@ -46,9 +46,8 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
     /// <inheritdoc/>
     public IEnumHandler GetHandler()
     {
-        // Set base type to System.Enum.
-        var enumBaseType = m_AssemblyHandler.GetCecilType(typeof(Enum)).Reference;
-        m_TypeDefinition.BaseType = m_AssemblyHandler.Assembly.Source.MainModule.ImportReference(enumBaseType);
+        // Set base type to System.Enum. Its reference is owned by the target module already, so it is appended as it is.
+        m_TypeDefinition.BaseType = m_AssemblyHandler.GetCecilType(typeof(Enum)).Reference;
 
         // Add the special value__ instance field of the underlying type.
         var valueField = new FieldDefinition("value__", FieldAttributes.Public | FieldAttributes.SpecialName | FieldAttributes.RTSpecialName, m_UnderlyingType);
