@@ -318,22 +318,12 @@ internal static class CecilExtensions
     /// <returns>The definition of the type, or null when the module does not declare it.</returns>
     private static TypeDefinition? FindType(ModuleDefinition module, string fullName)
     {
-        // A nested type is named by the full name of its declaring type, a slash and its own full name, so the name is
-        // walked down the nested types.
+        // The full name of a nested type holds the full name of its declaring type, a slash and its own full name, so it
+        // is the whole path rather than the last segment of it. The declaring type is walked down to reach it.
         var separator = fullName.IndexOf('/');
-        var type = module.Types.FirstOrDefault(type => type.FullName == (separator < 0 ? fullName : fullName[..separator]));
+        if (separator < 0) return module.Types.FirstOrDefault(type => type.FullName == fullName);
 
-        while (type != null && separator >= 0)
-        {
-            var rest = fullName[(separator + 1)..];
-            var next = rest.IndexOf('/');
-            var nestedFullName = next < 0 ? rest : rest[..next];
-
-            type      = type.NestedTypes.FirstOrDefault(nested => nested.FullName == nestedFullName);
-            separator = next < 0 ? -1 : separator + 1 + next;
-        }
-
-        return type;
+        return FindType(module, fullName[..separator])?.NestedTypes.FirstOrDefault(nested => nested.FullName == fullName);
     }
 
     /// <param name="typeReference">The type reference which could be Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20].</param>

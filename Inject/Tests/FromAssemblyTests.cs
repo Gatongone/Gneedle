@@ -33,6 +33,20 @@ namespace Gneedle.Test.Generated
         public static int Count;
     }
 
+    [FromAssembly(StubTarget.AssemblyName)]
+    public interface IStub
+    {
+    }
+
+    public class OuterStub
+    {
+        [FromAssembly(StubTarget.AssemblyName)]
+        public class Inner
+        {
+            public static int Field;
+        }
+    }
+
     /// <summary>
     /// A stub which the target assembly holds no real type for.
     /// </summary>
@@ -83,7 +97,12 @@ namespace Gneedle.Inject.Test
 
             public static int ReadGenericStubCount() => GenericStub<int>.Count;
 
-            public static string ObjectMethod_StubReceiver(Stub instance) => new Object(instance).Method<NameGetter>("Read")();
+            public static Stub[] StubArray()          => new Stub[0];
+            public static int    ReadNestedStubField() => OuterStub.Inner.Field;
+
+            public static string ObjectMethod_StubReceiver(Stub instance)   => new Object(instance).Method<NameGetter>("Read")();
+            public static int    ObjectField_StubReceiver(Stub instance)    => new Object(instance).Field<int>(nameof(Stub.Field)).Get();
+            public static int    ObjectProperty_StubReceiver(Stub instance) => new Object(instance).Property<int>(nameof(Stub.Property)).Get();
 
             public static int ReadAbsentStubField()       => AbsentStub.Field;
             public static int ReadUnresolvableStubField() => UnresolvableStub.Field;
@@ -138,6 +157,17 @@ namespace Gneedle.Inject.Test
             generic.GenericParameters.Add(new GenericParameter("T", generic));
             generic.Fields.Add(new FieldDefinition(nameof(GenericStub<int>.Count), FieldAttributes.Public | FieldAttributes.Static, module.TypeSystem.Int32));
             module.Types.Add(generic);
+
+            module.Types.Add(new TypeDefinition(Ns, nameof(IStub), TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract));
+
+            // The real type of a nested stub is nested in the very same way, so that both carry the same full name. A
+            // nested type which the compiler emits holds no namespace of its own, so this one holds none either: the
+            // last segment of the name of `Namespace.Outer/Inner` is the simple name.
+            var outer = new TypeDefinition(Ns, nameof(OuterStub), TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+            var inner = new TypeDefinition(string.Empty, nameof(OuterStub.Inner), TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
+            inner.Fields.Add(new FieldDefinition(nameof(OuterStub.Inner.Field), FieldAttributes.Public | FieldAttributes.Static, module.TypeSystem.Int32));
+            outer.NestedTypes.Add(inner);
+            module.Types.Add(outer);
 
             return assembly;
         }
@@ -293,9 +323,75 @@ namespace Gneedle.Inject.Test
             Assert.That(run.Invoke(null, null), Is.EqualTo(41));
         }
 
+        [Test]
+        public void SetBody_Replaces_The_Stub_Of_An_Array()
+        {
+            var method = Weave(nameof(Templates.StubArray));
+            var type = method.Source.ReturnType;
+
+            Assert.That(type, Is.InstanceOf<ArrayType>());
+            Assert.That(((ArrayType) type).ElementType.Module, Is.SameAs(method.Source.Module));
+        }
+
+        [Test]
+        public void SetBody_Replaces_The_Nested_Stub()
+        {
+            var method = Weave(nameof(Templates.ReadNestedStubField));
+            var field = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<FieldReference>()
+                              .FirstOrDefault(reference => reference.Name == nameof(OuterStub.Inner.Field));
+
+            Assert.That(field, Is.Not.Null);
+            Assert.That(field!.DeclaringType.Module, Is.SameAs(method.Source.Module));
+        }
+
+        [Test]
+        public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Field()
+        {
+            var method = Weave(nameof(Templates.ObjectField_StubReceiver), [typeof(Stub).ToGneedleType()]);
+            var field = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<FieldReference>()
+                              .FirstOrDefault(reference => reference.Name == nameof(Stub.Field));
+
+            Assert.That(field, Is.Not.Null);
+            Assert.That(field!.DeclaringType.Module, Is.SameAs(method.Source.Module));
+        }
+
+        [Test]
+        public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Property()
+        {
+            var method = Weave(nameof(Templates.ObjectProperty_StubReceiver), [typeof(Stub).ToGneedleType()]);
+            var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                             .FirstOrDefault(reference => reference.Name == "get_Property");
+
+            Assert.That(call, Is.Not.Null);
+            Assert.That(call!.DeclaringType.Module, Is.SameAs(method.Source.Module));
+        }
+
         // endregion
 
         // region Public API
+
+        [Test]
+        public void WithBaseType_Replaces_The_Stub()
+        {
+            var assembly = NewTarget();
+            var host = (ClassHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public)
+                                                                         .WithBaseType(typeof(Stub))
+                                                                         .GetHandler();
+
+            Assert.That(host.Source.BaseType!.Module, Is.SameAs(host.Source.Module));
+        }
+
+        [Test]
+        public void WithInterface_Replaces_The_Stub()
+        {
+            var assembly = NewTarget();
+            var host = (ClassHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public)
+                                                                         .WithInterface(typeof(IStub))
+                                                                         .GetHandler();
+
+            var implementation = host.Source.Interfaces.Single();
+            Assert.That(implementation.InterfaceType.Module, Is.SameAs(host.Source.Module));
+        }
 
         [Test]
         public void AddMethod_Replaces_The_Stub_Parameter_Type()
