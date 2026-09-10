@@ -13,17 +13,4 @@
     <ItemGroup>
       <PackageReference Include="Mono.Cecil" Version="0.11.5" />
     </ItemGroup>
-
-    <ItemGroup>
-      <TypeScriptCompile Update="Needle\Tokens\Generic.tt">
-        <Generator>TextTemplatingFileGenerator</Generator>
-        <LastGenOutput>Generic.cs</LastGenOutput>
-      </TypeScriptCompile>
-    </ItemGroup>
-
-    <ItemGroup>
-      <Compile Update="Needle\Tokens\Generic.cs">
-        <DependentUpon>Generic.tt</DependentUpon>
-      </Compile>
-    </ItemGroup>
 </Project>
