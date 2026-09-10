@@ -16,7 +16,7 @@ public class MethodTests
 
     private static MethodDefinition SourceOf(IMethodHandler handler) => ((MethodHandler) handler).Source;
 
-    // region AddMethod
+    #region AddMethod
 
     [Test]
     public void AddMethod_Void_NoArgs_Instance()
@@ -115,9 +115,9 @@ public class MethodTests
         Assert.That(def.HasBody, Is.False);
     }
 
-    // endregion
+    #endregion
 
-    // region Constructor validation
+    #region Constructor validation
 
     [Test]
     public void AddMethod_InstanceCtor_Static_Throws()
@@ -163,9 +163,9 @@ public class MethodTests
         Assert.That(def.Name, Is.EqualTo(".cctor"));
     }
 
-    // endregion
+    #endregion
 
-    // region MethodFlags conversion
+    #region MethodFlags conversion
 
     [TestCase(MethodFlags.Public, MethodAttributes.Public)]
     [TestCase(MethodFlags.Private, MethodAttributes.Private)]
@@ -192,5 +192,5 @@ public class MethodTests
         Assert.That(attributes.HasFlag(MethodAttributes.NewSlot), Is.True);
     }
 
-    // endregion
+    #endregion
 }

@@ -18,7 +18,7 @@ public class DefaultBodyTests
 
     private static MethodDefinition SourceOf(IMethodHandler method) => ((MethodHandler) method).Source;
 
-    // region ThrowException
+    #region ThrowException
 
     [Test]
     public void ThrowException_Emits_Newobj_And_Throw()
@@ -32,9 +32,9 @@ public class DefaultBodyTests
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Throw), Is.True);
     }
 
-    // endregion
+    #endregion
 
-    // region WithDefaultReturn
+    #region WithDefaultReturn
 
     [Test]
     public void WithDefaultReturn_ReferenceType_Emits_Ldnull()
@@ -72,9 +72,9 @@ public class DefaultBodyTests
         Assert.That(ins[0].OpCode, Is.EqualTo(OpCodes.Ret));
     }
 
-    // endregion
+    #endregion
 
-    // region CallFromBase
+    #region CallFromBase
 
     [Test]
     public void CallFromBase_Calls_Base_Method()
@@ -113,5 +113,5 @@ public class DefaultBodyTests
         Assert.Catch<System.ArgumentException>(() => method.SetBody(DefaultMethodBody.CallFromBase));
     }
 
-    // endregion
+    #endregion
 }

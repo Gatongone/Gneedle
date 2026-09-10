@@ -83,7 +83,7 @@ public class MemberInjectionTests
         return ((MethodHandler) method).Source.Body.Instructions.ToArray();
     }
 
-    // region Field rewriting
+    #region Field rewriting
 
     [Test]
     public void ReadInstanceField_Rewrites_To_Ldfld()
@@ -139,9 +139,9 @@ public class MemberInjectionTests
         Assert.Catch<System.ArgumentException>(() => method.SetBody(Template(nameof(Templates.ReadMissingField))));
     }
 
-    // endregion
+    #endregion
 
-    // region Property rewriting
+    #region Property rewriting
 
     [Test]
     public void ReadInstanceProperty_Rewrites_To_Call_Getter()
@@ -194,9 +194,9 @@ public class MemberInjectionTests
         Assert.Catch<System.ArgumentException>(() => method.SetBody(Template(nameof(Templates.WriteInstanceProperty))));
     }
 
-    // endregion
+    #endregion
 
-    // region Generic field rewriting (Host<T> with a field of type T)
+    #region Generic field rewriting (Host<T> with a field of type T)
 
     private static TypeHandler NewGenericHostWithField(string fieldName)
     {
@@ -236,9 +236,9 @@ public class MemberInjectionTests
         Assert.That(((FieldReference) stfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>());
     }
 
-    // endregion
+    #endregion
 
-    // region Generic property rewriting (Host<T> with a property of type T)
+    #region Generic property rewriting (Host<T> with a property of type T)
 
     private static TypeHandler NewGenericHostWithProperty(string propertyName, bool withGetter, bool withSetter)
     {
@@ -303,5 +303,5 @@ public class MemberInjectionTests
         Assert.That(param.ParameterType, Is.InstanceOf<GenericParameter>());
     }
 
-    // endregion
+    #endregion
 }

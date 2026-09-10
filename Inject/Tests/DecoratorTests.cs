@@ -27,7 +27,7 @@ public class DecoratorTests
         return (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
     }
 
-    // region MethodDecorator
+    #region MethodDecorator
 
     [Test]
     public void MethodDecorator_Chain_Builds_Method()
@@ -90,9 +90,9 @@ public class DecoratorTests
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Add), Is.True);
     }
 
-    // endregion
+    #endregion
 
-    // region FieldDecorator
+    #region FieldDecorator
 
     [Test]
     public void FieldDecorator_Chain_Builds_Field()
@@ -110,9 +110,9 @@ public class DecoratorTests
         Assert.That(host.Source.Fields.Contains(source), Is.True);
     }
 
-    // endregion
+    #endregion
 
-    // region PropertyDecorator
+    #region PropertyDecorator
 
     [Test]
     public void PropertyDecorator_Chain_Builds_Property()
@@ -147,5 +147,5 @@ public class DecoratorTests
         Assert.That(backingField!.IsPrivate, Is.True);
     }
 
-    // endregion
+    #endregion
 }

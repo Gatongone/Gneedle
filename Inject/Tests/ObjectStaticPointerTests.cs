@@ -108,7 +108,7 @@ public class ObjectStaticPointerTests
         Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
     }
 
-    // region Object.Field and Object.Property tests
+    #region Object.Field and Object.Property tests
 
     [Test]
     public void ObjectField_Get_Rewrites_To_Ldfld()
@@ -176,9 +176,9 @@ public class ObjectStaticPointerTests
         Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
     }
 
-    // endregion
+    #endregion
 
-    // region Static.Field and Static.Property tests
+    #region Static.Field and Static.Property tests
 
     [Test]
     public void StaticField_Get_Rewrites_To_Ldsfld()
@@ -271,5 +271,5 @@ public class ObjectStaticPointerTests
         Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
     }
 
-    // endregion
+    #endregion
 }

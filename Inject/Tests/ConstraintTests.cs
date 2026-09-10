@@ -17,7 +17,7 @@ public class ConstraintTests
     private static GenericParameter SingleGenericParameterOf(IMethodHandler method)
         => ((MethodHandler) method).Source.GenericParameters.Single();
 
-    // region Flag presets (construction only)
+    #region Flag presets (construction only)
 
     [Test]
     public void Preset_Class_Is_ReferenceTypeConstraint_Flag()
@@ -40,9 +40,9 @@ public class ConstraintTests
         Assert.That(Constraint.Struct.GenericParameterAttributes, Is.EqualTo(expected));
     }
 
-    // endregion
+    #endregion
 
-    // region FromType construction (currently broken — see Constraint.cs:46-52)
+    #region FromType construction (currently broken — see Constraint.cs:46-52)
 
     [Test]
     public void FromType_NonGeneric_Type_Does_Not_Throw()
@@ -58,9 +58,9 @@ public class ConstraintTests
         Assert.That(constraint.Name, Is.EqualTo("System.IDisposable"));
     }
 
-    // endregion
+    #endregion
 
-    // region AddMethod integration
+    #region AddMethod integration
 
     [Test]
     public void AddMethod_Generic_With_Class_Constraint_Sets_ReferenceTypeConstraint()
@@ -106,9 +106,9 @@ public class ConstraintTests
         Assert.That(gp.Constraints.Any(c => c.ConstraintType.Name == nameof(IDisposable)), Is.True);
     }
 
-    // endregion
+    #endregion
 
-    // region StructDecorator integration (shared SetConstraintFromType path)
+    #region StructDecorator integration (shared SetConstraintFromType path)
 
     [Test]
     public void AddStruct_Generic_With_Type_Constraint_Adds_Constraint()
@@ -136,5 +136,5 @@ public class ConstraintTests
         Assert.That(gp.HasReferenceTypeConstraint, Is.True);
     }
 
-    // endregion
+    #endregion
 }

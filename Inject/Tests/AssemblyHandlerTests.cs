@@ -92,7 +92,7 @@ public class AssemblyHandlerTests
         Assert.That(results.Length, Is.EqualTo(2)); // Outer + Inner
     }
 
-    // region GetCecilType
+    #region GetCecilType
 
     [Test]
     public void GetCecilType_ByIType_Resolves_A_Type_Of_Another_Assembly()
@@ -156,9 +156,9 @@ public class AssemblyHandlerTests
         Assert.Throws<ArgumentException>(() => handler.GetCecilType(typeof(TestBaseClass)));
     }
 
-    // endregion
+    #endregion
 
-    // region AddReference
+    #region AddReference
 
     [Test]
     public void AddReference_With_Assembly_Referencing_The_Target_Throws()
@@ -187,9 +187,9 @@ public class AssemblyHandlerTests
         Assert.That(target.Source.MainModule.AssemblyReferences.Any(reference => reference.FullName == other.Source.FullName), Is.True);
     }
 
-    // endregion
+    #endregion
 
-    // region ClassDecorator chain combinations
+    #region ClassDecorator chain combinations
 
     [Test]
     public void AddClass_WithGenericParameter_Creates_Generic_Class()
@@ -295,5 +295,5 @@ public class AssemblyHandlerTests
         Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
     }
 
-    // endregion
+    #endregion
 }

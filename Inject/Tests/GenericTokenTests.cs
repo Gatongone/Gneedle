@@ -141,7 +141,7 @@ public class GenericTokenTests
         return method;
     }
 
-    // region T_X: the generic parameter of the declaring type
+    #region T_X: the generic parameter of the declaring type
 
     [Test]
     public void ParseReturnType_Maps_T0_To_First_Type_Generic_Parameter()
@@ -193,9 +193,9 @@ public class GenericTokenTests
         Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
     }
 
-    // endregion
+    #endregion
 
-    // region M_X: the generic parameter of the method itself
+    #region M_X: the generic parameter of the method itself
 
     [Test]
     public void ParseReturnType_Maps_M0_To_First_Method_Generic_Parameter()
@@ -228,9 +228,9 @@ public class GenericTokenTests
         Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
     }
 
-    // endregion
+    #endregion
 
-    // region Non token types
+    #region Non token types
 
     [Test]
     public void ParseReturnType_With_NonToken_Type_Sets_ReturnType_To_It()
@@ -255,9 +255,9 @@ public class GenericTokenTests
         Assert.Throws<IndexOutOfRangeException>(() => method.SetBody(Template(nameof(Templates.ReturnSecondTypeGeneric))));
     }
 
-    // endregion
+    #endregion
 
-    // region Local variables
+    #region Local variables
 
     [Test]
     public void CopyVariables_Maps_T0_Local_To_First_Type_Generic_Parameter()
@@ -332,9 +332,9 @@ public class GenericTokenTests
                     "Every branch target must be an instruction of the injected body.");
     }
 
-    // endregion
+    #endregion
 
-    // region Tokens nested in generic instances
+    #region Tokens nested in generic instances
 
     [Test]
     public void ParseReturnType_Maps_Token_Nested_In_Generic_Instance()
@@ -393,9 +393,9 @@ public class GenericTokenTests
         foreach (var variable in method.Source.Body.Variables) AssertNoTokenType(variable.VariableType);
     }
 
-    // endregion
+    #endregion
 
-    // region Tokens nested in other type shapes
+    #region Tokens nested in other type shapes
 
     // The shapes below can't be written as a local variable or a return type of a C# template,
     // so they are built by hand instead of being compiled.
@@ -485,9 +485,9 @@ public class GenericTokenTests
         Assert.That(((SentinelType) returnType).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
     }
 
-    // endregion
+    #endregion
 
-    // region Tokens on the Object.Method path
+    #region Tokens on the Object.Method path
 
     // The host is constrained so that the generic parameters have members to look up, which is the only way a member
     // call on a generic parameter typed instance could be produced as valid IL. The two constraints hold the same
@@ -534,9 +534,9 @@ public class GenericTokenTests
         Assert.That(call!.DeclaringType.Name, Is.EqualTo(nameof(NamedSecondHelperBase)));
     }
 
-    // endregion
+    #endregion
 
-    // region Tokens on the public API path
+    #region Tokens on the public API path
     //
     // A token passed to the public API stands for a generic parameter just like it does in a template, even though the
     // parameter is a System.Type there. Parsing it must happen before the type is imported, because importing a token
@@ -601,7 +601,7 @@ public class GenericTokenTests
         Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
     }
 
-    // endregion
+    #endregion
 
     /// <summary>
     /// Assert that neither the operand of the instruction nor the types it refers to hold a token type.
