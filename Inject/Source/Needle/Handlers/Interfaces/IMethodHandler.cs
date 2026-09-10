@@ -13,4 +13,8 @@ public interface IMethodHandler
 public static class MethodExtensions
 {
     public static void SetBody(this IMethodHandler methodHandler, Delegate delegation) => methodHandler.SetBody(delegation.Method);
+
+    /// <inheritdoc cref="MethodDecorator.IBodyDecorator.WithBody(MethodInfo)"/>
+    public static MethodDecorator.ITypeDecorator WithBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
+        => decorator.WithBody(delegation.Method);
 }

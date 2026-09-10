@@ -2,21 +2,22 @@ namespace Gneedle.Inject;
 
 /// <summary>
 /// Decorator for describing a property and its accessors, following the chainable pattern of
-/// <see cref="ClassDecorator"/>. Create via <c>ITypeHandler.AddProperty(name)</c>.
+/// <see cref="ClassDecorator"/>. Create via <c>ITypeHandler.AddProperty(name, flags)</c>.
 /// </summary>
 public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
 {
     private readonly TypeHandler m_TypeHandler;
     private readonly string m_PropertyName;
+    private readonly PropertyFlags m_PropertyFlags;
     private IType m_PropertyType = typeof(object).ToGneedleType();
     private DefaultPropertyBody? m_GetterBody;
     private DefaultPropertyBody? m_SetterBody;
-    private PropertyFlags? m_Flags;
 
-    internal PropertyDecorator(TypeHandler typeHandler, string propertyName)
+    internal PropertyDecorator(TypeHandler typeHandler, string propertyName, PropertyFlags propertyFlags)
     {
-        m_TypeHandler = typeHandler;
-        m_PropertyName = propertyName;
+        m_TypeHandler   = typeHandler;
+        m_PropertyName  = propertyName;
+        m_PropertyFlags = propertyFlags;
     }
 
     /// <inheritdoc/>
@@ -48,13 +49,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     }
 
     /// <inheritdoc/>
-    public ITypeDecorator WithFlags(PropertyFlags propertyFlags)
-    {
-        m_Flags = propertyFlags;
-        return this;
-    }
-
-    /// <inheritdoc/>
     public IPropertyHandler GetHandler()
     {
         var propertyType = m_TypeHandler.AssemblyHandler.ResolveParameterType(m_TypeHandler.Source, m_PropertyType);
@@ -72,26 +66,24 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
             handler.SetSetter(setterBody);
         }
 
-        // Apply property flags to getter/setter method attributes.
-        if (m_Flags is { } flags)
+        // Apply property flags to getter/setter method attributes. The flags always keep the special name which an
+        // accessor needs, see PropertyFlags.ToMethodAttributes().
+        var methodAttrs = m_PropertyFlags.ToMethodAttributes();
+        if (propertyDef.GetMethod != null)
         {
-            var methodAttrs = flags.ToMethodAttributes();
-            if (propertyDef.GetMethod != null)
-            {
-                propertyDef.GetMethod.Attributes = methodAttrs;
-            }
+            propertyDef.GetMethod.Attributes = methodAttrs;
+        }
 
-            if (propertyDef.SetMethod != null)
-            {
-                propertyDef.SetMethod.Attributes = methodAttrs;
-            }
+        if (propertyDef.SetMethod != null)
+        {
+            propertyDef.SetMethod.Attributes = methodAttrs;
         }
 
         return handler;
     }
 
     /// <summary>
-    /// Decorator for create type definition to current module.
+    /// Decorator which completes the property. It is the end of the chain.
     /// </summary>
     public interface ITypeDecorator
     {
@@ -103,7 +95,8 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     }
 
     /// <summary>
-    /// Decorator for describing property accessors.
+    /// Decorator for describing property accessors. A getter and a setter do not depend on each other, so either
+    /// could be described first and either could be left out.
     /// </summary>
     public interface IAccessorDecorator : ITypeDecorator
     {
@@ -120,17 +113,12 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// <param name="body">The default body of the setter.</param>
         /// <returns>Result for chains calling.</returns>
         IAccessorDecorator WithSetter(DefaultPropertyBody body);
-
-        /// <summary>
-        /// Append property flags to the getter/setter methods.
-        /// </summary>
-        /// <param name="propertyFlags">Property flags.</param>
-        /// <returns>Result for chains calling.</returns>
-        ITypeDecorator WithFlags(PropertyFlags propertyFlags);
     }
 
     /// <summary>
-    /// Decorator for describing property type.
+    /// Decorator for describing property type. It is the entry of the chain, which follows the order in which the
+    /// parts of a property depend on each other: the type, then the accessors. The flags are given to
+    /// <c>ITypeHandler.AddProperty(name, flags)</c>.
     /// </summary>
     public interface IPropertyTypeDecorator : IAccessorDecorator
     {

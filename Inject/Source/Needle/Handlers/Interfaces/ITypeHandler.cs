@@ -42,7 +42,10 @@ public interface IFieldContainer
     /// <summary>
     /// Start building a field through a chainable <see cref="FieldDecorator"/>.
     /// </summary>
-    FieldDecorator AddField(string fieldName);
+    /// <param name="fieldName">Name of the field.</param>
+    /// <param name="fieldFlags">Flags of the field.</param>
+    /// <returns>Result for chains calling.</returns>
+    FieldDecorator.IFieldTypeDecorator AddField(string fieldName, FieldFlags fieldFlags);
 
     /// <summary>
     /// Gets a field handler for the specified field name. If the field is not found, returns null.
@@ -60,7 +63,10 @@ public interface IMethodContainer
     /// <summary>
     /// Start building a method through a chainable <see cref="MethodDecorator"/>.
     /// </summary>
-    MethodDecorator AddMethod(string methodName);
+    /// <param name="methodName">Name of the method.</param>
+    /// <param name="methodFlags">Flags of the method.</param>
+    /// <returns>Result for chains calling.</returns>
+    MethodDecorator.IGenericParameterDecorator AddMethod(string methodName, MethodFlags methodFlags);
 
     /// <summary>
     /// Gets a method handler for the specified method name and parameter types. If the method is not found, returns null.
@@ -76,7 +82,13 @@ public interface IMethodContainer
 /// </summary>
 public interface IPropertyContainer
 {
-    PropertyDecorator AddProperty(string propertyName);
+    /// <summary>
+    /// Start building a property through a chainable <see cref="PropertyDecorator"/>.
+    /// </summary>
+    /// <param name="propertyName">Name of the property.</param>
+    /// <param name="propertyFlags">Flags of the property.</param>
+    /// <returns>Result for chains calling.</returns>
+    PropertyDecorator.IPropertyTypeDecorator AddProperty(string propertyName, PropertyFlags propertyFlags);
 
     /// <summary>
     /// Gets a property handler for the specified property name. If the property is not found, returns null.

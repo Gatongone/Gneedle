@@ -62,13 +62,15 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     }
 
     /// <inheritdoc/>
-    public MethodDecorator AddMethod(string methodName) => new(this, methodName);
+    public MethodDecorator.IGenericParameterDecorator AddMethod(string methodName, MethodFlags methodFlags)
+        => new MethodDecorator(this, methodName, methodFlags);
 
     /// <inheritdoc/>
-    public FieldDecorator AddField(string fieldName) => new(this, fieldName);
+    public FieldDecorator.IFieldTypeDecorator AddField(string fieldName, FieldFlags fieldFlags) => new FieldDecorator(this, fieldName, fieldFlags);
 
     /// <inheritdoc/>
-    public PropertyDecorator AddProperty(string propertyName) => new(this, propertyName);
+    public PropertyDecorator.IPropertyTypeDecorator AddProperty(string propertyName, PropertyFlags propertyFlags)
+        => new PropertyDecorator(this, propertyName, propertyFlags);
 
     /// <inheritdoc/>
     public IFieldHandler? GetField(string fieldName)

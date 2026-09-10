@@ -4,39 +4,33 @@ namespace Gneedle.Inject;
 
 /// <summary>
 /// Decorator for describing a field, following the chainable pattern of
-/// <see cref="ClassDecorator"/>. Create via <c>ITypeHandler.AddField(name)</c>.
+/// <see cref="ClassDecorator"/>. Create via <c>ITypeHandler.AddField(name, flags)</c>.
 /// </summary>
 public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
 {
     private readonly TypeHandler m_TypeHandler;
     private readonly string m_FieldName;
+    private readonly FieldFlags m_FieldFlags;
     private IType m_FieldType = typeof(object).ToGneedleType();
-    private FieldFlags m_FieldFlags = FieldFlags.Public;
 
-    internal FieldDecorator(TypeHandler typeHandler, string fieldName)
+    internal FieldDecorator(TypeHandler typeHandler, string fieldName, FieldFlags fieldFlags)
     {
         m_TypeHandler = typeHandler;
         m_FieldName   = fieldName;
+        m_FieldFlags  = fieldFlags;
     }
 
     /// <inheritdoc/>
-    public IModifierDecorator WithType(IType fieldType)
+    public ITypeDecorator WithType(IType fieldType)
     {
         m_FieldType = fieldType;
         return this;
     }
 
     /// <inheritdoc/>
-    public IModifierDecorator WithType(Type fieldType)
+    public ITypeDecorator WithType(Type fieldType)
     {
         m_FieldType = fieldType.ToGneedleType();
-        return this;
-    }
-
-    /// <inheritdoc/>
-    public ITypeDecorator WithFlags(FieldFlags fieldFlags)
-    {
-        m_FieldFlags = fieldFlags;
         return this;
     }
 
@@ -51,7 +45,7 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
     }
 
     /// <summary>
-    /// Decorator for create type definition to current module.
+    /// Decorator which completes the field. It is the end of the chain.
     /// </summary>
     public interface ITypeDecorator
     {
@@ -63,35 +57,23 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
     }
 
     /// <summary>
-    /// Decorator for describing field modifier.
+    /// Decorator for describing field type. It is the entry of the chain. The flags are given to
+    /// <c>ITypeHandler.AddField(name, flags)</c>.
     /// </summary>
-    public interface IModifierDecorator : ITypeDecorator
-    {
-        /// <summary>
-        /// Set field flags.
-        /// </summary>
-        /// <param name="fieldFlags">Field flags.</param>
-        /// <returns>Result for chains calling.</returns>
-        ITypeDecorator WithFlags(FieldFlags fieldFlags);
-    }
-
-    /// <summary>
-    /// Decorator for describing field type.
-    /// </summary>
-    public interface IFieldTypeDecorator : IModifierDecorator
+    public interface IFieldTypeDecorator : ITypeDecorator
     {
         /// <summary>
         /// Append field type from <see cref="IType"/>.
         /// </summary>
         /// <param name="fieldType">Field type of type.</param>
         /// <returns>Result for chains calling.</returns>
-        IModifierDecorator WithType(IType fieldType);
+        ITypeDecorator WithType(IType fieldType);
 
         /// <summary>
         /// Append field type from <see cref="System.Type"/>.
         /// </summary>
         /// <param name="fieldType">Field type of type.</param>
         /// <returns>Result for chains calling.</returns>
-        IModifierDecorator WithType(Type fieldType);
+        ITypeDecorator WithType(Type fieldType);
     }
 }

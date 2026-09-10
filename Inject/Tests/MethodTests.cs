@@ -21,7 +21,7 @@ public class MethodTests
     public void AddMethod_Void_NoArgs_Instance()
     {
         var host = NewClass();
-        var method = host.AddMethod("Foo").WithReturnType(typeof(void)).WithFlags(MethodFlags.Public).GetHandler();
+        var method = host.AddMethod("Foo", MethodFlags.Public).WithReturnType(typeof(void)).GetHandler();
 
         var def = SourceOf(method);
         Assert.That(def.Name, Is.EqualTo("Foo"));
@@ -36,11 +36,10 @@ public class MethodTests
     public void AddMethod_WithParameters_Static()
     {
         var host = NewClass();
-        var method = host.AddMethod("Bar")
-            .WithReturnType(typeof(int))
+        var method = host.AddMethod("Bar", MethodFlags.Public | MethodFlags.Static)
             .WithParameter(typeof(string))
             .WithParameter(typeof(int))
-            .WithFlags(MethodFlags.Public | MethodFlags.Static)
+            .WithReturnType(typeof(int))
             .GetHandler();
 
         var def = SourceOf(method);
@@ -55,10 +54,10 @@ public class MethodTests
     public void AddMethod_Generic_Adds_Single_GenericParameter()
     {
         var host = NewClass();
-        var method = host.AddMethod("Identity")
-            .WithReturnType(new GenericParameterType("T"))
+        var method = host.AddMethod("Identity", MethodFlags.Public)
             .WithGenericParameter("T")
             .WithParameter(new GenericParameterType("T"))
+            .WithReturnType(new GenericParameterType("T"))
             .GetHandler();
 
         var def = SourceOf(method);
@@ -99,7 +98,7 @@ public class MethodTests
     {
         var host = NewClass();
         Assert.Catch<ArgumentException>(() =>
-            host.AddMethod(".ctor").WithReturnType(typeof(void)).WithFlags(MethodFlags.Public | MethodFlags.Static).GetHandler());
+            host.AddMethod(".ctor", MethodFlags.Public | MethodFlags.Static).WithReturnType(typeof(void)).GetHandler());
     }
 
     [Test]
@@ -107,7 +106,7 @@ public class MethodTests
     {
         var host = NewClass();
         Assert.Catch<ArgumentException>(() =>
-            host.AddMethod(".ctor").WithReturnType(typeof(void)).WithFlags(MethodFlags.Public | MethodFlags.Virtual).GetHandler());
+            host.AddMethod(".ctor", MethodFlags.Public | MethodFlags.Virtual).WithReturnType(typeof(void)).GetHandler());
     }
 
     [Test]
@@ -115,7 +114,7 @@ public class MethodTests
     {
         var host = NewClass();
         Assert.Catch<ArgumentException>(() =>
-            host.AddMethod(".cctor").WithReturnType(typeof(void)).WithFlags(MethodFlags.Private).GetHandler());
+            host.AddMethod(".cctor", MethodFlags.Private).WithReturnType(typeof(void)).GetHandler());
     }
 
     [Test]
@@ -123,14 +122,14 @@ public class MethodTests
     {
         var host = NewClass();
         Assert.Catch<ArgumentException>(() =>
-            host.AddMethod(".cctor").WithReturnType(typeof(void)).WithFlags(MethodFlags.Static | MethodFlags.Internal).GetHandler());
+            host.AddMethod(".cctor", MethodFlags.Static | MethodFlags.Internal).WithReturnType(typeof(void)).GetHandler());
     }
 
     [Test]
     public void AddMethod_StaticCtor_StaticPrivate_IsValid()
     {
         var host = NewClass();
-        var method = host.AddMethod(".cctor").WithReturnType(typeof(void)).WithFlags(MethodFlags.Static | MethodFlags.Private).GetHandler();
+        var method = host.AddMethod(".cctor", MethodFlags.Static | MethodFlags.Private).WithReturnType(typeof(void)).GetHandler();
 
         var def = SourceOf(method);
         Assert.That(def.IsStatic, Is.True);

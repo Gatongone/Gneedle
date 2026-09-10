@@ -1,36 +1,33 @@
+using System.Reflection;
+
 namespace Gneedle.Inject;
 
 /// <summary>
 /// Decorator for describing a method, following the chainable pattern of
-/// <see cref="ClassDecorator"/>. Create via <c>ITypeHandler.AddMethod(name)</c>.
+/// <see cref="ClassDecorator"/>. Create via <c>ITypeHandler.AddMethod(name, flags)</c>.
 /// </summary>
-public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
+public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
 {
     private readonly TypeHandler m_TypeHandler;
     private readonly string m_MethodName;
+    private readonly MethodFlags m_MethodFlags;
     private IType m_ReturnType = typeof(void).ToGneedleType();
     private readonly List<GenericParameterType> m_GenericParameters = [];
     private readonly List<IType> m_ParameterTypes = [];
-    private MethodFlags m_MethodFlags = MethodFlags.Public;
-    private DefaultMethodBody? m_Body;
+    private DefaultMethodBody? m_DefaultBody;
+    private MethodInfo? m_BodyMethod;
 
-    internal MethodDecorator(TypeHandler typeHandler, string methodName)
+    internal MethodDecorator(TypeHandler typeHandler, string methodName, MethodFlags methodFlags)
     {
         m_TypeHandler = typeHandler;
         m_MethodName  = methodName;
+        m_MethodFlags = methodFlags;
     }
 
     /// <inheritdoc/>
-    public IParameterDecorator WithReturnType(IType returnType)
+    public IGenericParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints)
     {
-        m_ReturnType = returnType;
-        return this;
-    }
-
-    /// <inheritdoc/>
-    public IParameterDecorator WithReturnType(Type returnType)
-    {
-        m_ReturnType = returnType.ToGneedleType();
+        m_GenericParameters.Add(new GenericParameterType(genericParameterName, constraints));
         return this;
     }
 
@@ -49,23 +46,33 @@ public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
     }
 
     /// <inheritdoc/>
-    public IParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints)
+    public IBodyDecorator WithReturnType(IType returnType)
     {
-        m_GenericParameters.Add(new GenericParameterType(genericParameterName, constraints));
+        m_ReturnType = returnType;
         return this;
     }
 
     /// <inheritdoc/>
-    public IParameterDecorator WithBody(DefaultMethodBody body)
+    public IBodyDecorator WithReturnType(Type returnType)
     {
-        m_Body = body;
+        m_ReturnType = returnType.ToGneedleType();
         return this;
     }
 
     /// <inheritdoc/>
-    public ITypeDecorator WithFlags(MethodFlags methodFlags)
+    public ITypeDecorator WithBody(DefaultMethodBody body)
     {
-        m_MethodFlags = methodFlags;
+        // The body sources replace each other, so that the one which was asked for last is the applied one.
+        m_DefaultBody = body;
+        m_BodyMethod  = null;
+        return this;
+    }
+
+    /// <inheritdoc/>
+    public ITypeDecorator WithBody(MethodInfo method)
+    {
+        m_BodyMethod  = method;
+        m_DefaultBody = null;
         return this;
     }
 
@@ -79,16 +86,16 @@ public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
             m_ParameterTypes.ToArray(),
             m_MethodFlags);
 
-        if (m_Body is { } body)
-        {
-            handler.SetBody(body);
-        }
+        // The method is added with a body which throws, so that a method which is added without a body is still
+        // loadable. The body which was asked for replaces it.
+        if (m_BodyMethod is { } methodInfo) handler.SetBody(methodInfo);
+        else if (m_DefaultBody is { } body) handler.SetBody(body);
 
         return handler;
     }
 
     /// <summary>
-    /// Decorator for create type definition to current module.
+    /// Decorator which completes the method. It is the end of the chain.
     /// </summary>
     public interface ITypeDecorator
     {
@@ -100,17 +107,51 @@ public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
     }
 
     /// <summary>
-    /// Decorator for describing method flags.
+    /// Decorator for describing method body. A body could only be described for a complete signature, so it is the
+    /// last part which could be described.
     /// </summary>
-    public interface IParameterDecorator : ITypeDecorator
+    public interface IBodyDecorator : ITypeDecorator
     {
         /// <summary>
-        /// Set method flags.
+        /// Set the body of the method to the default body behavior.
         /// </summary>
-        /// <param name="methodFlags">Method flags.</param>
+        /// <param name="body">Default method body.</param>
         /// <returns>Result for chains calling.</returns>
-        ITypeDecorator WithFlags(MethodFlags methodFlags);
+        ITypeDecorator WithBody(DefaultMethodBody body);
 
+        /// <summary>
+        /// Set the body of the method from the method which holds the IL to copy.
+        /// </summary>
+        /// <param name="method">Method which holds the body.</param>
+        /// <returns>Result for chains calling.</returns>
+        ITypeDecorator WithBody(MethodInfo method);
+    }
+
+    /// <summary>
+    /// Decorator for describing method return type.
+    /// </summary>
+    public interface IReturnTypeDecorator : IBodyDecorator
+    {
+        /// <summary>
+        /// Append return type to the method from <see cref="IType"/>.
+        /// </summary>
+        /// <param name="returnType">Return type of method.</param>
+        /// <returns>Result for chains calling.</returns>
+        IBodyDecorator WithReturnType(IType returnType);
+
+        /// <summary>
+        /// Append return type to the method from <see cref="System.Type"/>.
+        /// </summary>
+        /// <param name="returnType">Return type of method.</param>
+        /// <returns>Result for chains calling.</returns>
+        IBodyDecorator WithReturnType(Type returnType);
+    }
+
+    /// <summary>
+    /// Decorator for describing method parameters.
+    /// </summary>
+    public interface IParameterDecorator : IReturnTypeDecorator
+    {
         /// <summary>
         /// Append parameter to the method.
         /// </summary>
@@ -124,40 +165,21 @@ public class MethodDecorator : MethodDecorator.IReturnTypeDecorator
         /// <param name="parameterType">Parameter type.</param>
         /// <returns>Result for chains calling.</returns>
         IParameterDecorator WithParameter(Type parameterType);
+    }
 
+    /// <summary>
+    /// Decorator for describing method generic parameters. It is the entry of the chain, which follows the order in
+    /// which the parts of a method depend on each other: the generic parameters, the parameters, the return type and
+    /// lastly the body. The flags are given to <c>ITypeHandler.AddMethod(name, flags)</c>.
+    /// </summary>
+    public interface IGenericParameterDecorator : IParameterDecorator
+    {
         /// <summary>
         /// Append generic parameter to the method.
         /// </summary>
         /// <param name="genericParameterName">Generic parameter name.</param>
         /// <param name="constraints">Generic parameter constrains.</param>
         /// <returns>Result for chains calling.</returns>
-        IParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
-
-        /// <summary>
-        /// Append default body to the method.
-        /// </summary>
-        /// <param name="body">Default method body.</param>
-        /// <returns>Result for chains calling.</returns>
-        IParameterDecorator WithBody(DefaultMethodBody body);
-    }
-
-    /// <summary>
-    /// Decorator for describing method return type.
-    /// </summary>
-    public interface IReturnTypeDecorator : IParameterDecorator
-    {
-        /// <summary>
-        /// Append return type to the method from <see cref="IType"/>.
-        /// </summary>
-        /// <param name="returnType">Return type of method.</param>
-        /// <returns>Result for chains calling.</returns>
-        IParameterDecorator WithReturnType(IType returnType);
-
-        /// <summary>
-        /// Append return type to the method from <see cref="System.Type"/>.
-        /// </summary>
-        /// <param name="returnType">Return type of method.</param>
-        /// <returns>Result for chains calling.</returns>
-        IParameterDecorator WithReturnType(Type returnType);
+        IGenericParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
     }
 }

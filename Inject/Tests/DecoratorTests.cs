@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
@@ -9,6 +10,16 @@ namespace Gneedle.Inject.Test;
 public class DecoratorTests
 {
     private const string Ns = "Gneedle.Test.Generated";
+
+    /// <summary>
+    /// Template bodies live in the test assembly so Cecil can resolve them from disk.
+    /// </summary>
+    public static class Templates
+    {
+        public static int Add(int left, int right) => left + right;
+    }
+
+    private static MethodInfo AddTemplate() => typeof(Templates).GetMethod(nameof(Templates.Add))!;
 
     private static TypeHandler NewClass()
     {
@@ -22,11 +33,10 @@ public class DecoratorTests
     public void MethodDecorator_Chain_Builds_Method()
     {
         var host = NewClass();
-        var method = host.AddMethod("Compute")
-                         .WithReturnType(typeof(int))
+        var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
                          .WithParameter(typeof(int))
                          .WithParameter(typeof(string))
-                         .WithFlags(MethodFlags.Public | MethodFlags.Static)
+                         .WithReturnType(typeof(int))
                          .GetHandler();
 
         Assert.That(method, Is.Not.Null);
@@ -40,12 +50,44 @@ public class DecoratorTests
     public void MethodDecorator_WithBody_Emits_Throw()
     {
         var host = NewClass();
-        var method = host.AddMethod("Do")
+        var method = host.AddMethod("Do", MethodFlags.Public)
                          .WithBody(DefaultMethodBody.ThrowException)
                          .GetHandler();
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Throw), Is.True);
+    }
+
+    [Test]
+    public void MethodDecorator_WithBody_From_MethodInfo_Copies_The_Body()
+    {
+        var host = NewClass();
+        var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
+                         .WithParameter(typeof(int))
+                         .WithParameter(typeof(int))
+                         .WithReturnType(typeof(int))
+                         .WithBody(AddTemplate())
+                         .GetHandler();
+
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Add), Is.True);
+    }
+
+    [Test]
+    public void MethodDecorator_WithBody_From_Delegate_Copies_The_Body()
+    {
+        Func<int, int, int> template = Templates.Add;
+
+        var host = NewClass();
+        var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
+                         .WithParameter(typeof(int))
+                         .WithParameter(typeof(int))
+                         .WithReturnType(typeof(int))
+                         .WithBody(template)
+                         .GetHandler();
+
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Add), Is.True);
     }
 
     // endregion
@@ -56,9 +98,8 @@ public class DecoratorTests
     public void FieldDecorator_Chain_Builds_Field()
     {
         var host = NewClass();
-        var field = host.AddField("Counter")
+        var field = host.AddField("Counter", FieldFlags.Public | FieldFlags.Static)
                         .WithType(typeof(int))
-                        .WithFlags(FieldFlags.Public | FieldFlags.Static)
                         .GetHandler();
 
         Assert.That(field, Is.Not.Null);
@@ -77,7 +118,7 @@ public class DecoratorTests
     public void PropertyDecorator_Chain_Builds_Property()
     {
         var host = NewClass();
-        var property = host.AddProperty("Value")
+        var property = host.AddProperty("Value", PropertyFlags.Public)
                            .WithType(typeof(int))
                            .WithGetter(DefaultPropertyBody.WithFieldOperation)
                            .WithSetter(DefaultPropertyBody.WithFieldOperation)
@@ -94,7 +135,7 @@ public class DecoratorTests
     public void PropertyDecorator_WithFieldOperation_Creates_Backing_Field()
     {
         var host = NewClass();
-        var property = host.AddProperty("Value")
+        var property = host.AddProperty("Value", PropertyFlags.Public)
                            .WithType(typeof(int))
                            .WithGetter(DefaultPropertyBody.WithFieldOperation)
                            .WithSetter(DefaultPropertyBody.WithFieldOperation)
