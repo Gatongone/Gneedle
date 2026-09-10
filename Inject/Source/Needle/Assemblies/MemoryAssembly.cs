@@ -115,8 +115,12 @@ internal sealed class MemoryAssembly : Assembly
         SaveTo(cache);
         // .Net5.0 supports loading same assemblies with a different version.
 #if NET5_0_OR_GREATER
+        // Writing leaves the position where the writer last patched the image, while LoadFromStream reads from the
+        // current position and fails on anything but the beginning.
+        cache.Position = 0;
         return System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromStream(cache);
 #else
+        // Assembly.Load reads the whole buffer, which does not depend on the position.
         return System.Reflection.Assembly.Load(cache.GetBuffer());
 #endif
     }

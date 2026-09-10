@@ -140,7 +140,14 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         method.ReturnType = AssemblyHandler.ResolveParameterType(Source, returnType, method.GenericParameters);
 
         Source.Methods.Add(method);
-        return new MethodHandler(method, this);
+        var methodHandler = new MethodHandler(method, this);
+
+        // A method which is not abstract has to carry a body, otherwise the produced assembly holds a method without an
+        // RVA and cannot be loaded. A body which throws is used rather than one which returns a default value, so that a
+        // method which is added without a body is noticed at the call instead of returning what was never meant.
+        if (!method.IsAbstract) methodHandler.SetBody(DefaultMethodBody.ThrowException);
+
+        return methodHandler;
     }
 
     /// <summary>

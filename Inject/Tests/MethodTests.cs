@@ -1,4 +1,5 @@
 using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
@@ -87,6 +88,31 @@ public class MethodTests
         var emitted = reread.MainModule.GetType($"{Ns}.Host")!.Methods.First(method => method.Name == "Run");
         Assert.That(emitted.ReturnType.FullName, Is.EqualTo(typeof(void).FullName));
         Assert.That(emitted.Parameters[0].ParameterType.FullName, Is.EqualTo(typeof(MethodTests).FullName));
+    }
+
+    [Test]
+    public void AddMethod_Without_Body_Emits_A_Throwing_Body()
+    {
+        // A method which has no body carries no RVA, so the produced assembly could not be loaded. See AssemblyTests.
+        var host = NewClass();
+        var def = SourceOf(host.AddMethod("Foo", MethodFlags.Public).WithReturnType(typeof(void)).GetHandler());
+
+        var codes = def.Body.Instructions.Select(instruction => instruction.OpCode.Code).ToArray();
+        Assert.That(codes, Does.Contain(Code.Newobj));
+        Assert.That(codes, Does.Contain(Code.Throw));
+    }
+
+    [Test]
+    public void AddMethod_Abstract_Keeps_No_Body()
+    {
+        // An abstract method must not carry a body.
+        var handler = (AssemblyHandler) Assembly.Create("AbstractMethodAssembly").Handler;
+        var host = handler.AddClass("Host", Ns, ClassFlags.Public | ClassFlags.Abstract).GetHandler();
+
+        var def = SourceOf(host.AddMethod("Foo", MethodFlags.Public | MethodFlags.Abstract).WithReturnType(typeof(void)).GetHandler());
+
+        Assert.That(def.IsAbstract, Is.True);
+        Assert.That(def.HasBody, Is.False);
     }
 
     // endregion
