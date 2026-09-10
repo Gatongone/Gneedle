@@ -35,5 +35,7 @@ internal static class ErrorMessages
     internal const string TYPE_IS_INTERFACE                 = "Type cannot be interface.";
     internal const string TYPE_IS_NOT_INTERFACE             = "Type must be interface.";
     internal const string TYPE_CANNOT_ASSIGN_TO_TARGET_TYPE = "Type must be {0}.";
+    internal const string INVALID_FROM_ASSEMBLY_ASSEMBLY    = "The assembly {0} which the FromAssemblyAttribute names can't be resolved.";
+    internal const string INVALID_FROM_ASSEMBLY_TYPE        = "The type {0} can't be found in the assembly {1} which the FromAssemblyAttribute names.";
     internal const string LDARG0_CONVERT_FAILED             = "Invalid operation code: ldarg.0";
 }

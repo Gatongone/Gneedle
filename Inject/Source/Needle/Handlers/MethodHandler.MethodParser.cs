@@ -218,7 +218,8 @@ partial class MethodHandler
                 return GetMethodFromConstraint(parameter, methodName, parameters);
             }
 
-            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.Resolve(), (string) instructions[currentIndex].Operand, parameters);
+            // The instance type may stand for the type of another assembly, in which case the method is looked up on the real one.
+            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.ResolveDefinition(Source.Module), (string) instructions[currentIndex].Operand, parameters);
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Static))

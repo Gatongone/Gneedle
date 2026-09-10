@@ -311,6 +311,8 @@ internal sealed partial class MethodHandler : IMethodHandler
         switch (currentIns.Operand)
         {
             // The signature of the method may hold generic parameter tokens, just like List<Gneedle.Inject.T_0>::.ctor().
+            // It may also hold a declaring type which stands for the type of another assembly, which the parsing below
+            // replaces by the real one.
             case MethodReference methodRef:
                 var importedMethod = Source.Module.ImportReference(methodRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
@@ -320,6 +322,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, targetParameterDef));
                 break;
             // The type of the field may hold generic parameter tokens, just like List<Gneedle.Inject.T_0>::SomeField.
+            // It may also hold a declaring type which stands for the type of another assembly, which is replaced below.
             case FieldReference fieldRef:
                 var importedField = Source.Module.ImportReference(fieldRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedField));

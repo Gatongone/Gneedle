@@ -69,7 +69,8 @@ partial class MethodHandler
                     skipArrayInitCount = 7;
                     var instanceIns = filter.Target[baseIdx + 4];
                     var argType = GetArgType(instanceIns, targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
-                    declaringTypeFromPattern = argType.Resolve();
+                    // The instance type may stand for the type of another assembly, in which case the field is looked up on the real one.
+                    declaringTypeFromPattern = argType.ResolveDefinition(Source.Module);
                 }
             }
         }

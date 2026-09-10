@@ -116,6 +116,17 @@ partial class AssemblyHandler
         // If has imported, then return from cache.
         if (m_TypeCache.TryGetValue(new TypeName(typeRef).ToString(), out var cecilType)) return cecilType;
 
+        // A type which FromAssemblyAttribute marks stands for the real type of the same name which another assembly
+        // declares. It is resolved before the assembly of the reference is appended, so that the assembly which only
+        // declares the stub is not referenced by the produced assembly. The stub and the real type share a full name,
+        // so they share the cache entry as well.
+        if (typeRef.TryGetFromAssemblyDefinition(Assembly.Source.MainModule, out var fromAssemblyType))
+        {
+            cecilType                                     = new CecilType(fromAssemblyType!, Assembly.Source.MainModule.ImportReference(fromAssemblyType));
+            m_TypeCache[new TypeName(typeRef).ToString()] = cecilType;
+            return cecilType;
+        }
+
         // Get assembly name.
         var assemblyName = typeRef.Module.Assembly.Name.FullName;
 
@@ -153,6 +164,18 @@ partial class AssemblyHandler
         if (type.Assembly.GetReferencedAssemblies().Any(name => name.FullName.Equals(Assembly.Source.FullName)))
         {
             throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, type.Assembly.FullName));
+        }
+
+        // A type which FromAssemblyAttribute marks stands for the real type of the same name which another assembly
+        // declares. The real type is resolved before the stub is imported, so that the assembly which only declares the
+        // stub is not appended as a reference of the produced assembly. The stub and the real type share a full name, so
+        // they share the cache entry as well.
+        if (Attribute.GetCustomAttribute(type, typeof(FromAssemblyAttribute)) is FromAssemblyAttribute fromAssembly)
+        {
+            var fromAssemblyDefinition = CecilExtensions.ResolveTypeFromAssembly(Assembly.Source.MainModule, fromAssembly.Name, type.FullName!);
+            cecilType                                  = new CecilType(fromAssemblyDefinition, Assembly.Source.MainModule.ImportReference(fromAssemblyDefinition));
+            m_TypeCache[new TypeName(type).ToString()] = cecilType;
+            return cecilType;
         }
 
         // Import type ref into the current assembly definition. The import registers the assembly reference which the
