@@ -26,15 +26,21 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             Log.LogMessageFromText($"Inject assembly: {TargetPath} no changes.", MessageImportance.High);
         }
 
-        project.Save();
+        // The project is only read, to tell whether the aspect is disabled, so it is not saved back.
         return true;
     }
 
     private bool InjectAssemblies(string assemblyPath)
     {
-        var assembly = Assembly.Read(assemblyPath);
+        // The reflection assembly is loaded from the bytes rather than from the path. Loading it by path takes the file
+        // for itself, and the file is held open for the write which follows, so the two cannot share it.
+        var runtimeAssembly = System.Reflection.Assembly.Load(File.ReadAllBytes(assemblyPath));
+
+        // The assembly is written back through the very stream it was read from, and that stream stays open until the
+        // assembly is disposed, so it is saved before the end of this scope. Without the write the whole injection is
+        // discarded.
+        using var assembly = Assembly.Read(assemblyPath);
         var assemblyHandler = new AssemblyHandler(assembly);
-        var runtimeAssembly = System.Reflection.Assembly.LoadFrom(assemblyPath);
         var dirty = ProcessAssembleInjector(assemblyHandler, runtimeAssembly);
         foreach (var type in runtimeAssembly.GetTypes())
         {
@@ -73,6 +79,8 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
                 }
             }
         }
+
+        if (dirty) assembly.SaveTo(assemblyPath);
 
         return dirty;
     }
