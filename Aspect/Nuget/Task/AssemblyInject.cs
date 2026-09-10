@@ -25,6 +25,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
         {
             Log.LogMessageFromText($"Inject assembly: {TargetPath} no changes.", MessageImportance.High);
         }
+
         project.Save();
         return true;
     }
@@ -54,13 +55,15 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
                         dirty |= ProcessMethodInjector(methodContainer, type, method);
                     }
                 }
-                if  (typeHandler is IFieldContainer fieldContainer)
+
+                if (typeHandler is IFieldContainer fieldContainer)
                 {
                     foreach (var field in type.GetFields())
                     {
                         dirty |= ProcessFieldInjector(fieldContainer, type, field);
                     }
                 }
+
                 if (typeHandler is IPropertyContainer propertyContainer)
                 {
                     foreach (var property in type.GetProperties())
@@ -77,11 +80,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     private bool ProcessAssembleInjector(AssemblyHandler assemblyHandler, System.Reflection.Assembly runtimeAssembly)
     {
         var injectors = runtimeAssembly.GetCustomAttributes(inherit: false)
-                                       .Where(static item =>
-                                           item is Attribute attr &&
-                                           attr.GetType().GetInterfaces().Contains(typeof(IAssemblyInjector)) &&
-                                           Attribute.GetCustomAttribute(attr.GetType(), typeof(AttributeUsageAttribute)) is AttributeUsageAttribute usage &&
-                                           usage.ValidOn.HasFlag(AttributeTargets.Assembly))
+                                       .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IAssemblyInjector)))
                                        .Cast<IAssemblyInjector>()
                                        .ToArray();
         if (injectors.Length == 0) return false;
@@ -97,11 +96,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     {
         var dirty = false;
         var typeAttributes = type.GetCustomAttributes(inherit: false)
-                                 .Where(static item =>
-                                     item is Attribute attr &&
-                                     attr.GetType().GetInterfaces().Contains(typeof(ITypeInjector)) &&
-                                     Attribute.GetCustomAttribute(attr.GetType(), typeof(AttributeUsageAttribute)) is AttributeUsageAttribute usage &&
-                                     usage.ValidOn.HasFlag(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum))
+                                 .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(ITypeInjector)))
                                  .Cast<Attribute>()
                                  .ToArray();
 
@@ -156,17 +151,20 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     private bool ProcessMethodInjector(IMethodContainer typeHandler, Type runtimeType, MethodInfo methodInfo)
     {
         if (methodInfo.GetCustomAttributes(inherit: false)
-                      .Where(static item =>
-                          item is Attribute attr &&
-                          attr.GetType().GetInterfaces().Contains(typeof(IMethodInjector)) &&
-                          Attribute.GetCustomAttribute(attr.GetType(), typeof(AttributeUsageAttribute)) is AttributeUsageAttribute usage &&
-                          usage.ValidOn.HasFlag(AttributeTargets.Method))
+                      .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IMethodInjector)))
                       .Cast<IMethodInjector>()
                       .ToArray() is not {Length: > 0} injectors) return false;
 
         foreach (var injector in injectors)
         {
-            injector.Inject(methodInfo, typeHandler.GetMethod(methodInfo.Name, methodInfo.GetParameters().GetITypes())!);
+            var methodHandler = typeHandler.GetMethod(methodInfo.Name, methodInfo.GetParameters().GetITypes());
+            if (methodHandler == null)
+            {
+                Log.LogError($"Method '{methodInfo.Name}' not found in type '{runtimeType.FullName}'.");
+                continue;
+            }
+
+            injector.Inject(methodInfo, methodHandler);
         }
 
         return false;
@@ -175,11 +173,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     private bool ProcessFieldInjector(IFieldContainer typeHandler, Type runtimeType, FieldInfo fieldInfo)
     {
         if (fieldInfo.GetCustomAttributes(inherit: false)
-                     .Where(static item =>
-                         item is Attribute attr &&
-                         attr.GetType().GetInterfaces().Contains(typeof(IFieldInjector)) &&
-                         Attribute.GetCustomAttribute(attr.GetType(), typeof(AttributeUsageAttribute)) is AttributeUsageAttribute usage &&
-                         usage.ValidOn.HasFlag(AttributeTargets.Field))
+                     .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IFieldInjector)))
                      .Cast<IFieldInjector>()
                      .ToArray() is not {Length: > 0} injectors) return false;
 
@@ -201,11 +195,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     private bool ProcessPropertyInjector(IPropertyContainer typeHandler, Type runtimeType, PropertyInfo propertyInfo)
     {
         if (propertyInfo.GetCustomAttributes(inherit: false)
-                        .Where(static item =>
-                            item is Attribute attr &&
-                            attr.GetType().GetInterfaces().Contains(typeof(IPropertyInjector)) &&
-                            Attribute.GetCustomAttribute(attr.GetType(), typeof(AttributeUsageAttribute)) is AttributeUsageAttribute usage &&
-                            usage.ValidOn.HasFlag(AttributeTargets.Property))
+                        .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IPropertyInjector)))
                         .Cast<IPropertyInjector>()
                         .ToArray() is not {Length: > 0} injectors) return false;
 

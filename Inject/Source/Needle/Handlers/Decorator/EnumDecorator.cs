@@ -65,7 +65,7 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
         // Add type to module.
         m_AssemblyHandler.Assembly.Source.MainModule.Types.Add(m_TypeDefinition);
 
-        return new EnumHandler(m_AssemblyHandler, m_TypeDefinition);
+        return new EnumHandler(m_AssemblyHandler, m_TypeDefinition, m_UnderlyingType);
     }
 
     /// <summary>

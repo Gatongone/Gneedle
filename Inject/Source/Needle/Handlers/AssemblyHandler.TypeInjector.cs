@@ -18,23 +18,13 @@ partial class AssemblyHandler
         return null;
     }
 
-    public ITypeHandler GetType(TypeDefinition typeDefinition)
+    public ITypeHandler GetType(TypeDefinition typeDefinition) => typeDefinition switch
     {
-        if (typeDefinition.IsValueType && !typeDefinition.IsEnum)
-        {
-            return new StructHandler(this, typeDefinition);
-        }
-        if (typeDefinition.IsEnum)
-        {
-            return new EnumHandler(this, typeDefinition);
-        }
-        if (typeDefinition.IsClass)
-        {
-            return new ClassHandler(this, typeDefinition);
-        }
-
-        return new TypeHandler(this, typeDefinition);
-    }
+        {IsValueType: true, IsEnum: false} => new StructHandler(this, typeDefinition),
+        {IsEnum     : true}                => new EnumHandler(this, typeDefinition, typeDefinition.Fields.First(f => f.Name == "value__").FieldType),
+        {IsClass    : true}                => new ClassHandler(this, typeDefinition),
+        _                                  => new TypeHandler(this, typeDefinition)
+    };
 
     public ITypeHandler[] GetTypes(Func<TypeDefinition, bool> filter)
     {
@@ -120,6 +110,7 @@ partial class AssemblyHandler
             var obsoleteDef = GetCecilType(typeof(ObsoleteAttribute)).Definition;
             typeDef.CustomAttributes.Add(obsoleteDef.CreateCustomAttribute(module, "This type is a ref struct and cannot be used as a field.", true));
         }
+
         if (structFlags.HasFlag(StructFlags.ReadOnly))
         {
             var module = Assembly.Source.MainModule;
