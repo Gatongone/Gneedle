@@ -2,7 +2,9 @@
    <PropertyGroup>
       <AspectId>Gneedle.Aspect</AspectId>
       <AspectProjPath>..</AspectProjPath>
-      <AspectOutPath Condition="$(MSBuildRuntimeType) == 'Core'">$(AspectProjPath)\lib\net472</AspectOutPath>
-      <AspectOutPath Condition="$(MSBuildRuntimeType) != 'Core'">$(AspectProjPath)\lib\netstandard2.1</AspectOutPath>
+      <!-- Only the netstandard2.1 build is packed. The net472 build which a full framework MSBuild used to load was
+           dropped, and the conditions of the two branches were the wrong way round besides, so a dotnet build loaded
+           the net472 one. -->
+      <AspectOutPath>$(AspectProjPath)\lib\netstandard2.1</AspectOutPath>
    </PropertyGroup>
 </Project>

@@ -7,7 +7,7 @@
         <authors>Gatongone</authors>
         <requireLicenseAcceptance>true</requireLicenseAcceptance>
         <license type="file">docs\License.txt</license>
-        <readme>docs\Readme.md</readme>
+        <readme>docs\README.md</readme>
         <repository type="git">https://github.com/Gatongone/Gneedle</repository>
         <description>Gneedle weaver analyzer.</description>
         <copyright>© 2024 Gatongone</copyright>
@@ -18,13 +18,10 @@
         <file src="$id$.props" target="build"/>
         <file src="$id$.targets" target="build"/>
 
-        <file src=".\bin\$configuration$\net472\$id$.dll" target="lib\net472"/>
-        <file src=".\bin\$configuration$\net472\$id$.pdb" target="lib\net472"/>
-
         <file src=".\bin\$configuration$\netstandard2.1\$id$.dll" target="lib\netstandard2.1"/>
         <file src=".\bin\$configuration$\netstandard2.1\$id$.pdb" target="lib\netstandard2.1"/>
 
-        <file src="..\License.txt" target="docs"/>
-        <file src="..\Readme.md" target="docs"/>
+        <file src="..\..\License.txt" target="docs"/>
+        <file src="..\..\README.md" target="docs"/>
     </files>
 </package>
