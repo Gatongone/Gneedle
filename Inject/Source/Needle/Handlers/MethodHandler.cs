@@ -168,16 +168,12 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
-    /// Parse the return type. If the return type is a generic parameter that could be parsed from Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20],
+    /// Parse the return type. If the return type holds a generic parameter token which could be parsed from
+    /// Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20], it would be replaced with the generic parameter of the source method.
     /// </summary>
     /// <param name="sourceReturnType">The return type to parse.</param>
     public void ParseReturnType(TypeReference sourceReturnType)
-    {
-        if (sourceReturnType.TryGetParsedGenericParameter(Source, out var parameter))
-        {
-            Source.ReturnType = parameter;
-        }
-    }
+        => Source.ReturnType = sourceReturnType.ParseGenericTokens(Source, Source.Module);
 
     /// <summary>
     /// Parse the method body. We need to translate the instructions in target method body to make them work in source method body,
@@ -314,22 +310,27 @@ internal sealed partial class MethodHandler : IMethodHandler
     {
         switch (currentIns.Operand)
         {
+            // The signature of the method may hold generic parameter tokens, just like List<Gneedle.Inject.T_0>::.ctor().
             case MethodReference methodRef:
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, Source.Module.ImportReference(methodRef)));
+                var importedMethod = Source.Module.ImportReference(methodRef).ParseGenericTokens(Source, Source.Module);
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
                 break;
             case ParameterDefinition parameterDef:
                 var targetParameterDef = Source.Parameters?.FirstOrDefault(p => p.Name == parameterDef.Name);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, targetParameterDef));
                 break;
+            // The type of the field may hold generic parameter tokens, just like List<Gneedle.Inject.T_0>::SomeField.
             case FieldReference fieldRef:
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, Source.Module.ImportReference(fieldRef)));
+                var importedField = Source.Module.ImportReference(fieldRef).ParseGenericTokens(Source, Source.Module);
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedField));
                 break;
             // We need to find the variable with the same index in source method definition, and replace the operand with it.
             case VariableDefinition varDef:
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, Source.Body.Variables[varDef.Index]));
                 break;
+            // The type may hold generic parameter tokens itself, just like box Gneedle.Inject.T_0.
             case TypeReference typeRef:
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, Source.Module.ImportReference(typeRef)));
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, typeRef.ParseGenericTokens(Source, Source.Module)));
                 break;
         }
     }
@@ -375,10 +376,9 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         for (var i = 0; i < srcVariables.Count; i++)
         {
-            var typeRef = srcVariables[i].VariableType;
-            // If the variable is the genericType that could be parsed from Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20],
+            // If the variable type holds a generic parameter token which could be parsed from Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20],
             // then get the actual generic parameter type.
-            typeRef = typeRef.TryGetParsedGenericParameter(to, out var parameter) ? parameter : to.Module.ImportReference(typeRef)!;
+            var typeRef = srcVariables[i].VariableType.ParseGenericTokens(to, to.Module);
             desVariables.Add(new VariableDefinition(typeRef));
         }
     }

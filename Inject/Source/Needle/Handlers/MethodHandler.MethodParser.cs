@@ -105,7 +105,7 @@ partial class MethodHandler
             // Skip the array init sequence if this is Object.Method with new Object(param).
             if (skipArrayInitCount > 0)
             {
-                for (int i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
+                for (var i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
                 {
                     filter.Skip(i);
                 }
@@ -114,7 +114,7 @@ partial class MethodHandler
             // Skip the Static.From sequence if this is Static.Method.
             if (skipStaticFromCount > 0)
             {
-                for (int i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
+                for (var i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
                 {
                     filter.Skip(i);
                 }
@@ -207,19 +207,18 @@ partial class MethodHandler
             var argType = (instanceIns != null ? GetArgType(instanceIns, targetDef) : null)
                           ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
 
-            if (argType is GenericParameter parameter)
+            // A token as the instance type is just another spelling of the generic parameter of the injected method or of
+            // its declaring type, so it is resolved exactly like a real generic parameter: the method is looked up on the
+            // constraints of the generic parameter. The generic parameter itself has no definition to look the method up on
+            // (Cecil's GenericParameter.Resolve() returns null), and a call on an unconstrained one would be invalid IL.
+            var instanceType = argType.TryGetParsedGenericParameter(Source, out var genericParameter) ? genericParameter! : argType;
+
+            if (instanceType is GenericParameter parameter)
             {
                 return GetMethodFromConstraint(parameter, methodName, parameters);
             }
 
-            var originType = argType.Resolve();
-
-            if (originType.TryGetParsedGenericParameter(Source, out var genericParameter))
-            {
-                originType = DeclaringTypeHandler.AssemblyHandler.GetCecilType(genericParameter!).Definition;
-            }
-
-            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(originType, (string) instructions[currentIndex].Operand, parameters);
+            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.Resolve(), (string) instructions[currentIndex].Operand, parameters);
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Static))

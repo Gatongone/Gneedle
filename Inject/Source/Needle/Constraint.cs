@@ -45,10 +45,10 @@ public struct Constraint
 
         GenericParameterAttributes = genericParameterAttributes | type switch
         {
-            GenericParameterType genericParameterType => genericParameterType.Constraints.Combined(),
-            GenericType genericType when genericType.Type.IsGenericParameter       => genericType.Type.GenericParameterAttributes,
-            NongenericType nonGenericType when nonGenericType.Type.IsGenericParameter => nonGenericType.Type.GenericParameterAttributes,
-            _                                         => GenericParameterAttributes.None
+            GenericParameterType genericParameterType                     => genericParameterType.Constraints.Combined(),
+            GenericType {Type.IsGenericParameter   : true} genericType    => genericType.Type.GenericParameterAttributes,
+            NongenericType {Type.IsGenericParameter: true} nonGenericType => nonGenericType.Type.GenericParameterAttributes,
+            _                                                             => GenericParameterAttributes.None
         };
     }
 
@@ -158,7 +158,7 @@ public struct Constraint
 
     /// <summary>
     /// The generic type parameter is covariant.<para/>
-    /// A covariant type parameter can appear as the result type of a method, the type of a read-only field, a declared base type, or an implemented interface.
+    /// A covariant type parameter can appear as the result type of method, the type of read-only field, a declared base type, or an implemented interface.
     /// </summary>
     public static Constraint Out = new("'out'", GenericParameterAttributes.Covariant);
 }

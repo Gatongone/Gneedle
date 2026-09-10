@@ -167,7 +167,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             injector.Inject(methodInfo, methodHandler);
         }
 
-        return false;
+        return true;
     }
 
     private bool ProcessFieldInjector(IFieldContainer typeHandler, Type runtimeType, FieldInfo fieldInfo)
@@ -189,7 +189,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             injector.Inject(fieldInfo, fieldHandler);
         }
 
-        return false;
+        return true;
     }
 
     private bool ProcessPropertyInjector(IPropertyContainer typeHandler, Type runtimeType, PropertyInfo propertyInfo)
@@ -211,6 +211,6 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             injector.Inject(propertyInfo, propertyHandler);
         }
 
-        return false;
+        return true;
     }
 }

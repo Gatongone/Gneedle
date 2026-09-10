@@ -180,8 +180,10 @@ internal static class CecilExtensions
             parameter    = default;
             isFromMethod = false;
 
-            const string genericTypeNamePattern = @$"{nameof(Gneedle)}\.{nameof(Inject)}\.T_(1[1-9]|20|[0-9])";
-            const string genericMethodNamePattern = @$"{nameof(Gneedle)}\.{nameof(Inject)}\.M_(1[1-9]|20|[0-9])";
+            // The token must be the whole type name. Otherwise a type which merely contains a token as its generic argument,
+            // just like List<Gneedle.Inject.T_0>, would be taken as the token itself.
+            const string genericTypeNamePattern   = @$"^{nameof(Gneedle)}\.{nameof(Inject)}\.T_(1[1-9]|20|[0-9])$";
+            const string genericMethodNamePattern = @$"^{nameof(Gneedle)}\.{nameof(Inject)}\.M_(1[1-9]|20|[0-9])$";
             var typeName = typeReference.FullName;
             var matcher = Regex.Match(typeName, genericTypeNamePattern);
 
@@ -220,6 +222,145 @@ internal static class CecilExtensions
             parameter    = methodParameters[index];
             isFromMethod = true;
             return true;
+        }
+
+        /// <summary>
+        /// Parse the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] tokens in the type reference to the generic parameters of the <c>provider</c>.
+        /// Unlike <see cref="TryGetParsedGenericParameter(IMemberDefinition, out GenericParameter?)"/>, the tokens nested in the type are parsed as well,
+        /// just like <c>List&lt;Gneedle.Inject.T_0&gt;</c> to <c>List&lt;T&gt;</c>.
+        /// </summary>
+        /// <param name="provider">GenericParameters provider.</param>
+        /// <param name="module">The module which the returned type reference belongs to. The type reference is imported to it when it comes from another assembly.</param>
+        /// <returns>
+        /// The type reference without any token. It is the generic parameter of the <c>provider</c> itself when the type reference is a token.
+        /// </returns>
+        /// <exception cref="IndexOutOfRangeException">Throw when the token index out of the <c>provider</c>'s GenericParameters count.</exception>
+        internal TypeReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
+        {
+            // A type specification wraps another type, and the FullName of a wrapper which holds no affix
+            // (just like `pinned T` or `modreq(InAttribute) T`) is the FullName of the wrapped type itself.
+            // So the wrapped type is parsed below, otherwise the token of it would be taken as the token of the whole type.
+            if (typeReference is not TypeSpecification)
+            {
+                // The token stands for the generic parameter of the provider itself. It is not a type of any module, so it doesn't need to be imported.
+                if (typeReference.TryGetParsedGenericParameter(provider, out var parameter)) return parameter!;
+
+                // Import the type reference, so that it could be used in the module even if it comes from another assembly.
+                return module.ImportReference(typeReference);
+            }
+
+            // Import the type reference, so that it could be used in the module even if it comes from another assembly.
+            var importedType = module.ImportReference(typeReference);
+            switch (importedType)
+            {
+                // Parse the tokens nested in the generic arguments, just like List<Gneedle.Inject.T_0>.
+                case GenericInstanceType genericInstanceType:
+                    var genericArguments = genericInstanceType.GenericArguments;
+                    for (var index = 0; index < genericArguments.Count; index++)
+                    {
+                        genericArguments[index] = genericArguments[index].ParseGenericTokens(provider, module);
+                    }
+
+                    return genericInstanceType;
+
+                // Parse the tokens nested in the return type and the parameters of the signature, just like delegate*<Gneedle.Inject.T_0>.
+                // The element type of a function pointer type is its return type, so it is handled here instead of below.
+                case FunctionPointerType functionPointerType:
+                    functionPointerType.ReturnType = functionPointerType.ReturnType.ParseGenericTokens(provider, module);
+                    foreach (var functionPointerParameter in functionPointerType.Parameters)
+                    {
+                        functionPointerParameter.ParameterType = functionPointerParameter.ParameterType.ParseGenericTokens(provider, module);
+                    }
+
+                    return functionPointerType;
+
+                // Parse the tokens nested in the element type, just like Gneedle.Inject.T_0[].
+                case ArrayType arrayType:
+                    return new ArrayType(arrayType.ElementType.ParseGenericTokens(provider, module), arrayType.Rank);
+
+                case ByReferenceType byReferenceType:
+                    return new ByReferenceType(byReferenceType.ElementType.ParseGenericTokens(provider, module));
+
+                case PointerType pointerType:
+                    return new PointerType(pointerType.ElementType.ParseGenericTokens(provider, module));
+
+                // The pinned and the sentinel type hold nothing but the element type, so they could be recreated with the parsed element type.
+                case PinnedType pinnedType:
+                    return new PinnedType(pinnedType.ElementType.ParseGenericTokens(provider, module));
+
+                case SentinelType sentinelType:
+                    return new SentinelType(sentinelType.ElementType.ParseGenericTokens(provider, module));
+
+                case OptionalModifierType optionalModifierType:
+                    return new OptionalModifierType(
+                        optionalModifierType.ModifierType.ParseGenericTokens(provider, module),
+                        optionalModifierType.ElementType.ParseGenericTokens(provider, module));
+
+                case RequiredModifierType requiredModifierType:
+                    return new RequiredModifierType(
+                        requiredModifierType.ModifierType.ParseGenericTokens(provider, module),
+                        requiredModifierType.ElementType.ParseGenericTokens(provider, module));
+
+                default:
+                    return importedType;
+            }
+        }
+    }
+
+    /// <param name="methodReference">The method reference which may hold tokens in the types of its declaring type, parameters or return value.</param>
+    extension(MethodReference methodReference)
+    {
+        /// <summary>
+        /// Parse the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] tokens in the signature of the method reference to the generic parameters of the <c>provider</c>.
+        /// </summary>
+        /// <remarks>
+        /// The method reference is modified in place, so it must be a reference which belongs to the module of the <c>provider</c>.
+        /// </remarks>
+        /// <param name="provider">GenericParameters provider.</param>
+        /// <param name="module">The module which the method reference belongs to.</param>
+        /// <returns>The <c>methodReference</c> with all its tokens parsed.</returns>
+        /// <exception cref="IndexOutOfRangeException">Throw when the token index out of the <c>provider</c>'s GenericParameters count.</exception>
+        internal MethodReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
+        {
+            methodReference.DeclaringType = methodReference.DeclaringType.ParseGenericTokens(provider, module);
+            methodReference.ReturnType    = methodReference.ReturnType.ParseGenericTokens(provider, module);
+            foreach (var parameter in methodReference.Parameters)
+            {
+                parameter.ParameterType = parameter.ParameterType.ParseGenericTokens(provider, module);
+            }
+
+            // Parse the tokens nested in the generic arguments when the method is a generic instance method.
+            if (methodReference is GenericInstanceMethod genericInstanceMethod)
+            {
+                var genericArguments = genericInstanceMethod.GenericArguments;
+                for (var index = 0; index < genericArguments.Count; index++)
+                {
+                    genericArguments[index] = genericArguments[index].ParseGenericTokens(provider, module);
+                }
+            }
+
+            return methodReference;
+        }
+    }
+
+    /// <param name="fieldReference">The field reference which may hold tokens in the types of its declaring type or its field.</param>
+    extension(FieldReference fieldReference)
+    {
+        /// <summary>
+        /// Parse the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] tokens in the signature of the field reference to the generic parameters of the <c>provider</c>.
+        /// </summary>
+        /// <remarks>
+        /// The field reference is modified in place, so it must be a reference which belongs to the module of the <c>provider</c>.
+        /// </remarks>
+        /// <param name="provider">GenericParameters provider.</param>
+        /// <param name="module">The module which the field reference belongs to.</param>
+        /// <returns>The <c>fieldReference</c> with all its tokens parsed.</returns>
+        /// <exception cref="IndexOutOfRangeException">Throw when the token index out of the <c>provider</c>'s GenericParameters count.</exception>
+        internal FieldReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
+        {
+            fieldReference.DeclaringType = fieldReference.DeclaringType.ParseGenericTokens(provider, module);
+            fieldReference.FieldType     = fieldReference.FieldType.ParseGenericTokens(provider, module);
+            return fieldReference;
         }
     }
 
