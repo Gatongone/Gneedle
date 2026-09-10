@@ -25,8 +25,11 @@ internal sealed class StreamAssembly(IAssemblyCache cache, AssemblySymbol symbol
     /// <returns>ReaderParameters with target symbol reader provider.</returns>
     private static ReaderParameters GetReaderSymbolProvider(AssemblySymbol symbol) => symbol switch
     {
-        AssemblySymbol.Pdb  => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = PdbSymbolReaderProvider},
-        AssemblySymbol.Mdb  => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = MdbSymbolReaderProvider},
-        _                   => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = DefaultReaderProvider}
+        AssemblySymbol.Pdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = PdbSymbolReaderProvider},
+        AssemblySymbol.Mdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = MdbSymbolReaderProvider},
+
+        // No symbol was asked for, so none is read. The default symbol reader provider throws when the assembly has no
+        // symbol besides it, which an assembly which was just produced, or which was built without symbols, has not.
+        _ => new ReaderParameters(ReadingMode.Deferred) {ReadSymbols = false}
     };
 }
