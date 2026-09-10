@@ -6,7 +6,7 @@
 
         <IsPackable>false</IsPackable>
         <IsTestProject>true</IsTestProject>
-        <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
+        <TargetFrameworks>net5.0;netstandard2.1;</TargetFrameworks>
         <OutputType>Library</OutputType>
         <LangVersion>12</LangVersion>
         <RootNamespace>Gneedle.Inject.Test</RootNamespace>

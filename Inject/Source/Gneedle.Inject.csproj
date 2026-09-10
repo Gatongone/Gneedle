@@ -6,7 +6,7 @@
         <RootNamespace>Gneedle.Inject</RootNamespace>
         <Version>0.0.1</Version>
         <LangVersion>preview</LangVersion>
-        <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
+        <TargetFrameworks>net5.0;netstandard2.1;</TargetFrameworks>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
@@ -15,14 +15,14 @@
     </ItemGroup>
 
     <ItemGroup>
-      <TypeScriptCompile Update="Needle\Symbols\Generic.tt">
+      <TypeScriptCompile Update="Needle\Tokens\Generic.tt">
         <Generator>TextTemplatingFileGenerator</Generator>
         <LastGenOutput>Generic.cs</LastGenOutput>
       </TypeScriptCompile>
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Update="Needle\Symbols\Generic.cs">
+      <Compile Update="Needle\Tokens\Generic.cs">
         <DependentUpon>Generic.tt</DependentUpon>
       </Compile>
     </ItemGroup>
