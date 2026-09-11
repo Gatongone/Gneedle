@@ -78,13 +78,13 @@ partial class AssemblyHandler
 
         // Create type definition from context.
         var typeDef = new TypeDefinition(typeNamespace, typeName, classFlags.ToTypeAttributes());
-        var context = new Implementation();
-        return new ClassDecorator(this, typeDef, context, AddClassCallback);
+        // The base type is described through the decorator before the class is appended, so none is held here.
+        return new ClassDecorator(this, typeDef, null, AddClassCallback);
 
-        IClassHandler AddClassCallback(TypeDefinition type, Implementation impl)
+        IClassHandler AddClassCallback(TypeDefinition type, TypeReference? baseType)
         {
             // Inherits from base type.
-            type.BaseType = impl.BaseType;
+            type.BaseType = baseType;
 
             // Add type to module.
             Assembly.Source.MainModule.Types.Add(type);
@@ -106,7 +106,6 @@ partial class AssemblyHandler
 
         // Create type definition from context.
         var typeDef = new TypeDefinition(typeNamespace, typeName, structFlags.ToTypeAttributes());
-        var context = new Implementation();
 
         if (structFlags.HasFlag(StructFlags.Ref))
         {
@@ -127,12 +126,13 @@ partial class AssemblyHandler
             typeDef.CustomAttributes.Add(readOnlyDef.CreateCustomAttribute(module));
         }
 
-        return new StructDecorator(this, typeDef, context, AddStructCallback);
+        // The base type is described through the decorator before the struct is appended, so none is held here.
+        return new StructDecorator(this, typeDef, null, AddStructCallback);
 
-        IStructHandler AddStructCallback(TypeDefinition type, Implementation impl)
+        IStructHandler AddStructCallback(TypeDefinition type, TypeReference? baseType)
         {
             // Inherits from base type.
-            type.BaseType = impl.BaseType;
+            type.BaseType = baseType;
 
             // Add type to module.
             Assembly.Source.MainModule.Types.Add(type);

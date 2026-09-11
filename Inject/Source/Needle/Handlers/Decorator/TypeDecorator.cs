@@ -18,25 +18,25 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     /// <summary>
     /// Callback on <see cref="GetHandler"/> method.
     /// </summary>
-    private readonly Func<TypeDefinition, Implementation, IClassHandler> m_BuildCallback;
+    private readonly Func<TypeDefinition, TypeReference?, IClassHandler> m_BuildCallback;
 
     /// <summary>
-    /// Describing information.
+    /// The base type which the class is described with, or null while none was described.
     /// </summary>
-    private Implementation m_Implementation;
+    private TypeReference? m_BaseType;
 
     /// <summary>
     /// Create a decorator which describes a class before it is appended to the module.
     /// </summary>
     /// <param name="assemblyHandler">Handler of the assembly which the class is appended to.</param>
     /// <param name="typeDefinition">The class definition which is described.</param>
-    /// <param name="implementation">The base type and the interfaces which the class is described with.</param>
+    /// <param name="baseType">The base type which the class is described with, or null when none is described yet.</param>
     /// <param name="buildCallback">Callback which appends the class to the module and returns its handler.</param>
-    internal ClassDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, Implementation implementation, Func<TypeDefinition, Implementation, IClassHandler> buildCallback)
+    internal ClassDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, TypeReference? baseType, Func<TypeDefinition, TypeReference?, IClassHandler> buildCallback)
     {
         m_AssemblyHandler = assemblyHandler;
         m_TypeDefinition  = typeDefinition;
-        m_Implementation  = implementation;
+        m_BaseType        = baseType;
         m_BuildCallback   = buildCallback;
     }
 
@@ -73,7 +73,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         }
 
         // CecilType.Reference is owned by the target module already, so it can be appended as it is.
-        m_Implementation.BaseType = m_AssemblyHandler.GetCecilType(type).Reference;
+        m_BaseType = m_AssemblyHandler.GetCecilType(type).Reference;
         return this;
     }
 
@@ -81,7 +81,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     public IInterfaceDecorator WithBaseType(IType type)
     {
         // Resolve and append to base type.
-        m_Implementation.BaseType = m_AssemblyHandler.ResolveParameterType(m_TypeDefinition, type);
+        m_BaseType = m_AssemblyHandler.ResolveParameterType(m_TypeDefinition, type);
         return this;
     }
 
@@ -114,13 +114,13 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     public IClassHandler GetHandler()
     {
         // Default from object inheritance.
-        if (m_Implementation.BaseType == null)
+        if (m_BaseType == null)
         {
             WithBaseType(typeof(object));
         }
 
         // Build and append to module.
-        return m_BuildCallback.Invoke(m_TypeDefinition, m_Implementation);
+        return m_BuildCallback.Invoke(m_TypeDefinition, m_BaseType);
     }
 
     /// <summary>
@@ -208,25 +208,25 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     /// <summary>
     /// Callback on <see cref="GetHandler"/> method.
     /// </summary>
-    private readonly Func<TypeDefinition, Implementation, IStructHandler> m_BuildCallback;
+    private readonly Func<TypeDefinition, TypeReference?, IStructHandler> m_BuildCallback;
 
     /// <summary>
-    /// Describing information.
+    /// The base type which the struct is described with, or null while none was described.
     /// </summary>
-    private Implementation m_Implementation;
+    private TypeReference? m_BaseType;
 
     /// <summary>
     /// Create a decorator which describes a struct before it is appended to the module.
     /// </summary>
     /// <param name="assemblyHandler">Handler of the assembly which the struct is appended to.</param>
     /// <param name="typeDefinition">The struct definition which is described.</param>
-    /// <param name="implementation">The base type and the interfaces which the struct is described with.</param>
+    /// <param name="baseType">The base type which the struct is described with, or null when none is described yet.</param>
     /// <param name="buildCallback">Callback which appends the struct to the module and returns its handler.</param>
-    internal StructDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, Implementation implementation, Func<TypeDefinition, Implementation, IStructHandler> buildCallback)
+    internal StructDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, TypeReference? baseType, Func<TypeDefinition, TypeReference?, IStructHandler> buildCallback)
     {
         m_AssemblyHandler = assemblyHandler;
         m_TypeDefinition  = typeDefinition;
-        m_Implementation  = implementation;
+        m_BaseType        = baseType;
         m_BuildCallback   = buildCallback;
     }
 
@@ -279,14 +279,14 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     public IStructHandler GetHandler()
     {
         // Default from object inheritance.
-        if (m_Implementation.BaseType == null || m_Implementation.BaseType.FullName == typeof(ValueType).FullName)
+        if (m_BaseType == null || m_BaseType.FullName == typeof(ValueType).FullName)
         {
             // CecilType.Reference is owned by the target module already, so it can be appended as it is.
-            m_Implementation.BaseType = m_AssemblyHandler.GetCecilType(typeof(ValueType)).Reference;
+            m_BaseType = m_AssemblyHandler.GetCecilType(typeof(ValueType)).Reference;
         }
 
         // Build and append to module.
-        return m_BuildCallback.Invoke(m_TypeDefinition, m_Implementation);
+        return m_BuildCallback.Invoke(m_TypeDefinition, m_BaseType);
     }
 
     /// <summary>
