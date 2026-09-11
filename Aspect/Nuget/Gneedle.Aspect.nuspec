@@ -12,6 +12,21 @@
         <description>Gneedle weaver analyzer.</description>
         <copyright>© 2024 Gatongone</copyright>
         <tags>ILWeaving, AOP</tags>
+
+        <!-- The task weaves through the weaver and is compiled against it, so the assembly is needed beside it at run
+             time. It is named here rather than taken from the reference, because the file which describes the package
+             describes what it carries, and the two packages are published together at one version. -->
+        <dependencies>
+            <group targetFramework="net472">
+                <dependency id="Gneedle.Inject" version="0.0.1"/>
+            </group>
+            <group targetFramework="netstandard2.1">
+                <dependency id="Gneedle.Inject" version="0.0.1"/>
+            </group>
+            <group targetFramework="net5.0">
+                <dependency id="Gneedle.Inject" version="0.0.1"/>
+            </group>
+        </dependencies>
     </metadata>
 
     <files>
