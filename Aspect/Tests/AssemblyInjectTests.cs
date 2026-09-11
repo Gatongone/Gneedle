@@ -84,7 +84,7 @@ public class AssemblyInjectTests
     {
         var path = Path.Combine(m_WorkDirectory, $"{Guid.NewGuid():N}.csproj");
         File.WriteAllText(path, disabled
-            ? "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><Gneedle>disable</Gneedle></PropertyGroup></Project>"
+            ? "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><Aspect>disable</Aspect></PropertyGroup></Project>"
             : "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
         return path;
     }

@@ -8,11 +8,9 @@
       <AspectOutPath Condition="$(MSBuildRuntimeType) == 'Core'">$(AspectProjPath)\tools\netstandard2.1</AspectOutPath>
       <AspectOutPath Condition="$(MSBuildRuntimeType) != 'Core'">$(AspectProjPath)\tools\net472</AspectOutPath>
 
-      <!-- Keep the attributes which the injectors are read from, and the reference to the weaver which they name, in
-           the assembly which is woven. They are removed by default, so that the assembly does not carry the weaver. A
-           project which declares its attributes for another project to weave with is the one which wants this.
-           The other property of the pair is written in the project itself: <Gneedle>disable</Gneedle> tells the scan of
-           the solution to leave the project alone, and the task to weave nothing into it. -->
-      <GneedleKeepWeaver Condition="'$(GneedleKeepWeaver)' == ''">false</GneedleKeepWeaver>
+      <!-- The properties which a project is described by are read from the project itself: See the section of the
+           readme which is named for them. This one is given a default here, because the targets are read whether or not
+           the project which they run in says anything about it. -->
+      <KeepWeaver Condition="'$(KeepWeaver)' == ''">false</KeepWeaver>
    </PropertyGroup>
 </Project>

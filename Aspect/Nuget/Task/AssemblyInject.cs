@@ -33,7 +33,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     /// kept in the assembly which is woven.<para/>
     /// They are removed by default, so that the assembly which was woven does not carry the weaver. A project which
     /// declares its attributes for another project to weave with keeps them, which it asks for with the property
-    /// <c>GneedleKeepWeaver</c>. The value is read as the text of that property, so that a project which was never given
+    /// <c>KeepWeaver</c>. The value is read as the text of that property, so that a project which was never given
     /// one keeps nothing.
     /// </summary>
     public string? KeepWeaver { get; set; }

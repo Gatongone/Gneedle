@@ -1,6 +1,6 @@
 <Project>
     <UsingTask TaskName="$(AspectId).AssemblyInject" AssemblyFile="$(AspectOutPath)\$(AspectId).dll"/>
     <Target Name="GneedleTarget" AfterTargets="PostBuildEvent">
-        <AssemblyInject ProjectPath="$(ProjectPath)" TargetPath="$(TargetPath)" KeepWeaver="$(GneedleKeepWeaver)"/>
+        <AssemblyInject ProjectPath="$(ProjectPath)" TargetPath="$(TargetPath)" KeepWeaver="$(KeepWeaver)"/>
     </Target>
 </Project>

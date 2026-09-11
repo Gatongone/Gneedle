@@ -16,7 +16,7 @@
         <!-- The scan of the solution adds the injection target to every project which references this one, and this
              project calls the task itself rather than being injected into. It is also the toggle which the tests
              exercise. -->
-        <Gneedle>disable</Gneedle>
+        <Aspect>disable</Aspect>
     </PropertyGroup>
 
     <ItemGroup>
