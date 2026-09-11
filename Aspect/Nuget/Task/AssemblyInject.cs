@@ -101,6 +101,10 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             }
         }
 
+        // The injectors are read from attributes which the project declares, and those attributes name the weaver, so
+        // the weaver is removed from the assembly once they have been applied to it.
+        dirty |= assemblyHandler.RemoveTheWeaver();
+
         if (dirty) assembly.SaveTo(assemblyPath);
 
         return dirty;

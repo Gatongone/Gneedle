@@ -18,6 +18,14 @@ public class AssemblyInjectTests
 {
     private const string TargetType = "Gneedle.Aspect.Test.Fixtures.Target";
 
+    /// <summary>
+    /// The name of the attribute which the injectors of the fixtures are read from.<para/>
+    /// The name is written out rather than taken from the type, because naming the type in this assembly is what keeps
+    /// the type in the assembly which is woven: a type which the code names cannot be removed without taking the name
+    /// with it, so an assertion which named it would hold it in place and then fail on its own doing.
+    /// </summary>
+    private const string ThrowBodyAttributeName = "Gneedle.Aspect.Test.ThrowBodyAttribute";
+
     private string m_WorkDirectory = null!;
     private string m_InjectionLog = null!;
 
@@ -214,6 +222,56 @@ public class AssemblyInjectTests
         Assert.That(result, Is.True);
         Assert.That(engine.Messages.Any(message => message.Contains("no changes")), Is.True, string.Join(Environment.NewLine, engine.Messages));
         Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although no injector changed it");
+    }
+
+    #endregion
+
+    #region What the task leaves behind
+
+    [Test]
+    public void An_Injector_Attribute_Which_Nothing_Else_Names_Is_Removed_With_Its_Uses()
+    {
+        var assembly = CopyOfTheTestAssembly();
+
+        Inject(assembly, Project());
+
+        using var read = AssemblyDefinition.ReadAssembly(assembly);
+
+        // The attribute is what the injector was read from, and it names the weaver, so it goes with the mark which it
+        // left on the member: nothing of the assembly names the type, and the type is not there.
+        Assert.That(read.MainModule.Types.Any(type => type.FullName == ThrowBodyAttributeName), Is.False);
+        var method = read.MainModule.GetType(TargetType)!.Methods.Single(method => method.Name == "Public");
+        Assert.That(method.CustomAttributes, Is.Empty);
+    }
+
+    [Test]
+    public void An_Injector_Attribute_Which_The_Assembly_Still_Names_Keeps_Its_Place()
+    {
+        // A type which the assembly names itself, by a typeof or a signature, cannot be taken away without taking the
+        // names of it as well. It stays, and gives up what makes it an injector, which is what names the weaver.
+        var assembly = CopyOfTheTestAssembly();
+
+        Inject(assembly, Project());
+
+        using var read = AssemblyDefinition.ReadAssembly(assembly);
+        var type = read.MainModule.GetType(typeof(ClassOnlyAttribute).FullName!)!;
+
+        Assert.That(type, Is.Not.Null);
+        Assert.That(type.Interfaces.Any(implementation => implementation.InterfaceType.FullName == typeof(IClassInjector).FullName), Is.False);
+        Assert.That(type.Methods.Any(method => method.Name == nameof(IClassInjector.Inject)), Is.False);
+    }
+
+    [Test]
+    public void The_Reference_To_The_Weaver_Is_Kept_While_The_Assembly_Names_It()
+    {
+        // The assembly which these tests build with is one which weaves through the weaver, so it names the weaver for
+        // its own sake beside the attributes which it declares, and the reference to it is needed.
+        var assembly = CopyOfTheTestAssembly();
+
+        Inject(assembly, Project());
+
+        using var read = AssemblyDefinition.ReadAssembly(assembly);
+        Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "Gneedle.Inject"), Is.True);
     }
 
     #endregion
