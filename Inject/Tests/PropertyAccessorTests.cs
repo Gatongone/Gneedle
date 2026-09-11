@@ -139,6 +139,44 @@ public class PropertyAccessorTests
     }
 
     [Test]
+    public void PropertyDecorator_WithFieldOperation_Of_A_Static_Property_Reaches_The_Field_Through_The_Type()
+    {
+        // A static accessor is created as one, so the body which reads or writes a field is emitted for that shape
+        // rather than for the shape of an instance accessor, which the field it belongs to follows.
+        var (_, host) = NewHost("PropertyStaticFieldAssembly");
+
+        host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Static)
+            .WithType(typeof(int))
+            .WithGetter(DefaultPropertyBody.WithFieldOperation)
+            .WithSetter(DefaultPropertyBody.WithFieldOperation)
+            .GetHandler();
+
+        var field = host.Source.Fields.Single(f => f.Name == "<Value>k__BackingField");
+        Assert.That(field.IsStatic, Is.True);
+        Assert.That(Holds(GetterOf(host), OpCodes.Ldsfld), Is.True);
+        Assert.That(Holds(GetterOf(host), OpCodes.Ldarg_0), Is.False);
+        Assert.That(Holds(SetterOf(host), OpCodes.Stsfld), Is.True);
+    }
+
+    [Test]
+    public void PropertyDecorator_Static_Property_With_Field_Operation_Runs()
+    {
+        // A static accessor whose body named `this` left the type unloadable rather than merely wrong, so the test which
+        // tells the two apart is one which loads the type and uses the property.
+        var (assembly, host) = NewHost("PropertyStaticFieldRunsAssembly");
+        host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Static)
+            .WithType(typeof(int))
+            .WithGetter(DefaultPropertyBody.WithFieldOperation)
+            .WithSetter(DefaultPropertyBody.WithFieldOperation)
+            .GetHandler();
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        type.GetProperty("Value")!.SetValue(null, 5);
+
+        Assert.That(type.GetProperty("Value")!.GetValue(null), Is.EqualTo(5));
+    }
+
+    [Test]
     public void PropertyDecorator_WithGetter_Leaves_The_Setter_Alone()
     {
         // The bodies of the two accessors are described apart from each other.
@@ -175,17 +213,18 @@ public class PropertyAccessorTests
     }
 
     [Test]
-    public void PropertyGetter_AroundBody_Of_An_Abstract_Property_Throws()
+    public void PropertyDecorator_Of_An_Abstract_Property_Which_Describes_A_Body_Throws()
     {
-        // The flags are applied while the property is built, so an accessor which they make abstract holds no body to
-        // weave around by the time the handler is asked to.
-        var (_, host) = NewHost("PropertyAroundAbstractAssembly");
-        var property = host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Abstract)
-                           .WithType(typeof(int))
-                           .WithGetter(DefaultPropertyBody.WithFieldOperation)
-                           .GetHandler();
+        // The flags are given to the accessor as it is created, so an accessor which they make abstract is refused where
+        // its body would be described, rather than left holding one or reaching Cecil without a body at all.
+        var (_, host) = NewHost("PropertyAbstractAssembly");
 
-        Assert.Throws<ArgumentException>(() => property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne))));
+        var thrown = Assert.Throws<ArgumentException>(() => host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Abstract)
+                                                                .WithType(typeof(int))
+                                                                .WithGetter(DefaultPropertyBody.WithFieldOperation)
+                                                                .GetHandler());
+
+        Assert.That(thrown!.Message, Does.Contain("abstract"));
     }
 
     [Test]

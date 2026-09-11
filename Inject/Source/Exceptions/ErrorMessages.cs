@@ -22,6 +22,7 @@ internal static class ErrorMessages
     internal const string INVALID_GENERIC_PARAMETER         = "The generic parameter named {0} can't be found.";
     internal const string NON_GET_METHOD                    = "The property doesn't contain a get method. Property: {0}";
     internal const string NON_SET_METHOD                    = "The property doesn't contain a set method. Property: {0}";
+    internal const string ABSTRACT_ACCESSOR_HOLDS_NO_BODY   = "An abstract accessor holds no body, so none can be described for it. Accessor: {0}.";
     internal const string TYPE_HAS_DEFINED                  = "Type {0} has defined.";
     internal const string TYPE_IS_VALUE_TYPE                = "Type cannot be value type.";
     internal const string TYPE_IS_SEALED                    = "Type cannot be sealed type.";

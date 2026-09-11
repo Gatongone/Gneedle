@@ -10,12 +10,25 @@ namespace Gneedle.Inject;
 /// </summary>
 /// <param name="methodDef">The property definition which is handled.</param>
 /// <param name="declaringTypeHandler">Handler of the type which declares the property.</param>
-internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declaringTypeHandler) : IPropertyHandler, IAttributeContainer
+internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declaringTypeHandler, MethodAttributes? accessorAttributes = null) : IPropertyHandler, IAttributeContainer
 {
     public string Name => Source.Name;
     public string FullName => Source.FullName;
     private           MethodHandler?     m_Setter;
     private           MethodHandler?     m_Getter;
+
+    /// <summary>
+    /// The attributes which an accessor is created with, which are the attributes of the property when the decorator
+    /// describes it and the attributes of an accessor which the property already holds otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The attributes are given at the creation of an accessor rather than written over it afterwards, because a body
+    /// which reads or writes a field is emitted for the shape of the accessor which ends up holding it: <c>ldsfld</c>
+    /// where <c>ldarg.0; ldfld</c> is emitted for an instance one. The attributes of a property always keep the special
+    /// name which an accessor needs, see <see cref="PropertyFlagExtensions.ToMethodAttributes"/>.
+    /// </remarks>
+    private readonly MethodAttributes m_AccessorAttributes = accessorAttributes
+                                                          ?? MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
 
     /// <summary>
     /// The property definition which is handled.
@@ -50,7 +63,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     {
         if (Source.GetMethod == null)
         {
-            var methodDef = new MethodDefinition($"get_{Name}", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, Source.PropertyType);
+            var methodDef = new MethodDefinition($"get_{Name}", m_AccessorAttributes, Source.PropertyType);
             // If the property name is "Item", we treat it as an indexer setter,
             // and the parameter is the indexer parameter.
             if (Name == "Item")
@@ -64,6 +77,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         }
 
         m_Getter = new MethodHandler(Source.GetMethod, DeclaringTypeHandler);
+        VerifyHoldsBody(m_Getter.Source);
         // If the body is not default property body with field operation, we can directly set the body of the getter method using the provided delegate.
         if (body != DefaultPropertyBody.WithFieldOperation)
         {
@@ -80,11 +94,13 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
 
         // Default property body with field operation, which means the getter will return the value of a backing field,
         // and the setter will set the value of the backing field.
-        // The backing field will be automatically created by the injector with the name "<{property_name}>k__BackingField".
+        // The backing field will be automatically created by the injector with the name "<{property_name}>k__BackingField",
+        // and it belongs to the type rather than to an instance of it exactly when the accessor does.
+        var isStatic = m_Getter.Source.IsStatic;
         var field = DeclaringTypeHandler.GetFieldInThis($"<{Name}>k__BackingField");
         if (field == null)
         {
-            field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private, Source.PropertyType);
+            field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private | (isStatic ? FieldAttributes.Static : 0), Source.PropertyType);
             DeclaringTypeHandler.Source.Fields.Add((FieldDefinition) field);
         }
 
@@ -95,9 +111,11 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
             // Otherwise we can directly import the field definition as reference.
             : Source.Module.ImportReference(field);
+        // A static accessor reaches the field through the type alone, where an instance one reaches it through `this`,
+        // which is the slot before the parameters.
         m_Getter.Source.Body.Instructions.Clear();
-        m_Getter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        m_Getter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
+        if (!isStatic) m_Getter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        m_Getter.Source.Body.Instructions.Add(Instruction.Create(isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, fieldRef));
         m_Getter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
     }
 
@@ -105,7 +123,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     {
         if (Source.SetMethod == null)
         {
-            var methodDef = new MethodDefinition($"set_{Name}", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, Source.Module.TypeSystem.Void);
+            var methodDef = new MethodDefinition($"set_{Name}", m_AccessorAttributes, Source.Module.TypeSystem.Void);
             // If the property name is "Item", we treat it as an indexer setter,
             // and the first parameter is the indexer parameter,
             // and the second parameter is the value parameter.
@@ -122,6 +140,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         }
 
         m_Setter = new MethodHandler(Source.SetMethod, DeclaringTypeHandler);
+        VerifyHoldsBody(m_Setter.Source);
         // If the body is not default property body with field operation, we can directly set the body of the getter method using the provided delegate.
         if (body != DefaultPropertyBody.WithFieldOperation)
         {
@@ -138,11 +157,13 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
 
         // Default property body with field operation, which means the getter will return the value of a backing field,
         // and the getter will get the value from the backing field.
-        // The backing field will be automatically created by the injector with the name "<{property_name}>k__BackingField".
+        // The backing field will be automatically created by the injector with the name "<{property_name}>k__BackingField",
+        // and it belongs to the type rather than to an instance of it exactly when the accessor does.
+        var isStatic = m_Setter.Source.IsStatic;
         var field = DeclaringTypeHandler.GetFieldInThis($"<{Name}>k__BackingField");
         if (field == null)
         {
-            field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private, Source.PropertyType);
+            field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private | (isStatic ? FieldAttributes.Static : 0), Source.PropertyType);
             DeclaringTypeHandler.Source.Fields.Add((FieldDefinition) field);
         }
 
@@ -153,11 +174,23 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
             // Otherwise we can directly import the field definition as reference.
             : Source.Module.ImportReference(field);
-        m_Setter.Source.Body.Instructions.Clear();
-        m_Setter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        m_Setter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
-        m_Setter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Stfld, fieldRef));
-        m_Setter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        // A static setter holds the value in the slot zero, where an instance one holds `this` there and the value in the
+        // slot after it.
+        var setterBody = m_Setter.Source.Body.Instructions;
+        setterBody.Clear();
+        if (isStatic)
+        {
+            setterBody.Add(Instruction.Create(OpCodes.Ldarg_0));
+            setterBody.Add(Instruction.Create(OpCodes.Stsfld, fieldRef));
+        }
+        else
+        {
+            setterBody.Add(Instruction.Create(OpCodes.Ldarg_0));
+            setterBody.Add(Instruction.Create(OpCodes.Ldarg_1));
+            setterBody.Add(Instruction.Create(OpCodes.Stfld, fieldRef));
+        }
+
+        setterBody.Add(Instruction.Create(OpCodes.Ret));
     }
 
     public void SetSetter(MethodInfo body)
@@ -173,7 +206,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
 
         if (Source.SetMethod == null)
         {
-            var methodDef = new MethodDefinition($"set_{Name}", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, Source.Module.TypeSystem.Void);
+            var methodDef = new MethodDefinition($"set_{Name}", m_AccessorAttributes, Source.Module.TypeSystem.Void);
             if (paramLength == 2)
             {
                 // If the delegate has two parameters, we treat it as an indexer setter,
@@ -188,6 +221,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         }
 
         m_Setter = new MethodHandler(Source.SetMethod, DeclaringTypeHandler);
+        VerifyHoldsBody(m_Setter.Source);
         m_Setter.SetBody(body);
     }
 
@@ -199,7 +233,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
 
         if (Source.GetMethod == null)
         {
-            var methodDef = new MethodDefinition($"get_{Name}", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, Source.PropertyType);
+            var methodDef = new MethodDefinition($"get_{Name}", m_AccessorAttributes, Source.PropertyType);
             // If the delegate has one parameter, we treat it as an indexer getter,
             // and the parameter is the indexer parameter.
             if (body.GetParameters().Length == 1)
@@ -212,7 +246,18 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         }
 
         m_Getter = new MethodHandler(Source.GetMethod, DeclaringTypeHandler);
+        VerifyHoldsBody(m_Getter.Source);
         m_Getter.SetBody(body);
+    }
+
+    /// <summary>
+    /// Refuse an accessor which holds no body, because none can be described for it.
+    /// </summary>
+    /// <param name="accessor">The accessor which a body is described for.</param>
+    /// <exception cref="ArgumentException">Thrown when the accessor is abstract.</exception>
+    private static void VerifyHoldsBody(MethodDefinition accessor)
+    {
+        if (accessor.IsAbstract) throw new ArgumentException(string.Format(ErrorMessages.ABSTRACT_ACCESSOR_HOLDS_NO_BODY, accessor.Name));
     }
 
     /// <inheritdoc/>

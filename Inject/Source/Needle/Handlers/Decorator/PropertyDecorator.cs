@@ -85,7 +85,13 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         var propertyType = m_TypeHandler.AssemblyHandler.ResolveParameterType(m_TypeHandler.Source, m_PropertyType);
         var propertyDef = new PropertyDefinition(m_PropertyName, PropertyAttributes.None, propertyType);
         m_TypeHandler.Source.Properties.Add(propertyDef);
-        var handler = new PropertyHandler(propertyDef, m_TypeHandler);
+
+        // The flags are handed to the handler, which creates each accessor with them, rather than written over the
+        // accessors afterwards: the body of an accessor which reads or writes a field is emitted for the shape the
+        // accessor ends up with, and a static accessor reaches the field through the type where an instance one reaches
+        // it through `this`. The flags always keep the special name which an accessor needs, see
+        // PropertyFlags.ToMethodAttributes().
+        var handler = new PropertyHandler(propertyDef, m_TypeHandler, m_PropertyFlags.ToMethodAttributes());
 
         // The body which was described is the one which is applied, and the accessor is created by the call which applies
         // it, so a property whose accessor was described no body holds none of that accessor.
@@ -105,19 +111,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         else if (m_SetterBody is { } defaultSetterBody)
         {
             handler.SetSetter(defaultSetterBody);
-        }
-
-        // Apply property flags to getter/setter method attributes. The flags always keep the special name which an
-        // accessor needs, see PropertyFlags.ToMethodAttributes().
-        var methodAttrs = m_PropertyFlags.ToMethodAttributes();
-        if (propertyDef.GetMethod != null)
-        {
-            propertyDef.GetMethod.Attributes = methodAttrs;
-        }
-
-        if (propertyDef.SetMethod != null)
-        {
-            propertyDef.SetMethod.Attributes = methodAttrs;
         }
 
         return handler;
