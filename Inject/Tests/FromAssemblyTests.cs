@@ -450,6 +450,43 @@ namespace Gneedle.Inject.Test
         }
 
         [Test]
+        public void ResolveTypeFromAssembly_Resolves_An_Assembly_Loaded_From_A_File_Outside_The_Search_Paths()
+        {
+            // The dependency sits in a directory which no search path of the resolver of the module holds, so the resolver
+            // of the file system cannot find it. It is found through the assembly which is loaded in the process, which
+            // knows the file it was loaded from.
+            //
+            // The case this does not cover is an assembly which was loaded from bytes: nothing hands the image of an
+            // assembly over on .NET 5 and later, so such an assembly cannot be read back at all.
+            var path = Path.Combine(Path.GetTempPath(), $"gneedle-file-{Guid.NewGuid():N}.dll");
+            var dependency = Assembly.Create("FileDependencyAssembly");
+            ((AssemblyHandler) dependency.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
+            dependency.SaveTo(path);
+
+            try
+            {
+                System.Reflection.Assembly.LoadFrom(path);
+
+                var assembly = NewTarget();
+                var definition = CecilExtensions.ResolveTypeFromAssembly(assembly.Source.MainModule, "FileDependencyAssembly", $"{Ns}.Dependency");
+
+                Assert.That(definition.FullName, Is.EqualTo($"{Ns}.Dependency"));
+            }
+            finally
+            {
+                // The loaded assembly holds its file for as long as it is loaded, so the file is left behind in the
+                // temporary directory when it cannot be removed.
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+
+        [Test]
         public void ResolveTypeFromAssembly_With_An_Unknown_Assembly_Throws()
             => Assert.Throws<ArgumentException>(() => CecilExtensions.ResolveTypeFromAssembly(NewTarget().Source.MainModule, "No.Such.Assembly", $"{Ns}.{nameof(Stub)}"));
 
