@@ -17,8 +17,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Build" Version="17.6.3"/>
-        <PackageReference Include="Microsoft.Build.Tasks.Core" Version="17.11.4"/>
+        <!-- The assemblies of MSBuild are given to a task by the build which loads it, so they are referenced to compile
+             against and are neither copied out nor named as dependencies of the package. Copying them out pulls the
+             frameworks they were built for into the output of every project which references this one, where they do
+             not resolve, and a package which names them asks of its consumers what the build already provides. -->
+        <PackageReference Include="Microsoft.Build" Version="17.6.3" PrivateAssets="all" ExcludeAssets="runtime"/>
+        <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.6.3" PrivateAssets="all" ExcludeAssets="runtime"/>
     </ItemGroup>
 
     <ItemGroup>
