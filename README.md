@@ -12,6 +12,8 @@ A template is an ordinary method. It reaches the members of the type it will be 
 
 Weaving is therefore a rewrite rather than a compilation. The body of the template is copied instruction by instruction, and each operand is pointed at the member of the target which the placeholder named: a field read becomes `ldfld` of that field, a call on `This` becomes a call on the type being woven, a token becomes a generic parameter of the method or of the type which declares it. A local variable or a branch of the template is remapped to its counterpart in the body which is being woven.
 
+None of that could be expressed without [Mono.Cecil](https://github.com/jbevain/cecil), which Gneedle is built on: Mono.Cecil is what reads the metadata of an assembly and writes it back, and the rewrite above is described in the terms which it hands over — the instructions, the references, the signatures and the tables of the image. Gneedle decides what each of them becomes; Mono.Cecil is what turns that into an assembly the runtime reads.
+
 Around advice keeps the body which the target already had instead of discarding it. That body is moved to a generated method of the declaring type, and the template reaches it through `Proceed`, so that the advice can inspect the arguments, call the original, and return what it chose.
 
 The attribute which names an injector is only the way the build finds out what to do. By the time the assembly is written the injector has been applied and the attribute has done its work, so the weaver takes it back out along with the reference to itself: the assembly which was woven carries neither the attributes nor the weaver which read them.
@@ -42,7 +44,13 @@ Or, in the project file:
 
 # Features
 
-## Weaving from your own entry point
+The two packages are described apart from each other here, since either of them is usable without the other: the library is what weaves, and the aspect weaver is one of the things which drive it.
+
+## Inject
+
+The library is the weaver. An assembly is opened or created, its metadata is reached through the handlers, and the result is written back; a body is woven from a template, and the placeholders which a template names its members with are resolved at that moment.
+
+### Weaving from your own entry point
 
 Nothing of `Gneedle.Aspect` is needed to weave. An assembly which is already built is opened, its metadata is reached through the handlers, and the result is written back over it:
 
@@ -57,7 +65,7 @@ assembly.SaveTo("path/to/AnAssembly.dll");
 
 An assembly which does not exist yet is built the same way: `Assembly.Create("MyAssembly")` hands back one which holds nothing, whose types and members are described through the same handlers, and `Load()` loads it into the process once it is written. So the same library serves a generator which produces an assembly, a tool which rewrites one, and the build which the task drives.
 
-## Weaving a body from a template
+### Weaving a body from a template
 
 A template names the members of the type it is woven into. Each placeholder is a call which throws when the template is run on its own:
 
@@ -86,17 +94,17 @@ host.AddMethod("Compute", MethodFlags.Public)
 
 A default body is asked for the same way, when no template is needed: `WithBody(DefaultMethodBody.ThrowException)`, `WithBody(DefaultMethodBody.WithDefaultReturn)`, or `WithBody(DefaultMethodBody.CallFromBase)` to hand the call to the type which the target derives from.
 
-## The placeholders
+### The placeholders
 
-| Placeholder | Names |
-| --- | --- |
+| Placeholder                                         | Names                                                                                   |
+|-----------------------------------------------------|-----------------------------------------------------------------------------------------|
 | `This.Field<T>("name")`, `This.Property<T>("name")` | a field or a property of the type being woven, read and written through `Get` and `Set` |
-| `This.Method<TDelegate>("name")` | a method of the type being woven, called through the delegate which gives its signature |
-| `Base.Field`, `Base.Property`, `Base.Method` | the same, on the type which the target derives from |
-| `Object(instance).Field`, `.Property`, `.Method` | the same, on an instance the template pushed |
-| `Static.From("Full.Type.Name").Method` | the same, on a type named by a string |
-| `T_0`–`T_20`, `M_0`–`M_20` | the first to the twenty-first generic parameter of the declaring type, or of the method |
-| `ValuableMember<T>` | the value of a field or a property, without the boxing which `ValuableMember` costs |
+| `This.Method<TDelegate>("name")`                    | a method of the type being woven, called through the delegate which gives its signature |
+| `Base.Field`, `Base.Property`, `Base.Method`        | the same, on the type which the target derives from                                     |
+| `Object(instance).Field`, `.Property`, `.Method`    | the same, on an instance the template pushed                                            |
+| `Static.From("Full.Type.Name").Method`              | the same, on a type named by a string                                                   |
+| `T_0`–`T_20`, `M_0`–`M_20`                          | the first to the twenty-first generic parameter of the declaring type, or of the method |
+| `ValuableMember<T>`                                 | the value of a field or a property, without the boxing which `ValuableMember` costs     |
 
 Where a generic parameter cannot be named by a `System.Type` — in the signature of a delegate, in a local variable, in a return type — a token stands in for it, and the weaver turns it into the parameter of the method being woven:
 
@@ -105,7 +113,7 @@ Where a generic parameter cannot be named by a `System.Type` — in the signatur
 public static T_0 Echo(T_0 value) => value;
 ```
 
-## Around advice
+### Around advice
 
 `AroundBody` keeps the body which the method already had, moves it to a generated method named `<Name>k__Proceed`, and weaves the template around it. The template calls the original through `Proceed`:
 
@@ -120,9 +128,25 @@ host.GetMethod("Double", typeof(int).ToGneedleType())!
 
 The template keeps the signature of the method, and the body it proceeds into is the one which the method held: the body it was added with, the body it was read with, or the throwing body which marks a method that has none. An accessor of a property is woven around the same way, through `IPropertyHandler.GetGetter()` and `GetSetter()`, which hand back the handler of the accessor as an ordinary method.
 
-## Injectors at build time
+### Referring to a type you cannot reference
 
-An injector is an attribute which implements one of the interfaces of `Gneedle.Inject` and says what to do with the member it is put on. It is applied by the build of the project which declares it, so the weaving needs no extra step:
+A template is compiled before the type it will be woven into exists, so it cannot name that type. A stub with the same full name, marked with the name of the assembly which declares the real one, is how the template names it: the weaver resolves the stub to the real type and leaves the assembly of the stub out of the produced one.
+
+```csharp
+[FromAssembly("MyAssembly")]
+public class Stub
+{
+    public int Value;
+}
+```
+
+## Aspect
+
+The aspect weaver drives the library from the build. It is added to a project as a package and needs no entry point of its own: it reads the injectors from the attributes which the assembly declares, applies them to it during the build, and takes itself back out of the assembly once they have been applied.
+
+### Injectors
+
+An injector is an attribute that implements one of the interfaces of `Gneedle.Inject` and says what to do with the member it is put on. It is applied by the build of the project which declares it, so the weaving needs no extra step:
 
 ```csharp
 public sealed class ThrowBodyAttribute : Attribute, IMethodInjector
@@ -140,39 +164,38 @@ public class Target
 
 Which member an interface is read for: `IAssemblyInjector` for the assembly and `ITypeInjector` for a type, `IClassInjector`, `IStructInjector` and `IEnumInjector` for a type of that kind, and `IMethodInjector`, `IFieldInjector` and `IPropertyInjector` for a member. Every member of a type is looked at, whichever way a caller could reach it, and an injector which names a kind of type which it was put on is reported rather than passed over.
 
-## What is left in the assembly
+### What is left in the assembly
 
 The attributes are read at build time and do nothing at run time, and the weaver is not a dependency of what you ship. The task takes both back out once the injectors have been applied: the attributes are removed with the types which declare them, and the reference to the weaver is dropped when nothing of the assembly names it any more.
 
 A type which your code still names — through `typeof`, a field, a signature — cannot be removed without taking those names with it, so it keeps its place and gives up what makes it an injector instead. Either way the assembly which was woven carries no weaver.
 
-A project which declares its attributes for *another* project to weave with keeps them, since removing them would leave that project with nothing to name:
+### The properties which a project is described by
+
+Two properties change what is done with a project, and they answer different questions: whether anything is woven into the project at all, and whether the weaver is left in the assembly once it has been.
+
+| Property     | Value     | What it does                                                                                                                                               |
+|--------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Aspect`     | `disable` | Nothing is woven into the project. The scan of the solution does not add the target to it, and the task returns without reading its assembly.              |
+| `KeepWeaver` | `true`    | The attributes which the injectors were read from, and the reference to the weaver which they name, are kept in the assembly. Both are removed by default. |
 
 ```xml
 <PropertyGroup>
-  <GneedleKeepWeaver>true</GneedleKeepWeaver>
+  <!-- Nothing is woven into this project. -->
+  <Aspect>disable</Aspect>
 </PropertyGroup>
 ```
-
-A project which nothing should be woven into says so in the same way:
 
 ```xml
 <PropertyGroup>
-  <Gneedle>disable</Gneedle>
+  <!-- The attributes are kept in the assembly, and the reference to the weaver with them. -->
+  <KeepWeaver>true</KeepWeaver>
 </PropertyGroup>
 ```
 
-## Referring to a type you cannot reference
+`Aspect` is for a project which has nothing to weave: one which only declares the attributes for other projects to read, or one whose assembly is woven by something other than this build. A project which declares attributes that another project weaves with wants `KeepWeaver`, because removing them would leave that other project with nothing to name.
 
-A template is compiled before the type it will be woven into exists, so it cannot name that type. A stub with the same full name, marked with the name of the assembly which declares the real one, is how the template names it: the weaver resolves the stub to the real type and leaves the assembly of the stub out of the produced one.
-
-```csharp
-[FromAssembly("MyAssembly")]
-public class Stub
-{
-    public int Value;
-}
-```
+`Aspect` is read out of the project file itself, because the scan of a solution reads the projects which it walks without building them, and a property which comes from an imported file is not in a project's own file. `KeepWeaver` is passed to the task by the build, so it is an ordinary property, set on the command line as well as in the project file.
 
 # License
 
