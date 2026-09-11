@@ -8,7 +8,7 @@
         <requireLicenseAcceptance>true</requireLicenseAcceptance>
         <license type="file">docs\LICENSE.txt</license>
         <readme>docs\README.md</readme>
-        <repository type="git">https://github.com/Gatongone/Gneedle</repository>
+        <repository type="git" url="https://github.com/Gatongone/Gneedle"/>
         <description>Gneedle weaver analyzer.</description>
         <copyright>© 2024 Gatongone</copyright>
         <tags>ILWeaving, AOP</tags>
