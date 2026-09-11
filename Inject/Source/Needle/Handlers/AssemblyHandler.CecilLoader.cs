@@ -68,15 +68,6 @@ partial class AssemblyHandler
     /// <param name="typeName">Name of the type which need to be converted.</param>
     /// <exception cref="ArgumentException">Thrown when can't get from runtime type with the type name.</exception>
     /// <returns>The cecil type from current definition.</returns>
-    internal CecilType GetCecilType(TypeName typeName) => GetCecilType(typeName.ToString());
-
-    /// <summary>
-    /// Get cecil type from type name which was imported from current assembly definition.
-    /// If the type's assembly was never been referenced, then it would be appended.
-    /// </summary>
-    /// <param name="typeName">Name of the type which need to be converted.</param>
-    /// <exception cref="ArgumentException">Thrown when can't get from runtime type with the type name.</exception>
-    /// <returns>The cecil type from current definition.</returns>
     internal CecilType GetCecilType(string typeName)
     {
         // Check assembly has be appended to cache.

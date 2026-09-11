@@ -5,14 +5,8 @@
 /// </summary>
 internal static class ErrorMessages
 {
-    // Dirty operation exceptions:
-    internal const string DIRTY_ASSEMBLY_OPERATION = "The assembly still dirty.";
-
     // Not supported exceptions:
     internal const string ARCHITECTURE_NOT_SUPPORTED = "Not supported architecture.";
-
-    // Invalid operation exceptions:
-    internal const string INVALID_CONSTRAINT = "The type of constraint is invalid. Type: {0}.";
 
     // Invalid arguments exceptions:
     internal const string ASSEMBLY_CYCLE_REFERENCE          = "Assembly contains cycle reference. Assembly: \n{0}, \n{1}.";

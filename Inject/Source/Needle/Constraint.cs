@@ -12,12 +12,6 @@ namespace Gneedle.Inject;
 public struct Constraint
 {
     /// <summary>
-    /// Indicates whether the constraint is from self type, which means the constraint is from the type itself,
-    /// not from any of its generic parameters or base types.
-    /// </summary>
-    internal bool IsSelfType = false;
-
-    /// <summary>
     /// The constraint name, it could be any type name type where constraint form or constraints informing.
     /// </summary>
     public readonly string Name;
@@ -80,25 +74,25 @@ public struct Constraint
     /// <summary>
     /// Create a constraint type from type itself.
     /// </summary>
-    public static Constraint FromSelf() => new(new SelfType()) {IsSelfType = true};
+    public static Constraint FromSelf() => new(new SelfType());
 
     /// <summary>
     /// Create a constraint type from type itself.
     /// </summary>
     /// <param name="genericParameterNames">Type's generic parameter names.</param>
-    public static Constraint FromSelf(params string[] genericParameterNames) => new(new SelfType(genericParameterNames)) {IsSelfType = true};
+    public static Constraint FromSelf(params string[] genericParameterNames) => new(new SelfType(genericParameterNames));
 
     /// <summary>
     /// Create a constraint type from type itself.
     /// </summary>
     /// <param name="genericArguments">Type's generic arguments.</param>
-    public static Constraint FromSelf(params IType[] genericArguments) => new(new SelfType(genericArguments)) {IsSelfType = true};
+    public static Constraint FromSelf(params IType[] genericArguments) => new(new SelfType(genericArguments));
 
     /// <summary>
     /// Create a constraint type from type itself.
     /// </summary>
     /// <param name="genericArguments">Type's generic arguments.</param>
-    public static Constraint FromSelf(params Type[] genericArguments) => new(new SelfType(genericArguments)) {IsSelfType = true};
+    public static Constraint FromSelf(params Type[] genericArguments) => new(new SelfType(genericArguments));
 
     /// <summary>
     /// Create a constraint type from type.

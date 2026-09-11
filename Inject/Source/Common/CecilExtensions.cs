@@ -83,12 +83,6 @@ internal static class CecilExtensions
 
             return attribute;
         }
-
-        /// <summary>
-        /// Get the <see cref="Type">System.Runtime.Type</see> from the name of the <c>typeDefinition</c>.
-        /// </summary>
-        /// <returns>Runtime type from the name of the <c>typeDefinition</c>.</returns>
-        internal Type? GetRuntimeType() => Type.GetType(new TypeName(attributeDefinition));
     }
 
     /// <param name="ins">Opcode provider.</param>
