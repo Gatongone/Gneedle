@@ -41,7 +41,19 @@ public static class AssemblyLoader
     };
 
     /// <summary>
-    /// Whether the assemblies of the weaver are answered to an assembly which asks for them, which is done once.
+    /// The assemblies which this loader loaded from bytes, which are the only ones the assemblies of the weaver are
+    /// answered to. The key is weak, as the one of <see cref="s_Images"/> is, so that an assembly which is unloaded
+    /// stops being a target with it.
+    /// </summary>
+    private static readonly ConditionalWeakTable<System.Reflection.Assembly, object> s_Targets = new();
+
+    /// <summary>
+    /// The value which marks an assembly of <see cref="s_Targets"/>, which holds the assemblies alone.
+    /// </summary>
+    private static readonly object s_TargetMark = new();
+
+    /// <summary>
+    /// Whether the resolution of the assemblies of the weaver is waited for, which is done once.
     /// </summary>
     private static int s_WeaverAssembliesRegistered;
 
@@ -56,11 +68,21 @@ public static class AssemblyLoader
 
         var assembly = System.Reflection.Assembly.Load(rawBytes);
         Remember(assembly, rawBytes);
+
+        // The assembly is marked as one of the targets, which is what the resolution below answers to. It is marked
+        // before it is handed over, because the request for an assembly of the weaver is made as soon as a type of it is
+        // read, which the caller does with what is returned here.
+        lock (s_ImagesGuard)
+        {
+            s_Targets.Remove(assembly);
+            s_Targets.Add(assembly, s_TargetMark);
+        }
+
         return assembly;
     }
 
     /// <summary>
-    /// Answer the requests of an assembly which was loaded from bytes for the assemblies of the weaver.
+    /// Wait for the resolution of an assembly of the weaver to fail, and answer it.
     /// </summary>
     /// <remarks>
     /// The runtime resolves an assembly which was loaded from bytes from the ones which are already loaded and from the
@@ -75,18 +97,23 @@ public static class AssemblyLoader
     private static void RegisterWeaverAssemblies()
     {
         if (Interlocked.Exchange(ref s_WeaverAssembliesRegistered, 1) != 0) return;
-        AppDomain.CurrentDomain.AssemblyResolve += (_, args) => FindWeaverAssembly(args.Name);
+        AppDomain.CurrentDomain.AssemblyResolve += (_, args) => FindWeaverAssembly(args);
     }
 
     /// <summary>
-    /// The assembly of the weaver which <paramref name="name"/> names, or null when it names none of them.
+    /// The assembly of the weaver which the request of <paramref name="args"/> asks for, or null when the request is
+    /// not one to answer.
     /// </summary>
-    /// <param name="name">The name of the assembly which was asked for.</param>
-    private static System.Reflection.Assembly? FindWeaverAssembly(string name)
+    /// <param name="args">The request of an assembly which could not be resolved.</param>
+    private static System.Reflection.Assembly? FindWeaverAssembly(ResolveEventArgs args)
     {
-        // The version is not compared, because the target and the weaver are read from the one state of the project and
-        // an assembly which the target was built against is the one which the weaver holds.
-        var simpleName = new System.Reflection.AssemblyName(name).Name;
+        // Only an assembly which this loader loaded is answered, so that a request of any other assembly of the process
+        // is left to the resolution which the runtime does by itself.
+        if (args.RequestingAssembly == null || !s_Targets.TryGetValue(args.RequestingAssembly, out _)) return null;
+
+        // The version is not compared, because the target and the weaver are read from the one state of the project, so
+        // the assembly which the target was built against is the one which the weaver holds.
+        var simpleName = new System.Reflection.AssemblyName(args.Name).Name;
         return simpleName != null && s_WeaverAssemblies.TryGetValue(simpleName, out var assembly) ? assembly : null;
     }
 
