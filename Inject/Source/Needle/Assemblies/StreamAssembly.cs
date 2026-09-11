@@ -13,9 +13,29 @@ internal sealed class StreamAssembly(IAssemblyCache cache, AssemblySymbol symbol
         if (cache is FileCache fileCache)
             return System.Reflection.Assembly.LoadFile(fileCache.Path);
 
-        var buffer = new byte[cache.Stream.Length];
-        cache.Stream.Write(buffer, 0, buffer.Length);
-        return System.Reflection.Assembly.Load(buffer);
+        // The stream was consumed by the reader which read the metadata out of it, so the image is read from the start
+        // rather than from wherever the reader left it. The position is put back afterwards, so that the stream which
+        // the caller handed over, and which the assembly is written back through, is left as it was found.
+        var stream = cache.Stream;
+        using var buffer = new MemoryStream();
+        var position = stream.Position;
+        try
+        {
+            stream.Position = 0;
+            stream.CopyTo(buffer);
+        }
+        finally
+        {
+            stream.Position = position;
+        }
+
+        buffer.Position = 0;
+#if NET5_0_OR_GREATER
+        return System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromStream(buffer);
+#else
+        // Assembly.Load reads the whole buffer, which does not depend on the position.
+        return System.Reflection.Assembly.Load(buffer.ToArray());
+#endif
     }
 
     /// <summary>
