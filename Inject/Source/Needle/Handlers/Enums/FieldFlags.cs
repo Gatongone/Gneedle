@@ -9,12 +9,12 @@ public enum FieldFlags
     /// <summary>
     /// The field is visible to the types of every assembly.
     /// </summary>
-    Public    = 1 << 1,
+    Public = 1 << 1,
 
     /// <summary>
     /// The field is visible to the types of the assembly which declares it alone.
     /// </summary>
-    Internal  = 1 << 2,
+    Internal = 1 << 2,
 
     /// <summary>
     /// The field is visible to the types which derive from the type which declares it.
@@ -24,26 +24,17 @@ public enum FieldFlags
     /// <summary>
     /// The field is visible to the type which declares it alone.
     /// </summary>
-    Private   = 1 << 4,
+    Private = 1 << 4,
 
     /// <summary>
     /// The field belongs to the type rather than to an instance of it.
     /// </summary>
-    Static    = 1 << 5,
+    Static = 1 << 5,
 
     /// <summary>
     /// The field can only be assigned by a constructor of the type which declares it.
     /// </summary>
-    ReadOnly  = 1 << 6,
-
-    /// <summary>
-    /// The field can only be assigned by a constructor of the type which declares it.
-    /// </summary>
-    /// <remarks>
-    /// It says the same as <see cref="ReadOnly"/>, and unlike that one it is not applied, so a field which is flagged
-    /// with it alone is writable.
-    /// </remarks>
-    InitOnly  = 1 << 7
+    ReadOnly = 1 << 6
 }
 
 /// <summary>
@@ -60,7 +51,7 @@ internal static class FieldFlagExtensions
         /// <returns><see cref="FieldAttributes"/> corresponding to <see cref="FieldFlags"/>.</returns>
         internal FieldAttributes ToFieldAttributes()
         {
-            var attributes = (FieldAttributes)0;
+            var attributes = (FieldAttributes) 0;
 
             // Check access level.
             attributes |= fieldFlags switch
@@ -69,11 +60,11 @@ internal static class FieldFlagExtensions
                 _ when (fieldFlags & FieldFlags.Internal) != 0  => FieldAttributes.Assembly,
                 _ when (fieldFlags & FieldFlags.Protected) != 0 => FieldAttributes.Family,
                 _ when (fieldFlags & FieldFlags.Private) != 0   => FieldAttributes.Private,
-                _                                                => FieldAttributes.Public // Default
+                _                                               => FieldAttributes.Public // Default
             };
 
             // Process field modifiers.
-            if ((fieldFlags & FieldFlags.Static) != 0)   attributes |= FieldAttributes.Static;
+            if ((fieldFlags & FieldFlags.Static) != 0) attributes   |= FieldAttributes.Static;
             if ((fieldFlags & FieldFlags.ReadOnly) != 0) attributes |= FieldAttributes.InitOnly;
 
             return attributes;
