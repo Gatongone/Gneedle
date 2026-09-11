@@ -26,8 +26,10 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             Log.LogMessageFromText($"Inject assembly: {TargetPath} no changes.", MessageImportance.High);
         }
 
-        // The project is only read, to tell whether the aspect is disabled, so it is not saved back.
-        return true;
+        // The project is only read, to tell whether the aspect is disabled, so it is not saved back. A member which an
+        // injector named and the assembly does not hold is reported as an error, and the task fails with it rather than
+        // reporting a build which carried on.
+        return !Log.HasLoggedErrors;
     }
 
     private bool InjectAssemblies(string assemblyPath)
@@ -163,6 +165,9 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
                       .Cast<IMethodInjector>()
                       .ToArray() is not {Length: > 0} injectors) return false;
 
+        // The assembly is written back only when something was injected into it, so an injector which found nothing to
+        // inject into is not counted as a change: the member it names was reported instead.
+        var injected = false;
         foreach (var injector in injectors)
         {
             var methodHandler = typeHandler.GetMethod(methodInfo.Name, methodInfo.GetParameters().GetITypes());
@@ -173,9 +178,10 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             }
 
             injector.Inject(methodInfo, methodHandler);
+            injected = true;
         }
 
-        return true;
+        return injected;
     }
 
     private bool ProcessFieldInjector(IFieldContainer typeHandler, Type runtimeType, FieldInfo fieldInfo)
@@ -185,6 +191,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
                      .Cast<IFieldInjector>()
                      .ToArray() is not {Length: > 0} injectors) return false;
 
+        var injected = false;
         foreach (var injector in injectors)
         {
             var fieldHandler = typeHandler.GetField(fieldInfo.Name);
@@ -195,9 +202,10 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             }
 
             injector.Inject(fieldInfo, fieldHandler);
+            injected = true;
         }
 
-        return true;
+        return injected;
     }
 
     private bool ProcessPropertyInjector(IPropertyContainer typeHandler, Type runtimeType, PropertyInfo propertyInfo)
@@ -207,6 +215,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
                         .Cast<IPropertyInjector>()
                         .ToArray() is not {Length: > 0} injectors) return false;
 
+        var injected = false;
         foreach (var injector in injectors)
         {
             var propertyHandler = typeHandler.GetProperty(propertyInfo.Name);
@@ -217,8 +226,9 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             }
 
             injector.Inject(propertyInfo, propertyHandler);
+            injected = true;
         }
 
-        return true;
+        return injected;
     }
 }
