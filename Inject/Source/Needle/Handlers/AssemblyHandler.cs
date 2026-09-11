@@ -131,7 +131,8 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Parameters of the method.</param>
     /// <param name="throwWhenNotFound">Whether to throw an exception when the method is not found. Default is true.</param>
-    /// <returns>The method from target type or its base type. Returns null if there is no matching method in the target type and its base types.</returns>
+    /// <returns>The method from target type or its base type. Returns null if there is no matching method in the target type and its base types, which only happens when <paramref name="throwWhenNotFound"/> is false.</returns>
+    /// <exception cref="ArgumentException">Thrown when there is no matching method and <paramref name="throwWhenNotFound"/> is true.</exception>
     internal MethodDefinition? GetMethodFromType(TypeDefinition target, string methodName, IReadOnlyList<TypeReference> parameters, bool throwWhenNotFound = true)
     {
         var curType = target;
@@ -143,7 +144,8 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             curType   = curType.BaseType == null ? null : GetCecilType(curType.BaseType).Definition;
         }
 
-        return methodDef == null && throwWhenNotFound ? null : methodDef!;
+        if (methodDef == null && throwWhenNotFound) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+        return methodDef;
     }
 
     /// <summary>

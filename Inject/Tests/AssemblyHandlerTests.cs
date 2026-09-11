@@ -1,4 +1,5 @@
 using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
@@ -154,6 +155,56 @@ public class AssemblyHandlerTests
         var handler = (AssemblyHandler) target.Handler;
 
         Assert.Throws<ArgumentException>(() => handler.GetCecilType(typeof(TestBaseClass)));
+    }
+
+    #endregion
+
+    #region GetMethodFromType
+
+    private static MethodDefinition AddMethod(TypeDefinition type, string name)
+    {
+        var method = new MethodDefinition(name, MethodAttributes.Public, type.Module.TypeSystem.Void) { DeclaringType = type };
+        method.Body.GetILProcessor().Emit(OpCodes.Ret);
+        type.Methods.Add(method);
+        return method;
+    }
+
+    [Test]
+    public void GetMethodFromType_Throws_When_The_Method_Is_Not_Found()
+    {
+        var asm = Assembly.Create("MethodLookupAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var type = asm.Source.MainModule.Types[0];
+
+        Assert.Throws<ArgumentException>(() => handler.GetMethodFromType(type, "Missing", []));
+    }
+
+    [Test]
+    public void GetMethodFromType_Returns_Null_When_The_Method_Is_Not_Found_And_It_Is_Told_Not_To_Throw()
+    {
+        // The constraint lookup walks the constraints of a generic parameter and has to be able to try the next one,
+        // which is what the flag is for.
+        var asm = Assembly.Create("MethodLookupAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var type = asm.Source.MainModule.Types[0];
+
+        Assert.That(handler.GetMethodFromType(type, "Missing", [], false), Is.Null);
+    }
+
+    [Test]
+    public void GetMethodFromType_Finds_A_Method_Of_A_Base_Type()
+    {
+        var asm = Assembly.Create("MethodLookupAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var module = asm.Source.MainModule;
+
+        var baseType = new TypeDefinition(Ns, "Base", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var derived = new TypeDefinition(Ns, "Derived", TypeAttributes.Public | TypeAttributes.Class, baseType);
+        module.Types.Add(baseType);
+        module.Types.Add(derived);
+        var expected = AddMethod(baseType, "Ping");
+
+        Assert.That(handler.GetMethodFromType(derived, "Ping", []), Is.SameAs(expected));
     }
 
     #endregion
