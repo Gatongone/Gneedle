@@ -28,6 +28,18 @@ public interface IMethodHandler
     /// </summary>
     /// <param name="defaultMethodBody">The default body of the method.</param>
     void SetBody(DefaultMethodBody defaultMethodBody);
+
+    /// <summary>
+    /// Set the body of the method to run around the body which it holds, which the template reaches through
+    /// <see cref="Proceed"/>.<para/>
+    /// The template keeps the signature of the method, so its parameters and its return type have to match, and the body
+    /// which the method holds is moved to a generated method of the declaring type which the template calls. For a method
+    /// which belongs to an instance, the template has to place the instance before the call, as it does for
+    /// <see cref="This.Method{TMethod}(string)"/>.
+    /// </summary>
+    /// <param name="method">The template which holds the body to weave around.</param>
+    /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
+    void AroundBody(MethodInfo method);
 }
 
 /// <summary>
@@ -50,4 +62,20 @@ public static class MethodExtensions
     /// <returns>Result for chains calling.</returns>
     public static MethodDecorator.ITypeDecorator WithBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
         => decorator.WithBody(delegation.Method);
+
+    /// <summary>
+    /// Set the body of the method to run around the body which it holds, from the delegate which holds the template.
+    /// </summary>
+    /// <param name="methodHandler">The handler of the method.</param>
+    /// <param name="delegation">The delegate which holds the body to weave around.</param>
+    public static void AroundBody(this IMethodHandler methodHandler, Delegate delegation) => methodHandler.AroundBody(delegation.Method);
+
+    /// <summary>
+    /// Set the body of the method to run around the body which it holds, from the delegate which holds the template.
+    /// </summary>
+    /// <param name="decorator">The decorator which describes the method.</param>
+    /// <param name="delegation">The delegate which holds the body to weave around.</param>
+    /// <returns>Result for chains calling.</returns>
+    public static MethodDecorator.ITypeDecorator WithAroundBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
+        => decorator.WithAroundBody(delegation.Method);
 }

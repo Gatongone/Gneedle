@@ -48,10 +48,14 @@ partial class MethodHandler
 
         // Get method parameter from delegation. When the delegate is a generic instance (e.g. Func<int,int,int>),
         // the Invoke signature uses open generic parameters (T1,T2), so we map them to the actual arguments.
+        // A parameter of a generic method is named by a Gneedle.Inject.M_[0-20] token rather than by a real generic
+        // parameter, because a delegate cannot declare one, so the token is parsed to the generic parameter of the
+        // source method here. Without it, the parameter of the delegate would be a type of the Gneedle.Inject assembly
+        // which no method of the declaring type could ever match.
         var parameters = delegateDef.Methods
                                     .First(method => method.Name.Equals("Invoke"))
                                     .Parameters
-                                    .Select(p => Source.Module.ImportReference(ResolveDelegateParameterType(p.ParameterType, genericArguments)))
+                                    .Select(p => ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
                                     .ToArray();
 
         // Detect Object.Method with new Object(param) syntax: need to skip the array init sequence.
@@ -135,12 +139,12 @@ partial class MethodHandler
             // Skip `call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types})`
             filter.Skip(currentIndex + 1);
             // callvirt instance class {delegate_type}::Invoke({parameter_types}) -> callvirt/call instance class {declaring_type}::{method_name}({parameter_types})
-            filter.Replace(callvirtIndex, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, methodDef));
+            filter.Replace(callvirtIndex, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef)));
         }
         // Or create delegate by method pointer and call it right now.
         else
         {
-            var importedMethod = Source.Module.ImportReference(methodDef);
+            var importedMethod = GetCallableReference(methodDef);
             var delegateCtor = Source.Module.ImportReference(delegateDef.GetConstructors().FirstOrDefault());
 
             if (!methodDef.IsStatic)
@@ -162,6 +166,32 @@ partial class MethodHandler
         }
     }
 
+    /// <summary>
+    /// Get the reference which the instruction of the body has to hold to call <paramref name="methodDef"/>.
+    /// </summary>
+    /// <remarks>
+    /// A generic method is called through a method specification rather than through the definition itself, because the
+    /// call instruction has to name the generic arguments of the call. The template named them by the
+    /// <c>Gneedle.Inject.M_[0-20]</c> tokens which were resolved to the generic parameters of the method being woven, so
+    /// those parameters are the arguments here. The generic method which the template proceeds through is a generated
+    /// one which declares a parameter of every position, so the instantiation is the one a compiler emits for a call to
+    /// a method of the generic parameters of its own caller.
+    /// </remarks>
+    /// <param name="methodDef">The method which the body calls.</param>
+    /// <returns>The reference which the call instruction holds.</returns>
+    private MethodReference GetCallableReference(MethodDefinition methodDef)
+    {
+        var importedMethod = Source.Module.ImportReference(methodDef);
+
+        // A method which holds fewer or more generic parameters than the method being woven cannot be instantiated from
+        // the template, so it is left as the plain reference it was, which is what the call held before.
+        if (methodDef.GenericParameters.Count != Source.GenericParameters.Count) return importedMethod;
+
+        var genericInstance = new GenericInstanceMethod(importedMethod);
+        foreach (var genericParameter in Source.GenericParameters) genericInstance.GenericArguments.Add(genericParameter);
+        return genericInstance;
+    }
+
     private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, IReadOnlyList<Instruction> instructions, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef)
     {
         if (memberSymbol.HasFlag(MemberSymbols.Base))
@@ -172,6 +202,22 @@ partial class MethodHandler
         if (memberSymbol.HasFlag(MemberSymbols.This))
         {
             return DeclaringTypeHandler.GetMethodInThis(methodName, parameters);
+        }
+
+        if (memberSymbol.HasFlag(MemberSymbols.Proceed))
+        {
+            // The template proceeds without a body being woven around, which is a mistake of its own rather than a
+            // method which could not be found.
+            if (m_ProceedMethodName == null)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.PROCEED_WITHOUT_AROUND_BODY, methodName));
+            }
+
+            // The declaring type alone is searched, rather than the base types which GetMethodInThis walks: the body
+            // which was moved belongs to a method of the declaring type, and a method of a base type of the same name
+            // and signature is a different one.
+            return Source.DeclaringType.Methods.FirstOrDefault(
+                methodDef => methodDef.Name == m_ProceedMethodName && methodDef.Parameters.SameWith(parameters.ToArray()));
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Object))
@@ -309,7 +355,9 @@ partial class MethodHandler
             var offset = paramStack.Types.Count - count;
             for (var i = 0; i < count; i++)
             {
-                var expected = ResolveDelegateParameterType(invokeParameters[i].ParameterType, invokeGenericArguments);
+                // The token of a generic method is parsed here as well, so that the parameter of the delegate is compared
+                // as the generic parameter of the method which it stands for rather than as a type of Gneedle.Inject.
+                var expected = ResolveDelegateParameterType(invokeParameters[i].ParameterType, invokeGenericArguments).ParseGenericTokens(Source, Source.Module);
                 if (!StackTypeMatches(expected, paramStack.Types[offset + i])) return false;
             }
 
@@ -418,11 +466,17 @@ partial class MethodHandler
     private TypeReference? GetArgType(Instruction instruction, MethodDefinition targetDef)
     {
         var isStatic = targetDef.IsStatic;
-        if (instruction.OpCode == OpCodes.Ldarg_S && instruction.Operand is ParameterReference parameter) return parameter.ParameterType;
+        if (instruction.OpCode == OpCodes.Ldarg_S && instruction.Operand is ParameterReference parameter)
+        {
+            return parameter.ParameterType.ParseGenericTokens(Source, Source.Module);
+        }
+
         if (!instruction.TryGetLdargIndex(out var index)) return null;
-        return !isStatic && index == 0
+        // The parameter of a template is a token when it stands for a generic parameter of the method being woven, just
+        // as the parameter of a delegate is, so it is parsed to that parameter before the type is compared with anything.
+        return (!isStatic && index == 0
             ? targetDef.DeclaringType
-            : targetDef.Parameters[index + (isStatic ? 0 : -1)].ParameterType;
+            : targetDef.Parameters[index + (isStatic ? 0 : -1)].ParameterType).ParseGenericTokens(Source, Source.Module);
     }
 
     private static TypeReference ResolveMethodReturnType(MethodReference methodRef)

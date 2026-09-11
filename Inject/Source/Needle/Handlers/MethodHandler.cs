@@ -22,6 +22,12 @@ internal sealed partial class MethodHandler : IMethodHandler
     internal readonly TypeHandler DeclaringTypeHandler;
 
     /// <summary>
+    /// Name of the generated method which holds the body which the source method is woven around, or null when the
+    /// source method is not woven around.
+    /// </summary>
+    private string? m_ProceedMethodName;
+
+    /// <summary>
     /// Gets the name of the source method definition. It is used for debugging and logging purposes to identify the method being manipulated.
     /// </summary>
     public string Name => Source.Name;
@@ -167,6 +173,118 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
+    /// Set the body of the method to run around the body which it holds, which the template reaches through
+    /// <see cref="Proceed"/>.<para/>
+    /// The template keeps the signature of the method, so its parameters and its return type have to match, and the body
+    /// which the method holds is moved to a generated method of the declaring type which the template calls.
+    /// </summary>
+    /// <param name="method">The template which holds the body to weave around.</param>
+    /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
+    public void AroundBody(MethodInfo method)
+    {
+        var templateDef = Source.Module.ImportReference(method).Resolve();
+
+        // Every check runs before anything is changed, so that a weave which cannot be done leaves the method as it was.
+        if (Source.IsAbstract || Source.IsPInvokeImpl || Source.IsRuntime || Source.IsInternalCall || !Source.HasBody)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_TARGET_HAS_NO_BODY, Source.FullName));
+        }
+
+        if (Source.IsConstructor) throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_TARGET_IS_CONSTRUCTOR, Source.FullName));
+        if (m_ProceedMethodName != null) throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_ALREADY_SET, Source.FullName));
+
+        // The signature of the template is resolved against the method before it is compared, because a generic method is
+        // matched through the M_[0-20] tokens of the template rather than through its own generic parameters: a template
+        // which takes and returns Gneedle.Inject.M_0 matches a method which takes and returns its first generic
+        // parameter. Resolving first is what turns the token into that parameter, and it changes nothing for a method
+        // which holds no generic parameter.
+        if (templateDef.Parameters.Count != Source.Parameters.Count
+            || templateDef.Parameters.Where((parameter, index) => !TypeName.HasSameName(parameter.ParameterType.ParseGenericTokens(Source, Source.Module),
+                                                                                       Source.Parameters[index].ParameterType)).Any())
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_PARAMETERS_MISMATCH, Source.FullName, templateDef.FullName));
+        }
+
+        if (!TypeName.HasSameName(templateDef.ReturnType.ParseGenericTokens(Source, Source.Module), Source.ReturnType))
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_RETURN_TYPE_MISMATCH, Source.FullName, templateDef.FullName));
+        }
+
+        var name = $"<{Source.Name}>k__Proceed";
+        if (Source.DeclaringType.Methods.Any(methodDef => methodDef.Name == name) || Source.DeclaringType.Fields.Any(field => field.Name == name))
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_GENERATED_NAME_OCCUPIED, name));
+        }
+
+        var generated = new MethodDefinition(name, MethodAttributes.Private | MethodAttributes.HideBySig
+                                                  | (Source.IsStatic ? MethodAttributes.Static : 0), Source.ReturnType)
+        {
+            DeclaringType = Source.DeclaringType
+        };
+
+        // The parameters of the method are given to the generated method as the objects they are rather than as copies
+        // of them, so that every operand which names an argument keeps naming the one it named: the method of a parameter
+        // is a reference which only the parameter table uses, and that table is written from the signature of the method
+        // which holds it. A copy would mean rewriting every argument opcode, the ones which carry no operand included.
+        foreach (var parameter in Source.Parameters) generated.Parameters.Add(parameter);
+
+        // The generic parameters are copied rather than given, which is where they differ from the parameters above: a
+        // generic parameter belongs to the method which declares it, and adding one to the collection of a second method
+        // re-parents it, which leaves the method it came from declaring none of its own. The copies take the name, the
+        // attributes and the constraints of the originals, so the generated method is generic in the very same way.
+        // A generic parameter is named by its position in every reference to it, so a copy of the same position is the
+        // very same parameter to the body which was moved and to the call which the template leaves behind.
+        foreach (var genericParameter in Source.GenericParameters)
+        {
+            var copy = new GenericParameter(genericParameter.Name, generated) { Attributes = genericParameter.Attributes };
+            foreach (var constraint in genericParameter.Constraints)
+            {
+                copy.Constraints.Add(new GenericParameterConstraint(constraint.ConstraintType));
+            }
+
+            generated.GenericParameters.Add(copy);
+        }
+
+        Source.DeclaringType.Methods.Add(generated);
+
+        MoveBodyTo(generated, Source);
+        Source.Body         = new MethodBody(Source);
+        m_ProceedMethodName = name;
+
+        // The template is parsed last, so that Proceed resolves through the generated method, which is on the declaring
+        // type by now. The return type is deliberately left alone: the template keeps the signature of the method, which
+        // was checked above, so parsing it as SetBody does would only write an equal type again.
+        CopyVariables(templateDef, Source);
+        ParseBody(templateDef.Body.Instructions, templateDef);
+    }
+
+    /// <summary>
+    /// Move the body of <paramref name="from"/> onto <paramref name="to"/>, leaving the first empty.
+    /// </summary>
+    /// <remarks>
+    /// The instructions are moved rather than shared, because each of them belongs to a single body: the offset of one
+    /// is computed while the body which holds it is written, so a shared one would take the offset of whichever body
+    /// was written last. The module of the two methods is the same, so nothing has to be imported or parsed. The
+    /// variables and the exception handlers belong to the body which holds them in the same way, and they move with it.
+    /// </remarks>
+    /// <param name="to">The method which the body is moved onto.</param>
+    /// <param name="from">The method which the body is moved from.</param>
+    private static void MoveBodyTo(MethodDefinition to, MethodDefinition from)
+    {
+        var body = to.Body;
+
+        body.Instructions.AddRange(from.Body.Instructions);
+        from.Body.Instructions.Clear();
+        body.Variables.AddRange(from.Body.Variables);
+        from.Body.Variables.Clear();
+        body.ExceptionHandlers.AddRange(from.Body.ExceptionHandlers);
+        from.Body.ExceptionHandlers.Clear();
+
+        body.InitLocals   = from.Body.InitLocals;
+        body.MaxStackSize = from.Body.MaxStackSize;
+    }
+
+    /// <summary>
     /// Parse the return type. If the return type holds a generic parameter token which could be parsed from
     /// Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20], it would be replaced with the generic parameter of the source method.
     /// </summary>
@@ -266,15 +384,17 @@ internal sealed partial class MethodHandler : IMethodHandler
         // - Gneedle.Inject.Base.Property(string)
         // - Gneedle.Inject.This.Method(string)
         // - Gneedle.Inject.Base.Method(string)
+        // - Gneedle.Inject.Proceed.Method(string), where the call is a generic instance method
         // which ILCode just look like:
         // IL_0000: ldstr {field_name}
         // IL_0005: call class [Gneedle.Inject]Gneedle.Inject.ValuableMember [Gneedle.Inject]Gneedle.Inject.This::Field(string)
-        // So we ganna get member flag from the nearest `call` to `ldstr`.
+        // The name of the declaring type settles which pointer the operand stands for, so a pointer has to be named here
+        // as well as in GetInstanceMemberFlag, which maps the name to the flag.
         if (currentIns.OpCode == OpCodes.Ldstr && bodyInstructions[callIndex].Operand is MethodReference
         {
             DeclaringType:
             {
-                Name     : nameof(This) or nameof(Base) or nameof(Object) or nameof(Static),
+                Name     : nameof(This) or nameof(Base) or nameof(Object) or nameof(Static) or nameof(Proceed),
                 Namespace: nameof(Gneedle) + "." + nameof(Inject)
             }
         } callingMethod)
@@ -400,7 +520,11 @@ internal sealed partial class MethodHandler : IMethodHandler
             Base.TYPE_NAME   => MemberSymbols.Base,
             Object.TYPE_NAME => MemberSymbols.Object,
             Static.TYPE_NAME => MemberSymbols.Static,
-            _                => MemberSymbols.None
+
+            // The only member which the pointer holds is the method which the advice proceeds through, so the kind of
+            // the member is settled here rather than read from the name of the call.
+            Proceed.TYPE_NAME => MemberSymbols.Proceed | MemberSymbols.Method,
+            _                 => MemberSymbols.None
         };
 
         memberFlag |= member.Name switch

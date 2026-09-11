@@ -38,4 +38,13 @@ internal static class ErrorMessages
     internal const string INVALID_FROM_ASSEMBLY_ASSEMBLY    = "The assembly {0} which the FromAssemblyAttribute names can't be resolved.";
     internal const string INVALID_FROM_ASSEMBLY_TYPE        = "The type {0} can't be found in the assembly {1} which the FromAssemblyAttribute names.";
     internal const string LDARG0_CONVERT_FAILED             = "Invalid operation code: ldarg.0";
+
+    // Around body exceptions:
+    internal const string AROUND_BODY_TARGET_HAS_NO_BODY      = "The method holds no body to weave around. Method: {0}.";
+    internal const string AROUND_BODY_TARGET_IS_CONSTRUCTOR   = "A constructor cannot be woven around. Method: {0}.";
+    internal const string AROUND_BODY_ALREADY_SET             = "The method is already woven around. Method: {0}.";
+    internal const string AROUND_BODY_PARAMETERS_MISMATCH     = "The parameters of the template do not match the method. Method: {0}, Template: {1}.";
+    internal const string AROUND_BODY_RETURN_TYPE_MISMATCH    = "The return type of the template does not match the method. Method: {0}, Template: {1}.";
+    internal const string AROUND_BODY_GENERATED_NAME_OCCUPIED = "The name of the generated method is taken. Name: {0}.";
+    internal const string PROCEED_WITHOUT_AROUND_BODY         = "Proceed is used by a method which is not woven around. Method: {0}.";
 }

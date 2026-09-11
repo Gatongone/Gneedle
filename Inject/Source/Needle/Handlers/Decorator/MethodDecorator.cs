@@ -16,6 +16,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     private readonly List<IType> m_ParameterTypes = [];
     private DefaultMethodBody? m_DefaultBody;
     private MethodInfo? m_BodyMethod;
+    private MethodInfo? m_AroundBodyMethod;
 
     /// <summary>
     /// Create a decorator which describes a method before it is appended to the module.
@@ -69,16 +70,27 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     public ITypeDecorator WithBody(DefaultMethodBody body)
     {
         // The body sources replace each other, so that the one which was asked for last is the applied one.
-        m_DefaultBody = body;
-        m_BodyMethod  = null;
+        m_DefaultBody      = body;
+        m_BodyMethod       = null;
+        m_AroundBodyMethod = null;
         return this;
     }
 
     /// <inheritdoc/>
     public ITypeDecorator WithBody(MethodInfo method)
     {
-        m_BodyMethod  = method;
-        m_DefaultBody = null;
+        m_BodyMethod       = method;
+        m_DefaultBody      = null;
+        m_AroundBodyMethod = null;
+        return this;
+    }
+
+    /// <inheritdoc/>
+    public ITypeDecorator WithAroundBody(MethodInfo method)
+    {
+        m_AroundBodyMethod = method;
+        m_BodyMethod       = null;
+        m_DefaultBody      = null;
         return this;
     }
 
@@ -95,6 +107,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         // The method is added with a body which throws, so that a method which is added without a body is still
         // loadable. The body which was asked for replaces it.
         if (m_BodyMethod is { } methodInfo) handler.SetBody(methodInfo);
+        else if (m_AroundBodyMethod is { } aroundMethodInfo) handler.AroundBody(aroundMethodInfo);
         else if (m_DefaultBody is { } body) handler.SetBody(body);
 
         return handler;
@@ -131,6 +144,14 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// <param name="method">Method which holds the body.</param>
         /// <returns>Result for chains calling.</returns>
         ITypeDecorator WithBody(MethodInfo method);
+
+        /// <summary>
+        /// Set the body of the method to run around the body which it holds, which the template reaches through
+        /// <see cref="Proceed"/>.
+        /// </summary>
+        /// <param name="method">Method which holds the body to weave around.</param>
+        /// <returns>Result for chains calling.</returns>
+        ITypeDecorator WithAroundBody(MethodInfo method);
     }
 
     /// <summary>

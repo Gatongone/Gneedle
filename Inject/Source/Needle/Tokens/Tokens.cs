@@ -44,7 +44,12 @@ internal enum MemberSymbols
     /// <summary>
     /// It stands for the operand should be parsed as other static pointer operation.
     /// </summary>
-    Static = 0b1000000
+    Static = 0b1000000,
+
+    /// <summary>
+    /// It stands for the operand should be parsed as the implementation which the body being woven around holds.
+    /// </summary>
+    Proceed = 0b10000000
 }
 
 /// <summary>
@@ -177,6 +182,28 @@ public static class Base
     /// Get the method from <c>base</c> pointer.
     /// </summary>
     /// <param name="name">Method name</param>
+    /// <typeparam name="TMethod">Method signature without name.</typeparam>
+    /// <returns>The symbol of the method.</returns>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
+    public static TMethod Method<TMethod>(string name) where TMethod : Delegate => throw new InjectionNotEffectiveException();
+}
+
+/// <summary>
+/// The symbol of the implementation which the body being woven around holds.<para/>
+/// A body which is set through <see cref="IMethodHandler.AroundBody"/> keeps the body which the method had, and the
+/// template reaches that body through <see cref="Method{TMethod}"/>.
+/// </summary>
+public static class Proceed
+{
+    /// <summary>
+    /// Full name of the class.
+    /// </summary>
+    internal const string TYPE_NAME = $"{nameof(Gneedle)}.{nameof(Inject)}.{nameof(Proceed)}";
+
+    /// <summary>
+    /// Get the method which holds the body of the method which is woven around.
+    /// </summary>
+    /// <param name="name">Name of the method, which is for reading alone and takes no part in the resolving.</param>
     /// <typeparam name="TMethod">Method signature without name.</typeparam>
     /// <returns>The symbol of the method.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
