@@ -1,31 +1,49 @@
 ﻿namespace Gneedle.Inject;
 
+/// <summary>
+/// Represents a handler for a type of the metadata which is built, which reads its members and adds new ones to it.
+/// </summary>
 internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer, IEquatable<TypeHandler>
 {
+    /// <summary>
+    /// The type definition which is handled.
+    /// </summary>
     internal readonly TypeDefinition Source;
 
+    /// <summary>
+    /// Handler of the assembly which declares the type.
+    /// </summary>
     internal readonly AssemblyHandler AssemblyHandler;
 
+    /// <inheritdoc/>
     IAssemblyHandler ITypeHandler.AssemblyHandler => AssemblyHandler;
 
+    /// <inheritdoc/>
     public string Name
     {
         get => Source.Name;
         set => Source.Name = value;
     }
 
+    /// <inheritdoc/>
     public string Namespace
     {
         get => Source.Namespace;
         set => Source.Namespace = value;
     }
 
+    /// <summary>
+    /// Create a handler for a type definition.
+    /// </summary>
+    /// <param name="assemblyHandler">Handler of the assembly which declares the type.</param>
+    /// <param name="source">The type definition which is handled.</param>
     internal TypeHandler(AssemblyHandler assemblyHandler, TypeDefinition source)
     {
         AssemblyHandler = assemblyHandler;
         Source          = source;
     }
 
+    /// <inheritdoc/>
     public bool ContainsInterface(IType interfaceType) => Source.Interfaces.Any(implementation => TypeName.HasSameName(implementation.InterfaceType, interfaceType));
 
     /// <inheritdoc/>
@@ -209,15 +227,37 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     internal FieldReference? GetFieldInBase(string fieldName)
         => AssemblyHandler.GetFieldFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, fieldName);
 
+    /// <summary>
+    /// Get property from this type.
+    /// </summary>
+    /// <param name="propertyName">Name of the property.</param>
+    /// <returns>The property from this type.</returns>
     internal PropertyDefinition? GetPropertyInThis(string propertyName)
         => AssemblyHandler.GetPropertyFromType(Source, propertyName);
 
+    /// <summary>
+    /// Get property from base type.
+    /// </summary>
+    /// <param name="propertyName">Name of the property.</param>
+    /// <returns>The property from the base type.</returns>
     internal PropertyDefinition? GetPropertyInBase(string propertyName)
         => AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, propertyName);
 
+    /// <summary>
+    /// Get method from this type.
+    /// </summary>
+    /// <param name="methodName">Name of the method.</param>
+    /// <param name="parameters">Types of the parameters of the method.</param>
+    /// <returns>The method from this type.</returns>
     internal MethodDefinition? GetMethodInThis(string methodName, IReadOnlyList<TypeReference> parameters)
         => AssemblyHandler.GetMethodFromType(Source, methodName, parameters);
 
+    /// <summary>
+    /// Get method from base type.
+    /// </summary>
+    /// <param name="methodName">Name of the method.</param>
+    /// <param name="parameters">Types of the parameters of the method.</param>
+    /// <returns>The method from the base type.</returns>
     internal MethodDefinition? GetMethodInBase(string methodName, IReadOnlyList<TypeReference> parameters)
         => AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, methodName, parameters);
 }

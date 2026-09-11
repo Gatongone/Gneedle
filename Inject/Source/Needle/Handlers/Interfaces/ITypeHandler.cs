@@ -29,8 +29,19 @@ public interface IInterfaceContainer
 /// </summary>
 public interface ITypeHandler : IAttributeContainer
 {
+    /// <summary>
+    /// Handler of the assembly which declares the type.
+    /// </summary>
     IAssemblyHandler AssemblyHandler { get; }
+
+    /// <summary>
+    /// Name of the type. Setting it renames the type which is handled.
+    /// </summary>
     string Name { get; set; }
+
+    /// <summary>
+    /// Namespace of the type. Setting it moves the type which is handled into another namespace.
+    /// </summary>
     string Namespace { get; set; }
 }
 

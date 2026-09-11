@@ -192,9 +192,9 @@ internal static class CecilExtensions
     /// generic parameter of the type declared by <paramref name="typeProvider"/> or of the method held by <paramref name="methodParameters"/>.
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="TryGetParsedGenericParameter(IMemberDefinition, out GenericParameter?)"/>, which reads the token of a
-    /// type of a module, this one reads the token of an <see cref="IType"/> declared through the public API. The token is a
-    /// <see cref="System.Type"/> there, and the generic parameters of the method are not held by a method definition yet.
+    /// Unlike <c>TryGetParsedGenericParameter</c>, which reads the token of a type of a module, this one reads the token
+    /// of an <see cref="IType"/> declared through the public API. The token is a <see cref="System.Type"/> there, and the
+    /// generic parameters of the method are not held by a method definition yet.
     /// </remarks>
     /// <param name="type">The type which could be a token.</param>
     /// <param name="typeProvider">Holder of the generic parameters of the declaring type.</param>
@@ -390,7 +390,7 @@ internal static class CecilExtensions
 
         /// <summary>
         /// Parse the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] tokens in the type reference to the generic parameters of the <c>provider</c>.
-        /// Unlike <see cref="TryGetParsedGenericParameter(IMemberDefinition, out GenericParameter?)"/>, the tokens nested in the type are parsed as well,
+        /// Unlike <c>TryGetParsedGenericParameter</c>, the tokens nested in the type are parsed as well,
         /// just like <c>List&lt;Gneedle.Inject.T_0&gt;</c> to <c>List&lt;T&gt;</c>.
         /// </summary>
         /// <param name="provider">GenericParameters provider.</param>

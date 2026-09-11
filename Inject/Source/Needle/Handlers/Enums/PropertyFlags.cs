@@ -6,12 +6,39 @@ namespace Gneedle.Inject;
 [Flags]
 public enum PropertyFlags
 {
+    /// <summary>
+    /// The accessors of the property are visible to the types of every assembly.
+    /// </summary>
     Public    = 1 << 1,
+
+    /// <summary>
+    /// The accessors of the property are visible to the types of the assembly which declares it alone.
+    /// </summary>
     Internal  = 1 << 2,
+
+    /// <summary>
+    /// The accessors of the property are visible to the types which derive from the type which declares it.
+    /// </summary>
     Protected = 1 << 3,
+
+    /// <summary>
+    /// The accessors of the property are visible to the type which declares it alone.
+    /// </summary>
     Private   = 1 << 4,
+
+    /// <summary>
+    /// The property belongs to the type rather than to an instance of it.
+    /// </summary>
     Static    = 1 << 5,
+
+    /// <summary>
+    /// The accessors of the property can be overridden by a type which derives from the declaring one.
+    /// </summary>
     Virtual   = 1 << 6,
+
+    /// <summary>
+    /// The accessors of the property have no body, and a type which derives from the declaring one implements them.
+    /// </summary>
     Abstract  = 1 << 7
 }
 

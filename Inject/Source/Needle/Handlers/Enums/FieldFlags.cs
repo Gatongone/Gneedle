@@ -6,12 +6,43 @@ namespace Gneedle.Inject;
 [Flags]
 public enum FieldFlags
 {
+    /// <summary>
+    /// The field is visible to the types of every assembly.
+    /// </summary>
     Public    = 1 << 1,
+
+    /// <summary>
+    /// The field is visible to the types of the assembly which declares it alone.
+    /// </summary>
     Internal  = 1 << 2,
+
+    /// <summary>
+    /// The field is visible to the types which derive from the type which declares it.
+    /// </summary>
     Protected = 1 << 3,
+
+    /// <summary>
+    /// The field is visible to the type which declares it alone.
+    /// </summary>
     Private   = 1 << 4,
+
+    /// <summary>
+    /// The field belongs to the type rather than to an instance of it.
+    /// </summary>
     Static    = 1 << 5,
+
+    /// <summary>
+    /// The field can only be assigned by a constructor of the type which declares it.
+    /// </summary>
     ReadOnly  = 1 << 6,
+
+    /// <summary>
+    /// The field can only be assigned by a constructor of the type which declares it.
+    /// </summary>
+    /// <remarks>
+    /// It says the same as <see cref="ReadOnly"/>, and unlike that one it is not applied, so a field which is flagged
+    /// with it alone is writable.
+    /// </remarks>
     InitOnly  = 1 << 7
 }
 

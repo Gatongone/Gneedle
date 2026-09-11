@@ -36,6 +36,7 @@ partial class MethodHandler
     /// <param name="memberSymbol">Member flags about the member kind and its property.</param>
     /// <param name="currentIndex">Index of the instruction of `ldstr {member_name}`.</param>
     /// <param name="filter">The final instruction's container.</param>
+    /// <param name="targetDef">The template method which the instructions are copied from.</param>
     /// <exception cref="InvalidILException">Thrown when the nearest 'callvirt' to `Ldstr {field_name}` doesn't exist.</exception>
     /// <exception cref="ArgumentException">Thrown when the field is invalid.</exception>
     private void ParseField(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)

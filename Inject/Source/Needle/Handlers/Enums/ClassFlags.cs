@@ -6,12 +6,44 @@
 [Flags]
 public enum ClassFlags
 {
+    /// <summary>
+    /// The class cannot be inherited.
+    /// </summary>
     Sealed    = 1 << 0,
+
+    /// <summary>
+    /// The class is visible to the types of every assembly.
+    /// </summary>
     Public    = 1 << 1,
+
+    /// <summary>
+    /// The class is visible to the types of the assembly which declares it alone.
+    /// </summary>
     Internal  = 1 << 2,
+
+    /// <summary>
+    /// The class is visible to the types which derive from the type which declares it.
+    /// </summary>
     Protected = 1 << 3,
+
+    /// <summary>
+    /// The class is visible to the type which declares it alone.
+    /// </summary>
     Private   = 1 << 4,
+
+    /// <summary>
+    /// The class cannot be instantiated, and it cannot be inherited either, which is the shape of a class whose members
+    /// are all static.
+    /// </summary>
+    /// <remarks>
+    /// It alone gives the abstract and sealed shape. It is shadowed when it is combined with <see cref="Abstract"/> or
+    /// with <see cref="Sealed"/>, because those two are applied before it.
+    /// </remarks>
     Static    = 1 << 5,
+
+    /// <summary>
+    /// The class cannot be instantiated.
+    /// </summary>
     Abstract  = 1 << 6
 }
 

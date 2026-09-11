@@ -13,6 +13,12 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
     private readonly FieldFlags m_FieldFlags;
     private IType m_FieldType = typeof(object).ToGneedleType();
 
+    /// <summary>
+    /// Create a decorator which describes a field before it is appended to the module.
+    /// </summary>
+    /// <param name="typeHandler">Handler of the type which the field is appended to.</param>
+    /// <param name="fieldName">Name of the field.</param>
+    /// <param name="fieldFlags">Flags of the field.</param>
     internal FieldDecorator(TypeHandler typeHandler, string fieldName, FieldFlags fieldFlags)
     {
         m_TypeHandler = typeHandler;

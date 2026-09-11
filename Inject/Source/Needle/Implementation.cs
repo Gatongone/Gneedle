@@ -1,5 +1,8 @@
 ﻿namespace Gneedle.Inject;
 
+/// <summary>
+/// Implementation info for the target class.
+/// </summary>
 internal struct Implementation
 {
     /// <summary>

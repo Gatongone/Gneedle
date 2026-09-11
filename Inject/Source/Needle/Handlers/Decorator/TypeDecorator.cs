@@ -25,6 +25,13 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     /// </summary>
     private Implementation m_Implementation;
 
+    /// <summary>
+    /// Create a decorator which describes a class before it is appended to the module.
+    /// </summary>
+    /// <param name="assemblyHandler">Handler of the assembly which the class is appended to.</param>
+    /// <param name="typeDefinition">The class definition which is described.</param>
+    /// <param name="implementation">The base type and the interfaces which the class is described with.</param>
+    /// <param name="buildCallback">Callback which appends the class to the module and returns its handler.</param>
     internal ClassDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, Implementation implementation, Func<TypeDefinition, Implementation, IClassHandler> buildCallback)
     {
         m_AssemblyHandler = assemblyHandler;
@@ -208,6 +215,13 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     /// </summary>
     private Implementation m_Implementation;
 
+    /// <summary>
+    /// Create a decorator which describes a struct before it is appended to the module.
+    /// </summary>
+    /// <param name="assemblyHandler">Handler of the assembly which the struct is appended to.</param>
+    /// <param name="typeDefinition">The struct definition which is described.</param>
+    /// <param name="implementation">The base type and the interfaces which the struct is described with.</param>
+    /// <param name="buildCallback">Callback which appends the struct to the module and returns its handler.</param>
     internal StructDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, Implementation implementation, Func<TypeDefinition, Implementation, IStructHandler> buildCallback)
     {
         m_AssemblyHandler = assemblyHandler;
@@ -280,6 +294,10 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     /// </summary>
     public interface ITypeDecorator
     {
+        /// <summary>
+        /// Build struct definition to module.
+        /// </summary>
+        /// <returns>Handler for struct.</returns>
         IStructHandler GetHandler();
     }
 

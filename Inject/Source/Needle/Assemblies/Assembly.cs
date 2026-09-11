@@ -5,14 +5,45 @@
 /// </summary>
 public abstract class Assembly : IDisposable
 {
-    internal static readonly ISymbolReaderProvider MdbSymbolReaderProvider   = new Mono.Cecil.Mdb.MdbReaderProvider();
-    internal static readonly ISymbolWriterProvider MdbSymbolWriterProvider   = new Mono.Cecil.Mdb.MdbWriterProvider();
-    internal static readonly ISymbolReaderProvider PdbSymbolReaderProvider   = new Mono.Cecil.Pdb.PdbReaderProvider();
-    internal static readonly ISymbolWriterProvider PdbSymbolWriterProvider   = new Mono.Cecil.Pdb.PdbWriterProvider();
+    /// <summary>
+    /// Reader of the symbols of the Mono debug format.
+    /// </summary>
+    internal static readonly ISymbolReaderProvider MdbSymbolReaderProvider = new Mono.Cecil.Mdb.MdbReaderProvider();
+
+    /// <summary>
+    /// Writer of the symbols of the Mono debug format.
+    /// </summary>
+    internal static readonly ISymbolWriterProvider MdbSymbolWriterProvider = new Mono.Cecil.Mdb.MdbWriterProvider();
+
+    /// <summary>
+    /// Reader of the symbols of the Windows program database.
+    /// </summary>
+    internal static readonly ISymbolReaderProvider PdbSymbolReaderProvider = new Mono.Cecil.Pdb.PdbReaderProvider();
+
+    /// <summary>
+    /// Writer of the symbols of the Windows program database.
+    /// </summary>
+    internal static readonly ISymbolWriterProvider PdbSymbolWriterProvider = new Mono.Cecil.Pdb.PdbWriterProvider();
+
+    /// <summary>
+    /// Reader of the symbols of the portable program database.
+    /// </summary>
     internal static readonly ISymbolReaderProvider PortablePdbReaderProvider = new PortablePdbReaderProvider();
+
+    /// <summary>
+    /// Writer of the symbols of the portable program database.
+    /// </summary>
     internal static readonly ISymbolWriterProvider PortablePdbWriterProvider = new PortablePdbWriterProvider();
-    internal static readonly ISymbolReaderProvider DefaultReaderProvider     = new DefaultSymbolReaderProvider();
-    internal static readonly ISymbolWriterProvider DefaultWriterProvider     = new DefaultSymbolWriterProvider();
+
+    /// <summary>
+    /// Reader which tells the format of the symbols of an assembly by itself.
+    /// </summary>
+    internal static readonly ISymbolReaderProvider DefaultReaderProvider = new DefaultSymbolReaderProvider();
+
+    /// <summary>
+    /// Writer which tells the format of the symbols to write by itself.
+    /// </summary>
+    internal static readonly ISymbolWriterProvider DefaultWriterProvider = new DefaultSymbolWriterProvider();
 
     /// <summary>
     /// Assembly handler.
@@ -190,16 +221,23 @@ public abstract class Assembly : IDisposable
         {
             throw new ArgumentException($"The provided byte array is too small to hold the assembly data. Required size: {assemblyStream.Length} bytes.", nameof(assemblyBytes));
         }
+
         if (symbolBytes.Length < symbolStream.Length)
         {
             throw new ArgumentException($"The provided byte array is too small to hold the symbol data. Required size: {symbolStream.Length} bytes.", nameof(symbolBytes));
         }
+
         var (assemblyWrote, symbolWrote) = (assemblyStream.Length, symbolStream.Length);
         Array.Copy(assemblyStream.GetBuffer(), assemblyBytes, assemblyWrote);
         Array.Copy(symbolStream.GetBuffer(), symbolBytes, symbolWrote);
         return (assemblyWrote, symbolWrote);
     }
 
+    /// <summary>
+    /// Release the stream which the assembly was read from, and the metadata which was read from it.<para/>
+    /// The assembly is written back through the very stream it was read from, so it has to be saved before it is
+    /// disposed of.
+    /// </summary>
     public void Dispose()
     {
         m_AssemblyCache?.Dispose();

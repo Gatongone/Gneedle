@@ -152,9 +152,26 @@ public readonly struct TypeName : IEquatable<TypeName>
     /// </summary>
     public static implicit operator string(TypeName typeName) => typeName.Name;
 
+    /// <summary>
+    /// Check whether two type names hold the same name.
+    /// </summary>
+    /// <param name="typeName">The type name which is compared.</param>
+    /// <param name="other">The type name which is compared with.</param>
+    /// <returns>Whether the two hold the same name.</returns>
     public static bool operator ==(TypeName typeName, TypeName other) => typeName.Equals(other);
+
+    /// <inheritdoc cref="operator ==(TypeName, TypeName)"/>
     public static bool operator !=(TypeName typeName, TypeName other) => !(typeName == other);
+
+    /// <summary>
+    /// Check whether the type name is the one which an object of another type holds.
+    /// </summary>
+    /// <param name="typeName">The type name which is compared.</param>
+    /// <param name="other">The object which is compared with.</param>
+    /// <returns>Whether the object is a type name which holds the same name.</returns>
     public static bool operator ==(TypeName typeName, object other)   => typeName.Equals(other);
+
+    /// <inheritdoc cref="operator ==(TypeName, object)"/>
     public static bool operator !=(TypeName typeName, object other)   => !(typeName == other);
 
     /// <remarks>

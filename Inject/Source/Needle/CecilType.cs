@@ -1,10 +1,4 @@
-﻿// Copyright ©2023 Gatongone
-// Author: Gatongone
-// Email: gatongone@gmail.com
-// Created On: 2023/11/20-20:24:12
-// Github: https://github.com/Gatongone
-
-namespace Gneedle.Inject;
+﻿namespace Gneedle.Inject;
 
 /// <summary>
 /// Cecil type info.

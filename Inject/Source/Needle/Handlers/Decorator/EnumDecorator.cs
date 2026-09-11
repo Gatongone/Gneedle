@@ -11,6 +11,12 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
     private TypeReference m_UnderlyingType;
     private bool m_WithFlagsAttribute;
 
+    /// <summary>
+    /// Create a decorator which describes an enum before it is appended to the module.
+    /// </summary>
+    /// <param name="assemblyHandler">Handler of the assembly which the enum is appended to.</param>
+    /// <param name="typeDefinition">The enum definition which is described.</param>
+    /// <param name="underlyingType">Type of the values of the enum.</param>
     internal EnumDecorator(AssemblyHandler assemblyHandler, TypeDefinition typeDefinition, TypeReference underlyingType)
     {
         m_AssemblyHandler = assemblyHandler;

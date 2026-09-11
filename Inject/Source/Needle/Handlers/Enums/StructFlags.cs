@@ -6,11 +6,36 @@
 [Flags]
 public enum StructFlags
 {
+    /// <summary>
+    /// The fields of the struct cannot be assigned after it was created, which is marked by an
+    /// <c>IsReadOnlyAttribute</c>.
+    /// </summary>
     ReadOnly  = 1 << 0,
+
+    /// <summary>
+    /// The struct can only live on the stack, which is marked by an <c>IsByRefLikeAttribute</c> and by an
+    /// <c>ObsoleteAttribute</c> which keeps it out of the fields of another type.
+    /// </summary>
     Ref       = 1 << 1,
+
+    /// <summary>
+    /// The struct is visible to the types of every assembly.
+    /// </summary>
     Public    = 1 << 2,
+
+    /// <summary>
+    /// The struct is visible to the types which derive from the type which declares it.
+    /// </summary>
     Protected = 1 << 3,
+
+    /// <summary>
+    /// The struct is visible to the types of the assembly which declares it alone.
+    /// </summary>
     Internal  = 1 << 4,
+
+    /// <summary>
+    /// The struct is visible to the type which declares it alone.
+    /// </summary>
     Private   = 1 << 5
 }
 

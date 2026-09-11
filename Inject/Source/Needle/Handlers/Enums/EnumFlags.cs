@@ -6,9 +6,24 @@
 [Flags]
 public enum EnumFlags
 {
+    /// <summary>
+    /// The enum is visible to the types of every assembly.
+    /// </summary>
     Public    = 1 << 0,
+
+    /// <summary>
+    /// The enum is visible to the type which declares it alone.
+    /// </summary>
     Private   = 1 << 1,
+
+    /// <summary>
+    /// The enum is visible to the types which derive from the type which declares it.
+    /// </summary>
     Protected = 1 << 2,
+
+    /// <summary>
+    /// The enum is visible to the types of the assembly which declares it alone.
+    /// </summary>
     Internal  = 1 << 3
 }
 

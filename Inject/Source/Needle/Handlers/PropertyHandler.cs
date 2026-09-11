@@ -5,13 +5,26 @@ using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 
 namespace Gneedle.Inject;
 
+/// <summary>
+/// Represents a handler for a property of the metadata which is built, which reads its accessors and writes them.
+/// </summary>
+/// <param name="methodDef">The property definition which is handled.</param>
+/// <param name="declaringTypeHandler">Handler of the type which declares the property.</param>
 internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declaringTypeHandler) : IPropertyHandler, IAttributeContainer
 {
     public string Name => Source.Name;
     public string FullName => Source.FullName;
     private           MethodHandler?     m_Setter;
     private           MethodHandler?     m_Getter;
+
+    /// <summary>
+    /// The property definition which is handled.
+    /// </summary>
     internal readonly PropertyDefinition Source               = methodDef;
+
+    /// <summary>
+    /// Handler of the type which declares the property.
+    /// </summary>
     internal readonly TypeHandler        DeclaringTypeHandler = declaringTypeHandler;
     ITypeHandler IPropertyHandler.DeclaringTypeHandler => DeclaringTypeHandler;
 

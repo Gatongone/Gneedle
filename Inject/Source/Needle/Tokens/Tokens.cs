@@ -74,6 +74,10 @@ public sealed class ValuableMember
     public void Set(object value) => throw new InjectionNotEffectiveException();
 }
 
+/// <summary>
+/// The symbol of the field or property pointer, which reads and writes a value of the type which it stands for.<para/>
+/// Use it rather than <see cref="ValuableMember"/> when the field or property is of a value type, which that one boxes.
+/// </summary>
 public sealed class ValuableMember<T>
 {
     /// <summary>
@@ -189,6 +193,10 @@ public class Object
     /// </summary>
     internal const string TYPE_NAME = $"{nameof(Gneedle)}.{nameof(Inject)}.{nameof(Object)}";
 
+    /// <summary>
+    /// Wrap the instance which the described member is read from or called on.
+    /// </summary>
+    /// <param name="args">The instance alone, so that the array which the compiler builds holds a single element.</param>
     public Object(params object[] args) => throw new InjectionNotEffectiveException();
 
     /// <inheritdoc cref="Property(string)"/>

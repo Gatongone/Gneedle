@@ -66,6 +66,10 @@ public sealed class NongenericType : IType
         Type = type;
     }
 
+    /// <summary>
+    /// Create a non-generic type from a system type.
+    /// </summary>
+    /// <param name="type">The system type which is not generic.</param>
     public static implicit operator NongenericType(Type type) => new(type);
 
     /// <summary>

@@ -1,14 +1,45 @@
 ﻿namespace Gneedle.Inject;
 
+/// <summary>
+/// Represents the modifier of a method.
+/// </summary>
 [Flags]
 public enum MethodFlags
 {
+    /// <summary>
+    /// The method is visible to the types of every assembly.
+    /// </summary>
     Public    = 1 << 1,
+
+    /// <summary>
+    /// The method is visible to the types of the assembly which declares it alone.
+    /// </summary>
     Internal  = 1 << 2,
+
+    /// <summary>
+    /// The method is visible to the types which derive from the type which declares it.
+    /// </summary>
     Protected = 1 << 3,
+
+    /// <summary>
+    /// The method is visible to the type which declares it alone.
+    /// </summary>
     Private   = 1 << 4,
+
+    /// <summary>
+    /// The method belongs to the type rather than to an instance of it.
+    /// </summary>
     Static    = 1 << 5,
+
+    /// <summary>
+    /// The method has no body, and a type which derives from the declaring one implements it.
+    /// </summary>
     Abstract  = 1 << 6,
+
+    /// <summary>
+    /// The method can be overridden by a type which derives from the declaring one, and it is the implementation which
+    /// that type inherits unless it overrides it.
+    /// </summary>
     Virtual   = 1 << 7
 }
 

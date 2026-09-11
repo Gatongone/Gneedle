@@ -17,6 +17,12 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     private DefaultMethodBody? m_DefaultBody;
     private MethodInfo? m_BodyMethod;
 
+    /// <summary>
+    /// Create a decorator which describes a method before it is appended to the module.
+    /// </summary>
+    /// <param name="typeHandler">Handler of the type which the method is appended to.</param>
+    /// <param name="methodName">Name of the method.</param>
+    /// <param name="methodFlags">Flags of the method.</param>
     internal MethodDecorator(TypeHandler typeHandler, string methodName, MethodFlags methodFlags)
     {
         m_TypeHandler = typeHandler;

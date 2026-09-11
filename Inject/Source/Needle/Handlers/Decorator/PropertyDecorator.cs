@@ -13,6 +13,12 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     private DefaultPropertyBody? m_GetterBody;
     private DefaultPropertyBody? m_SetterBody;
 
+    /// <summary>
+    /// Create a decorator which describes a property before it is appended to the module.
+    /// </summary>
+    /// <param name="typeHandler">Handler of the type which the property is appended to.</param>
+    /// <param name="propertyName">Name of the property.</param>
+    /// <param name="propertyFlags">Flags of the property.</param>
     internal PropertyDecorator(TypeHandler typeHandler, string propertyName, PropertyFlags propertyFlags)
     {
         m_TypeHandler   = typeHandler;

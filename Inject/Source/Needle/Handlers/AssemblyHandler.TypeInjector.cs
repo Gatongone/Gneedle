@@ -4,6 +4,39 @@ namespace Gneedle.Inject;
 
 partial class AssemblyHandler
 {
+    /// <summary>
+    /// Get all type handlers that match the given filter.
+    /// </summary>
+    /// <param name="filter">The filter to apply to the type definitions.</param>
+    /// <returns>An array of type handlers that match the given filter.</returns>
+    internal ITypeHandler[] GetTypes(Func<TypeDefinition, bool> filter)
+    {
+        var handlers = new List<ITypeHandler>();
+        foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
+        {
+            // Append type definition.
+            if (filter(type)) handlers.Add(GetType(type));
+            // Append nested type definition.
+            handlers.AddRange(type.NestedTypes.Where(filter).Select(GetType));
+        }
+
+        return handlers.ToArray<ITypeHandler>();
+    }
+
+    /// <summary>
+    /// Get the type handler for the given type definition.
+    /// </summary>
+    /// <param name="typeDefinition">The type definition to get the handler for.</param>
+    /// <returns>The type handler for the given type definition.</returns>
+    internal ITypeHandler GetType(TypeDefinition typeDefinition) => typeDefinition switch
+    {
+        {IsValueType: true, IsEnum: false} => new StructHandler(this, typeDefinition),
+        {IsEnum     : true}                => new EnumHandler(this, typeDefinition, typeDefinition.Fields.First(f => f.Name == "value__").FieldType),
+        {IsClass    : true}                => new ClassHandler(this, typeDefinition),
+        _                                  => new TypeHandler(this, typeDefinition)
+    };
+
+    /// <inheritdoc/>
     public ITypeHandler? GetType(string typeFullName)
     {
         foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
@@ -16,28 +49,6 @@ partial class AssemblyHandler
         }
 
         return null;
-    }
-
-    public ITypeHandler GetType(TypeDefinition typeDefinition) => typeDefinition switch
-    {
-        {IsValueType: true, IsEnum: false} => new StructHandler(this, typeDefinition),
-        {IsEnum     : true}                => new EnumHandler(this, typeDefinition, typeDefinition.Fields.First(f => f.Name == "value__").FieldType),
-        {IsClass    : true}                => new ClassHandler(this, typeDefinition),
-        _                                  => new TypeHandler(this, typeDefinition)
-    };
-
-    public ITypeHandler[] GetTypes(Func<TypeDefinition, bool> filter)
-    {
-        var handlers = new List<ITypeHandler>();
-        foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
-        {
-            // Append type definition.
-            if (filter(type)) handlers.Add(GetType(type));
-            // Append nested type definition.
-            handlers.AddRange(type.NestedTypes.Where(filter).Select(GetType));
-        }
-
-        return handlers.ToArray<ITypeHandler>();
     }
 
     public ITypeHandler[] GetTypes()
@@ -54,11 +65,10 @@ partial class AssemblyHandler
         return handlers.ToArray<ITypeHandler>();
     }
 
+    /// <inheritdoc/>
     public ITypeHandler GetType(Type type) => new TypeHandler(this, GetCecilType(type).Definition);
 
-    /// <summary>
-    /// Add a class to the assembly.
-    /// </summary>
+    /// <inheritdoc/>
     public ClassDecorator AddClass(string typeName, string typeNamespace, ClassFlags classFlags)
     {
         var fullName = $"{typeNamespace}.{typeName}";
@@ -86,9 +96,7 @@ partial class AssemblyHandler
         }
     }
 
-    /// <summary>
-    /// Add a class to the assembly.
-    /// </summary>
+    /// <inheritdoc/>
     public StructDecorator AddStruct(string typeName, string typeNamespace, StructFlags structFlags)
     {
         var fullName = $"{typeNamespace}.{typeName}";
