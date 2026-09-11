@@ -448,8 +448,8 @@ public class AroundBodyTests
         var assembly = Assembly.Create("AroundBodyDecoratorAssembly");
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
         var method = (MethodHandler) host.AddMethod("Add", MethodFlags.Public | MethodFlags.Static)
-                                     .WithParameter(typeof(int))
-                                     .WithParameter(typeof(int))
+                                     .WithParameter("left", typeof(int))
+                                     .WithParameter("right", typeof(int))
                                      .WithReturnType(typeof(int))
                                      .WithAroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)))
                                      .GetHandler();

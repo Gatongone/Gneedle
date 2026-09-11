@@ -44,7 +44,7 @@ public class BasePointerTests
             baseDef.Methods.Add(calc);
         });
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [typeof(int).ToGneedleType()], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.BaseMethod)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 

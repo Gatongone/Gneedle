@@ -554,7 +554,7 @@ public class GenericTokenTests
     public void ObjectMethod_With_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_First_Generic_Parameter()
     {
         var host = NewConstrainedHost();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new GenericParameterType("T0")], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
 
         method.SetBody(Template(nameof(Templates.ObjectMethod_TokenReceiver)));
 
@@ -572,7 +572,7 @@ public class GenericTokenTests
     public void ObjectMethod_With_Second_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_Second_Generic_Parameter()
     {
         var host = NewConstrainedHost();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new GenericParameterType("T1")], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T1"))], MethodFlags.Public);
 
         method.SetBody(Template(nameof(Templates.ObjectMethod_SecondTokenReceiver)));
 
@@ -596,7 +596,7 @@ public class GenericTokenTests
     public void AddMethod_Parses_The_Token_Of_The_Parameter_Type()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(T_0).ToGneedleType()], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_0).ToGneedleType())], MethodFlags.Public);
 
         // The token parameter has to be the generic parameter of the host, just like the one from `new GenericParameterType("T")`.
         Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
@@ -607,7 +607,7 @@ public class GenericTokenTests
     {
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [new GenericParameterType("U")],
-                                                    [typeof(M_0).ToGneedleType()], MethodFlags.Public);
+                                                    [new Parameter(typeof(M_0).ToGneedleType())], MethodFlags.Public);
 
         Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(method.Source.GenericParameters[0]));
     }
@@ -616,7 +616,7 @@ public class GenericTokenTests
     public void AddMethod_Parses_The_Token_Nested_In_The_Parameter_Type()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new GenericType(typeof(List<>), typeof(T_0))],
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(new GenericType(typeof(List<>), typeof(T_0)))],
                                                     MethodFlags.Public);
 
         var parameterType = method.Source.Parameters[0].ParameterType;
@@ -629,7 +629,7 @@ public class GenericTokenTests
     {
         var host = NewHost("T0");
 
-        Assert.Throws<IndexOutOfRangeException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(T_1).ToGneedleType()],
+        Assert.Throws<IndexOutOfRangeException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
                                                                     MethodFlags.Public));
     }
 
@@ -641,7 +641,7 @@ public class GenericTokenTests
                                  .AddClass("Host", Ns, ClassFlags.Public)
                                  .WithGenericParameter("T0")
                                  .GetHandler();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(T_0).ToGneedleType()], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_0).ToGneedleType())], MethodFlags.Public);
 
         // Resolving the token through GetCecilType would load the assembly which declares Gneedle.Inject.T_0, and
         // hence append a Gneedle.Inject reference to the target module. The produced assembly would then depend on

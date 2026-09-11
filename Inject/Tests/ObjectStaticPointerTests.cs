@@ -55,7 +55,7 @@ public class ObjectStaticPointerTests
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [typeof(HelperClass).ToGneedleType(), typeof(int).ToGneedleType()], MethodFlags.Public);
+            [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.ObjectMethod_NewSyntax)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -117,7 +117,7 @@ public class ObjectStaticPointerTests
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [typeof(HelperClass).ToGneedleType()], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.ObjectField_Get)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -133,7 +133,7 @@ public class ObjectStaticPointerTests
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
-        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(HelperClass).ToGneedleType(), typeof(int).ToGneedleType()], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.ObjectField_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -149,7 +149,7 @@ public class ObjectStaticPointerTests
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [typeof(HelperClass).ToGneedleType()], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.ObjectProperty_Get)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -166,7 +166,7 @@ public class ObjectStaticPointerTests
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
-        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(HelperClass).ToGneedleType(), typeof(int).ToGneedleType()], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.ObjectProperty_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -211,7 +211,7 @@ public class ObjectStaticPointerTests
         var staticClass = (TypeHandler) handler.AddClass("LocalStatic", Ns, ClassFlags.Public).GetHandler();
         staticClass.Source.Fields.Add(new FieldDefinition("StaticField", FieldAttributes.Public | FieldAttributes.Static, asm.Source.MainModule.TypeSystem.Int32));
 
-        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(int).ToGneedleType()], MethodFlags.Public | MethodFlags.Static);
+        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(nameof(Templates.StaticField_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -262,7 +262,7 @@ public class ObjectStaticPointerTests
         staticClass.Source.Methods.Add(setter);
         staticClass.Source.Properties.Add(prop);
 
-        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(int).ToGneedleType()], MethodFlags.Public | MethodFlags.Static);
+        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(nameof(Templates.StaticProperty_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();

@@ -105,7 +105,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     }
 
     /// <inheritdoc/>
-    public IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, IType[] parameterTypes, MethodFlags methodFlags)
+    public IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, Parameter[] parameters, MethodFlags methodFlags)
     {
         // Set method attributes, and check the validity of method attributes according to method name.
         var methodAttribute = methodName switch
@@ -152,7 +152,8 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         }));
 
         // Add method parameters.
-        method.Parameters.AddRange(parameterTypes.Select(parameter => new ParameterDefinition(AssemblyHandler.ResolveParameterType(Source, parameter, method.GenericParameters))));
+        method.Parameters.AddRange(parameters.Select(parameter => new ParameterDefinition(parameter.Name, ParameterAttributes.None,
+            AssemblyHandler.ResolveParameterType(Source, parameter.Type, method.GenericParameters))));
 
         // Set method return type.
         method.ReturnType = AssemblyHandler.ResolveParameterType(Source, returnType, method.GenericParameters);

@@ -64,7 +64,7 @@ public class MethodInjectionTests
             "Run",
             typeof(int).ToGneedleType(),
             [],
-            [typeof(int).ToGneedleType(), typeof(int).ToGneedleType()],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.InvokeInstanceMethod)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -86,7 +86,7 @@ public class MethodInjectionTests
             "Run",
             typeof(int).ToGneedleType(),
             [],
-            [typeof(int).ToGneedleType(), typeof(int).ToGneedleType()],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
 
         Assert.DoesNotThrow(() => method.SetBody(Template(nameof(Templates.InvokeViaGenericDelegate))));
@@ -100,7 +100,7 @@ public class MethodInjectionTests
             "Run",
             typeof(int).ToGneedleType(),
             [],
-            [typeof(int).ToGneedleType(), typeof(int).ToGneedleType()],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.InvokeViaGenericDelegate)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();

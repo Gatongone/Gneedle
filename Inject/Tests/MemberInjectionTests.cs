@@ -76,7 +76,7 @@ public class MemberInjectionTests
         return host;
     }
 
-    private static Instruction[] Rewrite(TypeHandler host, string methodName, System.Type returnType, IType[] parameters, string template, MethodFlags flags)
+    private static Instruction[] Rewrite(TypeHandler host, string methodName, System.Type returnType, Parameter[] parameters, string template, MethodFlags flags)
     {
         var method = host.AddMethod(methodName, returnType.ToGneedleType(), [], parameters, flags);
         method.SetBody(Template(template));
@@ -101,7 +101,7 @@ public class MemberInjectionTests
     public void WriteInstanceField_Rewrites_To_Stfld()
     {
         var host = NewHostWithField("Value", isStatic: false);
-        var ins = Rewrite(host, "Write", typeof(void), [typeof(int).ToGneedleType()], nameof(Templates.WriteInstanceField), MethodFlags.Public);
+        var ins = Rewrite(host, "Write", typeof(void), [new Parameter(typeof(int).ToGneedleType())], nameof(Templates.WriteInstanceField), MethodFlags.Public);
 
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld), Is.True);
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld), Is.False);
@@ -123,7 +123,7 @@ public class MemberInjectionTests
     public void WriteStaticField_Rewrites_To_Stsfld()
     {
         var host = NewHostWithField("Value", isStatic: true);
-        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [typeof(int).ToGneedleType()], MethodFlags.Public | MethodFlags.Static);
+        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(nameof(Templates.WriteStaticField)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -158,7 +158,7 @@ public class MemberInjectionTests
     public void WriteInstanceProperty_Rewrites_To_Call_Setter()
     {
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: true, isVirtual: false);
-        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [typeof(int).ToGneedleType()], MethodFlags.Public);
+        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.WriteInstanceProperty)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -189,7 +189,7 @@ public class MemberInjectionTests
     public void WriteProperty_Without_Setter_Throws()
     {
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: false, isVirtual: false);
-        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [typeof(int).ToGneedleType()], MethodFlags.Public);
+        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
         Assert.Catch<System.ArgumentException>(() => method.SetBody(Template(nameof(Templates.WriteInstanceProperty))));
     }
@@ -227,7 +227,7 @@ public class MemberInjectionTests
     public void WriteGenericField_Rewrites_To_Stfld_On_GenericInstanceType()
     {
         var host = NewGenericHostWithField("value");
-        var method = host.AddMethod("Set", typeof(void).ToGneedleType(), [], [new GenericParameterType("T")], MethodFlags.Public);
+        var method = host.AddMethod("Set", typeof(void).ToGneedleType(), [], [new Parameter(new GenericParameterType("T"))], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.WriteGenericField)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -291,7 +291,7 @@ public class MemberInjectionTests
     public void WriteGenericProp_Rewrites_To_Call_Setter_With_Correct_Signature()
     {
         var host = NewGenericHostWithProperty("Prop", withGetter: true, withSetter: true);
-        var method = host.AddMethod("Set", typeof(void).ToGneedleType(), [], [new GenericParameterType("T")], MethodFlags.Public);
+        var method = host.AddMethod("Set", typeof(void).ToGneedleType(), [], [new Parameter(new GenericParameterType("T"))], MethodFlags.Public);
         method.SetBody(Template(nameof(Templates.WriteGenericProp)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 

@@ -13,7 +13,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     private readonly MethodFlags m_MethodFlags;
     private IType m_ReturnType = typeof(void).ToGneedleType();
     private readonly List<GenericParameterType> m_GenericParameters = [];
-    private readonly List<IType> m_ParameterTypes = [];
+    private readonly List<Parameter> m_Parameters = [];
     private DefaultMethodBody? m_DefaultBody;
     private MethodInfo? m_BodyMethod;
     private MethodInfo? m_AroundBodyMethod;
@@ -39,16 +39,23 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     }
 
     /// <inheritdoc/>
-    public IParameterDecorator WithParameter(IType parameterType)
+    public IParameterDecorator WithParameter(Parameter parameter)
     {
-        m_ParameterTypes.Add(parameterType);
+        m_Parameters.Add(parameter);
         return this;
     }
 
     /// <inheritdoc/>
-    public IParameterDecorator WithParameter(Type parameterType)
+    public IParameterDecorator WithParameter(string name, IType parameterType)
     {
-        m_ParameterTypes.Add(parameterType.ToGneedleType());
+        m_Parameters.Add(new Parameter(name, parameterType));
+        return this;
+    }
+
+    /// <inheritdoc/>
+    public IParameterDecorator WithParameter(string name, Type parameterType)
+    {
+        m_Parameters.Add(new Parameter(name, parameterType.ToGneedleType()));
         return this;
     }
 
@@ -101,7 +108,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
             m_MethodName,
             m_ReturnType,
             m_GenericParameters.ToArray(),
-            m_ParameterTypes.ToArray(),
+            m_Parameters.ToArray(),
             m_MethodFlags);
 
         // The method is added with a body which throws, so that a method which is added without a body is still
@@ -182,16 +189,25 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// <summary>
         /// Append parameter to the method.
         /// </summary>
-        /// <param name="parameterType">Parameter type.</param>
+        /// <param name="parameter">Parameter name and type.</param>
         /// <returns>Result for chains calling.</returns>
-        IParameterDecorator WithParameter(IType parameterType);
+        IParameterDecorator WithParameter(Parameter parameter);
 
         /// <summary>
-        /// Append parameter to the method from <see cref="System.Type"/>.
+        /// Append parameter to the method from <see cref="IType"/> under a name.
         /// </summary>
+        /// <param name="name">Parameter name.</param>
         /// <param name="parameterType">Parameter type.</param>
         /// <returns>Result for chains calling.</returns>
-        IParameterDecorator WithParameter(Type parameterType);
+        IParameterDecorator WithParameter(string name, IType parameterType);
+
+        /// <summary>
+        /// Append parameter to the method from <see cref="System.Type"/> under a name.
+        /// </summary>
+        /// <param name="name">Parameter name.</param>
+        /// <param name="parameterType">Parameter type.</param>
+        /// <returns>Result for chains calling.</returns>
+        IParameterDecorator WithParameter(string name, Type parameterType);
     }
 
     /// <summary>

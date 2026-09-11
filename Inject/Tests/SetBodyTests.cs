@@ -31,7 +31,7 @@ public class SetBodyTests
             "Add",
             typeof(int).ToGneedleType(),
             [],
-            [typeof(int).ToGneedleType(), typeof(int).ToGneedleType()],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
 
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Add))!);
@@ -53,7 +53,7 @@ public class SetBodyTests
             "Add",
             typeof(int).ToGneedleType(),
             [],
-            [typeof(int).ToGneedleType(), typeof(int).ToGneedleType()],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Add))!);
 
@@ -80,7 +80,7 @@ public class SetBodyTests
             "Echo",
             typeof(int).ToGneedleType(),
             [],
-            [typeof(int).ToGneedleType()],
+            [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Echo))!);
 

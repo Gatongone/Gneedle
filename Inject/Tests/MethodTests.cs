@@ -38,8 +38,8 @@ public class MethodTests
     {
         var host = NewClass();
         var method = host.AddMethod("Bar", MethodFlags.Public | MethodFlags.Static)
-            .WithParameter(typeof(string))
-            .WithParameter(typeof(int))
+            .WithParameter("text", typeof(string))
+            .WithParameter("count", typeof(int))
             .WithReturnType(typeof(int))
             .GetHandler();
 
@@ -57,7 +57,7 @@ public class MethodTests
         var host = NewClass();
         var method = host.AddMethod("Identity", MethodFlags.Public)
             .WithGenericParameter("T")
-            .WithParameter(new GenericParameterType("T"))
+            .WithParameter("value", new GenericParameterType("T"))
             .WithReturnType(new GenericParameterType("T"))
             .GetHandler();
 
@@ -78,7 +78,7 @@ public class MethodTests
         // type of another assembly, so both of the shapes which are not importable as-is are covered here.
         var assembly = Assembly.Create("DeclaredTypeAssembly");
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-        host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new NongenericType(typeof(MethodTests))], MethodFlags.Public);
+        host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(new NongenericType(typeof(MethodTests)))], MethodFlags.Public);
 
         using var stream = new MemoryStream();
         assembly.SaveTo(stream);

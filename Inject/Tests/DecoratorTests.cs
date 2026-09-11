@@ -34,8 +34,8 @@ public class DecoratorTests
     {
         var host = NewClass();
         var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
-                         .WithParameter(typeof(int))
-                         .WithParameter(typeof(string))
+                         .WithParameter("count", typeof(int))
+                         .WithParameter("label", typeof(string))
                          .WithReturnType(typeof(int))
                          .GetHandler();
 
@@ -44,6 +44,33 @@ public class DecoratorTests
         Assert.That(((MethodHandler) method).Source.IsStatic, Is.True);
         Assert.That(((MethodHandler) method).Source.ReturnType.FullName, Is.EqualTo(typeof(int).FullName));
         Assert.That(((MethodHandler) method).Source.Parameters.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void MethodDecorator_WithParameter_Names_The_Parameters_Of_The_Produced_Method()
+    {
+        var host = NewClass();
+        var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
+                         .WithParameter(new Parameter("left", typeof(int).ToGneedleType()))
+                         .WithParameter("right", typeof(int))
+                         .WithReturnType(typeof(int))
+                         .GetHandler();
+
+        var parameters = ((MethodHandler) method).Source.Parameters;
+        Assert.That(parameters[0].Name, Is.EqualTo("left"));
+        Assert.That(parameters[1].Name, Is.EqualTo("right"));
+        Assert.That(parameters[0].ParameterType.FullName, Is.EqualTo(typeof(int).FullName));
+    }
+
+    [Test]
+    public void MethodDecorator_WithParameter_Without_A_Name_Leaves_The_Parameter_Unnamed()
+    {
+        var host = NewClass();
+        var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
+                         .WithParameter(new Parameter(typeof(int).ToGneedleType()))
+                         .GetHandler();
+
+        Assert.That(((MethodHandler) method).Source.Parameters[0].Name, Is.Empty);
     }
 
     [Test]
@@ -63,8 +90,8 @@ public class DecoratorTests
     {
         var host = NewClass();
         var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
-                         .WithParameter(typeof(int))
-                         .WithParameter(typeof(int))
+                         .WithParameter("left", typeof(int))
+                         .WithParameter("right", typeof(int))
                          .WithReturnType(typeof(int))
                          .WithBody(AddTemplate())
                          .GetHandler();
@@ -80,8 +107,8 @@ public class DecoratorTests
 
         var host = NewClass();
         var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
-                         .WithParameter(typeof(int))
-                         .WithParameter(typeof(int))
+                         .WithParameter("left", typeof(int))
+                         .WithParameter("right", typeof(int))
                          .WithReturnType(typeof(int))
                          .WithBody(template)
                          .GetHandler();

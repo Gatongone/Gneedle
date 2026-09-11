@@ -172,7 +172,7 @@ namespace Gneedle.Inject.Test
             return assembly;
         }
 
-        private static MethodHandler Weave(string templateName, IType[]? parameterTypes = null)
+        private static MethodHandler Weave(string templateName, Parameter[]? parameterTypes = null)
         {
             var assembly = NewTarget();
             var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
@@ -233,7 +233,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Method()
         {
-            var method = Weave(nameof(Templates.ObjectMethod_StubReceiver), [typeof(Stub).ToGneedleType()]);
+            var method = Weave(nameof(Templates.ObjectMethod_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
             var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                              .FirstOrDefault(reference => reference.Name == nameof(Stub.Read));
 
@@ -347,7 +347,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Field()
         {
-            var method = Weave(nameof(Templates.ObjectField_StubReceiver), [typeof(Stub).ToGneedleType()]);
+            var method = Weave(nameof(Templates.ObjectField_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
             var field = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<FieldReference>()
                               .FirstOrDefault(reference => reference.Name == nameof(Stub.Field));
 
@@ -358,7 +358,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Property()
         {
-            var method = Weave(nameof(Templates.ObjectProperty_StubReceiver), [typeof(Stub).ToGneedleType()]);
+            var method = Weave(nameof(Templates.ObjectProperty_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
             var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                              .FirstOrDefault(reference => reference.Name == "get_Property");
 
@@ -398,7 +398,7 @@ namespace Gneedle.Inject.Test
         {
             var assembly = NewTarget();
             var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-            var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [typeof(Stub).ToGneedleType()],
+            var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(Stub).ToGneedleType())],
                                                         MethodFlags.Public | MethodFlags.Static);
 
             var parameter = method.Source.Parameters[0].ParameterType;
