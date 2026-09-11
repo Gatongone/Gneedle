@@ -47,8 +47,10 @@ public class GenericTokenTests
         // Return type templates.
         public static T_0 ReturnFirstTypeGeneric() => null!;
         public static T_1 ReturnSecondTypeGeneric() => null!;
+        public static T_10 ReturnTenthTypeGeneric() => null!;
         public static T_11 ReturnEleventhTypeGeneric() => null!;
         public static M_0 ReturnFirstMethodGeneric() => null!;
+        public static M_10 ReturnTenthMethodGeneric() => null!;
         public static M_1 ReturnSecondMethodGeneric() => null!;
 
         // Local variable templates. The local is kept alive with GC.KeepAlive so that the
@@ -162,6 +164,30 @@ public class GenericTokenTests
     }
 
     [Test]
+    public void ParseReturnType_Maps_T10_To_Tenth_Type_Generic_Parameter()
+    {
+        // Guards the tens of the token pattern: the alternation has to cover '10', which is the one index of the two
+        // tens which does not share its spelling with the single digit tokens.
+        var host = NewHost("T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10");
+        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [], nameof(Templates.ReturnTenthTypeGeneric));
+
+        Assert.That(method.Source.ReturnType, Is.SameAs(host.Source.GenericParameters[10]));
+        Assert.That(method.Source.ReturnType.Name, Is.EqualTo("T10"));
+    }
+
+    [Test]
+    public void ParseReturnType_With_T10_Token_But_Single_Type_Generic_Parameter_Throws()
+    {
+        // The token has to be parsed rather than taken as a type of its own, which is what throwing proves: an
+        // unparsed token would be imported as an ordinary type and set as the return type without any complaint.
+        var host = NewHost("T0");
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var token = host.Source.Module.ImportReference(typeof(T_10));
+
+        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+    }
+
+    [Test]
     public void ParseReturnType_Maps_T11_To_Eleventh_Type_Generic_Parameter()
     {
         // Guards the multi-digit alternation of the token pattern: 'T_11' must not be parsed as 'T_1'.
@@ -224,6 +250,29 @@ public class GenericTokenTests
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_0));
+
+        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+    }
+
+    [Test]
+    public void ParseReturnType_Maps_M10_To_Tenth_Method_Generic_Parameter()
+    {
+        // The method pattern is an expression of its own rather than the type one, so the tens are guarded here as well.
+        var host = NewHost();
+        var genericParameters = Enumerable.Range(0, 11).Select(index => new GenericParameterType($"U{index}")).ToArray();
+        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), genericParameters, nameof(Templates.ReturnTenthMethodGeneric));
+
+        Assert.That(method.Source.ReturnType, Is.SameAs(method.Source.GenericParameters[10]));
+        Assert.That(method.Source.ReturnType.Name, Is.EqualTo("U10"));
+    }
+
+    [Test]
+    public void ParseReturnType_With_M10_Token_But_Single_Method_Generic_Parameter_Throws()
+    {
+        // An unparsed token would be imported as an ordinary type and set as the return type without any complaint.
+        var host = NewHost();
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], [], MethodFlags.Public);
+        var token = host.Source.Module.ImportReference(typeof(M_10));
 
         Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
     }

@@ -161,10 +161,10 @@ internal static class CecilExtensions
     /// The token must be the whole type name. Otherwise a type which merely contains a token as its generic argument,
     /// just like <c>List&lt;Gneedle.Inject.T_0&gt;</c>, would be taken as the token itself.
     /// </remarks>
-    private static readonly Regex s_GenericTypeNamePattern = new(@$"^{nameof(Gneedle)}\.{nameof(Inject)}\.T_(1[1-9]|20|[0-9])$");
+    private static readonly Regex s_GenericTypeNamePattern = new(@$"^{nameof(Gneedle)}\.{nameof(Inject)}\.T_(1[0-9]|20|[0-9])$");
 
     /// <inheritdoc cref="s_GenericTypeNamePattern"/>
-    private static readonly Regex s_GenericMethodNamePattern = new(@$"^{nameof(Gneedle)}\.{nameof(Inject)}\.M_(1[1-9]|20|[0-9])$");
+    private static readonly Regex s_GenericMethodNamePattern = new(@$"^{nameof(Gneedle)}\.{nameof(Inject)}\.M_(1[0-9]|20|[0-9])$");
 
     /// <summary>
     /// Try to parse the index which the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] token of <paramref name="typeName"/> holds.
