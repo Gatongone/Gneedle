@@ -76,19 +76,18 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public ITypeDecorator WithBody(DefaultMethodBody body)
     {
-        // The body sources replace each other, so that the one which was asked for last is the applied one.
-        m_DefaultBody      = body;
-        m_BodyMethod       = null;
-        m_AroundBodyMethod = null;
+        // The two ways of describing a body replace each other, so that the one which was asked for last is the one which
+        // is applied. They are not replaced by the around body, which wraps whichever body the method holds by then.
+        m_DefaultBody = body;
+        m_BodyMethod  = null;
         return this;
     }
 
     /// <inheritdoc/>
     public ITypeDecorator WithBody(MethodInfo method)
     {
-        m_BodyMethod       = method;
-        m_DefaultBody      = null;
-        m_AroundBodyMethod = null;
+        m_BodyMethod  = method;
+        m_DefaultBody = null;
         return this;
     }
 
@@ -96,8 +95,6 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     public ITypeDecorator WithAroundBody(MethodInfo method)
     {
         m_AroundBodyMethod = method;
-        m_BodyMethod       = null;
-        m_DefaultBody      = null;
         return this;
     }
 
@@ -112,10 +109,12 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
             m_MethodFlags);
 
         // The method is added with a body which throws, so that a method which is added without a body is still
-        // loadable. The body which was asked for replaces it.
+        // loadable. The body which was asked for replaces it, and the around body is woven over whichever of the two the
+        // method holds by then.
         if (m_BodyMethod is { } methodInfo) handler.SetBody(methodInfo);
-        else if (m_AroundBodyMethod is { } aroundMethodInfo) handler.AroundBody(aroundMethodInfo);
         else if (m_DefaultBody is { } body) handler.SetBody(body);
+
+        if (m_AroundBodyMethod is { } aroundMethodInfo) handler.AroundBody(aroundMethodInfo);
 
         return handler;
     }
