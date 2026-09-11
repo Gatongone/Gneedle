@@ -1,27 +1,25 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <RootNamespace>Gneedle.Inject</RootNamespace>
-        <Version>0.0.1</Version>
         <LangVersion>preview</LangVersion>
         <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-        <NuSpecFile>Gneedle.Inject.nuspec</NuSpecFile>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Description>Gneedle.Inject is the weaver. It builds and rewrites the IL of .NET assemblies through Mono.Cecil, and weaves a body from a template, which is an ordinary C# method: the template reaches the members of the type it is woven into through the placeholders This, Base, Object, Static and Proceed, and names a generic parameter of that type through the tokens T_0 to T_20 and M_0 to M_20. Around advice keeps the body which the method already held and lets the template proceed into it. It is driven the same way from a code generator, from a tool of your own, or from the build task in Gneedle.Aspect.</Description>
+        <PackageTags>Inject</PackageTags>
+        <Title>Gneedle.Inject</Title>
+
+        <!-- The library is a reference of what it is packed into, so its assemblies go to lib for each framework, which
+             is what the pack carries by itself, and Mono.Cecil is named as a dependency of the package from the
+             reference which the project holds. -->
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Mono.Cecil" Version="0.11.5" />
     </ItemGroup>
 
-    <!-- The nuspec names the package and the build after the properties of the project which is being packed, which are
-         the ones the build holds rather than anything the file could read for itself. -->
-    <Target Name="SetNuspecProperties" BeforeTargets="GenerateNuspec">
-        <PropertyGroup>
-            <NuspecProperties>id=$(MSBuildProjectName);authors=$(Authors);version=$(PackageVersion);configuration=$(Configuration);</NuspecProperties>
-        </PropertyGroup>
-    </Target>
 </Project>

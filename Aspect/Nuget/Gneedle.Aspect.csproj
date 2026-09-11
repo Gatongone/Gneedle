@@ -1,29 +1,28 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <RootNamespace>Gneedle.Aspect</RootNamespace>
-        <NuSpecFile>Gneedle.Aspect.nuspec</NuSpecFile>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
         <LangVersion>12</LangVersion>
-        <Version>0.0.1</Version>
-        <Authors>Gatongone</Authors>
-        <Copyright>Gatongone</Copyright>
-        <PackageLicenseUrl>https://github.com/Gatongone/Gneedle/LICENSE.txt</PackageLicenseUrl>
-        <RepositoryUrl>https://github.com/Gatongone/Gneedle.git</RepositoryUrl>
-        <RepositoryType>Git</RepositoryType>
+
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Description>Gneedle.Aspect is the aspect weaver: an MSBuild task which applies the injectors of a project to the assembly which it builds, so that weaving needs no step of its own beyond the package. An injector is an attribute which implements one of the interfaces of Gneedle.Inject, for a method or a field or a property as well as for a type or for the assembly, and says what to do with the member it is put on. By the time the assembly is written the injectors have been applied and the attributes have done their work, so the task removes them with the types which declare them and drops the reference to the weaver, leaving nothing of the weaver in the assembly which was woven.</Description>
         <PackageTags>Aspect</PackageTags>
-        <AssemblyVersion>0.0.1</AssemblyVersion>
-        <FileVersion>0.0.1</FileVersion>
+        <Title>Gneedle.Aspect</Title>
+
+        <!-- The task is not a reference of the project which installs the package, it is what the build of that project
+             loads and runs, so nothing of it goes to lib. What it needs is packed under tools instead, beside the
+             assemblies which it loads at run time, which is where the build looks for them. -->
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackTools</TargetsForTfmSpecificContentInPackage>
 
         <!-- The build loads the task from the folder of the package which holds it and resolves the assemblies it is
              compiled against from that same folder, so they are packed beside it and have to be in the output of every
              framework which is packed. A project reference is copied there by itself, while the assemblies which come
              from a package are not copied out of one which is not an application. -->
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-        <Title>Gneedle.Aspect</Title>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -45,10 +44,23 @@
       <ProjectReference Include="..\..\Inject\Source\Gneedle.Inject.csproj" />
     </ItemGroup>
 
-    <Target Name="SetNuspecProperties" BeforeTargets="GenerateNuspec">
-        <PropertyGroup>
-            <NuspecProperties>id=$(MSBuildProjectName);authors=$(Authors);version=$(PackageVersion);configuration=$(Configuration);</NuspecProperties>
-        </PropertyGroup>
+    <ItemGroup>
+        <!-- What the project which installs the package reads: the props which point the build at the task, and the
+             target which runs it. Both are taken from the folder of the package which the build imports by itself. -->
+        <None Include="$(MSBuildProjectName).props" Pack="true" PackagePath="build\"/>
+        <None Include="$(MSBuildProjectName).targets" Pack="true" PackagePath="build\"/>
+    </ItemGroup>
+
+    <!-- The task and the assemblies which it loads at run time, packed for each framework which the build loads one of.
+         A framework which the build never loads the task of needs none of them: the props picks between the two. -->
+    <Target Name="PackTools">
+        <ItemGroup Condition="'$(TargetFramework)' == 'net472' Or '$(TargetFramework)' == 'netstandard2.1'">
+            <TfmSpecificPackageFile Include="$(TargetDir)$(MSBuildProjectName).dll" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)$(MSBuildProjectName).pdb" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)Gneedle.Inject.dll" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)Gneedle.Inject.pdb" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)Mono.Cecil*.dll" PackagePath="tools\$(TargetFramework)\"/>
+        </ItemGroup>
     </Target>
 
     <!-- The name of a task is qualified by the namespace of its type, while the project name is the one which a
