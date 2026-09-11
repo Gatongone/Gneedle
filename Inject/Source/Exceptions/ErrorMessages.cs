@@ -24,6 +24,7 @@ internal static class ErrorMessages
     internal const string INVALID_FIELD                     = "Invalid field: {0}.";
     internal const string INVALID_PROPERTY                  = "Invalid property: {0}.";
     internal const string INVALID_METHOD                    = "Invalid method: {0}.";
+    internal const string INVALID_TEMPLATE_PARAMETER        = "The template refers to the parameter of position {0}, which the method being woven does not hold. Method: {1}.";
     internal const string INVALID_GENERIC_PARAMETER         = "The generic parameter named {0} can't be found.";
     internal const string NON_GET_METHOD                    = "The property doesn't contain a get method. Property: {0}";
     internal const string NON_SET_METHOD                    = "The property doesn't contain a set method. Property: {0}";

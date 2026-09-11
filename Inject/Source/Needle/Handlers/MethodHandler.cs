@@ -436,9 +436,18 @@ internal sealed partial class MethodHandler : IMethodHandler
                 var importedMethod = Source.Module.ImportReference(methodRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
                 break;
+            // The parameter of the template is matched to the parameter of the same position rather than to the one of
+            // the same name: they are the parameters of two different methods, and the name which the template gave its
+            // own takes no part in it. The opcode is kept, because the position which is written is the one which the
+            // parameter holds in the method being woven, and that method accounts for its receiver by itself, just as
+            // the macro opcodes which GetLdargCode translates do.
             case ParameterDefinition parameterDef:
-                var targetParameterDef = Source.Parameters?.FirstOrDefault(p => p.Name == parameterDef.Name);
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, targetParameterDef));
+                if (parameterDef.Index >= Source.Parameters.Count)
+                {
+                    throw new ArgumentException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, parameterDef.Index, Source.FullName));
+                }
+
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, Source.Parameters[parameterDef.Index]));
                 break;
             // The type of the field may hold generic parameter tokens, just like List<Gneedle.Inject.T_0>::SomeField.
             // It may also hold a declaring type which stands for the type of another assembly, which is replaced below.

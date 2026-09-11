@@ -14,6 +14,10 @@ public class SetBodyTests
     {
         public static int Add(int a, int b) => a + b;
         public static int Echo(int x) => x;
+
+        // Five parameters, so the fifth is addressed by ldarg.s with a parameter as its operand rather than by one of the
+        // macro opcodes, which carry no operand at all.
+        public static int Sum(int a, int b, int c, int d, int e) => a + b + c + d + e;
     }
 
     private static (AssemblyHandler handler, TypeHandler host) NewHost()
@@ -68,6 +72,39 @@ public class SetBodyTests
         Assert.That(type, Is.Not.Null);
         var emitted = type.Methods.First(m => m.Name == "Add");
         Assert.That(emitted.Body.Instructions.Any(i => i.OpCode == OpCodes.Add), Is.True);
+    }
+
+    [Test]
+    public void SetBody_Maps_A_Parameter_Addressed_By_Operand_To_The_Parameter_Of_The_Same_Position()
+    {
+        // The parameters of the template and the parameters of the method are two different sets, and the name of one
+        // is not the name of the other. A parameter which the body addresses by operand is therefore matched by the
+        // position it holds, which is the only thing the two sets share. A body which is copied by name alone leaves
+        // the operand null where the names differ, which Cecil rejects while the instruction is built.
+        var assembly = Assembly.Create("SetBodyParameterOperandAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        var method = host.AddMethod("Sum", intType, [], [new Parameter(intType), new Parameter(intType), new Parameter(intType),
+                                                         new Parameter(intType), new Parameter(intType)],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Sum))!);
+
+        // 15 rather than 1, 5 or 10 tells the arguments apart from a body which reached the wrong parameters.
+        var sum = assembly.Load().GetType($"{Ns}.Calc")!.GetMethod("Sum")!;
+        Assert.That(sum.Invoke(null, [1, 2, 3, 4, 5]), Is.EqualTo(15));
+    }
+
+    [Test]
+    public void SetBody_With_More_Parameters_Than_The_Method_Holds_Throws()
+    {
+        var (_, host) = NewHost();
+        var method = host.AddMethod("Echo", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Sum))!));
+
+        Assert.That(thrown!.Message, Does.Contain("position"));
     }
 
     [Test]
