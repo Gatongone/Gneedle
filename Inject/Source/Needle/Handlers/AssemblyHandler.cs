@@ -23,8 +23,15 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// <param name="assembly">Handled target assembly.</param>
     internal AssemblyHandler(Assembly assembly)
     {
-        Assembly        = assembly;
-        m_AssemblyCache = new Dictionary<string, AssemblyDefinition> {{assembly.Source.FullName, assembly.Source}};
+        Assembly = assembly;
+
+        // The cache is the one of the resolver of the module, because resolution goes through that resolver and it only
+        // finds the assemblies which the cache holds. It is created with the module, which is why it is taken from there
+        // rather than made here, and it is seeded with the target assembly before anything is resolved.
+        m_AssemblyCache = (assembly.Source.MainModule.AssemblyResolver as CachedAssemblyResolver)?.Assemblies
+                       ?? new Dictionary<string, AssemblyDefinition>();
+        m_AssemblyCache[assembly.Source.FullName] = assembly.Source;
+
         AddDefaultTypes();
     }
 

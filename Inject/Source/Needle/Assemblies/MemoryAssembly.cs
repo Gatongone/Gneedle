@@ -10,46 +10,6 @@ internal sealed class MemoryAssembly : Assembly
     /// </summary>
     private const string DEFAULT_ASSEMBLY_VERSION = "1.0.0";
 
-    /// <summary>
-    /// Default dll module parameters with System.Private.Core library provider.
-    /// </summary>
-    private static readonly ModuleParameters s_DefaultDllModuleParameters = new()
-    {
-        Architecture               = SystemInfo.Architecture,
-        Kind                       = ModuleKind.Dll,
-        ReflectionImporterProvider = SPCLReflectionImporterProvider.Instance
-    };
-
-    /// <summary>
-    /// Default console module parameters with System.Private.Core library provider.
-    /// </summary>
-    private static readonly ModuleParameters s_DefaultConsoleModuleParameters = new()
-    {
-        Architecture               = SystemInfo.Architecture,
-        Kind                       = ModuleKind.Console,
-        ReflectionImporterProvider = SPCLReflectionImporterProvider.Instance
-    };
-
-    /// <summary>
-    /// Default net module parameters with System.Private.Core library provider.
-    /// </summary>
-    private static readonly ModuleParameters s_DefaultNetModuleParameters = new()
-    {
-        Architecture               = SystemInfo.Architecture,
-        Kind                       = ModuleKind.NetModule,
-        ReflectionImporterProvider = SPCLReflectionImporterProvider.Instance
-    };
-
-    /// <summary>
-    /// Default windows module parameters with System.Private.Core library provider.
-    /// </summary>
-    private static readonly ModuleParameters s_DefaultWindowsModuleParameters = new()
-    {
-        Architecture               = SystemInfo.Architecture,
-        Kind                       = ModuleKind.Windows,
-        ReflectionImporterProvider = SPCLReflectionImporterProvider.Instance
-    };
-
     /// <param name="assemblyName">
     /// A text string specifying the assembly's name.
     /// </param>
@@ -99,14 +59,23 @@ internal sealed class MemoryAssembly : Assembly
     /// <param name="moduleKind">Module kind.</param>
     /// <returns>Module parameters.</returns>
     /// <exception cref="ArgumentOutOfRangeException">Enum value out of range.</exception>
-    private static ModuleParameters GetModuleParameters(ModuleKind moduleKind) => moduleKind switch
+    private static ModuleParameters GetModuleParameters(ModuleKind moduleKind)
     {
-        ModuleKind.Dll       => s_DefaultDllModuleParameters,
-        ModuleKind.Console   => s_DefaultConsoleModuleParameters,
-        ModuleKind.Windows   => s_DefaultWindowsModuleParameters,
-        ModuleKind.NetModule => s_DefaultNetModuleParameters,
-        _                    => throw new ArgumentOutOfRangeException(nameof(moduleKind), moduleKind, null)
-    };
+        if (moduleKind is not (ModuleKind.Dll or ModuleKind.Console or ModuleKind.Windows or ModuleKind.NetModule))
+        {
+            throw new ArgumentOutOfRangeException(nameof(moduleKind), moduleKind, null);
+        }
+
+        return new ModuleParameters
+        {
+            Architecture               = SystemInfo.Architecture,
+            Kind                       = moduleKind,
+            ReflectionImporterProvider = SPCLReflectionImporterProvider.Instance,
+            // The resolver holds the assemblies which are read into the module, so that one which only exists in memory
+            // is resolvable. It is given here because the resolver of a module cannot be replaced once it was created.
+            AssemblyResolver = new CachedAssemblyResolver(new DefaultAssemblyResolver())
+        };
+    }
 
     /// <inheritdoc/>
     public override System.Reflection.Assembly Load()

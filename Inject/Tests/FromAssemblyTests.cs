@@ -434,6 +434,22 @@ namespace Gneedle.Inject.Test
         }
 
         [Test]
+        public void ResolveTypeFromAssembly_Resolves_An_Assembly_Which_Only_Exists_In_Memory()
+        {
+            // The dependency is never written to the file system, so the resolver of the module could not find it: that
+            // one searches the file system alone. It is reachable because the handler read it.
+            var dependency = Assembly.Create("InMemoryDependencyAssembly");
+            var dependencyType = (TypeHandler) ((AssemblyHandler) dependency.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
+
+            var assembly = NewTarget();
+            ((AssemblyHandler) assembly.Handler).GetCecilType(dependencyType.Source);
+
+            var definition = CecilExtensions.ResolveTypeFromAssembly(assembly.Source.MainModule, "InMemoryDependencyAssembly", $"{Ns}.Dependency");
+
+            Assert.That(definition.FullName, Is.EqualTo($"{Ns}.Dependency"));
+        }
+
+        [Test]
         public void ResolveTypeFromAssembly_With_An_Unknown_Assembly_Throws()
             => Assert.Throws<ArgumentException>(() => CecilExtensions.ResolveTypeFromAssembly(NewTarget().Source.MainModule, "No.Such.Assembly", $"{Ns}.{nameof(Stub)}"));
 
