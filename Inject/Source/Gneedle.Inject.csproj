@@ -8,9 +8,20 @@
         <LangVersion>preview</LangVersion>
         <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+        <NuSpecFile>Gneedle.Inject.nuspec</NuSpecFile>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Mono.Cecil" Version="0.11.5" />
     </ItemGroup>
+
+    <!-- The nuspec names the package and the build after the properties of the project which is being packed, which are
+         the ones the build holds rather than anything the file could read for itself. -->
+    <Target Name="SetNuspecProperties" BeforeTargets="GenerateNuspec">
+        <PropertyGroup>
+            <NuspecProperties>id=$(MSBuildProjectName);authors=$(Authors);version=$(PackageVersion);configuration=$(Configuration);</NuspecProperties>
+        </PropertyGroup>
+    </Target>
 </Project>
