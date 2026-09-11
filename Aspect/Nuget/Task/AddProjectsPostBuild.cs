@@ -29,28 +29,34 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
         foreach (var targetProject in projects)
         {
             var targetProjectName = Path.GetFileNameWithoutExtension(targetProject.FullPath);
-            ProcessProject(targetProject, targetProjectName);
-            targetProject.Save();
+            if (TryProcessProject(targetProject, targetProjectName))
+            {
+                targetProject.Save();
+            }
         }
 
         return true;
     }
 
-    private void ProcessProject(ProjectRootElement project, string projectName)
+    private bool TryProcessProject(ProjectRootElement project, string projectName)
     {
+        var dirty = false;
         if (!VerifyProject(project))
         {
             if (CleanElements(project))
             {
                 Log.LogMessageFromText($"Remove {TaskConstants.TARGET} target from {projectName}.csproj......", MessageImportance.High);
+                dirty = true;
             }
-            return;
+            return dirty;
         }
 
         if (AddElements(project))
         {
             Log.LogMessageFromText($"Add {TaskConstants.TARGET} target to {projectName}.csproj......", MessageImportance.High);
+            dirty = true;
         }
+        return dirty;
     }
 
     private bool VerifyProject(ProjectRootElement project) => project.ContainsReference(ProjectName) && !project.VerifyAspectDisable();
