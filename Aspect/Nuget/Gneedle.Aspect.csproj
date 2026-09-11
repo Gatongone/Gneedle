@@ -31,8 +31,14 @@
         </PropertyGroup>
     </Target>
 
-    <UsingTask TaskName="$(ProjectName).AddProjectsPostBuild" AssemblyFile="$(AspectTargetPath)"/>
-    <Target Name="SolutionScan" AfterTargets="PostBuildEvent" Condition="Exists('$(AspectTargetPath)')">
-        <AddProjectsPostBuild ProjectName="$(ProjectName)" SolutionPath="$(SolutionPath)" TargetPath="$(AspectTargetPath)"/>
+    <!-- The name of a task is qualified by the namespace of its type, while the project name is the one which a
+         reference to this project names. Nothing in this file declares $(ProjectName), so both were empty: the task was
+         found by its own name alone, and it was given no name to look for, which made it clean rather than add. -->
+    <UsingTask TaskName="$(RootNamespace).AddProjectsPostBuild" AssemblyFile="$(AspectTargetPath)"/>
+    <!-- The scan walks the solution which this project is built with, and a build of the project on its own has none:
+         it leaves the solution properties at the literal `*Undefined*`, which is not a path, so the scan is skipped
+         there rather than handed something the task cannot parse. -->
+    <Target Name="SolutionScan" AfterTargets="PostBuildEvent" Condition="Exists('$(SolutionPath)') And Exists('$(AspectTargetPath)')">
+        <AddProjectsPostBuild ProjectName="$(MSBuildProjectName)" SolutionPath="$(SolutionPath)" TargetPath="$(AspectTargetPath)"/>
     </Target>
 </Project>
