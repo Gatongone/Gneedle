@@ -323,7 +323,9 @@ internal static class CecilExtensions
         var separator = fullName.IndexOf('/');
         if (separator < 0) return module.Types.FirstOrDefault(type => type.FullName == fullName);
 
-        return FindType(module, fullName[..separator])?.NestedTypes.FirstOrDefault(nested => nested.FullName == fullName);
+        // The range operator is not used here, because System.Range is not a part of .NET Framework.
+        var declaringFullName = fullName.Substring(0, separator);
+        return FindType(module, declaringFullName)?.NestedTypes.FirstOrDefault(nested => nested.FullName == fullName);
     }
 
     /// <param name="typeReference">The type reference which could be Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20].</param>

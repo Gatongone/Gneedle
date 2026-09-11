@@ -6,12 +6,13 @@
         <RootNamespace>Gneedle.Aspect</RootNamespace>
         <NuSpecFile>Gneedle.Aspect.nuspec</NuSpecFile>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <TargetFrameworks>net5.0;netstandard2.1;</TargetFrameworks>
+        <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
         <LangVersion>12</LangVersion>
     </PropertyGroup>
 
     <PropertyGroup>
         <AspectOutPath Condition="$(MSBuildRuntimeType) == 'Core'">$(MSBuildThisFileDirectory)bin\$(Configuration)\netstandard2.1</AspectOutPath>
+        <AspectOutPath Condition="$(MSBuildRuntimeType) != 'Core'">$(MSBuildThisFileDirectory)bin\$(Configuration)\net472</AspectOutPath>
         <AspectTargetPath>$(AspectOutPath)\Gneedle.Aspect.dll</AspectTargetPath>
     </PropertyGroup>
 

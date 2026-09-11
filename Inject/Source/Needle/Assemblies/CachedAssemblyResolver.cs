@@ -1,3 +1,7 @@
+#if NETFRAMEWORK
+using System.Reflection;
+#endif
+
 namespace Gneedle.Inject;
 
 /// <summary>
@@ -8,6 +12,14 @@ namespace Gneedle.Inject;
 /// <param name="fallback">Resolver which finds the assemblies which were not read into the module.</param>
 internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAssemblyResolver
 {
+#if NETFRAMEWORK
+    /// <summary>
+    /// Cache of the non public <c>GetRawBytes</c> method of <see cref="System.Reflection.Assembly"/>, which hands the
+    /// bytes of the image of an assembly over.
+    /// </summary>
+    private static MethodInfo? s_GetRawBytes;
+#endif
+
     /// <summary>
     /// Assemblies which were read into the module, keyed by the full name of each.
     /// </summary>
@@ -47,34 +59,21 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAsse
     public void Dispose() => fallback.Dispose();
 
     /// <summary>
-    /// Read the assembly of <paramref name="name"/> which is loaded in the process from the file which it was loaded from.
+    /// Read the assembly of <paramref name="name"/> which is loaded in the process from the bytes of its image.
     /// </summary>
     /// <remarks>
-    /// Nothing hands the image of an assembly over on .NET 5 and later, so an assembly which was loaded from bytes, or
-    /// which belongs to no file at all, cannot be read here. The file of one which was loaded from a file outside the
-    /// directories which the resolver of the module searches can be read though, and that is the case this covers.
+    /// Nothing hands the image of an assembly over on .NET 5 and later, so an assembly which was loaded from bytes could
+    /// only be read back on .NET Framework. An assembly which was loaded from a file which the resolver of the module
+    /// could not search is read from that file, which is what the other runtimes cover.
     /// </remarks>
     /// <param name="name">Name of the assembly.</param>
-    /// <returns>The assembly definition, or null when no assembly of that name is loaded, or its file can't be read.</returns>
+    /// <returns>The assembly definition, or null when no assembly of that name is loaded, or its image can't be read.</returns>
     private AssemblyDefinition? ReadLoadedAssembly(AssemblyNameReference name)
     {
         var assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(assembly => assembly.GetName().Name == name.Name);
-        if (assembly == null) return null;
+        if (assembly == null || !TryGetAssemblyRawBytes(assembly, out var rawBytes)) return null;
 
-        // Asking a dynamic assembly for its location throws, and one which was loaded from bytes holds an empty one.
-        string location;
-        try
-        {
-            location = assembly.Location;
-        }
-        catch (NotSupportedException)
-        {
-            return null;
-        }
-
-        if (string.IsNullOrEmpty(location) || !File.Exists(location)) return null;
-
-        using var memoryStream = new MemoryStream(File.ReadAllBytes(location));
+        using var memoryStream = new MemoryStream(rawBytes);
         return AssemblyDefinition.ReadAssembly(memoryStream, new ReaderParameters
         {
             InMemory         = true,
@@ -82,5 +81,41 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAsse
             ReadingMode      = ReadingMode.Deferred,
             AssemblyResolver = this
         });
+    }
+
+    /// <summary>
+    /// Get the bytes of the image of <paramref name="assembly"/>, which no file necessarily backs.
+    /// </summary>
+    /// <param name="assembly">The assembly which need to get raw bytes.</param>
+    /// <param name="rawBytes">Bytes that is a COFF-based image containing the assembly.</param>
+    /// <returns>True when there is any way to get raw bytes.</returns>
+    private static bool TryGetAssemblyRawBytes(System.Reflection.Assembly assembly, out byte[] rawBytes)
+    {
+        rawBytes = Array.Empty<byte>();
+
+#if NETFRAMEWORK
+        // .NET Framework holds the bytes of the image itself, and hands them over through a non public method.
+        s_GetRawBytes ??= assembly.GetType().GetMethod("GetRawBytes", BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic);
+        if (s_GetRawBytes?.Invoke(assembly, null) is byte[] {Length: > 0} bytes)
+        {
+            rawBytes = bytes;
+            return true;
+        }
+#endif
+
+        // An assembly which was loaded from a file holds the path of it. A dynamic assembly holds none, and asking for
+        // the path of one throws, so the path is only read when the assembly was loaded from one.
+        try
+        {
+            var location = assembly.Location;
+            if (string.IsNullOrEmpty(location) || !File.Exists(location)) return false;
+
+            rawBytes = File.ReadAllBytes(location);
+            return true;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
     }
 }
