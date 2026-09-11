@@ -8,6 +8,22 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
         <LangVersion>12</LangVersion>
+        <Version>0.0.1</Version>
+        <Authors>Gatongone</Authors>
+        <Copyright>Gatongone</Copyright>
+        <PackageLicenseUrl>https://github.com/Gatongone/Gneedle/LICENSE.txt</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/Gatongone/Gneedle.git</RepositoryUrl>
+        <RepositoryType>Git</RepositoryType>
+        <PackageTags>Aspect</PackageTags>
+        <AssemblyVersion>0.0.1</AssemblyVersion>
+        <FileVersion>0.0.1</FileVersion>
+
+        <!-- The build loads the task from the folder of the package which holds it and resolves the assemblies it is
+             compiled against from that same folder, so they are packed beside it and have to be in the output of every
+             framework which is packed. A project reference is copied there by itself, while the assemblies which come
+             from a package are not copied out of one which is not an application. -->
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <Title>Gneedle.Aspect</Title>
     </PropertyGroup>
 
     <PropertyGroup>
