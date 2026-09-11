@@ -6,6 +6,25 @@ namespace Gneedle.Aspect;
 
 public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
 {
+    /// <summary>
+    /// The members which the injectors of a type are looked for on: every member which the type declares, whichever way
+    /// a caller could reach it, because a member which no injector names is left alone either way.<para/>
+    /// Only the members which the type declares itself are walked, because an injector is applied where its member is
+    /// declared. A member which a base type declares is walked with that base type, which the assembly holds as well
+    /// when the base type is one of its own, and a member of a base type which another assembly declares cannot be
+    /// written to from here at all.
+    /// </summary>
+    private const BindingFlags InjectedMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+                                               | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+    /// <summary>
+    /// The interfaces which an attribute implements to be asked to inject into a type.<para/>
+    /// Every one of them is looked for, which the kinds are told apart by afterwards: looking for the first alone left
+    /// the attributes of the other three on a type, where they were passed over without a word because nothing had
+    /// asked for them.
+    /// </summary>
+    private static readonly Type[] TypeInjectors = [typeof(ITypeInjector), typeof(IClassInjector), typeof(IStructInjector), typeof(IEnumInjector)];
+
     [Required] public string ProjectPath { get; private set; }
     [Required] public string TargetPath { get; private set; }
 
@@ -58,7 +77,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
             {
                 if (typeHandler is IMethodContainer methodContainer)
                 {
-                    foreach (var method in type.GetMethods())
+                    foreach (var method in type.GetMethods(InjectedMembers))
                     {
                         dirty |= ProcessMethodInjector(methodContainer, type, method);
                     }
@@ -66,7 +85,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
 
                 if (typeHandler is IFieldContainer fieldContainer)
                 {
-                    foreach (var field in type.GetFields())
+                    foreach (var field in type.GetFields(InjectedMembers))
                     {
                         dirty |= ProcessFieldInjector(fieldContainer, type, field);
                     }
@@ -74,7 +93,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
 
                 if (typeHandler is IPropertyContainer propertyContainer)
                 {
-                    foreach (var property in type.GetProperties())
+                    foreach (var property in type.GetProperties(InjectedMembers))
                     {
                         dirty |= ProcessPropertyInjector(propertyContainer, type, property);
                     }
@@ -106,7 +125,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     {
         var dirty = false;
         var typeAttributes = type.GetCustomAttributes(inherit: false)
-                                 .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(ITypeInjector)))
+                                 .Where(static item => item is Attribute attr && TypeInjectors.Any(injector => injector.IsInstanceOfType(attr)))
                                  .Cast<Attribute>()
                                  .ToArray();
 
@@ -124,33 +143,42 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
                 dirty = true;
             }
 
+            // A type injector applies to any type, while the three below apply to the kind which they name and to no
+            // other. One which is asked of a type of another kind is reported rather than passed over, because the
+            // injection it stands for does not happen, and a build which carried on would say that it had.
             if (typeAttribute is IClassInjector classInjector)
             {
-                if (typeHandler is IClassHandler classHandler)
+                if (typeHandler is not IClassHandler classHandler)
                 {
-                    classInjector.Inject(type, classHandler);
+                    Log.LogError($"Type '{type.FullName}' is not a class, which '{typeAttribute.GetType().FullName}' injects into.");
+                    continue;
                 }
 
+                classInjector.Inject(type, classHandler);
                 dirty = true;
             }
 
             if (typeAttribute is IStructInjector structInjector)
             {
-                if (typeHandler is IStructHandler structHandler)
+                if (typeHandler is not IStructHandler structHandler)
                 {
-                    structInjector.Inject(type, structHandler);
+                    Log.LogError($"Type '{type.FullName}' is not a struct, which '{typeAttribute.GetType().FullName}' injects into.");
+                    continue;
                 }
 
+                structInjector.Inject(type, structHandler);
                 dirty = true;
             }
 
             if (typeAttribute is IEnumInjector enumInjector)
             {
-                if (typeHandler is IEnumHandler enumHandler)
+                if (typeHandler is not IEnumHandler enumHandler)
                 {
-                    enumInjector.Inject(type, enumHandler);
+                    Log.LogError($"Type '{type.FullName}' is not an enum, which '{typeAttribute.GetType().FullName}' injects into.");
+                    continue;
                 }
 
+                enumInjector.Inject(type, enumHandler);
                 dirty = true;
             }
         }
