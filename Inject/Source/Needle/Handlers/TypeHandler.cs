@@ -52,9 +52,9 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     /// <inheritdoc/>
     public void AddAttribute(IType attributeType, params object[] arguments)
     {
-        var typeDef = AssemblyHandler.GetCecilType(attributeType).Definition;
-        var attribute = typeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
-        typeDef.CustomAttributes.Add(attribute);
+        var attributeDef = AssemblyHandler.GetCecilType(attributeType).Definition;
+        var attribute = attributeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
+        Source.CustomAttributes.Add(attribute);
     }
 
     /// <inheritdoc/>
@@ -169,19 +169,19 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     }
 
     /// <summary>
-    /// Add custom attribute to type definition.
+    /// Add custom attribute to this type definition.
     /// </summary>
     /// <param name="arguments">Arguments of the attribute constructor calling.</param>
     /// <typeparam name="TAttribute">Type of the attribute.</typeparam>
     public void AddAttribute<TAttribute>(params object[] arguments) where TAttribute : Attribute
     {
-        var typeDef = AssemblyHandler.GetCecilType(typeof(TAttribute)).Definition;
-        var attribute = typeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
-        typeDef.CustomAttributes.Add(attribute);
+        var attributeDef = AssemblyHandler.GetCecilType(typeof(TAttribute)).Definition;
+        var attribute = attributeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
+        Source.CustomAttributes.Add(attribute);
     }
 
     /// <summary>
-    /// Add custom attribute to type definition.
+    /// Add custom attribute to this type definition.
     /// </summary>
     /// <param name="attributeType">Type of the attribute.</param>
     /// <param name="arguments">Arguments of the attribute constructor calling.</param>
@@ -190,9 +190,9 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     {
         if (!typeof(Attribute).IsAssignableFrom(attributeType))
             throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_ASSIGN_TO_TARGET_TYPE, typeof(Attribute)));
-        var typeDef = AssemblyHandler.GetCecilType(attributeType).Definition;
-        var attribute = typeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
-        typeDef.CustomAttributes.Add(attribute);
+        var attributeDef = AssemblyHandler.GetCecilType(attributeType).Definition;
+        var attribute = attributeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
+        Source.CustomAttributes.Add(attribute);
     }
 
     public bool Equals(TypeHandler? other)

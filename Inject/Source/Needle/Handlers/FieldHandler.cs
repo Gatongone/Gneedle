@@ -27,8 +27,8 @@ internal class FieldHandler(FieldDefinition fieldDef, TypeHandler declaringTypeH
     /// <inheritdoc/>
     public void AddAttribute(IType attributeType, params object[] arguments)
     {
-        var typeDef = DeclaringTypeHandler.AssemblyHandler.GetCecilType(attributeType).Definition;
-        var attribute = typeDef.CreateCustomAttribute(DeclaringTypeHandler.AssemblyHandler.Assembly.Source.MainModule, arguments);
-        typeDef.CustomAttributes.Add(attribute);
+        var attributeDef = DeclaringTypeHandler.AssemblyHandler.GetCecilType(attributeType).Definition;
+        var attribute = attributeDef.CreateCustomAttribute(DeclaringTypeHandler.AssemblyHandler.Assembly.Source.MainModule, arguments);
+        Source.CustomAttributes.Add(attribute);
     }
 }

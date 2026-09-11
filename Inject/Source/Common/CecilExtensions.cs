@@ -71,8 +71,10 @@ internal static class CecilExtensions
             var method = attributeDefinition.Methods.FirstOrDefault(method => method.IsConstructor && method.Parameters.SameWith(argTypes));
             if (method == null) throw new ArgumentException(ErrorMessages.INVALID_PARAMETERS);
 
-            // Create custom attribute and append arguments.
-            var attribute = new CustomAttribute(method);
+            // Create custom attribute and append arguments. The constructor is imported rather than used as it is, because
+            // the attribute is declared by another assembly whenever the type which carries it is not the one which
+            // declares the attribute: Cecil writes a member of another module only through a reference to it.
+            var attribute = new CustomAttribute(module.ImportReference(method));
             for (var index = 0; index < argTypes.Length; index++)
             {
                 var argument = new CustomAttributeArgument(module.ImportReference(argTypes[index]), arguments[index]);
