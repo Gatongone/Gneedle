@@ -94,8 +94,10 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAsse
         rawBytes = Array.Empty<byte>();
 
 #if NETFRAMEWORK
-        // .NET Framework holds the bytes of the image itself, and hands them over through a non public method.
-        s_GetRawBytes ??= assembly.GetType().GetMethod("GetRawBytes", BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic);
+        // .NET Framework holds the bytes of the image itself, and hands them over through a non public method. The
+        // parameter types are named because the name alone matches the overloads of the base types as well, which makes
+        // the lookup ambiguous.
+        s_GetRawBytes ??= assembly.GetType().GetMethod("GetRawBytes", BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null);
         if (s_GetRawBytes?.Invoke(assembly, null) is byte[] {Length: > 0} bytes)
         {
             rawBytes = bytes;
