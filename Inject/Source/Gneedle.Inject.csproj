@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+    <!-- The metadata which both packages are published with, which the repository keeps in one file. It is imported
+         rather than found by walking up from here, because the file is not a Directory.Build.props and the two projects
+         which are packed are the only ones which need it. -->
+    <Import Project="..\..\Build\Package.props"/>
+
     <PropertyGroup>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>

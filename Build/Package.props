@@ -1,6 +1,7 @@
 <Project>
 
-    <!-- The metadata which the packages of this repository are published with, written once for both of them.
+    <!-- The metadata which the packages of this repository are published with, written once for both of them and
+         imported by each of the two projects which is packed: see the comment at the import of each of them.
          The two are released together at one version, because the aspect weaver depends on the weaver: that dependency
          carries the version of the reference which the project holds, which is the version written here. -->
     <PropertyGroup>
@@ -27,8 +28,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="$(MSBuildThisFileDirectory)LICENSE.txt" Pack="true" PackagePath="docs\"/>
-        <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="docs\"/>
+        <None Include="$(MSBuildThisFileDirectory)..\LICENSE.txt" Pack="true" PackagePath="docs\"/>
+        <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="docs\"/>
     </ItemGroup>
 
 </Project>
