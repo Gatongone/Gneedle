@@ -34,7 +34,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     {
         // The reflection assembly is loaded from the bytes rather than from the path. Loading it by path takes the file
         // for itself, and the file is held open for the write which follows, so the two cannot share it.
-        var runtimeAssembly = System.Reflection.Assembly.Load(File.ReadAllBytes(assemblyPath));
+        var runtimeAssembly = AssemblyLoader.LoadFromBytes(File.ReadAllBytes(assemblyPath));
 
         // The assembly is written back through the very stream it was read from, and that stream stays open until the
         // assembly is disposed, so it is saved before the end of this scope. Without the write the whole injection is

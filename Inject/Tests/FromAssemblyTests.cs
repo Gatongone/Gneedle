@@ -487,6 +487,85 @@ namespace Gneedle.Inject.Test
         }
 
         [Test]
+        public void ResolveTypeFromAssembly_Resolves_An_Assembly_Which_Was_Loaded_From_Bytes()
+        {
+            // The dependency is loaded from its bytes and its file is removed, so nothing of it is reachable from the
+            // file system: the resolver finds it through the image of the assembly which is loaded in the process.
+            var path = Path.Combine(Path.GetTempPath(), $"gneedle-bytes-{Guid.NewGuid():N}.dll");
+            var dependency = Assembly.Create("BytesDependencyAssembly");
+            ((AssemblyHandler) dependency.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
+            dependency.SaveTo(path);
+
+            var bytes = File.ReadAllBytes(path);
+            File.Delete(path);
+            System.Reflection.Assembly.Load(bytes);
+
+            var assembly = NewTarget();
+            var definition = CecilExtensions.ResolveTypeFromAssembly(assembly.Source.MainModule, "BytesDependencyAssembly", $"{Ns}.Dependency");
+
+            Assert.That(definition.FullName, Is.EqualTo($"{Ns}.Dependency"));
+        }
+
+        [Test]
+        public void AssemblyLoader_Remembers_The_Bytes_It_Loaded()
+        {
+            var path = Path.Combine(Path.GetTempPath(), $"gneedle-loader-{Guid.NewGuid():N}.dll");
+            var produced = Assembly.Create("LoaderProbeAssembly");
+            ((AssemblyHandler) produced.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
+            produced.SaveTo(path);
+
+            var expected = File.ReadAllBytes(path);
+            File.Delete(path);
+
+            var loaded = AssemblyLoader.LoadFromBytes(expected);
+
+            Assert.That(AssemblyLoader.TryGetSource(loaded, out var remembered), Is.True);
+            Assert.That(remembered, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void AssemblyLoader_Remembers_The_Bytes_Which_It_Was_Told_Of()
+        {
+            // The assembly is loaded by the test rather than by the loader, which is the case Remember is for.
+            var path = Path.Combine(Path.GetTempPath(), $"gneedle-remember-{Guid.NewGuid():N}.dll");
+            var produced = Assembly.Create("RememberProbeAssembly");
+            ((AssemblyHandler) produced.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
+            produced.SaveTo(path);
+
+            var expected = File.ReadAllBytes(path);
+            File.Delete(path);
+
+            var loaded = System.Reflection.Assembly.Load(expected);
+            Assert.That(AssemblyLoader.TryGetSource(loaded, out _), Is.False, "the bytes were remembered before they were told");
+
+            AssemblyLoader.Remember(loaded, expected);
+
+            Assert.That(AssemblyLoader.TryGetSource(loaded, out var remembered), Is.True);
+            Assert.That(remembered, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void ResolveTypeFromAssembly_Resolves_An_Assembly_Loaded_Through_AssemblyLoader()
+        {
+            // Reading the memory which an image was mapped to is a Windows layout, so the bytes which the loader
+            // remembered are the way this is covered on another runtime. The two paths cannot be told apart on Windows,
+            // where both would find the image.
+            var path = Path.Combine(Path.GetTempPath(), $"gneedle-loader-{Guid.NewGuid():N}.dll");
+            var dependency = Assembly.Create("LoaderDependencyAssembly");
+            ((AssemblyHandler) dependency.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
+            dependency.SaveTo(path);
+
+            var bytes = File.ReadAllBytes(path);
+            File.Delete(path);
+            AssemblyLoader.LoadFromBytes(bytes);
+
+            var assembly = NewTarget();
+            var definition = CecilExtensions.ResolveTypeFromAssembly(assembly.Source.MainModule, "LoaderDependencyAssembly", $"{Ns}.Dependency");
+
+            Assert.That(definition.FullName, Is.EqualTo($"{Ns}.Dependency"));
+        }
+
+        [Test]
         public void ResolveTypeFromAssembly_With_An_Unknown_Assembly_Throws()
             => Assert.Throws<ArgumentException>(() => CecilExtensions.ResolveTypeFromAssembly(NewTarget().Source.MainModule, "No.Such.Assembly", $"{Ns}.{nameof(Stub)}"));
 
