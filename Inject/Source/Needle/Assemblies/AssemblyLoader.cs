@@ -32,15 +32,62 @@ public static class AssemblyLoader
     private static readonly object s_ImagesGuard = new();
 
     /// <summary>
+    /// The assemblies of the weaver, which a target which was compiled against it refers to.
+    /// </summary>
+    private static readonly Dictionary<string, System.Reflection.Assembly> s_WeaverAssemblies = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [typeof(AssemblyLoader).Assembly.GetName().Name!] = typeof(AssemblyLoader).Assembly,
+        [typeof(TypeReference).Assembly.GetName().Name!]  = typeof(TypeReference).Assembly
+    };
+
+    /// <summary>
+    /// Whether the assemblies of the weaver are answered to an assembly which asks for them, which is done once.
+    /// </summary>
+    private static int s_WeaverAssembliesRegistered;
+
+    /// <summary>
     /// Load the assembly of <paramref name="rawBytes"/> and remember those bytes.
     /// </summary>
     /// <param name="rawBytes">Bytes that is a COFF-based image containing a managed assembly.</param>
     /// <returns>The loaded assembly.</returns>
     public static System.Reflection.Assembly LoadFromBytes(byte[] rawBytes)
     {
+        RegisterWeaverAssemblies();
+
         var assembly = System.Reflection.Assembly.Load(rawBytes);
         Remember(assembly, rawBytes);
         return assembly;
+    }
+
+    /// <summary>
+    /// Answer the requests of an assembly which was loaded from bytes for the assemblies of the weaver.
+    /// </summary>
+    /// <remarks>
+    /// The runtime resolves an assembly which was loaded from bytes from the ones which are already loaded and from the
+    /// ones which lie beside the process, while a build keeps the weaver in the folder of the package which holds it,
+    /// which is neither of the two. Waiting for the request to fail is what leaves the answer here rather than in the
+    /// resolution which the runtime would do by itself.<para/>
+    /// The assemblies are answered with the ones which are loaded rather than read again from the folder they lie in,
+    /// because a type of the target which implements an interface of the weaver has to implement the very interface
+    /// which the weaver holds: a second copy of the assembly would hold a second interface, and a type of it would
+    /// implement that one.
+    /// </remarks>
+    private static void RegisterWeaverAssemblies()
+    {
+        if (Interlocked.Exchange(ref s_WeaverAssembliesRegistered, 1) != 0) return;
+        AppDomain.CurrentDomain.AssemblyResolve += (_, args) => FindWeaverAssembly(args.Name);
+    }
+
+    /// <summary>
+    /// The assembly of the weaver which <paramref name="name"/> names, or null when it names none of them.
+    /// </summary>
+    /// <param name="name">The name of the assembly which was asked for.</param>
+    private static System.Reflection.Assembly? FindWeaverAssembly(string name)
+    {
+        // The version is not compared, because the target and the weaver are read from the one state of the project and
+        // an assembly which the target was built against is the one which the weaver holds.
+        var simpleName = new System.Reflection.AssemblyName(name).Name;
+        return simpleName != null && s_WeaverAssemblies.TryGetValue(simpleName, out var assembly) ? assembly : null;
     }
 
     /// <summary>
