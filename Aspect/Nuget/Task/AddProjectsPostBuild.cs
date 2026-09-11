@@ -23,11 +23,16 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
     public override bool Execute()
     {
         var solution = SolutionFile.Parse(SolutionPath);
-        var projects = solution.ProjectsInOrder
-                               .Where(p => !ProjectName.Equals(p.ProjectName))
-                               .Select(p => ProjectRootElement.Open(p.AbsolutePath));
-        foreach (var targetProject in projects)
+        foreach (var project in solution.ProjectsInOrder)
         {
+            if (ProjectName.Equals(project.ProjectName)) continue;
+
+            // A solution folder stands in the solution beside the projects which it groups, and the path it holds is
+            // that folder, which is not a project file and cannot be read as one. A project which the solution names
+            // and the disk does not hold cannot be described either, and reading it is what would report it.
+            if (!File.Exists(project.AbsolutePath)) continue;
+
+            var targetProject = ProjectRootElement.Open(project.AbsolutePath);
             var targetProjectName = Path.GetFileNameWithoutExtension(targetProject.FullPath);
             if (TryProcessProject(targetProject, targetProjectName))
             {
