@@ -28,6 +28,16 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     [Required] public string ProjectPath { get; private set; }
     [Required] public string TargetPath { get; private set; }
 
+    /// <summary>
+    /// Whether the attributes which the injectors are read from, and the reference to the weaver which they name, are
+    /// kept in the assembly which is woven.<para/>
+    /// They are removed by default, so that the assembly which was woven does not carry the weaver. A project which
+    /// declares its attributes for another project to weave with keeps them, which it asks for with the property
+    /// <c>GneedleKeepWeaver</c>. The value is read as the text of that property, so that a project which was never given
+    /// one keeps nothing.
+    /// </summary>
+    public string? KeepWeaver { get; set; }
+
     public override bool Execute()
     {
         var project = ProjectRootElement.Open(ProjectPath);
@@ -36,7 +46,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
         if (project.VerifyAspectDisable()) return true;
 
         Log.LogMessageFromText($"Inject assembly: {TargetPath}", MessageImportance.High);
-        if (InjectAssemblies(TargetPath))
+        if (InjectAssemblies(TargetPath, KeepsTheWeaver()))
         {
             Log.LogMessageFromText($"Inject assembly: {TargetPath} success.", MessageImportance.High);
         }
@@ -51,7 +61,12 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
         return !Log.HasLoggedErrors;
     }
 
-    private bool InjectAssemblies(string assemblyPath)
+    /// <summary>
+    /// Whether the project asked for the weaver to be kept in the assembly which is woven.
+    /// </summary>
+    private bool KeepsTheWeaver() => string.Equals(KeepWeaver, "true", StringComparison.OrdinalIgnoreCase);
+
+    private bool InjectAssemblies(string assemblyPath, bool keepsTheWeaver)
     {
         // The reflection assembly is loaded from the bytes rather than from the path. Loading it by path takes the file
         // for itself, and the file is held open for the write which follows, so the two cannot share it.
@@ -102,8 +117,9 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
         }
 
         // The injectors are read from attributes which the project declares, and those attributes name the weaver, so
-        // the weaver is removed from the assembly once they have been applied to it.
-        dirty |= assemblyHandler.RemoveTheWeaver();
+        // the weaver is removed from the assembly once they have been applied to it. A project which declares them for
+        // another one to weave with keeps them, and keeps the weaver which they name.
+        if (!keepsTheWeaver) dirty |= assemblyHandler.RemoveTheWeaver();
 
         if (dirty) assembly.SaveTo(assemblyPath);
 

@@ -92,10 +92,10 @@ public class AssemblyInjectTests
     /// <summary>
     /// Run the task on an assembly, as the build runs it.
     /// </summary>
-    private static (bool Result, FakeBuildEngine Engine) Inject(string assemblyPath, string projectPath)
+    private static (bool Result, FakeBuildEngine Engine) Inject(string assemblyPath, string projectPath, string? keepWeaver = null)
     {
         var engine = new FakeBuildEngine();
-        var task = new AssemblyInject { BuildEngine = engine };
+        var task = new AssemblyInject { BuildEngine = engine, KeepWeaver = keepWeaver };
 
         // The parameters of a task are set by the build, which reaches them by reflection rather than through a setter:
         // the task declares them to be read by the build alone.
@@ -259,6 +259,24 @@ public class AssemblyInjectTests
         Assert.That(type, Is.Not.Null);
         Assert.That(type.Interfaces.Any(implementation => implementation.InterfaceType.FullName == typeof(IClassInjector).FullName), Is.False);
         Assert.That(type.Methods.Any(method => method.Name == nameof(IClassInjector.Inject)), Is.False);
+    }
+
+    [Test]
+    public void The_Weaver_Is_Kept_In_The_Assembly_Whose_Project_Asks_For_It()
+    {
+        // A project which declares its attributes for another one to weave with asks for them to be kept, and keeps the
+        // weaver which they name. The weaving itself is what it was: only the taking back of the weaver is left out.
+        var assembly = CopyOfTheTestAssembly();
+
+        Inject(assembly, Project(), keepWeaver: "true");
+
+        using var read = AssemblyDefinition.ReadAssembly(assembly);
+        Assert.That(read.MainModule.Types.Any(type => type.FullName == ThrowBodyAttributeName), Is.True, "the attribute was removed.");
+        Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "Gneedle.Inject"), Is.True, "the reference was dropped.");
+
+        var method = read.MainModule.GetType(TargetType)!.Methods.Single(method => method.Name == "Public");
+        Assert.That(method.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == ThrowBodyAttributeName), Is.True, "the mark was taken off.");
+        Assert.That(method.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.True, "the member was not injected into.");
     }
 
     [Test]

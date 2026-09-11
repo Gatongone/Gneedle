@@ -78,6 +78,10 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
         var injectTask = postBuild.RequireTask(nameof(AssemblyInject), out var isTaskAdd);
         injectTask.SetParameter(nameof(AssemblyInject.TargetPath), "$(TargetPath)");
         injectTask.SetParameter(nameof(AssemblyInject.ProjectPath), "$(ProjectPath)");
+
+        // The target which is written here runs in a project which does not read the props of the package, so the
+        // property is passed on where it is set and is left empty where it is not, which the task reads as its default.
+        injectTask.SetParameter(nameof(AssemblyInject.KeepWeaver), $"$({TaskConstants.KEEP})");
         return isTargetAdd || isTaskAdd;
     }
 
