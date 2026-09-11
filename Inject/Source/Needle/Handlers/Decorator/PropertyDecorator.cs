@@ -15,10 +15,8 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     private IType m_PropertyType = typeof(object).ToGneedleType();
     private DefaultPropertyBody? m_GetterBody;
     private MethodInfo? m_GetterBodyMethod;
-    private MethodInfo? m_GetterAroundBodyMethod;
     private DefaultPropertyBody? m_SetterBody;
     private MethodInfo? m_SetterBodyMethod;
-    private MethodInfo? m_SetterAroundBodyMethod;
 
     /// <summary>
     /// Create a decorator which describes a property before it is appended to the module.
@@ -51,8 +49,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     public IAccessorDecorator WithGetter(DefaultPropertyBody body)
     {
         // The two ways of describing a body replace each other, so that the one which was asked for last is the one which
-        // is applied. The around body is not one of them: it wraps whichever body the accessor holds by then. Both are
-        // held for one accessor alone, because a getter and a setter do not depend on each other.
+        // is applied. They are held for one accessor alone, because a getter and a setter do not depend on each other.
         m_GetterBody       = body;
         m_GetterBodyMethod = null;
         return this;
@@ -63,13 +60,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     {
         m_GetterBodyMethod = method;
         m_GetterBody       = null;
-        return this;
-    }
-
-    /// <inheritdoc/>
-    public IAccessorDecorator WithAroundGetter(MethodInfo method)
-    {
-        m_GetterAroundBodyMethod = method;
         return this;
     }
 
@@ -90,13 +80,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     }
 
     /// <inheritdoc/>
-    public IAccessorDecorator WithAroundSetter(MethodInfo method)
-    {
-        m_SetterAroundBodyMethod = method;
-        return this;
-    }
-
-    /// <inheritdoc/>
     public IPropertyHandler GetHandler()
     {
         var propertyType = m_TypeHandler.AssemblyHandler.ResolveParameterType(m_TypeHandler.Source, m_PropertyType);
@@ -104,9 +87,8 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         m_TypeHandler.Source.Properties.Add(propertyDef);
         var handler = new PropertyHandler(propertyDef, m_TypeHandler);
 
-        // The body of the accessor comes first, and the around body is woven over it afterwards. An accessor which was
-        // described no body at all is given one which throws, so that an around body has something to proceed into and
-        // so that a template which never reaches it is noticed at the call, as it is for a method.
+        // The body which was described is the one which is applied, and the accessor is created by the call which applies
+        // it, so a property whose accessor was described no body holds none of that accessor.
         if (m_GetterBodyMethod is { } getterBody)
         {
             handler.SetGetter(getterBody);
@@ -114,10 +96,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         else if (m_GetterBody is { } defaultGetterBody)
         {
             handler.SetGetter(defaultGetterBody);
-        }
-        else if (m_GetterAroundBodyMethod != null)
-        {
-            handler.SetGetter(DefaultPropertyBody.ThrowException);
         }
 
         if (m_SetterBodyMethod is { } setterBody)
@@ -127,10 +105,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         else if (m_SetterBody is { } defaultSetterBody)
         {
             handler.SetSetter(defaultSetterBody);
-        }
-        else if (m_SetterAroundBodyMethod != null)
-        {
-            handler.SetSetter(DefaultPropertyBody.ThrowException);
         }
 
         // Apply property flags to getter/setter method attributes. The flags always keep the special name which an
@@ -144,19 +118,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         if (propertyDef.SetMethod != null)
         {
             propertyDef.SetMethod.Attributes = methodAttrs;
-        }
-
-        // The weave runs last, for the two things which have to be settled before it can. An accessor has to hold a body
-        // to be woven around, and the flags have to be applied, because an abstract accessor holds none and because the
-        // generated method is static exactly when the accessor is.
-        if (m_GetterAroundBodyMethod is { } getterAroundBody)
-        {
-            handler.GetGetter()!.AroundBody(getterAroundBody);
-        }
-
-        if (m_SetterAroundBodyMethod is { } setterAroundBody)
-        {
-            handler.GetSetter()!.AroundBody(setterAroundBody);
         }
 
         return handler;
@@ -196,19 +157,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         IAccessorDecorator WithGetter(MethodInfo method);
 
         /// <summary>
-        /// Set the body of the getter to run around the body which it holds, which the template reaches through
-        /// <see cref="Proceed"/>.<para/>
-        /// The template keeps the signature of the getter, so it returns the type of the property and takes the
-        /// parameters of the getter, which are none unless the property is an indexer. The body which it wraps is the one
-        /// which <see cref="WithGetter(DefaultPropertyBody)"/> or <see cref="WithGetter(MethodInfo)"/> described, and a
-        /// body which throws when neither did, so that a getter which the template never reaches is noticed at the call.
-        /// </summary>
-        /// <param name="method">The template which holds the body to weave around.</param>
-        /// <returns>Result for chains calling.</returns>
-        /// <exception cref="ArgumentException">Thrown when the accessor cannot be woven around, or when the template does not match it.</exception>
-        IAccessorDecorator WithAroundGetter(MethodInfo method);
-
-        /// <summary>
         /// Append setter to the property, with the default body behavior.
         /// </summary>
         /// <param name="body">The default body of the setter.</param>
@@ -224,20 +172,6 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// <returns>Result for chains calling.</returns>
         /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the setter.</exception>
         IAccessorDecorator WithSetter(MethodInfo method);
-
-        /// <summary>
-        /// Set the body of the setter to run around the body which it holds, which the template reaches through
-        /// <see cref="Proceed"/>.<para/>
-        /// The template keeps the signature of the setter, so it returns void and takes the value of the property as
-        /// its last parameter, and the index of the property before it when the property is an indexer. The body which
-        /// it wraps is the one which <see cref="WithSetter(DefaultPropertyBody)"/> or <see cref="WithSetter(MethodInfo)"/>
-        /// described, and a body which throws when neither did, so that a setter which the template never reaches is
-        /// noticed at the call.
-        /// </summary>
-        /// <param name="method">The template which holds the body to weave around.</param>
-        /// <returns>Result for chains calling.</returns>
-        /// <exception cref="ArgumentException">Thrown when the accessor cannot be woven around, or when the template does not match it.</exception>
-        IAccessorDecorator WithAroundSetter(MethodInfo method);
     }
 
     /// <summary>

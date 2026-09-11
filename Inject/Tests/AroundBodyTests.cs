@@ -440,19 +440,22 @@ public class AroundBodyTests
 
     // endregion
 
-    // region The decorator
+    // region A method which the decorator added
 
     [Test]
-    public void MethodDecorator_WithAroundBody_Weaves_Around_The_Body_Which_Was_Added()
+    public void MethodDecorator_Around_Of_A_Method_It_Added_Proceeds_Into_The_Body_Which_Was_Added()
     {
         var assembly = Assembly.Create("AroundBodyDecoratorAssembly");
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+
+        // The decorator describes the body of the method alone, of which one part is the body it holds. A body is woven
+        // around through the handler, which is what holds one.
         var method = (MethodHandler) host.AddMethod("Add", MethodFlags.Public | MethodFlags.Static)
                                      .WithParameter("left", typeof(int))
                                      .WithParameter("right", typeof(int))
                                      .WithReturnType(typeof(int))
-                                     .WithAroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)))
                                      .GetHandler();
+        method.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
 
         // A method which is added carries a body which throws, which is the body the around template proceeds into.
         var generated = host.Source.Methods.Single(methodDef => methodDef.Name == ProceedMethodName);
@@ -460,32 +463,6 @@ public class AroundBodyTests
 
         // The method itself now calls the generated one rather than holding the throwing body.
         Assert.That(method.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.Name == ProceedMethodName), Is.True);
-    }
-
-    [Test]
-    public void MethodDecorator_WithBody_Then_WithAroundBody_Weaves_Around_The_Body_Which_Was_Described()
-    {
-        var assembly = Assembly.Create("AroundBodyDecoratorBothAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-
-        // Describing a body and asking for one to be woven around it are two statements rather than one chain, because
-        // every member of the body stage returns the end of the chain.
-        var decorator = host.AddMethod("Add", MethodFlags.Public | MethodFlags.Static)
-                            .WithParameter("left", typeof(int))
-                            .WithParameter("right", typeof(int))
-                            .WithReturnType(typeof(int));
-        decorator.WithBody(DefaultMethodBody.WithDefaultReturn);
-        decorator.WithAroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
-        var method = (MethodHandler) decorator.GetHandler();
-
-        // The body which was described moved to the generated method, so the around body wraps the default return rather
-        // than the throwing body which the method was added with.
-        var generated = host.Source.Methods.Single(methodDef => methodDef.Name == ProceedMethodName);
-        Assert.That(generated.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Initobj), Is.True);
-        Assert.That(generated.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.False);
-
-        // The method holds the template alone, so the body it was described with is not left behind in it as well.
-        Assert.That(method.Source.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Initobj), Is.False);
     }
 
     // endregion

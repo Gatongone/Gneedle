@@ -6,10 +6,30 @@ using MethodAttributes = Mono.Cecil.MethodAttributes;
 namespace Gneedle.Inject.Test;
 
 /// <summary>
-/// Templates for the accessors of a property, which live top level in the test assembly so that Cecil can resolve them
-/// from disk.<para/>
-/// They are static, which gives the getter no parameter and the setter the value alone, and that is the shape the
-/// accessors of the woven property have.
+/// Templates for the bodies of a property's accessors, which live top level in the test assembly so that Cecil can
+/// resolve them from disk.
+/// </summary>
+public static class PropertyBodyTemplates
+{
+    /// <summary>
+    /// The field which <see cref="RecordValue"/> writes, so that the body copied into a setter is told apart from the
+    /// body which the setter would otherwise hold.
+    /// </summary>
+    public static int Recorded;
+
+    /// <summary>
+    /// A body of the shape a getter has, which holds no call to an accessor.
+    /// </summary>
+    public static int GetConstant() => 42;
+
+    /// <summary>
+    /// A body of the shape a setter has, which holds no call to an accessor.
+    /// </summary>
+    public static void RecordValue(int value) => Recorded = value;
+}
+
+/// <summary>
+/// Templates which weave around the body of an accessor, which the template reaches through <see cref="Proceed"/>.
 /// </summary>
 public static class PropertyAroundTemplates
 {
@@ -20,34 +40,22 @@ public static class PropertyAroundTemplates
 
     /// <inheritdoc cref="GetThenAddsOne"/>
     public static void SetThenAddsOne(int value) => Proceed.Method<Action<int>>("set_Value")(value + 1);
-
-    /// <summary>
-    /// A body which holds no call to an accessor, so that the body of the accessor which was described and the body of
-    /// the template are told apart by the instructions they hold.
-    /// </summary>
-    public static int GetConstant() => 42;
-
-    /// <summary>
-    /// A template whose return type does not match the property, which the around body refuses.
-    /// </summary>
-    public static long GetWithAnotherReturnType() => 0L;
 }
 
 /// <summary>
-/// Tests for describing the bodies of a property's accessors through <see cref="PropertyDecorator"/>, which the chain
-/// does the way <see cref="MethodDecorator"/> describes the body of a method.<para/>
-/// The weaver itself needed nothing new for this: <see cref="IPropertyHandler.GetGetter"/> and
-/// <see cref="IPropertyHandler.GetSetter"/> hand back an <see cref="IMethodHandler"/>, whose
-/// <see cref="IMethodHandler.SetBody(MethodInfo)"/> and <see cref="IMethodHandler.AroundBody(MethodInfo)"/> have always
-/// applied to an accessor. What these tests cover is the entry point which was missing from the chain, and the order in
-/// which it has to be applied.
+/// Tests for describing the bodies of a property's accessors, both through <see cref="PropertyDecorator"/> and through
+/// the handlers which it hands back.<para/>
+/// A body is described through the chain, and a body is woven around through the <see cref="IMethodHandler"/> which
+/// <see cref="IPropertyHandler.GetGetter"/> and <see cref="IPropertyHandler.GetSetter"/> return. The chain describes
+/// the members being added, of which a body is one part, while weaving around is an operation on a body which the
+/// handler holds.
 /// </summary>
 [TestFixture]
 public class PropertyAccessorTests
 {
     private const string Ns = "Gneedle.Test.Generated";
 
-    private static MethodInfo Template(string name) => typeof(PropertyAroundTemplates).GetMethod(name)!;
+    private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
 
     /// <summary>
     /// Create a host which carries a constructor, so that an instance of it could be created once it is loaded.
@@ -79,9 +87,6 @@ public class PropertyAccessorTests
     private static MethodDefinition? ProceedOf(TypeHandler host, string accessorName)
         => host.Source.Methods.FirstOrDefault(method => method.Name == $"<{accessorName}>k__Proceed");
 
-    private static bool Calls(MethodDefinition method, string name)
-        => method.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.Name == name);
-
     private static bool Holds(MethodDefinition method, OpCode opcode)
         => method.Body.Instructions.Any(instruction => instruction.OpCode == opcode);
 
@@ -94,7 +99,7 @@ public class PropertyAccessorTests
 
         host.AddProperty("Value", PropertyFlags.Public)
             .WithType(typeof(int))
-            .WithGetter(Template(nameof(PropertyAroundTemplates.GetConstant)))
+            .WithGetter(Template(typeof(PropertyBodyTemplates), nameof(PropertyBodyTemplates.GetConstant)))
             .GetHandler();
 
         // The body of the template, rather than the one which reads the backing field.
@@ -103,59 +108,18 @@ public class PropertyAccessorTests
     }
 
     [Test]
-    public void PropertyDecorator_WithAroundGetter_Proceeds_Into_The_Throwing_Body_It_Was_Added_With()
+    public void PropertyDecorator_WithSetter_From_A_Template_Copies_The_Body()
     {
-        // Nothing was described for the getter to do, so it is created with a body which throws, which the template
-        // proceeds into. A body which throws is used rather than one which returns a value, so that a getter which the
-        // template never reaches is noticed at the call.
-        var (_, host) = NewHost("PropertyAroundThrowingGetterAssembly");
+        var (_, host) = NewHost("PropertySetterBodyAssembly");
 
         host.AddProperty("Value", PropertyFlags.Public)
             .WithType(typeof(int))
-            .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetThenAddsOne)))
+            .WithSetter(Template(typeof(PropertyBodyTemplates), nameof(PropertyBodyTemplates.RecordValue)))
             .GetHandler();
 
-        var proceed = ProceedOf(host, "get_Value");
-        Assert.That(proceed, Is.Not.Null);
-        Assert.That(Holds(proceed!, OpCodes.Newobj), Is.True);
-        Assert.That(Calls(GetterOf(host), proceed!.Name), Is.True);
-    }
-
-    [Test]
-    public void PropertyDecorator_WithAroundSetter_Proceeds_Into_The_Throwing_Body_It_Was_Added_With()
-    {
-        // The around body alone is enough to create the accessor, which is what this checks as much as the body.
-        var (_, host) = NewHost("PropertyAroundThrowingSetterAssembly");
-
-        host.AddProperty("Value", PropertyFlags.Public)
-            .WithType(typeof(int))
-            .WithAroundSetter(Template(nameof(PropertyAroundTemplates.SetThenAddsOne)))
-            .GetHandler();
-
-        var proceed = ProceedOf(host, "set_Value");
-        Assert.That(proceed, Is.Not.Null);
-        Assert.That(Holds(proceed!, OpCodes.Newobj), Is.True);
-        Assert.That(Calls(SetterOf(host), proceed!.Name), Is.True);
-    }
-
-    [Test]
-    public void PropertyDecorator_WithGetter_Then_WithAroundGetter_Weaves_Around_The_Body_Which_Was_Described()
-    {
-        var (_, host) = NewHost("PropertyAroundDescribedGetterAssembly");
-
-        host.AddProperty("Value", PropertyFlags.Public)
-            .WithType(typeof(int))
-            .WithGetter(DefaultPropertyBody.WithFieldOperation)
-            .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetThenAddsOne)))
-            .GetHandler();
-
-        // The body which was described moved to the proceed method, so it is there rather than in the getter, and it is
-        // that body rather than a throwing one.
-        var proceed = ProceedOf(host, "get_Value");
-        Assert.That(proceed, Is.Not.Null);
-        Assert.That(Holds(proceed!, OpCodes.Ldfld), Is.True);
-        Assert.That(Holds(proceed!, OpCodes.Newobj), Is.False);
-        Assert.That(Calls(GetterOf(host), proceed!.Name), Is.True);
+        // The body of the template, rather than the one which writes the backing field.
+        Assert.That(Holds(SetterOf(host), OpCodes.Stsfld), Is.True);
+        Assert.That(Holds(SetterOf(host), OpCodes.Stfld), Is.False);
     }
 
     [Test]
@@ -172,142 +136,83 @@ public class PropertyAccessorTests
             .GetHandler();
 
         Assert.That(Holds(GetterOf(host), OpCodes.Ldfld), Is.True);
-        Assert.That(ProceedOf(host, "get_Value"), Is.Null);
     }
 
     [Test]
-    public void PropertyDecorator_WithAroundGetter_Before_WithGetter_Wraps_The_Body_Which_Was_Described_Afterwards()
+    public void PropertyDecorator_WithGetter_Leaves_The_Setter_Alone()
     {
-        // The around body is not one of the two which replace each other: it wraps whichever body the accessor holds, so
-        // the order between the two kinds does not settle whether it is applied.
-        var (_, host) = NewHost("PropertyAroundBeforeGetterAssembly");
-
-        host.AddProperty("Value", PropertyFlags.Public)
-            .WithType(typeof(int))
-            .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetThenAddsOne)))
-            .WithGetter(DefaultPropertyBody.WithFieldOperation)
-            .GetHandler();
-
-        var proceed = ProceedOf(host, "get_Value");
-        Assert.That(proceed, Is.Not.Null);
-        Assert.That(Holds(proceed!, OpCodes.Ldfld), Is.True);
-        Assert.That(Holds(proceed!, OpCodes.Newobj), Is.False);
-    }
-
-    [Test]
-    public void PropertyDecorator_WithAroundGetter_Leaves_The_Setter_Alone()
-    {
-        // The bodies of the two accessors are described apart from each other, so the around body of the getter does not
-        // reach the setter.
-        var (_, host) = NewHost("PropertyAroundGetterAndSetterAssembly");
+        // The bodies of the two accessors are described apart from each other.
+        var (_, host) = NewHost("PropertyGetterAndSetterAssembly");
 
         host.AddProperty("Value", PropertyFlags.Public)
             .WithType(typeof(int))
             .WithSetter(DefaultPropertyBody.WithFieldOperation)
-            .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetThenAddsOne)))
+            .WithGetter(DefaultPropertyBody.WithFieldOperation)
             .GetHandler();
 
+        Assert.That(Holds(GetterOf(host), OpCodes.Ldfld), Is.True);
         Assert.That(Holds(SetterOf(host), OpCodes.Stfld), Is.True);
-        Assert.That(ProceedOf(host, "set_Value"), Is.Null);
     }
 
     #endregion
 
-    #region What the weave refuses
+    #region The body which the handler weaves around
 
     [Test]
-    public void PropertyDecorator_WithAroundGetter_Of_An_Abstract_Property_Throws()
+    public void PropertyGetter_AroundBody_Moves_The_Body_To_A_Generated_Method()
     {
-        // The flags are applied before the weave, so an accessor which the flags make abstract is refused rather than
-        // left holding a body and a proceed method of its own.
-        var (_, host) = NewHost("PropertyAroundAbstractAssembly");
+        var (_, host) = NewHost("PropertyGetterAroundAssembly");
+        var property = host.AddProperty("Value", PropertyFlags.Public)
+                           .WithType(typeof(int))
+                           .WithGetter(DefaultPropertyBody.WithFieldOperation)
+                           .GetHandler();
 
-        Assert.Throws<ArgumentException>(() => host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Abstract)
-                                                   .WithType(typeof(int))
-                                                   .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetThenAddsOne)))
-                                                   .GetHandler());
+        property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne)));
+
+        var proceed = ProceedOf(host, "get_Value");
+        Assert.That(proceed, Is.Not.Null);
+        Assert.That(Holds(proceed!, OpCodes.Ldfld), Is.True);
     }
 
     [Test]
-    public void PropertyDecorator_WithAroundGetter_On_A_Virtual_Property_Generates_A_Not_Virtual_Proceed()
+    public void PropertyGetter_AroundBody_Of_An_Abstract_Property_Throws()
+    {
+        // The flags are applied while the property is built, so an accessor which they make abstract holds no body to
+        // weave around by the time the handler is asked to.
+        var (_, host) = NewHost("PropertyAroundAbstractAssembly");
+        var property = host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Abstract)
+                           .WithType(typeof(int))
+                           .WithGetter(DefaultPropertyBody.WithFieldOperation)
+                           .GetHandler();
+
+        Assert.Throws<ArgumentException>(() => property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne))));
+    }
+
+    [Test]
+    public void PropertyGetter_AroundBody_On_A_Virtual_Property_Generates_A_Not_Virtual_Proceed()
     {
         // The flags make the accessor virtual, and the method which the body is moved to is generated apart from them.
         var (_, host) = NewHost("PropertyAroundVirtualAssembly");
+        var property = host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Virtual)
+                           .WithType(typeof(int))
+                           .WithGetter(DefaultPropertyBody.WithFieldOperation)
+                           .GetHandler();
 
-        host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Virtual)
-            .WithType(typeof(int))
-            .WithGetter(DefaultPropertyBody.WithFieldOperation)
-            .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetThenAddsOne)))
-            .GetHandler();
+        property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne)));
 
         Assert.That(GetterOf(host).IsVirtual, Is.True);
         Assert.That(ProceedOf(host, "get_Value")!.IsVirtual, Is.False);
     }
 
     [Test]
-    public void PropertyDecorator_WithAroundGetter_With_A_Template_Of_Another_Return_Type_Throws()
-    {
-        var (_, host) = NewHost("PropertyAroundMismatchAssembly");
-
-        Assert.Throws<ArgumentException>(() => host.AddProperty("Value", PropertyFlags.Public)
-                                                   .WithType(typeof(int))
-                                                   .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetWithAnotherReturnType)))
-                                                   .GetHandler());
-    }
-
-    #endregion
-
-    #region The woven accessor runs
-
-    [Test]
-    public void PropertyDecorator_WithAroundGetter_Runs_The_Getter_And_Returns_What_The_Template_Chose()
-    {
-        var (assembly, host) = NewHost("PropertyAroundGetterRunsAssembly");
-        host.AddProperty("Value", PropertyFlags.Public)
-            .WithType(typeof(int))
-            .WithGetter(DefaultPropertyBody.WithFieldOperation)
-            .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetThenAddsOne)))
-            .GetHandler();
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
-        var instance = Activator.CreateInstance(type)!;
-        type.GetField("<Value>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, 5);
-
-        // 5 is a getter which ran unchanged, 6 is one which the template wrapped, and 1 is one which never ran at all.
-        Assert.That(type.GetProperty("Value")!.GetValue(instance), Is.EqualTo(6));
-    }
-
-    [Test]
-    public void PropertyDecorator_WithAroundSetter_Runs_The_Setter_And_Writes_What_The_Template_Chose()
-    {
-        var (assembly, host) = NewHost("PropertyAroundSetterRunsAssembly");
-        host.AddProperty("Value", PropertyFlags.Public)
-            .WithType(typeof(int))
-            .WithGetter(DefaultPropertyBody.WithFieldOperation)
-            .WithSetter(DefaultPropertyBody.WithFieldOperation)
-            .WithAroundSetter(Template(nameof(PropertyAroundTemplates.SetThenAddsOne)))
-            .GetHandler();
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
-        var instance = Activator.CreateInstance(type)!;
-        type.GetProperty("Value")!.SetValue(instance, 5);
-
-        var written = type.GetField("<Value>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(instance);
-
-        // 5 is a setter which ran unchanged, and 6 is one which the template wrapped: the value reached the proceed call
-        // through the Action<int> which the template names.
-        Assert.That(written, Is.EqualTo(6));
-    }
-
-    [Test]
-    public void PropertyDecorator_WithAroundGetter_Survives_A_Save_And_ReRead()
+    public void PropertyGetter_AroundBody_Survives_A_Save_And_ReRead()
     {
         var (assembly, host) = NewHost("PropertyAroundSaveAssembly");
-        host.AddProperty("Value", PropertyFlags.Public)
-            .WithType(typeof(int))
-            .WithGetter(DefaultPropertyBody.WithFieldOperation)
-            .WithAroundGetter(Template(nameof(PropertyAroundTemplates.GetThenAddsOne)))
-            .GetHandler();
+        var property = host.AddProperty("Value", PropertyFlags.Public)
+                           .WithType(typeof(int))
+                           .WithGetter(DefaultPropertyBody.WithFieldOperation)
+                           .GetHandler();
+        property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne)));
 
         using var stream = new MemoryStream();
         assembly.SaveTo(stream);
@@ -319,6 +224,50 @@ public class PropertyAccessorTests
 
         Assert.That(proceed, Is.Not.Null);
         Assert.That(proceed!.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldfld), Is.True);
+    }
+
+    #endregion
+
+    #region The woven accessor runs
+
+    [Test]
+    public void PropertyGetter_AroundBody_Runs_The_Getter_And_Returns_What_The_Template_Chose()
+    {
+        var (assembly, host) = NewHost("PropertyGetterRunsAssembly");
+        var property = host.AddProperty("Value", PropertyFlags.Public)
+                           .WithType(typeof(int))
+                           .WithGetter(DefaultPropertyBody.WithFieldOperation)
+                           .GetHandler();
+        property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne)));
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetField("<Value>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, 5);
+
+        // 5 is a getter which ran unchanged, 6 is one which the template wrapped, and 1 is one which never ran at all.
+        Assert.That(type.GetProperty("Value")!.GetValue(instance), Is.EqualTo(6));
+    }
+
+    [Test]
+    public void PropertySetter_AroundBody_Runs_The_Setter_And_Writes_What_The_Template_Chose()
+    {
+        var (assembly, host) = NewHost("PropertySetterRunsAssembly");
+        var property = host.AddProperty("Value", PropertyFlags.Public)
+                           .WithType(typeof(int))
+                           .WithGetter(DefaultPropertyBody.WithFieldOperation)
+                           .WithSetter(DefaultPropertyBody.WithFieldOperation)
+                           .GetHandler();
+        property.GetSetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.SetThenAddsOne)));
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetProperty("Value")!.SetValue(instance, 5);
+
+        var written = type.GetField("<Value>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(instance);
+
+        // 5 is a setter which ran unchanged, and 6 is one which the template wrapped: the value reached the proceed call
+        // through the Action<int> which the template names.
+        Assert.That(written, Is.EqualTo(6));
     }
 
     #endregion

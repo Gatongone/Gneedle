@@ -92,22 +92,4 @@ public static class PropertyExtensions
     /// <returns>Result for chains calling.</returns>
     public static PropertyDecorator.IAccessorDecorator WithSetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
         => decorator.WithSetter(delegation.Method);
-
-    /// <summary>
-    /// Set the body of the getter to run around the body which it holds, from the delegate which holds the template.
-    /// </summary>
-    /// <param name="decorator">The decorator which describes the property.</param>
-    /// <param name="delegation">The delegate which holds the body to weave around.</param>
-    /// <returns>Result for chains calling.</returns>
-    public static PropertyDecorator.IAccessorDecorator WithAroundGetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
-        => decorator.WithAroundGetter(delegation.Method);
-
-    /// <summary>
-    /// Set the body of the setter to run around the body which it holds, from the delegate which holds the template.
-    /// </summary>
-    /// <param name="decorator">The decorator which describes the property.</param>
-    /// <param name="delegation">The delegate which holds the body to weave around.</param>
-    /// <returns>Result for chains calling.</returns>
-    public static PropertyDecorator.IAccessorDecorator WithAroundSetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
-        => decorator.WithAroundSetter(delegation.Method);
 }
