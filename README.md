@@ -10,6 +10,8 @@ An aspect weaver usually asks you to learn a language of its own to say what sho
 
 Where an assembly is built decides that form of it is used, and the two are the same weaver: a .NET project is given an MSBuild task, and a Unity project is given an IL post processor, that the compilation pipeline of the editor runs. Both of them read the same attributes, drive the same library, and leave the same assembly behind.
 
+> This project is still in the early stages of development, which means that I may break compatibility in order to fix major bugs or include critical features.
+
 # Principle
 
 A template is an ordinary method. It reaches the members of the type it will be woven into through placeholders, that are calls into `Gneedle.Inject` — `This`, `Base`, `Object`, `Static`, `Proceed` — and it names a generic parameter of the target through the tokens `T_0`–`T_20` and `M_0`–`M_20`. Every placeholder throws when it runs, because a template is never meant to run as it is written; the weaver replaces each of them with the member it names.
