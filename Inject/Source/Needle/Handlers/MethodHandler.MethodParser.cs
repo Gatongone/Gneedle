@@ -29,13 +29,13 @@ partial class MethodHandler
     /// <param name="currentIndex">Index of the instruction of `ldstr {member_name}`.</param>
     /// <param name="filter">The final instruction's container.</param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
-    /// <exception cref="InvalidILException">Thrown when the nearest 'callvirt' to `Ldstr {field_name}` doesn't exist.</exception>
+    /// <exception cref="InvalidILException">Thrown when the instructions around the name of the member are not the call which it stands for.</exception>
     /// <exception cref="ArgumentException">Thrown when the method is invalid.</exception>
     private void ParseMethod(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         if ((filter.Target[currentIndex + 1].Operand as GenericInstanceMethod)?.GenericArguments.FirstOrDefault() is not { } delegateRef)
         {
-            throw new InvalidILException();
+            throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
 
         if (delegateRef is not TypeDefinition delegateDef)

@@ -65,7 +65,7 @@ public sealed class ValuableMember
     /// So you should use <see cref="ValuableMember{T}"/> if you is going to avoid it.
     /// </remarks>
     /// <returns>The value from the field or property.</returns>
-    /// <exception cref="InjectionNotEffectiveException">Thrown when the injection doesn't work.</exception>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the member is called where it is written rather than from a member which was woven.</exception>
     public object Get() => throw new InjectionNotEffectiveException();
 
     /// <summary>
@@ -75,7 +75,7 @@ public sealed class ValuableMember
     /// <inheritdoc cref="ValuableMember.Get()"/>
     /// </remarks>
     /// <param name="value">The value need to set.</param>
-    /// <exception cref="InjectionNotEffectiveException">Thrown when the injection doesn't work.</exception>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the member is called where it is written rather than from a member which was woven.</exception>
     public void Set(object value) => throw new InjectionNotEffectiveException();
 }
 
@@ -89,14 +89,14 @@ public sealed class ValuableMember<T>
     /// Get the value from the field or property.
     /// </summary>
     /// <returns>The value from the field or property.</returns>
-    /// <exception cref="InjectionNotEffectiveException">Thrown when the injection doesn't work.</exception>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the member is called where it is written rather than from a member which was woven.</exception>
     public T Get() => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Set the value to the field or property.
     /// </summary>
     /// <param name="value">The value need to set.</param>
-    /// <exception cref="InjectionNotEffectiveException">Thrown when the injection doesn't work.</exception>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the member is called where it is written rather than from a member which was woven.</exception>
     public void Set(T value) => throw new InjectionNotEffectiveException();
 }
 

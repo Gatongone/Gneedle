@@ -112,17 +112,17 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         {
             ".ctor" => // Instance constructor cannot be static, abstract or virtual, and can only be public, private or protected.
                 methodFlags.HasFlag(MethodFlags.Static)
-                    ? throw new ArgumentException("Instance constructor with static attribute.")
+                    ? throw new ArgumentException(string.Format(ErrorMessages.INSTANCE_CONSTRUCTOR_IS_STATIC, methodName))
                     : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
-                        ? throw new ArgumentException("Instance constructor with abstract or virtual attribute.")
+                        ? throw new ArgumentException(string.Format(ErrorMessages.INSTANCE_CONSTRUCTOR_IS_ABSTRACT_OR_VIRTUAL, methodName))
                         : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
             ".cctor" => // Static constructor must be static, and can only be private, and cannot be abstract or virtual.
                 methodFlags.HasFlag(MethodFlags.Protected) || methodFlags.HasFlag(MethodFlags.Internal)
-                    ? throw new ArgumentException("Static constructor can only be private.")
+                    ? throw new ArgumentException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_NOT_PRIVATE, methodName))
                     : !methodFlags.HasFlag(MethodFlags.Static)
-                        ? throw new ArgumentException("Static constructor must have static attribute.")
+                        ? throw new ArgumentException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_NOT_STATIC, methodName))
                         : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
-                            ? throw new ArgumentException("Static constructor with abstract or virtual attribute.")
+                            ? throw new ArgumentException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_ABSTRACT_OR_VIRTUAL, methodName))
                             : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
             _ => methodFlags.ToMethodAttributes()
         };

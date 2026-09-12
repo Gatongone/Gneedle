@@ -8,6 +8,20 @@ namespace Gneedle.Inject;
 /// </summary>
 internal static class ErrorMessages
 {
+    // Invalid operation exceptions:
+
+    /// <summary>
+    /// A member which stands for a member of the type which is woven was called where it is written rather than from a
+    /// body which the weaving wrote, so nothing replaced it with the member it stands for.
+    /// </summary>
+    internal const string INJECTION_NOT_EFFECTIVE = "The member stands for a member of the type which is woven, and it was called where it is written rather than from a member which was woven. Nothing replaced it.";
+
+    /// <summary>
+    /// The instructions which a template compiles a symbol of it into are not the shape which the weaving reads. The
+    /// placeholder is the name of the member which the symbol names.
+    /// </summary>
+    internal const string INVALID_IL = "The instructions which the template compiles the member into are not the shape which the weaving reads. Member: {0}.";
+
     // Not supported exceptions:
 
     /// <summary>
@@ -156,6 +170,81 @@ internal static class ErrorMessages
     /// types, so what the argument holds is not what the member is written against.
     /// </summary>
     internal const string LDARG0_CONVERT_FAILED = "The template and the member which is woven are of different types, so the first argument of the template cannot be loaded in it. Instruction: ldarg.0";
+
+    /// <summary>
+    /// The array which the image of an assembly was to be written to is smaller than the image. The placeholder is the
+    /// number of bytes which the image takes.
+    /// </summary>
+    internal const string ARRAY_TOO_SMALL_FOR_ASSEMBLY = "The array is too small to hold the assembly. Required size: {0} bytes.";
+
+    /// <summary>
+    /// The array which the symbols of an assembly were to be written to is smaller than the symbols. The placeholder is
+    /// the number of bytes which the symbols take.
+    /// </summary>
+    internal const string ARRAY_TOO_SMALL_FOR_SYMBOLS = "The array is too small to hold the symbols of the assembly. Required size: {0} bytes.";
+
+    /// <summary>
+    /// The member which was given to describe the getter of a property is not of the shape a getter has, which is one
+    /// which takes no parameter and hands a value of the type of the property back. The placeholders are the property
+    /// and the type of it.
+    /// </summary>
+    internal const string GETTER_MEMBER_DOES_NOT_MATCH = "A member which describes the getter takes no parameter and hands back a value of the type of the property. Property: {0}, Type: {1}.";
+
+    /// <summary>
+    /// The member which was given to describe the setter of a property is not of the shape a setter has, which is one
+    /// which takes the value it sets as its last parameter, of the type of the property. The placeholders are the
+    /// property and the type of it.
+    /// </summary>
+    internal const string SETTER_MEMBER_DOES_NOT_MATCH = "A member which describes the setter takes the value which is set as the last of its parameters, of the type of the property. Property: {0}, Type: {1}.";
+
+    /// <summary>
+    /// A body which reads or writes a field was described for a property which is an indexer, which such a body has no
+    /// form for: an indexer takes an index beside the value, and the field a body names is a single one. The
+    /// placeholder is the property.
+    /// </summary>
+    internal const string INDEXER_TAKES_NO_FIELD_OPERATION = "A body which reads or writes a field cannot be described for an indexer. Property: {0}.";
+
+    /// <summary>
+    /// A constructor of an instance was declared with the flag a static member carries, which a constructor of an
+    /// instance has not. The placeholder is the name of the constructor.
+    /// </summary>
+    internal const string INSTANCE_CONSTRUCTOR_IS_STATIC = "A constructor of an instance cannot be static. Method: {0}.";
+
+    /// <summary>
+    /// A constructor of an instance was declared abstract or virtual, which a constructor of an instance is neither.
+    /// The placeholder is the name of the constructor.
+    /// </summary>
+    internal const string INSTANCE_CONSTRUCTOR_IS_ABSTRACT_OR_VIRTUAL = "A constructor of an instance cannot be abstract or virtual. Method: {0}.";
+
+    /// <summary>
+    /// A constructor of a type was declared with a visibility other than private, which the constructor of a type can
+    /// only be. The placeholder is the name of the constructor.
+    /// </summary>
+    internal const string STATIC_CONSTRUCTOR_IS_NOT_PRIVATE = "A constructor of a type can only be private. Method: {0}.";
+
+    /// <summary>
+    /// A constructor of a type was declared without the flag a static member carries, which the constructor of a type
+    /// has to carry. The placeholder is the name of the constructor.
+    /// </summary>
+    internal const string STATIC_CONSTRUCTOR_IS_NOT_STATIC = "A constructor of a type has to be static. Method: {0}.";
+
+    /// <summary>
+    /// A constructor of a type was declared abstract or virtual, which the constructor of a type is neither. The
+    /// placeholder is the name of the constructor.
+    /// </summary>
+    internal const string STATIC_CONSTRUCTOR_IS_ABSTRACT_OR_VIRTUAL = "A constructor of a type cannot be abstract or virtual. Method: {0}.";
+
+    /// <summary>
+    /// The value which a member of an enum was given is of a type which the underlying type of an enum cannot hold. The
+    /// placeholder is the name of the type of the value.
+    /// </summary>
+    internal const string INVALID_ENUM_UNDERLYING_TYPE = "The value which the member of the enum was given is of a type which an enum cannot hold. Type: {0}, which has to be one of sbyte, byte, short, ushort, int, uint, long or ulong.";
+
+    /// <summary>
+    /// A token names a generic parameter at a position which neither the type being woven nor the member declares. The
+    /// placeholders are the token and the name of what its parameters were counted on.
+    /// </summary>
+    internal const string GENERIC_PARAMETER_OUT_OF_RANGE = "The token names a generic parameter at a position which is not declared. Token: {0}, Declared by: {1}.";
 
     // Around body exceptions:
 

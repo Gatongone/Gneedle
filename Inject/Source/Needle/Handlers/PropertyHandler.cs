@@ -115,7 +115,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         // and the default property body with field operation only supports parameterless setter method.
         if (Source.GetMethod.Parameters.Count > 0)
         {
-            throw new ArgumentException("The default property body with field operation does not support indexer.");
+            throw new ArgumentException(string.Format(ErrorMessages.INDEXER_TAKES_NO_FIELD_OPERATION, Name));
         }
 
         // Default property body with field operation, which means the getter will return the value of a backing field,
@@ -187,7 +187,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         // "value" parameter; only an indexer setter adds an extra "index" parameter.
         if (m_Setter.Source.Parameters.Count > 1)
         {
-            throw new ArgumentException("The default property body with field operation does not support indexer.");
+            throw new ArgumentException(string.Format(ErrorMessages.INDEXER_TAKES_NO_FIELD_OPERATION, Name));
         }
 
         // Default property body with field operation, which means the getter will return the value of a backing field,
@@ -244,7 +244,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             || (paramLength == 1 && !TypeName.HasSameName(body.GetParameters()[0].ParameterType, Source.PropertyType))
             || (paramLength == 2 && !TypeName.HasSameName(body.GetParameters()[1].ParameterType, Source.PropertyType)))
         {
-            throw new ArgumentException($"The provided delegate must have exactly one parameter of type {Source.PropertyType.FullName}.");
+            throw new ArgumentException(string.Format(ErrorMessages.SETTER_MEMBER_DOES_NOT_MATCH, Name, Source.PropertyType.FullName));
         }
 
         if (Source.SetMethod == null)
@@ -281,7 +281,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     {
         // Indexer has more than one parameter or the parameter type does not match the property type.
         if (body.GetParameters().Length > 1 || !TypeName.HasSameName(body.ReturnType, Source.PropertyType))
-            throw new ArgumentException($"The provided delegate must have no parameters and return a value of type {Source.PropertyType.FullName}.");
+            throw new ArgumentException(string.Format(ErrorMessages.GETTER_MEMBER_DOES_NOT_MATCH, Name, Source.PropertyType.FullName));
 
         if (Source.GetMethod == null)
         {

@@ -211,7 +211,7 @@ internal static class CecilExtensions
             if (parameters == null) return false;
             if (index > parameters.Length - 1)
             {
-                throw new IndexOutOfRangeException($"'M_{index}' index out of Generic parameters count from {type.FullName}");
+                throw new IndexOutOfRangeException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", type.FullName));
             }
 
             parameter = parameters[index];
@@ -228,7 +228,7 @@ internal static class CecilExtensions
         if (typeDef == null) return false;
         if (index > typeDef.GenericParameters.Count - 1)
         {
-            throw new IndexOutOfRangeException($"'T_{index}' index out of Generic parameters count from {typeDef.FullName}");
+            throw new IndexOutOfRangeException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
         }
 
         parameter = typeDef.GenericParameters[index];
@@ -365,7 +365,7 @@ internal static class CecilExtensions
                 var typeParameters = typeDef.GenericParameters;
                 if (index > typeParameters.Count - 1)
                 {
-                    throw new IndexOutOfRangeException($"'T_{index}' index out of Generic parameters count from {typeDef.FullName}");
+                    throw new IndexOutOfRangeException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
                 }
 
                 parameter = typeParameters[index];
@@ -377,7 +377,7 @@ internal static class CecilExtensions
             var methodParameters = methodDef.GenericParameters;
             if (index > methodParameters.Count - 1)
             {
-                throw new IndexOutOfRangeException($"'M_{index}' index out of Generic parameters count from {methodDef.FullName}");
+                throw new IndexOutOfRangeException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", methodDef.FullName));
             }
 
             parameter = methodParameters[index];

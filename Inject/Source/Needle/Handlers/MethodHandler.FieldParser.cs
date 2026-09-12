@@ -37,14 +37,14 @@ partial class MethodHandler
     /// <param name="currentIndex">Index of the instruction of `ldstr {member_name}`.</param>
     /// <param name="filter">The final instruction's container.</param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
-    /// <exception cref="InvalidILException">Thrown when the nearest 'callvirt' to `Ldstr {field_name}` doesn't exist.</exception>
+    /// <exception cref="InvalidILException">Thrown when the instructions around the name of the member are not the call which it stands for.</exception>
     /// <exception cref="ArgumentException">Thrown when the field is invalid.</exception>
     private void ParseField(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         // Can't convert 'callvirt' to `Ldstr {field_name}`, because it doesn't even exist.
         if (!TryGetNextGetOrSet(filter.Target, currentIndex + 2, out var isGet, out var callvirtIndex))
         {
-            throw new InvalidILException();
+            throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
 
         // Detect Object/Static patterns to determine skip count and declaring type.

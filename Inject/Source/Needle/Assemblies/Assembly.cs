@@ -209,7 +209,7 @@ public abstract class Assembly : IDisposable
         SaveTo(assemblyStream);
         if (assemblyBytes.Length < assemblyStream.Length)
         {
-            throw new ArgumentException($"The provided byte array is too small to hold the assembly data. Required size: {assemblyStream.Length} bytes.", nameof(assemblyBytes));
+            throw new ArgumentException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_ASSEMBLY, assemblyStream.Length), nameof(assemblyBytes));
         }
 
         var length = assemblyStream.Length;
@@ -232,12 +232,12 @@ public abstract class Assembly : IDisposable
         SaveTo(assemblyStream, symbolStream);
         if (assemblyBytes.Length < assemblyStream.Length)
         {
-            throw new ArgumentException($"The provided byte array is too small to hold the assembly data. Required size: {assemblyStream.Length} bytes.", nameof(assemblyBytes));
+            throw new ArgumentException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_ASSEMBLY, assemblyStream.Length), nameof(assemblyBytes));
         }
 
         if (symbolBytes.Length < symbolStream.Length)
         {
-            throw new ArgumentException($"The provided byte array is too small to hold the symbol data. Required size: {symbolStream.Length} bytes.", nameof(symbolBytes));
+            throw new ArgumentException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_SYMBOLS, symbolStream.Length), nameof(symbolBytes));
         }
 
         var (assemblyWrote, symbolWrote) = (assemblyStream.Length, symbolStream.Length);

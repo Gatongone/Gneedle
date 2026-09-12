@@ -1,4 +1,4 @@
-namespace Gneedle.Inject;
+﻿namespace Gneedle.Inject;
 
 /// <summary>
 /// Handler for an enum type definition, providing access to the underlying Cecil type.
@@ -41,7 +41,7 @@ internal class EnumHandler(AssemblyHandler assemblyHandler, TypeDefinition sourc
     {
         if (value is not (sbyte or byte or short or ushort or int or uint or long or ulong))
         {
-            throw new ArgumentException($"Invalid enum underlying type: {value.GetType().Name}. Must be one of: sbyte, byte, short, ushort, int, uint, long, ulong.");
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_ENUM_UNDERLYING_TYPE, value.GetType().Name));
         }
     }
 }
