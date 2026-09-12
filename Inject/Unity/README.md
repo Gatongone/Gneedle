@@ -4,7 +4,9 @@ The weaver of [Gneedle](https://github.com/Gatongone/Gneedle). It rewrites the I
 [Mono.Cecil](https://github.com/jbevain/cecil), and weaves a body into it from a template, which is an ordinary C#
 method: the template reaches the members of the type it is woven into through the placeholders `This`, `Base`,
 `Object`, `Static` and `Proceed`, and names a generic parameter of that type through the tokens `T_0`–`T_20` and
-`M_0`–`M_20`.
+`M_0`–`M_20`. A template may also be a lambda which captures what it is written among, and what it captured is written
+into the assembly which is woven as the value itself, which
+[the readme of the repository](https://github.com/Gatongone/Gneedle/blob/main/README.md#principle) describes in full.
 
 This package is that weaver as a package of Unity. It is carried as a plugin of the project rather than as source which
 is compiled into it, so that every assembly of the project can reach it: the assemblies which are woven are woven by
