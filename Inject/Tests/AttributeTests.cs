@@ -199,49 +199,6 @@ public class AttributeTests
 
     #endregion
 
-    #region Assembly
-
-    [Test]
-    public void AddAttribute_On_The_Assembly_Puts_The_Attribute_On_The_Assembly()
-    {
-        var assembly = Assembly.Create("AssemblyAttributeAssembly");
-        var handler = (AssemblyHandler) assembly.Handler;
-
-        handler.AddAttribute<MarkerAttribute>("hello");
-
-        var attribute = assembly.Source.CustomAttributes.Single(carried => carried.AttributeType.FullName == typeof(MarkerAttribute).FullName);
-        Assert.That(attribute.ConstructorArguments[0].Value, Is.EqualTo("hello"));
-        Assert.That(CarriesMarker(handler.GetCecilType(typeof(MarkerAttribute)).Definition), Is.False);
-    }
-
-    [Test]
-    public void ContainsAttribute_On_The_Assembly_Reports_The_Attribute_Which_Was_Added()
-    {
-        var assembly = Assembly.Create("AssemblyAttributeContainsAssembly");
-        var handler = (AssemblyHandler) assembly.Handler;
-
-        Assert.That(handler.ContainsAttribute<MarkerAttribute>(), Is.False);
-        handler.AddAttribute(typeof(MarkerAttribute), "hello");
-        Assert.That(handler.ContainsAttribute<MarkerAttribute>(), Is.True);
-    }
-
-    [Test]
-    public void AddAttribute_On_The_Assembly_Produces_An_Assembly_Which_Reads_Back()
-    {
-        var assembly = Assembly.Create("AssemblyAttributeReadableAssembly");
-        ((AssemblyHandler) assembly.Handler).AddAttribute<MarkerAttribute>("hello");
-
-        using var stream = new MemoryStream();
-        assembly.SaveTo(stream);
-        stream.Position = 0;
-
-        var reread = AssemblyDefinition.ReadAssembly(stream);
-        var attribute = reread.MainModule.Assembly.CustomAttributes.Single(carried => carried.AttributeType.FullName == typeof(MarkerAttribute).FullName);
-        Assert.That(attribute.ConstructorArguments[0].Value, Is.EqualTo("hello"));
-    }
-
-    #endregion
-
     #region Method
 
     [Test]

@@ -56,17 +56,6 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         }
     }
 
-    /// <inheritdoc/>
-    public bool ContainsAttribute(IType attributeType) => Assembly.Source.CustomAttributes.Any(attribute => TypeName.HasSameName(attribute.AttributeType, attributeType));
-
-    /// <inheritdoc/>
-    public void AddAttribute(IType attributeType, params object[] arguments)
-    {
-        var attributeDef = GetCecilType(attributeType).Definition;
-        var attribute = attributeDef.CreateCustomAttribute(Assembly.Source.MainModule, arguments);
-        Assembly.Source.CustomAttributes.Add(attribute);
-    }
-
     /// <summary>
     /// Verify that referencing <paramref name="targetAssembly"/> does not make the assemblies reference each other,
     /// which cannot be represented in metadata.
