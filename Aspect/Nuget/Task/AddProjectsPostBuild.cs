@@ -71,7 +71,7 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
         {
             if (CleanElements(project))
             {
-                Log.LogMessageFromText($"Remove {TaskConstants.TARGET} target from {projectName}.csproj......", MessageImportance.High);
+                Log.LogMessageFromText(string.Format(TaskMessages.TARGET_TAKEN_OUT, projectName), MessageImportance.High);
                 dirty = true;
             }
             return dirty;
@@ -79,7 +79,7 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
 
         if (AddElements(project))
         {
-            Log.LogMessageFromText($"Add {TaskConstants.TARGET} target to {projectName}.csproj......", MessageImportance.High);
+            Log.LogMessageFromText(string.Format(TaskMessages.TARGET_WRITTEN, projectName), MessageImportance.High);
             dirty = true;
         }
         return dirty;

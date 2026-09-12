@@ -1,4 +1,4 @@
-using Gneedle.Inject;
+﻿using Gneedle.Inject;
 
 namespace Gneedle.Aspect;
 
@@ -45,14 +45,14 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
 
         if (project.VerifyAspectDisable()) return true;
 
-        Log.LogMessageFromText($"Inject assembly: {TargetPath}", MessageImportance.High);
+        Log.LogMessageFromText(string.Format(TaskMessages.WEAVING_ASSEMBLY, TargetPath), MessageImportance.High);
         if (InjectAssemblies(TargetPath, KeepsTheWeaver()))
         {
-            Log.LogMessageFromText($"Inject assembly: {TargetPath} success.", MessageImportance.High);
+            Log.LogMessageFromText(string.Format(TaskMessages.ASSEMBLY_WOVEN, TargetPath), MessageImportance.High);
         }
         else
         {
-            Log.LogMessageFromText($"Inject assembly: {TargetPath} no changes.", MessageImportance.High);
+            Log.LogMessageFromText(string.Format(TaskMessages.ASSEMBLY_LEFT_AS_IT_WAS, TargetPath), MessageImportance.High);
         }
 
         // The project is only read, to tell whether the aspect is disabled, so it is not saved back. A member which an

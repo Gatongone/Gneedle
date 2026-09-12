@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Gneedle.Inject;
 using Mono.Cecil;
 using Assembly = Gneedle.Inject.Assembly;
@@ -233,7 +233,7 @@ public class AssemblyInjectTests
         var (result, engine) = Inject(assembly, Project());
 
         Assert.That(result, Is.True);
-        Assert.That(engine.Messages.Any(message => message.Contains("no changes")), Is.True, string.Join(Environment.NewLine, engine.Messages));
+        Assert.That(engine.Messages.Any(message => message.Contains("left as it was")), Is.True, string.Join(Environment.NewLine, engine.Messages));
         Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although no injector changed it");
     }
 
