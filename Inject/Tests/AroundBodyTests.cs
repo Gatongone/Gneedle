@@ -10,7 +10,7 @@ namespace Gneedle.Inject.Test;
 
 /// <summary>
 /// Signature of the method which the templates below proceed through, which a template names as the generic argument
-/// of <see cref="Proceed.Method{TMethod}(string)"/>.
+/// of <see cref="Proceed.Method{TMethod}()"/>.
 /// </summary>
 public delegate int IntBinaryOp(int left, int right);
 
@@ -22,17 +22,33 @@ public static class AroundTemplates
     /// <summary>
     /// Double both arguments, proceed with them, and add one to what the original returned.
     /// </summary>
-    public static int DoubleThenProceedThenAddOne(int left, int right) => Proceed.Method<IntBinaryOp>("Add")(left * 2, right * 2) + 1;
+    public static int DoubleThenProceedThenAddOne(int left, int right) => Proceed.Method<IntBinaryOp>()(left * 2, right * 2) + 1;
+
+    /// <summary>
+    /// Proceed with the arguments which this template was given, and add one to what the original returned. The call
+    /// names no signature, so nothing of the member is written out a second time.
+    /// </summary>
+    public static int ProceedWithItsOwnArgumentsThenAddOne(int left, int right) => Proceed.Invoke<int>() + 1;
 
     /// <summary>
     /// Proceed with the arguments as they are.
     /// </summary>
-    public static int ProceedOnly(int left, int right) => Proceed.Method<IntBinaryOp>("Add")(left, right);
+    public static int ProceedOnly(int left, int right) => Proceed.Method<IntBinaryOp>()(left, right);
+
+    /// <summary>
+    /// Call for a type which the member does not hand back, which the weaving refuses rather than writing a call the
+    /// runtime would find disagreeing with what the caller reads off the stack.
+    /// </summary>
+    public static int ProceedWithAnotherHandedBackType(int left, int right)
+    {
+        Proceed.Invoke<long>();
+        return left + right;
+    }
 
     /// <summary>
     /// A template whose return type does not match the method, which the around body refuses.
     /// </summary>
-    public static long ProceedWithAnotherReturnType(int left, int right) => Proceed.Method<IntBinaryOp>("Add")(left, right);
+    public static long ProceedWithAnotherReturnType(int left, int right) => Proceed.Method<IntBinaryOp>()(left, right);
 
     /// <summary>
     /// A template whose parameters do not match the method, which the around body refuses.
@@ -50,7 +66,31 @@ public class AroundInstanceTemplates
     /// <summary>
     /// Double both arguments, proceed with them, and add one to what the original returned.
     /// </summary>
-    public int DoubleThenProceedThenAddOne(int left, int right) => Proceed.Method<IntBinaryOp>("Add")(left * 2, right * 2) + 1;
+    public int DoubleThenProceedThenAddOne(int left, int right) => Proceed.Method<IntBinaryOp>()(left * 2, right * 2) + 1;
+}
+
+/// <summary>
+/// Signature of the four argument method which the templates below proceed through.<para/>
+/// A template of four arguments and more is loaded by an operand which names the parameter rather than by one of the
+/// four macro opcodes, which carry the slot in the opcode itself.
+/// </summary>
+public delegate int IntQuadOp(int a, int b, int c, int d);
+
+/// <summary>
+/// Templates whose argument loads reach past the four slots which a macro opcode holds.
+/// </summary>
+public static class WideAroundTemplates
+{
+    /// <summary>
+    /// The four arguments as a number, which is given as the body of the member which the template below wraps.
+    /// </summary>
+    public static int Number(int a, int b, int c, int d) => a * 1000 + b * 100 + c * 10 + d;
+
+    /// <summary>
+    /// Proceed with the arguments reversed, so that a load which reached another argument is told apart from one which
+    /// reached the right one.
+    /// </summary>
+    public static int ReversedThenAddOne(int a, int b, int c, int d) => Proceed.Method<IntQuadOp>()(d, c, b, a) + 1;
 }
 
 /// <summary>
@@ -69,7 +109,55 @@ public static class GenericAroundTemplates
     /// <summary>
     /// Proceed with the value as it is.
     /// </summary>
-    public static M_0 Passthrough(M_0 value) => Proceed.Method<PassthroughOp>(nameof(Passthrough))(value);
+    public static M_0 Passthrough(M_0 value) => Proceed.Method<PassthroughOp>()(value);
+
+    /// <summary>
+    /// Proceed with the value which this template was given, where neither that argument nor the value which is handed
+    /// back has a type of its own: the call names the token which the weaving turns into the parameter of the member,
+    /// and the signature of the delegate which the template above needs is written nowhere.
+    /// </summary>
+    public static M_0 PassthroughWithItsOwnArguments(M_0 value) => Proceed.Invoke<M_0>();
+}
+
+/// <summary>
+/// A template which belongs to an instance of a type which the sources name, which reads a member of that instance
+/// rather than a variable of the method it is written in.
+/// </summary>
+public class InstanceFieldTemplates
+{
+    /// <summary>
+    /// A value which the instance holds, which a template of it reads off the instance rather than out of itself.
+    /// </summary>
+    private readonly int m_Value = 7;
+
+    /// <summary>
+    /// Read the field of the instance which this template belongs to.
+    /// </summary>
+    public int ReadsItsOwnField(int value) => value + m_Value;
+}
+
+/// <summary>
+/// A template which is a lambda of an instance of a type which the sources name, and which reads a member of that
+/// instance rather than a variable of the method it is written in.
+/// </summary>
+public class InstanceCaptureTemplate
+{
+    /// <summary>
+    /// The value which the lambda below reaches off the instance which the closure holds.
+    /// </summary>
+    private readonly int m_Captured;
+
+    /// <summary>
+    /// Create the instance which holds what the lambda reaches.
+    /// </summary>
+    /// <param name="captured">The value which the instance holds.</param>
+    public InstanceCaptureTemplate(int captured) => m_Captured = captured;
+
+    /// <summary>
+    /// Weave the lambda, which proceeds and adds the value of this instance, around the method.
+    /// </summary>
+    /// <param name="handler">The handler of the method which is woven around.</param>
+    public void Weave(IMethodHandler handler) => handler.AroundBody(() => Proceed.Method<Func<int>>()() + m_Captured);
 }
 
 /// <summary>
@@ -178,6 +266,109 @@ public class AroundBodyTests
         var result = WeaveAndInvoke("AroundBodyInstanceAssembly", false, typeof(AroundInstanceTemplates), nameof(AroundInstanceTemplates.DoubleThenProceedThenAddOne), [3, 4]);
 
         Assert.That(result, Is.EqualTo(15));
+    }
+
+    [Test]
+    public void AroundBody_Reads_Every_Argument_Of_A_Static_Template_At_The_Slot_Of_An_Instance_Member()
+    {
+        // The member which is wrapped holds a receiver ahead of its arguments, so every load of an argument of the
+        // template is written one slot after the one which the template names, whichever form of the opcode carries it.
+        var assembly = Assembly.Create("AroundBodyWideArgumentsAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+
+        var method = host.AddMethod("Number", intType, [],
+                                    [new Parameter(intType), new Parameter(intType), new Parameter(intType), new Parameter(intType)],
+                                    MethodFlags.Public);
+        method.SetBody(Template(typeof(WideAroundTemplates), nameof(WideAroundTemplates.Number)));
+        method.AroundBody(Template(typeof(WideAroundTemplates), nameof(WideAroundTemplates.ReversedThenAddOne)));
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        // 1234 reversed is 4321, and the template adds one to what it returned: 4322 rather than 3212, which is what
+        // the arguments come to when the loads keep the slots of the template.
+        Assert.That(type.GetMethod("Number")!.Invoke(Activator.CreateInstance(type), [1, 2, 3, 4]), Is.EqualTo(4322));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Symbol_Which_Proceeds_With_Its_Own_Arguments_Runs_The_Original()
+    {
+        // 3 + 4 + 1. The call names no signature and no argument: the template proceeds with the arguments which it was
+        // given, which are the arguments of the member which is woven.
+        var result = WeaveAndInvoke("AroundBodyOwnArgumentsAssembly", true, typeof(AroundTemplates),
+                                    nameof(AroundTemplates.ProceedWithItsOwnArgumentsThenAddOne), [3, 4]);
+
+        Assert.That(result, Is.EqualTo(8));
+    }
+
+    [Test]
+    public void AroundBody_Of_An_Instance_Member_Which_Proceeds_With_Its_Own_Arguments_Runs_The_Original()
+    {
+        // The member belongs to an instance, so its receiver is the one which the call is made on, and the arguments of
+        // the template follow it.
+        var result = WeaveAndInvoke("AroundBodyOwnArgumentsInstanceAssembly", false, typeof(AroundTemplates),
+                                    nameof(AroundTemplates.ProceedWithItsOwnArgumentsThenAddOne), [3, 4]);
+
+        Assert.That(result, Is.EqualTo(8));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Generic_Member_Which_Proceeds_With_Its_Own_Arguments_Runs_The_Original()
+    {
+        // The token stands for the generic parameter of the member, so the template names neither the type of the
+        // argument nor the type of the value which is handed back, and declares no delegate to name them with.
+        var (assembly, host, _) = NewGenericHost("AroundBodyOwnArgumentsGenericAssembly");
+        HandlerOf(host, "Identity")
+            .AroundBody(Template(typeof(GenericAroundTemplates), nameof(GenericAroundTemplates.PassthroughWithItsOwnArguments)));
+
+        var identity = assembly.Load().GetType($"{Ns}.Host")!.GetMethod("Identity")!.MakeGenericMethod(typeof(string));
+
+        Assert.That(identity.Invoke(null, ["hello"]), Is.EqualTo("hello"));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Call_Which_Names_Another_Type_Than_The_Member_Hands_Back_Throws()
+    {
+        // What the call names is what the caller reads off the stack, and the member hands back the type which is
+        // written at the member. The two are compared, so the disagreement is named at the weave rather than left to
+        // the runtime to refuse the type which was written.
+        var (_, host, _) = NewHost(true);
+
+        var thrown = Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add")
+            .AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedWithAnotherHandedBackType))));
+
+        Assert.That(thrown!.Message, Does.Contain("is not the type which the member being woven hands back"));
+    }
+
+    [Test]
+    public void SetBody_With_A_Template_Which_Takes_The_Arguments_Of_Itself_Throws()
+    {
+        // The call stands for the body which was taken over, so a template which is copied rather than woven around has
+        // none for it to stand for.
+        var (_, host, _) = NewHost(true);
+
+        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add")
+            .SetBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedWithItsOwnArgumentsThenAddOne))));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Member_Which_Hands_Nothing_Back_Proceeds_Through_The_Call_Which_Names_No_Type()
+    {
+        // The call is a statement rather than an expression, and the body which it proceeds into is the one which the
+        // method already held: the throwing body which a method is added with, which the call reaches and runs.
+        var assembly = Assembly.Create("AroundBodyOwnArgumentsVoidAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+
+        run.AroundBody(() => Proceed.Invoke());
+
+        Assert.That(((MethodHandler) run).Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference
+                                                                                        && reference.Name == "<Run>k__Proceed"), Is.True);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var thrown = Assert.Throws<TargetInvocationException>(() => type.GetMethod("Run")!.Invoke(null, null));
+        Assert.That(thrown!.InnerException, Is.InstanceOf<NotSupportedException>());
     }
 
     #endregion
@@ -307,6 +498,90 @@ public class AroundBodyTests
     #endregion
 
     #region Refusals
+
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Captures_A_Variable_Writes_The_Value_Into_The_Member()
+    {
+        // A lambda which captures a variable is an instance method of the type which the compiler wrote to hold what it
+        // captured, and it reads each of them off the instance of that type which the delegate was made from. That
+        // instance belongs to the run of the injector and not to the assembly being woven, so the value is written into
+        // the member instead: the woven body reaches the same value, and holds no instance which it could not.
+        var assembly = Assembly.Create("AroundBodyCapturedValueAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        run.SetBody(DefaultMethodBody.WithDefaultReturn);
+        var captured = 41;
+
+        run.AroundBody(() => Proceed.Method<Func<int>>()() + captured);
+
+        var body = ((MethodHandler) run).Source.Body;
+        // Nothing reads the instance which the delegate held, and the value which was captured stands in the body.
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+
+        // The body which was taken over hands back the default of int, which what the template captured is added to.
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(41));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Captures_A_Member_Of_Its_Instance_Writes_The_Value_Into_The_Member()
+    {
+        // A lambda of an instance of a type which the sources name captures that instance rather than one of the
+        // variables of the method it is written in, so the closure holds the instance and what the template reads is a
+        // member of it, which is read off the instance the delegate holds.
+        var assembly = Assembly.Create("AroundBodyInstanceCaptureAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        run.SetBody(DefaultMethodBody.WithDefaultReturn);
+
+        new InstanceCaptureTemplate(7).Weave(run);
+
+        var body = ((MethodHandler) run).Source.Body;
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 7), Is.True);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(7));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Captures_A_Value_Which_Cannot_Be_Written_Throws()
+    {
+        // What a template captured is written into the member as a value of its own, which only a string, a number, a
+        // character, a boolean, an enumeration or a null of a reference type has a form for. A capture of any other
+        // type is named rather than woven into a member which the runtime would refuse.
+        var assembly = Assembly.Create("AroundBodyUnwritableCaptureAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var captured = new object();
+
+        var thrown = Assert.Throws<ArgumentException>(() => run.AroundBody(() =>
+        {
+            Proceed.Method<Action>()();
+            Console.WriteLine(captured);
+        }));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be written"));
+        Assert.That(thrown!.Message, Does.Contain("captured"));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Given_As_A_Method_Which_Reads_Its_Instance_Throws()
+    {
+        // A template which is given as the method alone is given no instance, so what it reads off the instance it
+        // belongs to is held by nothing, and there is no value of it to write into the member being woven.
+        var assembly = Assembly.Create("AroundBodyInstanceFieldAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        var one = host.AddMethod("One", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+        one.SetBody(DefaultMethodBody.WithDefaultReturn);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => one.AroundBody(typeof(InstanceFieldTemplates).GetMethod(nameof(InstanceFieldTemplates.ReadsItsOwnField))!));
+
+        Assert.That(thrown!.Message, Does.Contain("instance which it belongs to"));
+    }
 
     [Test]
     public void AroundBody_Of_An_Abstract_Method_Throws()

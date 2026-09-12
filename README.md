@@ -16,6 +16,10 @@ A template is an ordinary method. It reaches the members of the type it will be 
 
 Weaving is therefore a rewrite rather than a compilation. The body of the template is copied instruction by instruction, and each operand is pointed at the member of the target that the placeholder named: a field read becomes `ldfld` of that field, a call on `This` becomes a call on the type being woven, a token becomes a generic parameter of the method or of the type that declares it. A local variable or a branch of the template is remapped to its counterpart in the body that is being woven.
 
+A template may capture a variable as well, by being written as a lambda. What it captured is nothing the target holds, so it is not copied: it belongs to the run that wove the assembly rather than to the type that was woven, and the delegate which the template is handed over as is what holds it. The weaver reads the value out of that delegate while the injector runs and writes the value itself where the template read it, so the woven member carries the value as a constant and behaves as if it had stood in the template's source. The delegating overloads are given the delegate rather than the method alone for that reason — `SetBody` and `AroundBody` of a handler, and `WithBody`, `WithGetter` and `WithSetter` of a decorator — and a template handed over as a `MethodInfo` holds nothing to read, so one which reads the instance it belongs to is refused.
+
+What may be captured is settled by what the woven body can hold: a string, an integer or a floating point number of any width, a character, a boolean, an enumeration, and a null of a reference type are written, and a capture of any other type is refused by name rather than woven into a member which would fail when it ran.
+
 None of that could be expressed without [Mono.Cecil](https://github.com/jbevain/cecil), that Gneedle is built on: Mono.Cecil is what reads the metadata of an assembly and writes it back, and the rewrite above is described in the terms that it hands over — the instructions, the references, the signatures and the tables of the image. Gneedle decides what each of them becomes; Mono.Cecil is what turns that into an assembly the runtime reads.
 
 Around advice keeps the body that the target already had instead of discarding it. That body is moved to a generated method of the declaring type, and the template reaches it through `Proceed`, so that the advice can inspect the arguments, call the original, and return what it chose.
@@ -146,6 +150,16 @@ assembly.SaveTo("path/to/AnAssembly.dll");
 
 An assembly that does not exist yet is built the same way: `Assembly.Create("MyAssembly")` hands back one that holds nothing, whose types and members are described through the same handlers, and `Load()` loads it into the process once it is written. So the same library serves a generator that produces an assembly, a tool that rewrites one, and the build that the task drives.
 
+The injectors which an assembly declares are applied from an entry point of your own as well, without the aspect weaver: `Injections.Apply` reads them from the attributes of the assembly, applies each of them to the member it names, and hands back the image which holds the result. The assembly is given as the one which was loaded from those bytes, because how an assembly is loaded belongs to whoever loads it, and the types which an injector names are resolved against it:
+
+```csharp
+var image = File.ReadAllBytes("path/to/AnAssembly.dll");
+var (changed, woven) = Injections.Apply(AssemblyLoader.LoadFromBytes(image), image);
+if (changed) File.WriteAllBytes("path/to/AnAssembly.dll", woven);
+```
+
+The attributes and the reference to the weaver are taken out of the image by default, which is what leaves the woven assembly standing alone; `removesTheWeaver: false` keeps them. What an injector is, and which member each of the interfaces of one is read for, is under [Aspect](#aspect).
+
 ### Weaving a body from a template
 
 A template names the members of the type it is woven into. Each placeholder is a call that throws when the template is run on its own:
@@ -199,7 +213,7 @@ public static T_0 Echo(T_0 value) => value;
 `AroundBody` keeps the body that the method already had, moves it to a generated method named `<Name>k__Proceed`, and weaves the template around it. The template calls the original through `Proceed`:
 
 ```csharp
-public static int AddOne(int value) => Proceed.Method<Func<int, int>>("Double")(value) + 1;
+public static int AddOne(int value) => Proceed.Method<Func<int, int>>()(value) + 1;
 ```
 
 ```csharp
@@ -207,7 +221,30 @@ host.GetMethod("Double", typeof(int).ToGneedleType())!
     .AroundBody(typeof(Templates).GetMethod(nameof(Templates.AddOne))!);
 ```
 
+The two forms of that call differ in what the template has to say about the signature of the body it proceeds into. `Proceed.Method<TMethod>()` names it — a delegate, which is how the template takes arguments of its own choosing, as `left * 2` above does — while `Proceed.Invoke<TResult>()` names only the type of the value which the body hands back and passes on the arguments which the template itself was given, which for a template of an around body are the arguments of the member:
+
+```csharp
+// The same advice as above, which passes the argument on as it is: no signature is written, and no delegate is needed.
+public static int AddOne(int value) => Proceed.Invoke<int>() + 1;
+```
+
+A member which hands nothing back takes `Proceed.Invoke()`, and a member whose parameters are generic takes the token — `Proceed.Invoke<M_0>()` — so that a template of such a member needs no delegate of its own to name them with. What `Invoke<TResult>` names is checked against the type which the member hands back, and a template which proceeds without a body having been taken over is refused either way.
+
 The template keeps the signature of the method, and the body it proceeds into is the one that the method held: the body it was added with, the body it was read with, or the throwing body that marks a method that has none. An accessor of a property is woven around the same way, through `IPropertyHandler.GetGetter()` and `GetSetter()`, that hand back the handler of the accessor as an ordinary method.
+
+A template may be a lambda rather than a method, and then it may capture the variables which it is written among. An attribute is only what a driver of the library reads, and the library is driven from the build by [the aspect weaver](#aspect) or from a call of your own by `Injections.Apply`, which [the entry point above](#weaving-from-your-own-entry-point) describes. Where the weave is asked for at a call of your own, the template is written there:
+
+```csharp
+var message = "Hello World";
+host.GetMethod("Write", typeof(void).ToGneedleType())!
+    .AroundBody(() =>
+    {
+        Proceed.Invoke();
+        Console.WriteLine(message);
+    });
+```
+
+The delegate is what the weaving is given, so what the lambda captured is read out of it while the weaving runs, and the member which is woven carries `"Hello World"` as a string of its own rather than reaching for the instance the lambda was made from. What may be captured, and what is refused, is written out under [Principle](#principle).
 
 ### Referring to a type you cannot reference
 
@@ -240,6 +277,19 @@ public sealed class ThrowBodyAttribute : Attribute, IMethodInjector
 public class Target
 {
     [ThrowBody] public void Weave() => Console.WriteLine("the body ran unchanged");
+}
+```
+
+An injector which carries something of its own writes its template as a lambda which captures it, and the weaving reads what it captured while the injector runs, so the member carries the value itself rather than the instance the lambda was made from:
+
+```csharp
+public sealed class LogMessageAttribute(string message) : Attribute, IMethodInjector
+{
+    public void Inject(MethodInfo method, IMethodHandler handler) => handler.AroundBody(() =>
+    {
+        Proceed.Invoke();
+        Console.WriteLine(message);
+    });
 }
 ```
 

@@ -48,11 +48,14 @@ public interface IMethodHandler : IAttributeContainer
 public static class MethodExtensions
 {
     /// <summary>
-    /// Set the body of the method from the delegate which holds the IL to copy.
+    /// Set the body of the method from the delegate which holds the IL to copy.<para/>
+    /// A template may capture the variables which it is written among, and the delegate is what holds the values of
+    /// them: it is given to the weaving rather than the method alone, so that what the template captured is written
+    /// into the member being woven.
     /// </summary>
     /// <param name="methodHandler">The handler of the method.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
-    public static void SetBody(this IMethodHandler methodHandler, Delegate delegation) => methodHandler.SetBody(delegation.Method);
+    public static void SetBody(this IMethodHandler methodHandler, Delegate delegation) => MethodHandler.SetBody(methodHandler, delegation);
 
     /// <summary>
     /// Set the body of the method from the delegate which holds the IL to copy.
@@ -61,12 +64,12 @@ public static class MethodExtensions
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
     public static MethodDecorator.ITypeDecorator WithBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
-        => decorator.WithBody(delegation.Method);
+        => decorator is MethodDecorator methodDecorator ? methodDecorator.WithBody(delegation) : decorator.WithBody(delegation.Method);
 
     /// <summary>
     /// Set the body of the method to run around the body which it holds, from the delegate which holds the template.
     /// </summary>
     /// <param name="methodHandler">The handler of the method.</param>
     /// <param name="delegation">The delegate which holds the body to weave around.</param>
-    public static void AroundBody(this IMethodHandler methodHandler, Delegate delegation) => methodHandler.AroundBody(delegation.Method);
+    public static void AroundBody(this IMethodHandler methodHandler, Delegate delegation) => MethodHandler.AroundBody(methodHandler, delegation);
 }

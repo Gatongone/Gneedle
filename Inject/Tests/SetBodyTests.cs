@@ -4,6 +4,18 @@ using OpCodes = Mono.Cecil.Cil.OpCodes;
 namespace Gneedle.Inject.Test;
 
 /// <summary>
+/// A template of five arguments which belongs to an instance of its own type, so that its first argument is the slot
+/// after its receiver, and which never reads that receiver.
+/// </summary>
+public class WideBodyTemplates
+{
+    /// <summary>
+    /// The five arguments as a number.
+    /// </summary>
+    public int Number(int a, int b, int c, int d, int e) => a * 10000 + b * 1000 + c * 100 + d * 10 + e;
+}
+
+/// <summary>
 /// Tests for <see cref="IMethodHandler.SetBody"/>: the body which is copied out of a member, and the default bodies
 /// which are written from the kind of body which is asked for.
 /// </summary>
@@ -22,6 +34,11 @@ public class SetBodyTests
         // Five parameters, so the fifth is addressed by ldarg.s with a parameter as its operand rather than by one of the
         // macro opcodes, which carry no operand at all.
         public static int Sum(int a, int b, int c, int d, int e) => a + b + c + d + e;
+
+        // Six parameters, and each of them at its own place in a number, so that a load which reached another argument
+        // is told apart from one which reached the right one. The six loads cover every form of the opcode: the four
+        // macro opcodes of the first four slots, and the operand form for the two which they do not reach.
+        public static int Number(int a, int b, int c, int d, int e, int f) => a * 100000 + b * 10000 + c * 1000 + d * 100 + e * 10 + f;
     }
 
     /// <summary>
@@ -150,6 +167,62 @@ public class SetBodyTests
         Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False);
     }
 
+    [Test]
+    public void SetBody_Moves_Every_Argument_Of_A_Static_Template_Past_The_Receiver_Of_An_Instance_Method()
+    {
+        // The first argument of the template is not the only one which moves: the member being woven holds a receiver
+        // ahead of all of them, so every load of an argument is written one slot after the one which the template
+        // names, whichever form of the opcode carries the slot.
+        var assembly = Assembly.Create("SetBodyShiftedArgumentsAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+
+        var method = host.AddMethod("Number", intType, [],
+                                    [new Parameter(intType), new Parameter(intType), new Parameter(intType),
+                                     new Parameter(intType), new Parameter(intType), new Parameter(intType)],
+                                    MethodFlags.Public);
+
+        method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Number))!);
+
+        // Nothing loads the receiver, because the template names no such argument.
+        Assert.That(SourceOf(method).Body.Instructions.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False);
+
+        // 123456 rather than 112345 tells a body which read every argument of the member from one which kept the slots
+        // of the template, where the load of the second argument reaches into the first.
+        var type = assembly.Load().GetType($"{Ns}.Calc")!;
+        var number = type.GetMethod("Number")!;
+        Assert.That(number.Invoke(Activator.CreateInstance(type), [1, 2, 3, 4, 5, 6]), Is.EqualTo(123456));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Is_An_Instance_Reads_Its_Arguments_Around_Its_Receiver()
+    {
+        // A template which belongs to an instance holds its receiver ahead of its arguments, so its first argument is
+        // the second slot, and the last of five is the sixth. The member which the body is woven into reads every one
+        // of them at the slot which it holds there, which is the slot of the template shifted by the receivers of the
+        // two: none of them moves where both belong to an instance.
+        var assembly = Assembly.Create("SetBodyInstanceTemplateAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+
+        var method = host.AddMethod("Number", intType, [],
+                                    [new Parameter(intType), new Parameter(intType), new Parameter(intType),
+                                     new Parameter(intType), new Parameter(intType)],
+                                    MethodFlags.Public);
+
+        method.SetBody(typeof(WideBodyTemplates).GetMethod(nameof(WideBodyTemplates.Number))!);
+
+        // 12345 rather than 12344 tells a body which read the last argument from one which read it at the position
+        // which it holds among the parameters, where it reaches the argument before it. A template written as a lambda
+        // which captures a variable cannot be used here, because reading the capture reads the receiver, which the
+        // weaving refuses.
+        var type = assembly.Load().GetType($"{Ns}.Calc")!;
+        var number = type.GetMethod("Number")!;
+        Assert.That(number.Invoke(Activator.CreateInstance(type), [1, 2, 3, 4, 5]), Is.EqualTo(12345));
+    }
+
     #endregion
 
     #region ThrowException
@@ -235,6 +308,30 @@ public class SetBodyTests
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
                                  && i.Operand is MethodReference mr && mr.Name == "Method"), Is.True);
         Assert.That(ins.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+    }
+
+    [Test]
+    public void CallFromBase_Of_An_Instance_Loads_The_Receiver_And_The_Arguments()
+    {
+        // The receiver of an instance is an argument of the call to the base member as much as the parameters are, and
+        // no parameter of the member holds it, so a body which loads the parameters alone hands the base member the
+        // first of them where it expects the instance and leaves it one short at the end.
+        var assembly = Assembly.Create("CallFromBaseInstanceAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+
+        // The constructor is a call from base of its own, which is the first thing which an instance of the type runs.
+        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+        host.AddMethod("Equals", typeof(bool).ToGneedleType(), [], [new Parameter(typeof(object).ToGneedleType())], MethodFlags.Public)
+            .SetBody(DefaultMethodBody.CallFromBase);
+
+        var type = assembly.Load().GetType($"{Ns}.Calc")!;
+        var instance = Activator.CreateInstance(type);
+        var equals = type.GetMethod("Equals", [typeof(object)])!;
+
+        // The base implementation answers whether the reference is the one it was given, which it can only answer
+        // about the instance the call was made on.
+        Assert.That(equals.Invoke(instance, [instance]), Is.True);
+        Assert.That(equals.Invoke(instance, [new object()]), Is.False);
     }
 
     [Test]

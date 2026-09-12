@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
@@ -26,6 +27,15 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// source method is not woven around.
     /// </summary>
     private string? m_ProceedMethodName;
+
+    /// <summary>
+    /// The instance which the delegate of the template was made from, whose fields hold the variables which the
+    /// template captured, or null when the template was given as a method rather than as the delegate of it.<para/>
+    /// A lambda which captures a variable is an instance method of the type which the compiler wrote to hold it, and it
+    /// reads what it captured off that instance. The values themselves are held by the delegate, which the weaving is
+    /// given while the injector runs, so what the template captured is written where the template read it.
+    /// </summary>
+    private object? m_TemplateClosure;
 
     /// <summary>
     /// Gets the name of the source method definition. It is used for debugging and logging purposes to identify the method being manipulated.
@@ -109,11 +119,18 @@ internal sealed partial class MethodHandler : IMethodHandler
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
         }
 
-        // Load arguments, call base method, return.
-        var isStatic = Source.IsStatic;
-        for (var i = 0; i < Source.Parameters.Count; i++)
+        // Load the receiver, then the arguments, call the base method, and return. The receiver of an instance is an
+        // argument of the call as much as the others are, and it is the one which no parameter of the member holds.
+        // Every argument beyond it is named by its parameter rather than by the slot which it holds, because the slot
+        // of an argument is the position of the parameter shifted by the receiver, and only the write knows the shift.
+        if (!Source.IsStatic)
         {
-            il.Emit(OpCodes.Ldarg, i + (isStatic ? 0 : 1));
+            il.Emit(OpCodes.Ldarg_0);
+        }
+
+        foreach (var parameter in Source.Parameters)
+        {
+            il.Emit(OpCodes.Ldarg, parameter);
         }
 
         il.Emit(baseMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, Source.Module.ImportReference(baseMethod));
@@ -163,11 +180,71 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
+    /// Set the body of the method from the delegate which holds the template, which is the template itself where the
+    /// template captured nothing and the instance which holds what it captured where it did.
+    /// </summary>
+    /// <param name="handler">The handler of the method.</param>
+    /// <param name="template">The delegate which the template was made into.</param>
+    public static void SetBody(IMethodHandler handler, Delegate template)
+        => SetBody(handler, template.Method, template.Target);
+
+    /// <summary>
+    /// Set the body of the method from a template which was given as the method alone, so that what the template
+    /// captured, if it captured anything, is held by nothing.
+    /// </summary>
+    /// <param name="handler">The handler of the method.</param>
+    /// <param name="method">The template which holds the body to copy.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    public static void SetBody(IMethodHandler handler, MethodInfo method, object? closure)
+    {
+        if (closure != null && handler is MethodHandler concrete)
+        {
+            concrete.SetBody(method, closure);
+            return;
+        }
+
+        handler.SetBody(method);
+    }
+
+    /// <summary>
+    /// Set the body of the method to run around the one which it holds, from the delegate which holds the template.
+    /// </summary>
+    /// <param name="handler">The handler of the method.</param>
+    /// <param name="template">The delegate which the template was made into.</param>
+    public static void AroundBody(IMethodHandler handler, Delegate template)
+        => AroundBody(handler, template.Method, template.Target);
+
+    /// <summary>
+    /// Set the body of the method to run around the one which it holds, from a template which was given as the method
+    /// alone, so that what the template captured, if it captured anything, is held by nothing.
+    /// </summary>
+    /// <param name="handler">The handler of the method.</param>
+    /// <param name="method">The template which holds the body to weave around.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    public static void AroundBody(IMethodHandler handler, MethodInfo method, object? closure)
+    {
+        if (closure != null && handler is MethodHandler concrete)
+        {
+            concrete.AroundBody(method, closure);
+            return;
+        }
+
+        handler.AroundBody(method);
+    }
+
+    /// <summary>
     /// Set the method body of source method definition to be the same as the target method definition.
     /// We need to parse the instructions in target method body and translate them to make them work in source method body,
     /// </summary>
     /// <param name="method"></param>
-    public void SetBody(MethodInfo method)
+    public void SetBody(MethodInfo method) => SetBody(method, null);
+
+    /// <summary>
+    /// Set the method body to be the one which the template holds.
+    /// </summary>
+    /// <param name="method">The template which holds the body to copy.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    internal void SetBody(MethodInfo method, object? closure)
     {
         var targetDef = Source.Module.ImportReference(method).Resolve();
         var instructions = targetDef.Body.Instructions;
@@ -178,7 +255,9 @@ internal sealed partial class MethodHandler : IMethodHandler
         // Copy target method variables to source.
         CopyVariables(targetDef, Source);
 
+        m_TemplateClosure = closure;
         ParseBody(instructions, targetDef);
+        m_TemplateClosure = null;
 
         ParseReturnType(targetDef.ReturnType);
     }
@@ -191,7 +270,16 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="method">The template which holds the body to weave around.</param>
     /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
-    public void AroundBody(MethodInfo method)
+    public void AroundBody(MethodInfo method) => AroundBody(method, null);
+
+    /// <summary>
+    /// Set the body of the method to run around the body which it holds, which the template reaches through
+    /// <see cref="Proceed"/>.
+    /// </summary>
+    /// <param name="method">The template which holds the body to weave around.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
+    internal void AroundBody(MethodInfo method, object? closure)
     {
         var templateDef = Source.Module.ImportReference(method).Resolve();
 
@@ -266,7 +354,9 @@ internal sealed partial class MethodHandler : IMethodHandler
         // type by now. The return type is deliberately left alone: the template keeps the signature of the method, which
         // was checked above, so parsing it as SetBody does would only write an equal type again.
         CopyVariables(templateDef, Source);
+        m_TemplateClosure = closure;
         ParseBody(templateDef.Body.Instructions, templateDef);
+        m_TemplateClosure = null;
     }
 
     /// <summary>
@@ -321,10 +411,15 @@ internal sealed partial class MethodHandler : IMethodHandler
 
             var instruction = instructions[index];
 
-            // Replace Ldarg.
-            if (instruction.OpCode == OpCodes.Ldarg_0 || instruction.OpCode == OpCodes.Ldarg_1 || instruction.OpCode == OpCodes.Ldarg)
+            // Write what the template captured where it read it.
+            if (TryInlineCapture(instructions, index, targetDef, filter)) continue;
+
+            // Replace Ldarg. Every form of the load is translated rather than the two which carry the first slot, because
+            // each of them names an argument of the template, and what the member being woven holds at that slot is
+            // another argument whenever the two do not agree on belonging to an instance.
+            if (instruction.TryGetLdargIndex(!targetDef.IsStatic, out var slot))
             {
-                filter.Replace(index, Instruction.Create(GetLdargCode(targetDef, instruction)));
+                filter.Replace(index, CreateLdarg(slot, targetDef));
                 continue;
             }
 
@@ -340,42 +435,202 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
-    /// Get the OpCode to load argument based on the source method definition and the instruction in target method definition.
-    /// If the instruction is Ldarg0, we need to check if the source method is static or not, and if the target method is static or not,
-    /// to determine whether to replace it with Ldarg1 or keep it as Ldarg0. If the instruction is Ldarg1,
-    /// we also need to check if the source method is static and the target method is not static to determine whether to replace it with Ldarg0 or keep it as Ldarg1.
-    /// For other Ldarg instructions, we keep them unchanged.
+    /// Write the value which the template captured where the template read it, which is the pair of the instance it
+    /// belongs to being loaded and the field of that instance being read.
     /// </summary>
-    /// <param name="methodDef">The target method definition to check.</param>
-    /// <param name="instruction">The instruction to check.</param>
-    /// <returns>The OpCode to load argument after translation.</returns>
-    /// <exception cref="ArgumentException">Thrown when the instruction is Ldarg0 but the source and target method static-ness are not compatible.</exception>
-    private OpCode GetLdargCode(MethodDefinition methodDef, Instruction instruction)
+    /// <remarks>
+    /// A lambda which captures a variable is an instance method of the type which the compiler wrote to hold what it
+    /// captured, and it reads each of them off the instance of that type which the delegate was made from. That
+    /// instance belongs to the run of the injector rather than to the assembly being woven, so what it holds is written
+    /// into the member as the value itself, which is what makes the template reach the same value at run time.
+    /// </remarks>
+    /// <param name="instructions">The instructions of the body which is parsed.</param>
+    /// <param name="index">Index of the instruction which may be the load of the instance.</param>
+    /// <param name="templateDef">The template which the instructions belong to.</param>
+    /// <param name="filter">The instruction filter to replace the instructions.</param>
+    /// <returns>Whether a captured value was written, which is false when the pair is not a read of one.</returns>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value which cannot be written.</exception>
+    private bool TryInlineCapture(Mono.Collections.Generic.Collection<Instruction> instructions, int index, MethodDefinition templateDef, InstructionFilter filter)
     {
-        // Resolve Ldarg0.
-        if (instruction.OpCode == OpCodes.Ldarg_0 || instruction.OpCode == OpCodes.Ldarg && instruction.Operand.Equals(0))
+        if (m_TemplateClosure == null || index + 1 >= instructions.Count) return false;
+
+        // The load of the instance is the one which names the receiver of the template, and the reads of the fields
+        // which are reached through it follow, one after the next.
+        if (!instructions[index].TryGetLdargIndex(!templateDef.IsStatic, out var slot) || slot != 0) return false;
+
+        // The first read is the one which reads the instance which the template belongs to, which is the instance the
+        // delegate held, and each read after it reaches into the value which the one before handed back: a lambda of an
+        // instance captures that instance, and what it reads off it is a member of the instance rather than of the
+        // method which holds it.
+        var declaringType = templateDef.DeclaringType;
+        var fields  = new List<FieldReference>();
+        var readIndex = index + 1;
+        while (readIndex < instructions.Count
+               && instructions[readIndex] is { OpCode.Code: Code.Ldfld, Operand: FieldReference field }
+               && TypeName.HasSameName(field.DeclaringType, fields.Count == 0 ? declaringType : fields[fields.Count - 1].FieldType))
         {
-            return Source.IsStatic switch
+            fields.Add(field);
+            readIndex++;
+        }
+
+        if (fields.Count == 0) return false;
+
+        // What the template captured is read off the instance which the delegate held, which is the instance the
+        // template was written in, and off what each field of the chain holds in its turn.
+        object? captured = m_TemplateClosure;
+        foreach (var field in fields)
+        {
+            var member = captured?.GetType().GetField(field.Name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (member == null)
             {
-                false when methodDef.IsStatic => OpCodes.Ldarg_1,
-                true                          => instruction.OpCode,
-                _                             => throw new ArgumentException(ErrorMessages.LDARG0_CONVERT_FAILED)
-            };
+                throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, field.Name, field.FieldType.FullName, Source.FullName));
+            }
+
+            captured = member.GetValue(captured);
         }
 
-        // Resolve Ldarg1.
-        if (instruction.OpCode == OpCodes.Ldarg_1 || instruction.OpCode == OpCodes.Ldarg && instruction.Operand.Equals(1))
+        if (!TryCreateLiteral(fields[fields.Count - 1].FieldType, captured, out var literal))
         {
-            return Source.IsStatic && !methodDef.IsStatic ? OpCodes.Ldarg_0 : instruction.OpCode;
+            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, fields[fields.Count - 1].Name, fields[fields.Count - 1].FieldType.FullName, Source.FullName));
         }
 
-        return instruction.OpCode;
+        filter.Replace(index, literal!);
+        for (var read = index + 1; read <= index + fields.Count; read++)
+        {
+            filter.Skip(read);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The instruction which loads the value which a template captured, for the kinds of value which one instruction
+    /// can hold.
+    /// </summary>
+    /// <param name="fieldType">The type which the field of the capture holds, which is the type the value is read as
+    /// rather than the one the value reports: a boxed value reports the type it was boxed from.</param>
+    /// <param name="value">The value which the instance holds.</param>
+    /// <param name="literal">The instruction which loads the value, or null when there is none.</param>
+    /// <returns>Whether the value can be written, which is false for every value but a string, a number, a character, a
+    /// boolean, an enumeration and a null of a reference type.</returns>
+    private static bool TryCreateLiteral(TypeReference fieldType, object? value, out Instruction? literal)
+    {
+        var metadata = fieldType.MetadataType;
+
+        // An enumeration is held as a value of the type under it, which is the type the stack carries. What the instance
+        // holds is the enumeration boxed, so it is read as that value before it is written, which is what the box of it
+        // holds and what the metadata of the field is named by.
+        if (metadata == MetadataType.ValueType && fieldType.Resolve() is { IsEnum: true } enumDef)
+        {
+            metadata = enumDef.GetEnumUnderlyingType().MetadataType;
+            if (value != null) value = Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()), CultureInfo.InvariantCulture);
+        }
+
+        literal = metadata switch
+        {
+            MetadataType.String when value is string text          => Instruction.Create(OpCodes.Ldstr, text),
+            MetadataType.Boolean when value is bool flag           => Instruction.Create(OpCodes.Ldc_I4, flag ? 1 : 0),
+            MetadataType.Char when value is char character         => Instruction.Create(OpCodes.Ldc_I4, character),
+            MetadataType.SByte when value is sbyte number          => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Byte when value is byte number            => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Int16 when value is short number          => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.UInt16 when value is ushort number        => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Int32 when value is int number            => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.UInt32 when value is uint number          => Instruction.Create(OpCodes.Ldc_I4, unchecked((int) number)),
+            MetadataType.Int64 when value is long number           => Instruction.Create(OpCodes.Ldc_I8, number),
+            MetadataType.UInt64 when value is ulong number         => Instruction.Create(OpCodes.Ldc_I8, unchecked((long) number)),
+            MetadataType.Single when value is float number         => Instruction.Create(OpCodes.Ldc_R4, number),
+            MetadataType.Double when value is double number        => Instruction.Create(OpCodes.Ldc_R8, number),
+            // A null is the same value of every reference type, and the member which it is written into names the type.
+            MetadataType.Class or MetadataType.Object or MetadataType.String or MetadataType.Array when value is null
+                => Instruction.Create(OpCodes.Ldnull),
+            _ => null
+        };
+
+        return literal != null;
+    }
+
+    /// <summary>
+    /// The instruction which loads the argument at <paramref name="slot"/> of the template, written so that it loads the
+    /// argument which the member being woven holds at that slot.
+    /// </summary>
+    /// <param name="slot">The slot which the template names, as the IL of the template holds it: the receiver of the
+    /// template takes the first slot when the template belongs to an instance.</param>
+    /// <param name="templateDef">The template whose body names the slot.</param>
+    /// <returns>The instruction which loads the argument in the member being woven.</returns>
+    /// <exception cref="ArgumentException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
+    private Instruction CreateLdarg(int slot, MethodDefinition templateDef)
+    {
+        var parameter = GetParameterAt(slot, templateDef);
+
+        // A macro form carries the slot in the opcode rather than as an operand, so the macro is chosen by the slot
+        // which the argument holds in the member being woven, which is not the position of the parameter: the receiver
+        // of an instance member takes the slot ahead of the first of them. A slot which no macro holds is loaded
+        // through the operand form, which names the parameter itself and leaves the slot of it to be written from the
+        // parameter, where the one form of the slot is settled rather than written twice.
+        return GetShiftedSlot(slot, templateDef) switch
+        {
+            0 => Instruction.Create(OpCodes.Ldarg_0),
+            1 => Instruction.Create(OpCodes.Ldarg_1),
+            2 => Instruction.Create(OpCodes.Ldarg_2),
+            3 => Instruction.Create(OpCodes.Ldarg_3),
+            _ => Instruction.Create(OpCodes.Ldarg, parameter)
+        };
+    }
+
+    /// <summary>
+    /// The slot which the argument at <paramref name="slot"/> of the template holds in the member being woven.
+    /// </summary>
+    /// <param name="slot">The slot which the template names.</param>
+    /// <param name="templateDef">The template whose body names the slot.</param>
+    /// <returns>The slot which the same argument holds in the member being woven.</returns>
+    /// <exception cref="ArgumentException">Thrown when the template reads its own instance.</exception>
+    private int GetShiftedSlot(int slot, MethodDefinition templateDef)
+    {
+        // What the template reads at the slot of its own receiver is that receiver rather than an argument, and no
+        // member can be given it: a static member holds no such argument, and an instance one holds another instance in
+        // its place. A lambda which captures a variable is an instance method of the type which holds the capture, so a
+        // template written as one is a template of this kind.
+        if (!templateDef.IsStatic && slot == 0)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_READS_ITS_OWN_INSTANCE, Source.FullName));
+        }
+
+        // The two hold the same arguments in the same order, so an argument moves by one slot exactly when one of them
+        // belongs to an instance and the other does not: the receiver of the one which does takes the first slot.
+        return slot + (Source.IsStatic ? 0 : 1) - (templateDef.IsStatic ? 0 : 1);
+    }
+
+    /// <summary>
+    /// The parameter which the template reads or writes at a slot, which is the parameter of the member being woven that
+    /// holds the same argument.
+    /// </summary>
+    /// <remarks>
+    /// The slot is resolved against the member being woven rather than against the template, because it is the member
+    /// which holds the parameter that is written as the operand. The position of that parameter is the position which
+    /// the argument holds in the template as well, so it is the slot with the receivers of the two taken off it.
+    /// </remarks>
+    /// <param name="slot">The slot which the template names.</param>
+    /// <param name="templateDef">The template whose body names the slot.</param>
+    /// <returns>The parameter of the member being woven which holds the same argument.</returns>
+    /// <exception cref="ArgumentException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
+    private ParameterDefinition GetParameterAt(int slot, MethodDefinition templateDef)
+    {
+        var position = GetShiftedSlot(slot, templateDef) - (Source.IsStatic ? 0 : 1);
+        if (position < 0 || position >= Source.Parameters.Count)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, position, Source.FullName));
+        }
+
+        return Source.Parameters[position];
     }
 
     /// <summary>
     /// Replace the operand of instruction at current index. If the instruction is `ldstr {member_name}` and the nearest `call` instruction
     /// is one of the instance member accessors in Gneedle.Inject, parse the member name and flags, and replace the instruction with
-    /// the one to get the member reference. Otherwise, replace the instruction with the one imported to current module.
+    /// the one to get the member reference. Otherwise, replace the instruction with the one imported to current module.<para/>
+    /// The symbol which proceeds is the one which carries no name, so the call is the whole of it and the type which
+    /// declares it is what identifies it, in the place where the name of the others identifies them.
     /// </summary>
     /// <param name="currentIndex">Index of the instruction to replace operand.</param>
     /// <param name="filter">The instruction filter to replace the instruction.</param>
@@ -395,7 +650,6 @@ internal sealed partial class MethodHandler : IMethodHandler
         // - Gneedle.Inject.Base.Property(string)
         // - Gneedle.Inject.This.Method(string)
         // - Gneedle.Inject.Base.Method(string)
-        // - Gneedle.Inject.Proceed.Method(string), where the call is a generic instance method
         // which ILCode just look like:
         // IL_0000: ldstr {field_name}
         // IL_0005: call class [Gneedle.Inject]Gneedle.Inject.ValuableMember [Gneedle.Inject]Gneedle.Inject.This::Field(string)
@@ -405,7 +659,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             DeclaringType:
             {
-                Name     : nameof(This) or nameof(Base) or nameof(Object) or nameof(Static) or nameof(Proceed),
+                Name     : nameof(This) or nameof(Base) or nameof(Object) or nameof(Static),
                 Namespace: nameof(Gneedle) + "." + nameof(Inject)
             }
         } callingMethod)
@@ -424,9 +678,33 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             ParseMember(memberName, memberFlag, currentIndex, filter, targetDef);
         }
+        // The symbol which proceeds carries no name, so there is no instruction ahead of the call which identifies it:
+        // the call is the whole of the symbol, and the type which declares it does what the name of the others does.
+        // Which member it stands for is settled by the member being woven, whose body was taken over rather than named.
+        else if (currentIns.Operand is MethodReference proceedCall && proceedCall.DeclaringType.FullName == Proceed.TYPE_NAME)
+        {
+            // The type declares the two symbols which reach the body that was taken over: the one which names a
+            // signature for the call to be made with, and the one which takes the arguments which the template itself
+            // was given. Which of the two it is, is the name of the call.
+            if (proceedCall.Name == nameof(Proceed.Invoke))
+            {
+                ParseProceedInvoke(currentIndex, proceedCall, filter, targetDef);
+            }
+            else if (proceedCall.Parameters.Count != 0)
+            {
+                // A call which hands the symbol a name is a template which was compiled against a weaver which read one,
+                // and the name would be left on the stack ahead of the call which is written in its place.
+                throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, nameof(Proceed) + "." + nameof(Proceed.Method)));
+            }
+            else
+            {
+                ParseMethod(nameof(Proceed) + "." + nameof(Proceed.Method),
+                            MemberSymbols.Proceed | MemberSymbols.Method, currentIndex, null, filter, targetDef);
+            }
+        }
         else
         {
-            FilterOperand(currentIns, currentIndex, filter);
+            FilterOperand(currentIns, currentIndex, filter, targetDef);
         }
     }
 
@@ -436,7 +714,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="currentIns">The instruction with non-imported operand.</param>
     /// <param name="currentIndex">Index of the instruction.</param>
     /// <param name="filter">The instruction filter to replace the instruction.</param>
-    private void FilterOperand(Instruction currentIns, int currentIndex, InstructionFilter filter)
+    /// <param name="targetDef">The method definition being scanned (source of the instructions).</param>
+    private void FilterOperand(Instruction currentIns, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         switch (currentIns.Operand)
         {
@@ -449,16 +728,12 @@ internal sealed partial class MethodHandler : IMethodHandler
                 break;
             // The parameter of the template is matched to the parameter of the same position rather than to the one of
             // the same name: they are the parameters of two different methods, and the name which the template gave its
-            // own takes no part in it. The opcode is kept, because the position which is written is the one which the
-            // parameter holds in the method being woven, and that method accounts for its receiver by itself, just as
-            // the macro opcodes which GetLdargCode translates do.
+            // own takes no part in it. The opcode is kept, because the load or store is an instruction of the member
+            // being woven, which accounts for its receiver by itself. The forms of ldarg never reach here: each of them
+            // is translated by ParseBody, which reaches the macro forms as well.
             case ParameterDefinition parameterDef:
-                if (parameterDef.Index >= Source.Parameters.Count)
-                {
-                    throw new ArgumentException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, parameterDef.Index, Source.FullName));
-                }
-
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, Source.Parameters[parameterDef.Index]));
+                var parameter = GetParameterAt(parameterDef.Index, targetDef);
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, parameter));
                 break;
             // The type of the field may hold generic parameter tokens, just like List<Gneedle.Inject.T_0>::SomeField.
             // It may also hold a declaring type which stands for the type of another assembly, which is replaced below.
@@ -499,7 +774,9 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         else if (memberSymbol.HasFlag(MemberSymbols.Method))
         {
-            ParseMethod(memberName, memberSymbol, currentIndex, filter, targetDef);
+            // The name is the instruction ahead of the call, which is where every symbol but the one which proceeds
+            // writes it: that one is recognized by the call alone and reaches ParseMethod without a name.
+            ParseMethod(memberName, memberSymbol, currentIndex + 1, currentIndex, filter, targetDef);
         }
     }
 
@@ -601,9 +878,10 @@ internal sealed partial class MethodHandler : IMethodHandler
         private readonly Instruction?[] m_Replacements = new Instruction[target.Count];
 
         /// <summary>
-        /// The instruction to insert before the original instruction at index. If null, it means no instruction to insert.
+        /// The instructions to insert before the original instruction at index, in the order they were inserted. If
+        /// null, it means no instruction to insert.
         /// </summary>
-        private readonly Instruction?[] m_Insert = new Instruction[target.Count];
+        private readonly List<Instruction>?[] m_Insert = new List<Instruction>?[target.Count];
 
         /// <summary>
         /// Key: the instruction with non-imported operand.
@@ -653,7 +931,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         /// </summary>
         /// <param name="index">Index of the instruction to insert before.</param>
         /// <param name="ins"> The instruction to insert.</param>
-        public void Insert(int index, Instruction ins) => m_Insert[index] = ins;
+        public void Insert(int index, Instruction ins) => (m_Insert[index] ??= []).Add(ins);
 
         /// <summary>
         /// Apply the instruction translations to source collection. For each instruction in target collection,
@@ -672,16 +950,18 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         /// <summary>
-        /// If there is an instruction to insert before current index, add it to source.
+        /// If there are instructions to insert before current index, add them to source in the order they were
+        /// inserted, which is the order they are read in: the receiver of a call before the arguments of it.
         /// </summary>
-        /// <param name="source">The source collection to add instruction.</param>
+        /// <param name="source">The source collection to add instructions.</param>
         /// <param name="index">Index of the instruction in target collection.</param>
         private void AddInsertInstruction(ICollection<Instruction> source, int index)
         {
-            var insert = m_Insert[index];
-            if (insert != null)
+            if (m_Insert[index] is not { } insert) return;
+
+            foreach (var instruction in insert)
             {
-                source.Add(insert);
+                source.Add(instruction);
             }
         }
 

@@ -167,10 +167,23 @@ internal static class ErrorMessages
     internal const string INVALID_FROM_ASSEMBLY_TYPE = "The type which the FromAssemblyAttribute names cannot be found in the assembly it names. Type: {0}, Assembly: {1}.";
 
     /// <summary>
-    /// The first argument of a template is loaded where the template and the member which is woven are of different
-    /// types, so what the argument holds is not what the member is written against.
+    /// A template calls <see cref="Proceed.Invoke{TResult}"/> for a type which the member being woven does not hand
+    /// back. The placeholders are the type which the call names and the member.
     /// </summary>
-    internal const string LDARG0_CONVERT_FAILED = "The template and the member which is woven are of different types, so the first argument of the template cannot be loaded in it. Instruction: ldarg.0";
+    internal const string PROCEED_INVOKE_RETURN_TYPE_MISMATCH = "The type which the call to Proceed.Invoke hands back is not the type which the member being woven hands back. Type: {0}, Method: {1}.";
+
+    /// <summary>
+    /// The template belongs to an instance and reads it, which is the template's own receiver rather than an argument
+    /// of the member being woven. The placeholder is the member.
+    /// </summary>
+    internal const string TEMPLATE_READS_ITS_OWN_INSTANCE = "The template reads the instance which it belongs to, which is no argument of the member being woven. A template is a static method, and a lambda which captures a variable is an instance method of the type which holds the capture. Method: {0}.";
+
+    /// <summary>
+    /// The template reads a variable which it captured, and a value of that type cannot be written into the member
+    /// being woven, where the value would have to be held. The placeholders are the name of the field which holds it,
+    /// the name of the type, and the member.
+    /// </summary>
+    internal const string TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN = "The template captures a variable whose value cannot be written into the member being woven, where a string, a number, a character, a boolean, an enumeration, a null of a reference type can. Field: {0}, Type: {1}, Method: {2}.";
 
     /// <summary>
     /// The array which the image of an assembly was to be written to is smaller than the image. The placeholder is the

@@ -39,10 +39,10 @@ public static class PropertyAroundTemplates
     /// <summary>
     /// Proceed, and add one to what the accessor did with the value.
     /// </summary>
-    public static int GetThenAddsOne() => Proceed.Method<Func<int>>("get_Value")() + 1;
+    public static int GetThenAddsOne() => Proceed.Method<Func<int>>()() + 1;
 
     /// <inheritdoc cref="GetThenAddsOne"/>
-    public static void SetThenAddsOne(int value) => Proceed.Method<Action<int>>("set_Value")(value + 1);
+    public static void SetThenAddsOne(int value) => Proceed.Method<Action<int>>()(value + 1);
 }
 
 /// <summary>

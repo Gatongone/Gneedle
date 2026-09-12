@@ -3,6 +3,54 @@ namespace Gneedle.Inject;
 partial class MethodHandler
 {
     /// <summary>
+    /// Parse the call which proceeds into the body that was taken over with the arguments which the template itself was
+    /// given, which is the symbol that names no signature: the member which is woven keeps the signature of the
+    /// template, so the arguments of the call are the parameters of the template, in the order they are declared in.
+    /// </summary>
+    /// <param name="callIndex">Index of the instruction of the call to <see cref="Proceed.Invoke{TResult}"/>.</param>
+    /// <param name="call">The reference of that call, which names the type the body hands back where it hands one back.</param>
+    /// <param name="filter">The final instruction's container.</param>
+    /// <param name="targetDef">The template method which the instructions are copied from.</param>
+    /// <exception cref="ArgumentException">Thrown when the template proceeds without a body being woven around, or when the type which the call hands back is not the one which the member hands back.</exception>
+    private void ParseProceedInvoke(int callIndex, MethodReference call, InstructionFilter filter, MethodDefinition targetDef)
+    {
+        // The body which was taken over is what the call stands for, and a template which proceeds without one being
+        // taken over is a mistake of its own rather than a member which could not be found.
+        if (m_ProceedMethodName == null)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.PROCEED_WITHOUT_AROUND_BODY, nameof(Proceed) + "." + nameof(Proceed.Invoke)));
+        }
+
+        // The type of the value which the call hands back is written at the call and the type which the member hands
+        // back is written at the member, so the two are compared rather than left to the runtime to find disagreeing.
+        var handedBack = call is GenericInstanceMethod genericCall ? genericCall.GenericArguments[0] : Source.Module.TypeSystem.Void;
+        if (!TypeName.HasSameName(handedBack.ParseGenericTokens(Source, Source.Module), Source.ReturnType))
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.PROCEED_INVOKE_RETURN_TYPE_MISMATCH, handedBack.FullName, Source.FullName));
+        }
+
+        var proceed = Source.DeclaringType.Methods.FirstOrDefault(methodDef => methodDef.Name == m_ProceedMethodName)
+                      ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, m_ProceedMethodName));
+
+        // The receiver of the member comes first where the generated method belongs to an instance, and it is the
+        // receiver of the member which is written rather than the one of the template: the call is an instruction of the
+        // body which is woven, where the slot zero is the member. The arguments follow it in the order which the
+        // template declares its parameters in, which is the order of the parameters of the member.
+        if (!proceed.IsStatic)
+        {
+            filter.Insert(callIndex, Instruction.Create(OpCodes.Ldarg_0));
+        }
+
+        for (var position = 0; position < Source.Parameters.Count; position++)
+        {
+            filter.Insert(callIndex, CreateLdarg(position + (targetDef.IsStatic ? 0 : 1), targetDef));
+        }
+
+        // The call of the generated method takes the place of the call which proceeds.
+        filter.Replace(callIndex, Instruction.Create(OpCodes.Call, GetCallableReference(proceed)));
+    }
+
+    /// <summary>
     /// Parse the symbol to actual method operation.
     /// </summary>
     /// <example>
@@ -26,14 +74,17 @@ partial class MethodHandler
     /// </example>
     /// <param name="memberName">Name of the member.</param>
     /// <param name="memberSymbol">Member flags about the member kind and its property.</param>
-    /// <param name="currentIndex">Index of the instruction of `ldstr {member_name}`.</param>
+    /// <param name="callIndex">Index of the instruction of the call which the symbol stands for.</param>
+    /// <param name="nameIndex">Index of the instruction of `ldstr {member_name}`, which is the one ahead of the call, or
+    /// null for the symbol which carries no name: that one names its member from the member being woven rather than from
+    /// a name, so the call is the whole of the symbol.</param>
     /// <param name="filter">The final instruction's container.</param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
     /// <exception cref="InvalidILException">Thrown when the instructions around the name of the member are not the call which it stands for.</exception>
     /// <exception cref="ArgumentException">Thrown when the method is invalid.</exception>
-    private void ParseMethod(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
+    private void ParseMethod(string memberName, MemberSymbols memberSymbol, int callIndex, int? nameIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
-        if ((filter.Target[currentIndex + 1].Operand as GenericInstanceMethod)?.GenericArguments.FirstOrDefault() is not { } delegateRef)
+        if ((filter.Target[callIndex].Operand as GenericInstanceMethod)?.GenericArguments.FirstOrDefault() is not { } delegateRef)
         {
             throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
@@ -60,14 +111,14 @@ partial class MethodHandler
 
         // Detect Object.Method with new Object(param) syntax: need to skip the array init sequence.
         var skipArrayInitCount = 0;
-        if (memberSymbol.HasFlag(MemberSymbols.Object) && currentIndex >= 1)
+        if (memberSymbol.HasFlag(MemberSymbols.Object) && nameIndex is { } name && name >= 1)
         {
-            var prevIns = filter.Target[currentIndex - 1];
+            var prevIns = filter.Target[name - 1];
             if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
                 && declType.FullName == Object.TYPE_NAME)
             {
                 // Verify the full array init pattern exists.
-                var baseIdx = currentIndex - 7;
+                var baseIdx = name - 7;
                 if (baseIdx >= 0
                     && filter.Target[baseIdx].OpCode.Code == Code.Ldc_I4_1
                     && filter.Target[baseIdx + 1].OpCode == OpCodes.Newarr
@@ -83,13 +134,13 @@ partial class MethodHandler
 
         // Detect Static.Method with Static.From("typename"): need to skip ldstr+call Static::From.
         var skipStaticFromCount = 0;
-        if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
+        if (memberSymbol.HasFlag(MemberSymbols.Static) && nameIndex is { } staticName && staticName >= 2)
         {
-            var callFromIns = filter.Target[currentIndex - 1];
+            var callFromIns = filter.Target[staticName - 1];
             if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference { Name: "From", DeclaringType: var declType }
                 && declType.FullName == Static.TYPE_NAME)
             {
-                var ldstrIns = filter.Target[currentIndex - 2];
+                var ldstrIns = filter.Target[staticName - 2];
                 if (ldstrIns.OpCode == OpCodes.Ldstr)
                 {
                     skipStaticFromCount = 2; // ldstr + call Static::From
@@ -98,46 +149,52 @@ partial class MethodHandler
         }
 
         // var methodDef = memberSymbol.HasFlag(MemberSymbols.Base) ? GetMethodInBase(memberName, parameters) : GetMethodInThis(memberName, parameters);
-        var methodDef = GetMethod(memberSymbol, memberName, currentIndex, filter.Target, parameters, targetDef);
+        // The index which is given is the one of the name, which is what the members reached through an instance of
+        // Object or Static are read against: a symbol which carries no name is not one of those, so the call stands in
+        // its place, where it is read by nothing.
+        var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter.Target, parameters, targetDef);
         if (methodDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
         }
 
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
-        if (TryGetNextInvoke(filter.Target, currentIndex + 1, delegateRef, targetDef, out var callvirtIndex))
+        if (TryGetNextInvoke(filter.Target, callIndex, delegateRef, targetDef, out var callvirtIndex))
         {
             // Skip the array init sequence if this is Object.Method with new Object(param).
-            if (skipArrayInitCount > 0)
+            if (skipArrayInitCount > 0 && nameIndex is { } arrayName)
             {
-                for (var i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
+                for (var i = arrayName - skipArrayInitCount; i < arrayName; i++)
                 {
                     filter.Skip(i);
                 }
             }
 
             // Skip the Static.From sequence if this is Static.Method.
-            if (skipStaticFromCount > 0)
+            if (skipStaticFromCount > 0 && nameIndex is { } fromName)
             {
-                for (var i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
+                for (var i = fromName - skipStaticFromCount; i < fromName; i++)
                 {
                     filter.Skip(i);
                 }
             }
 
+            // The name of a symbol is dropped, and the receiver of a member of an instance is loaded in its place, which
+            // is the instruction ahead of the call. A symbol which carries no name has no such instruction, so the load
+            // is inserted ahead of the call instead. The call itself is dropped either way, and what the delegate was
+            // invoked through becomes the call of the member.
+            if (nameIndex is { } loadedName)
+            {
+                filter.Skip(loadedName);
+            }
+
             if (!methodDef.IsStatic)
             {
-                // ldstr {method_name} -> ldarg.0
-                filter.Replace(currentIndex, Instruction.Create(OpCodes.Ldarg_0));
-            }
-            else
-            {
-                // ldstr {method_name} -> nop
-                filter.Skip(currentIndex);
+                filter.Insert(callIndex, Instruction.Create(OpCodes.Ldarg_0));
             }
 
             // Skip `call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types})`
-            filter.Skip(currentIndex + 1);
+            filter.Skip(callIndex);
             // callvirt instance class {delegate_type}::Invoke({parameter_types}) -> callvirt/call instance class {declaring_type}::{method_name}({parameter_types})
             filter.Replace(callvirtIndex, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef)));
         }
@@ -147,22 +204,23 @@ partial class MethodHandler
             var importedMethod = GetCallableReference(methodDef);
             var delegateCtor = Source.Module.ImportReference(delegateDef.GetConstructors().FirstOrDefault());
 
+            // The name of the symbol is dropped, and the receiver of a member of an instance is loaded in its place: a
+            // symbol which carries no name has no such instruction, so the load is inserted ahead of the call instead.
+            // The call then becomes the pointer of the member, and the delegate is built from it.
+            if (nameIndex is { } loadedName)
+            {
+                filter.Skip(loadedName);
+            }
+
             if (!methodDef.IsStatic)
             {
-                // ldstr {method_name} -> ldarg.0
-                filter.Replace(currentIndex, Instruction.Create(OpCodes.Ldarg_0));
-                // call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types}) -> ldftn {return_type} {declaring_type}::{method_name}({parameter_types})
-                filter.Replace(currentIndex + 1, Instruction.Create(OpCodes.Ldftn, importedMethod));
-                // insert `newobj System.Void {delegate_type}::.ctor({parameter_types})`
-                filter.Insert(currentIndex + 2, Instruction.Create(OpCodes.Newobj, delegateCtor));
+                filter.Insert(callIndex, Instruction.Create(OpCodes.Ldarg_0));
             }
-            else
-            {
-                // ldstr {method_name} -> ldftn {return_type} {declaring_type}::{method_name}({parameter_types})
-                filter.Replace(currentIndex, Instruction.Create(OpCodes.Ldftn, importedMethod));
-                // call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types}) -> newobj System.Void {delegate_type}::.ctor({parameter_types})
-                filter.Replace(currentIndex + 1, Instruction.Create(OpCodes.Newobj, delegateCtor));
-            }
+
+            // call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types}) -> ldftn {return_type} {declaring_type}::{method_name}({parameter_types})
+            filter.Replace(callIndex, Instruction.Create(OpCodes.Ldftn, importedMethod));
+            // insert `newobj System.Void {delegate_type}::.ctor({parameter_types})`
+            filter.Insert(callIndex + 1, Instruction.Create(OpCodes.Newobj, delegateCtor));
         }
     }
 
@@ -531,17 +589,17 @@ partial class MethodHandler
     private TypeReference? GetArgType(Instruction instruction, MethodDefinition targetDef)
     {
         var isStatic = targetDef.IsStatic;
-        if (instruction.OpCode == OpCodes.Ldarg_S && instruction.Operand is ParameterReference parameter)
-        {
-            return parameter.ParameterType.ParseGenericTokens(Source, Source.Module);
-        }
+        if (!instruction.TryGetLdargIndex(!isStatic, out var slot)) return null;
+        if (!isStatic && slot == 0) return targetDef.DeclaringType;
 
-        if (!instruction.TryGetLdargIndex(out var index)) return null;
+        // The load may name a slot which the template holds no parameter for, which is a body the weaving refuses with a
+        // message of its own rather than a type to compare against.
+        var position = slot - (isStatic ? 0 : 1);
+        if (position < 0 || position >= targetDef.Parameters.Count) return null;
+
         // The parameter of a template is a token when it stands for a generic parameter of the method being woven, just
         // as the parameter of a delegate is, so it is parsed to that parameter before the type is compared with anything.
-        return (!isStatic && index == 0
-            ? targetDef.DeclaringType
-            : targetDef.Parameters[index + (isStatic ? 0 : -1)].ParameterType).ParseGenericTokens(Source, Source.Module);
+        return targetDef.Parameters[position].ParameterType.ParseGenericTokens(Source, Source.Module);
     }
 
     /// <summary>

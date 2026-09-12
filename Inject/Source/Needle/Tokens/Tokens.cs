@@ -201,13 +201,34 @@ public static class Proceed
     internal const string TYPE_NAME = $"{nameof(Gneedle)}.{nameof(Inject)}.{nameof(Proceed)}";
 
     /// <summary>
-    /// Get the method which holds the body of the method which is woven around.
+    /// Get the method which holds the body of the method which is woven around.<para/>
+    /// The member which the call proceeds into is the member being woven rather than one which is named, so the call
+    /// takes no name: a template is woven around one member at a time, and that member is the one whose body was taken
+    /// over. What the generic argument describes is the signature of that body, which is the signature of the member.
     /// </summary>
-    /// <param name="name">Name of the method, which is for reading alone and takes no part in the resolving.</param>
     /// <typeparam name="TMethod">Method signature without name.</typeparam>
     /// <returns>The symbol of the method.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
-    public static TMethod Method<TMethod>(string name) where TMethod : Delegate => throw new InjectionNotEffectiveException();
+    public static TMethod Method<TMethod>() where TMethod : Delegate => throw new InjectionNotEffectiveException();
+
+    /// <summary>
+    /// Call the body which was taken over with the arguments which the template itself was given, and hand back what
+    /// that body hands back.<para/>
+    /// The template of an around body keeps the signature of the member which is woven, so its parameters are the
+    /// arguments of that member, and a call which passes them on names no signature of its own: the type of the value
+    /// which is handed back is what the call names, and the weaving writes the arguments of the template into the call.
+    /// </summary>
+    /// <typeparam name="TResult">Type of the value which the body hands back, which is the type of the member.</typeparam>
+    /// <returns>The value which the body of the member hands back.</returns>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
+    public static TResult Invoke<TResult>() => throw new InjectionNotEffectiveException();
+
+    /// <summary>
+    /// Call the body which was taken over with the arguments which the template itself was given, where the member
+    /// which is woven hands nothing back.
+    /// </summary>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
+    public static void Invoke() => throw new InjectionNotEffectiveException();
 }
 
 /// <summary>

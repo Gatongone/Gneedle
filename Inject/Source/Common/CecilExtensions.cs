@@ -89,11 +89,21 @@ internal static class CecilExtensions
     extension(Instruction ins)
     {
         /// <summary>
-        /// Get ldarg code index.
+        /// Get the slot of the argument which a load of one names.
         /// </summary>
-        /// <param name="index">Index of the ldarg target. It would be -1 when return false.</param>
+        /// <remarks>
+        /// The slot is the position of the argument rather than that of the parameter, so the receiver of a method which
+        /// belongs to an instance takes the first one and the first parameter of such a method follows it. The macro
+        /// opcodes hold that slot in the opcode, while the long ones hold it as an operand, which Cecil resolves to the
+        /// parameter itself wherever the body still holds the method the operand belongs to, and leaves as the slot
+        /// wherever it does not. A parameter is named by its position among the parameters of its method, which is the
+        /// slot only when the method belongs to no instance, so the receiver is added back where there is one.
+        /// </remarks>
+        /// <param name="hasReceiver">Whether the method which the instruction belongs to holds a receiver, which takes
+        /// the first slot, ahead of the first parameter of it.</param>
+        /// <param name="index">Slot of the ldarg target. It would be -1 when return false.</param>
         /// <returns>False when the instruction opcode is not a ldarg type.</returns>
-        internal bool TryGetLdargIndex(out int index)
+        internal bool TryGetLdargIndex(bool hasReceiver, out int index)
         {
             index = ins.OpCode.Code switch
             {
@@ -101,8 +111,13 @@ internal static class CecilExtensions
                 Code.Ldarg_1 => 1,
                 Code.Ldarg_2 => 2,
                 Code.Ldarg_3 => 3,
-                Code.Ldarg   => (int) ins.Operand,
-                _            => -1
+                Code.Ldarg or Code.Ldarg_S => ins.Operand switch
+                {
+                    int slot                     => slot,
+                    ParameterReference parameter => parameter.Index + (hasReceiver ? 1 : 0),
+                    _                            => -1
+                },
+                _ => -1
             };
             return index != -1;
         }

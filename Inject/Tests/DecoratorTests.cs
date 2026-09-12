@@ -224,6 +224,64 @@ public class DecoratorTests
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Add), Is.True);
     }
 
+    [Test]
+    public void MethodDecorator_WithBody_Of_A_Lambda_Which_Captured_A_Variable_Writes_The_Value()
+    {
+        // The delegate is what the chain is given and what it holds until the method is appended, so what the lambda
+        // captured is read while the chain ends and written into the body which the method copies.
+        var assembly = Assembly.Create("MethodDecoratorCaptureAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var captured = 41;
+
+        var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
+                         .WithReturnType(typeof(int))
+                         .WithBody(() => captured)
+                         .GetHandler();
+
+        var body = ((MethodHandler) method).Source.Body;
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Compute")!.Invoke(null, null), Is.EqualTo(41));
+    }
+
+    [Test]
+    public void PropertyDecorator_WithGetter_Of_A_Lambda_Which_Captured_A_Variable_Writes_The_Value()
+    {
+        // A getter is described by a delegate as well, and what the lambda captured is written into the accessor which
+        // the chain appends rather than read off the instance which the delegate held.
+        var host = NewClass();
+        var captured = 41;
+
+        var property = host.AddProperty("Value", PropertyFlags.Public)
+                           .WithType(typeof(int))
+                           .WithGetter(() => captured)
+                           .GetHandler();
+
+        var body = ((MethodHandler) property.GetGetter()!).Source.Body;
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+    }
+
+    [Test]
+    public void PropertyDecorator_WithSetter_Of_A_Lambda_Which_Captured_A_Variable_Writes_The_Value()
+    {
+        var host = NewClass();
+        var captured = 41;
+
+        var property = host.AddProperty("Value", PropertyFlags.Public)
+                           .WithType(typeof(int))
+                           .WithSetter((int value) => Console.WriteLine(value + captured))
+                           .GetHandler();
+
+        // The setter reads the value which it was given off its own receiver, which is not what the template loaded, so
+        // nothing of the body reads the instance the delegate held.
+        var body = ((MethodHandler) property.GetSetter()!).Source.Body;
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+    }
+
     #endregion
 
     #region FieldDecorator

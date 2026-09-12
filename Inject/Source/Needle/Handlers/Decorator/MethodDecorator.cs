@@ -54,6 +54,12 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     private MethodInfo? m_BodyMethod;
 
     /// <summary>
+    /// The instance which the delegate of <see cref="m_BodyMethod"/> was made from, which holds what the template
+    /// captured, or null when the body was given as a method alone, or when the template captured nothing.
+    /// </summary>
+    private object? m_BodyClosure;
+
+    /// <summary>
     /// Create a decorator which describes a method before it is appended to the module.
     /// </summary>
     /// <param name="typeHandler">Handler of the type which the method is appended to.</param>
@@ -113,8 +119,9 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     {
         // The two ways of describing a body replace each other, so that the one which was asked for last is the one which
         // is applied.
-        m_DefaultBody = body;
-        m_BodyMethod  = null;
+        m_DefaultBody  = body;
+        m_BodyMethod   = null;
+        m_BodyClosure  = null;
         return this;
     }
 
@@ -123,6 +130,16 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     {
         m_BodyMethod  = method;
         m_DefaultBody = null;
+        m_BodyClosure = null;
+        return this;
+    }
+
+    /// <inheritdoc cref="WithBody(MethodInfo)"/>
+    /// <param name="delegation">The delegate which holds the body, and the instance which holds what it captured.</param>
+    internal ITypeDecorator WithBody(Delegate delegation)
+    {
+        WithBody(delegation.Method);
+        m_BodyClosure = delegation.Target;
         return this;
     }
 
@@ -138,7 +155,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
 
         // The method is added with a body which throws, so that a method which is added without a body is still
         // loadable. The body which was asked for replaces it.
-        if (m_BodyMethod is { } methodInfo) handler.SetBody(methodInfo);
+        if (m_BodyMethod is { } methodInfo) MethodHandler.SetBody(handler, methodInfo, m_BodyClosure);
         else if (m_DefaultBody is { } body) handler.SetBody(body);
 
         return handler;
