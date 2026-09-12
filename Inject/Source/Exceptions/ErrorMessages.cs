@@ -173,6 +173,13 @@ internal static class ErrorMessages
     internal const string PROCEED_INVOKE_RETURN_TYPE_MISMATCH = "The type which the call to Proceed.Invoke hands back is not the type which the member being woven hands back. Type: {0}, Method: {1}.";
 
     /// <summary>
+    /// The template names a type which the compiler wrote for a body of the template's own — a lambda, a local
+    /// function, an async body or an iterator — which holds that body as a method of its own rather than as
+    /// instructions of the template. The placeholders are the reference which names it and the member.
+    /// </summary>
+    internal const string TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN = "The template names a type which the compiler wrote for a body of the template's own, which is a lambda, a local function, an async body or an iterator: what such a type holds is a method of its own rather than instructions of the template, so the weaving cannot carry it. Reference: {0}, Method: {1}.";
+
+    /// <summary>
     /// The template belongs to an instance and reads it, which is the template's own receiver rather than an argument
     /// of the member being woven. The placeholder is the member.
     /// </summary>

@@ -432,6 +432,46 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         // Apply translations to body.
         filter.ApplyTo(Source.Body.Instructions);
+
+        CarryExceptionHandlers(instructions, targetDef, filter);
+    }
+
+    /// <summary>
+    /// Write the regions which the template protects into the body which is woven, so that what the template catches,
+    /// disposes in a `finally` or takes a `lock` on is protected where it was woven as well.<para/>
+    /// The boundaries of a region are instructions of the template, and each of them stands where it stood: what the
+    /// weaving wrote for it. The types which are caught are imported, so that a region which catches a type of another
+    /// assembly is written against that assembly in the body which is woven, as every other operand is.
+    /// </summary>
+    /// <param name="instructions">The instructions of the body which was parsed.</param>
+    /// <param name="targetDef">The template which the instructions belong to.</param>
+    /// <param name="filter">The instruction filter which wrote the body.</param>
+    /// <exception cref="InvalidILException">Thrown when a region begins at an instruction which the body does not hold.</exception>
+    private void CarryExceptionHandlers(Mono.Collections.Generic.Collection<Instruction> instructions, MethodDefinition targetDef, InstructionFilter filter)
+    {
+        foreach (var handler in targetDef.Body.ExceptionHandlers)
+        {
+            var carried = new ExceptionHandler(handler.HandlerType)
+            {
+                TryStart     = filter.Emitted(handler.TryStart),
+                TryEnd       = filter.Emitted(handler.TryEnd),
+                HandlerStart = filter.Emitted(handler.HandlerStart),
+                HandlerEnd   = filter.Emitted(handler.HandlerEnd),
+                FilterStart  = filter.Emitted(handler.FilterStart),
+                CatchType    = handler.CatchType == null
+                    ? null
+                    : Source.Module.ImportReference(handler.CatchType).ParseGenericTokens(Source, Source.Module)
+            };
+
+            // A region which begins at nothing would protect nothing, and the two boundaries at the end of it stand for
+            // the end of the body, which is written by leaving them out rather than by naming an instruction.
+            if (carried.TryStart == null || carried.HandlerStart == null)
+            {
+                throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, "$" + instructions.Count));
+            }
+
+            Source.Body.ExceptionHandlers.Add(carried);
+        }
     }
 
     /// <summary>
@@ -723,6 +763,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // It may also hold a declaring type which stands for the type of another assembly, which the parsing below
             // replaces by the real one.
             case MethodReference methodRef:
+                RefuseTheCompilersOwnType(methodRef.DeclaringType, methodRef.FullName);
                 var importedMethod = Source.Module.ImportReference(methodRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
                 break;
@@ -738,6 +779,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // The type of the field may hold generic parameter tokens, just like List<Gneedle.Inject.T_0>::SomeField.
             // It may also hold a declaring type which stands for the type of another assembly, which is replaced below.
             case FieldReference fieldRef:
+                RefuseTheCompilersOwnType(fieldRef.DeclaringType, fieldRef.FullName);
                 var importedField = Source.Module.ImportReference(fieldRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedField));
                 break;
@@ -747,8 +789,29 @@ internal sealed partial class MethodHandler : IMethodHandler
                 break;
             // The type may hold generic parameter tokens itself, just like box Gneedle.Inject.T_0.
             case TypeReference typeRef:
+                RefuseTheCompilersOwnType(typeRef, typeRef.FullName);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, typeRef.ParseGenericTokens(Source, Source.Module)));
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Refuse a reference into a type which the compiler wrote for a body of the template's own.<para/>
+    /// A lambda, a local function, an async body and an iterator body are each a method of a type which the compiler
+    /// writes beside the template, and which is nested inside what declares it with a name the compiler writes. The
+    /// instructions of the template are carried, but such a method is not: the woven member would reach into the
+    /// assembly the template was compiled into, at a type which is private to it, and fail when it ran rather than here.
+    /// </summary>
+    /// <param name="type">The type which the reference names, or which declares the member it names.</param>
+    /// <param name="reference">The reference itself, which the message names.</param>
+    /// <exception cref="ArgumentException">Thrown when the reference reaches a type which the compiler wrote.</exception>
+    private void RefuseTheCompilersOwnType(TypeReference? type, string reference)
+    {
+        for (var at = type; at is { IsNested: true }; at = at.DeclaringType)
+        {
+            if (!at.Name.StartsWith("<", StringComparison.Ordinal)) continue;
+
+            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, reference, Source.FullName));
         }
     }
 
@@ -884,6 +947,15 @@ internal sealed partial class MethodHandler : IMethodHandler
         private readonly List<Instruction>?[] m_Insert = new List<Instruction>?[target.Count];
 
         /// <summary>
+        /// The instruction which was written for each instruction of the target, at the same index, or null for one
+        /// which was written as nothing at all.<para/>
+        /// Where an instruction was written as more than one, this is the first of them, which is where a region or a
+        /// branch which named that instruction begins. Where it was written as none, what stands in its place is the
+        /// first instruction written after it, which is what <see cref="Emitted"/> answers with.
+        /// </summary>
+        private readonly Instruction?[] m_Written = new Instruction?[target.Count];
+
+        /// <summary>
         /// Key: the instruction with non-imported operand.
         /// Value: the instruction with re-imported operand.
         /// </summary>
@@ -894,7 +966,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         /// The instruction at index in target collection will be replaced with the instruction in m_Replacements at the same index if there is one,
         /// or will be added to source collection directly if there is no replacement instruction.
         /// </summary>
-        public readonly IReadOnlyList<Instruction> Target = target.ToArray();
+        public readonly Instruction[] Target = target.ToArray();
 
         /// <summary>
         /// Check if there is a replacement instruction for the instruction at index.
@@ -911,16 +983,19 @@ internal sealed partial class MethodHandler : IMethodHandler
         public void Skip(int index) => m_Replacements[index] = Instruction.Create(OpCodes.Nop);
 
         /// <summary>
-        /// Replace the instruction at index with the given instruction. If the operand of original instruction is MethodReference,
-        /// ParameterDefinition, FieldReference, VariableDefinition or TypeReference,
-        /// add the original instruction and the new instruction to m_Operands for later operand replacement.
+        /// Replace the instruction at index with the given instruction. The instruction which was replaced and the one
+        /// which replaces it are remembered together, so that an instruction which branches to the first is pointed at
+        /// the second: what a branch was written to reach is whatever stands where that instruction stood.
         /// </summary>
         /// <param name="index">Index of the instruction to be replaced.</param>
         /// <param name="ins">The instruction to replace with.</param>
         public void Replace(int index, Instruction ins)
         {
             m_Replacements[index] = ins;
-            if (target[index].Operand is MethodReference or ParameterDefinition or FieldReference or VariableDefinition or TypeReference)
+
+            // An instruction which is replaced with a nop is one which the body does not hold at all, and a branch to
+            // it is pointed at what stands after it instead, which is what ApplyTo does once the body is written.
+            if (ins.OpCode != OpCodes.Nop)
             {
                 m_Operands.Add(target[index], ins);
             }
@@ -932,6 +1007,25 @@ internal sealed partial class MethodHandler : IMethodHandler
         /// <param name="index">Index of the instruction to insert before.</param>
         /// <param name="ins"> The instruction to insert.</param>
         public void Insert(int index, Instruction ins) => (m_Insert[index] ??= []).Add(ins);
+
+        /// <summary>
+        /// The instruction which stands where the given instruction of the template stood, which is the first one
+        /// written for it, or the first written after it where nothing was written for it at all.
+        /// </summary>
+        /// <param name="instruction">The instruction of the template which is asked about, or null for a boundary which
+        /// the template does not hold, which stands for the end of the body.</param>
+        /// <returns>The instruction of the body which stands where that one stood, or null when there is none.</returns>
+        public Instruction? Emitted(Instruction? instruction)
+        {
+            if (instruction == null) return null;
+
+            for (var index = Array.IndexOf(Target, instruction); index >= 0 && index < m_Written.Length; index++)
+            {
+                if (m_Written[index] != null) return m_Written[index];
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Apply the instruction translations to source collection. For each instruction in target collection,
@@ -946,6 +1040,29 @@ internal sealed partial class MethodHandler : IMethodHandler
             {
                 AddInsertInstruction(source, index);
                 ReplaceOrAddInstruction(source, index);
+            }
+
+            PointBranches(source);
+        }
+
+        /// <summary>
+        /// Point every branch which names an instruction of the template at the instruction which stands where that one
+        /// stood, for the ones which were written as nothing: a branch to an instruction which the body does not hold
+        /// would be a branch to nothing.
+        /// </summary>
+        /// <param name="source">The source collection which the instructions were applied to.</param>
+        private void PointBranches(ICollection<Instruction> source)
+        {
+            var written = new HashSet<Instruction>(source);
+
+            foreach (var instruction in source)
+            {
+                // An instruction which the body holds stands where it stood, and one of another body, which a moved
+                // body carries, is not read against the instructions of this one.
+                if (instruction.Operand is not Instruction target || written.Contains(target)) continue;
+
+                var standing = Emitted(target);
+                if (standing != null) instruction.Operand = standing;
             }
         }
 
@@ -962,6 +1079,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             foreach (var instruction in insert)
             {
                 source.Add(instruction);
+                m_Written[index] ??= instruction;
             }
         }
 
@@ -979,6 +1097,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 if (replacement.OpCode != OpCodes.Nop)
                 {
                     source.Add(replacement);
+                    m_Written[index] ??= replacement;
                 }
             }
             else
@@ -998,11 +1117,14 @@ internal sealed partial class MethodHandler : IMethodHandler
             // The operand may be re-imported, so we need to build a new one.
             if (ins.Operand is Instruction oldIns && m_Operands.TryGetValue(oldIns, out var newIns))
             {
-                source.Add(Instruction.Create(ins.OpCode, newIns));
+                var pointer = Instruction.Create(ins.OpCode, newIns);
+                source.Add(pointer);
+                m_Written[index] ??= pointer;
             }
             else
             {
                 source.Add(ins);
+                m_Written[index] ??= ins;
             }
         }
     }

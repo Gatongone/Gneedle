@@ -31,6 +31,16 @@ public static class AroundTemplates
     public static int ProceedWithItsOwnArgumentsThenAddOne(int left, int right) => Proceed.Invoke<int>() + 1;
 
     /// <summary>
+    /// Proceed inside a region which catches what the body which was taken over throws, which is the region whose
+    /// boundaries the weaving rewrites with the instructions of the template: what catches is carried with them.
+    /// </summary>
+    public static int ProceedInsideACatch()
+    {
+        try { return Proceed.Invoke<int>(); }
+        catch (NotSupportedException) { return -1; }
+    }
+
+    /// <summary>
     /// Proceed with the arguments as they are.
     /// </summary>
     public static int ProceedOnly(int left, int right) => Proceed.Method<IntBinaryOp>()(left, right);
@@ -289,6 +299,22 @@ public class AroundBodyTests
         // 1234 reversed is 4321, and the template adds one to what it returned: 4322 rather than 3212, which is what
         // the arguments come to when the loads keep the slots of the template.
         Assert.That(type.GetMethod("Number")!.Invoke(Activator.CreateInstance(type), [1, 2, 3, 4]), Is.EqualTo(4322));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Catches_What_The_Body_Throws_Runs_The_Catch()
+    {
+        // The body of the member which is added without one throws, and the region of the template which catches that
+        // is written with it: -1 rather than the exception leaving the woven member, and rather than 0, which is what a
+        // region without a handler would hand back by reading nothing off the stack.
+        var assembly = Assembly.Create("AroundBodyCatchAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+
+        run.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedInsideACatch)));
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(-1));
     }
 
     [Test]
