@@ -3,9 +3,9 @@
 namespace Gneedle.Inject;
 
 /// <summary>
-/// Represents a handler for a method, which reads its name and writes its body.
+/// Represents a handler for a method, which reads its name and its attributes and writes its body.
 /// </summary>
-public interface IMethodHandler
+public interface IMethodHandler : IAttributeContainer
 {
     /// <summary>
     /// Name of the method.

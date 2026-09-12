@@ -35,6 +35,17 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <inheritdoc/>
     ITypeHandler IMethodHandler.DeclaringTypeHandler => DeclaringTypeHandler;
 
+    /// <inheritdoc/>
+    public bool ContainsAttribute(IType attributeType) => Source.CustomAttributes.Any(attribute => TypeName.HasSameName(attribute.AttributeType, attributeType));
+
+    /// <inheritdoc/>
+    public void AddAttribute(IType attributeType, params object[] arguments)
+    {
+        var attributeDef = DeclaringTypeHandler.AssemblyHandler.GetCecilType(attributeType).Definition;
+        var attribute = attributeDef.CreateCustomAttribute(DeclaringTypeHandler.AssemblyHandler.Assembly.Source.MainModule, arguments);
+        Source.CustomAttributes.Add(attribute);
+    }
+
     /// <summary>
     /// Initialize a new instance of MethodHandler with the source method definition and its declaring type handler.
     /// The source method definition is the method definition we want to inject code into, and the declaring type handler is the type handler of the type that declares the source method definition.

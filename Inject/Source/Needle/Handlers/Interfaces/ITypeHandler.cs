@@ -22,6 +22,14 @@ public interface IInterfaceContainer
     /// <param name="interfaceType">The interface type to check for.</param>
     /// <returns>True if the container contains the specified interface type; otherwise, false.</returns>
     bool ContainsInterface(IType interfaceType);
+
+    /// <summary>
+    /// Append an interface to the type which is handled.<para/>
+    /// The type which is handled is given the reference to the interface and nothing else: the members of the interface
+    /// are not read, and nothing is woven into the type for it, so an interface is added whole or not at all.
+    /// </summary>
+    /// <param name="interfaceType">The interface which is added.</param>
+    void AddInterface(IType interfaceType);
 }
 
 /// <summary>
@@ -161,5 +169,22 @@ public static class TypeHandlerExtensions
         /// Checks if the container contains the specified interface type.
         /// </summary>
         public bool ContainsInterface<TInterface>() => container.ContainsInterface(typeof(TInterface));
+
+        /// <summary>
+        /// Append an interface to the type which is handled.
+        /// </summary>
+        /// <param name="interfaceType">The interface which is added, which has to be an interface.</param>
+        /// <exception cref="ArgumentException">Thrown when the type which is given is not an interface.</exception>
+        public void AddInterface(Type interfaceType)
+        {
+            if (!interfaceType.IsInterface) throw new ArgumentException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
+            container.AddInterface(interfaceType.ToGneedleType());
+        }
+
+        /// <summary>
+        /// Append an interface to the type which is handled.
+        /// </summary>
+        /// <typeparam name="TInterface">The interface which is added.</typeparam>
+        public void AddInterface<TInterface>() => container.AddInterface(typeof(TInterface));
     }
 }

@@ -347,4 +347,79 @@ public class AssemblyHandlerTests
     }
 
     #endregion
+
+    #region AddInterface
+
+    [Test]
+    public void AddInterface_Adds_The_Interface_To_The_Type()
+    {
+        var asm = Assembly.Create("HandlerInterfaceAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+
+        host.AddInterface<ITestInterface>();
+
+        Assert.That(host.Source.Interfaces.Count, Is.EqualTo(1));
+        Assert.That(host.Source.Interfaces[0].InterfaceType.FullName, Is.EqualTo(typeof(ITestInterface).FullName));
+    }
+
+    [Test]
+    public void AddInterface_With_An_IType_Adds_The_Interface_To_The_Type()
+    {
+        var asm = Assembly.Create("HandlerInterfaceITypeAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+
+        host.AddInterface(typeof(ITestInterface).ToGneedleType());
+
+        Assert.That(host.ContainsInterface<ITestInterface>(), Is.True);
+    }
+
+    [Test]
+    public void AddInterface_Is_Reported_By_ContainsInterface()
+    {
+        var asm = Assembly.Create("HandlerInterfaceContainsAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+
+        Assert.That(host.ContainsInterface<ITestInterface>(), Is.False);
+        host.AddInterface(typeof(ITestInterface));
+        Assert.That(host.ContainsInterface<ITestInterface>(), Is.True);
+    }
+
+    [Test]
+    public void AddInterface_With_A_Type_Which_Is_Not_An_Interface_Throws()
+    {
+        // A class as the interface of a type is metadata which no loader reads, so it is refused where it is asked for
+        // rather than where the assembly which holds it is loaded.
+        var asm = Assembly.Create("HandlerInterfaceRefusedAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+
+        Assert.Throws<ArgumentException>(() => host.AddInterface(typeof(TestBaseClass)));
+    }
+
+    [Test]
+    public void AddInterface_Produces_An_Assembly_Which_Reads_Back()
+    {
+        // The interface is declared by the assembly which holds these tests, so the reference which is written has to
+        // belong to the assembly which is built rather than to the one which declares the interface: a member of
+        // another module is written through a reference to it alone.
+        var asm = Assembly.Create("HandlerInterfaceReadableAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        host.AddInterface<ITestInterface>();
+
+        using var stream = new MemoryStream();
+        asm.SaveTo(stream);
+        stream.Position = 0;
+
+        var reread = AssemblyDefinition.ReadAssembly(stream);
+        var type = reread.MainModule.GetType($"{Ns}.Host");
+        Assert.That(type, Is.Not.Null);
+        Assert.That(type!.Interfaces.Count, Is.EqualTo(1));
+        Assert.That(type.Interfaces[0].InterfaceType.FullName, Is.EqualTo(typeof(ITestInterface).FullName));
+    }
+
+    #endregion
 }

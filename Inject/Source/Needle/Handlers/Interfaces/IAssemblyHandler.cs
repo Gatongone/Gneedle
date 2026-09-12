@@ -1,9 +1,12 @@
 ﻿namespace Gneedle.Inject;
 
 /// <summary>
-/// Represents a handler for an assembly, which resolves the types which it declares and adds new ones to it.
+/// Represents a handler for an assembly, which resolves the types which it declares, adds new ones to it, and carries
+/// the attributes of the assembly itself.<para/>
+/// The attributes which are read and written here are the ones of the assembly, which an injector of the assembly
+/// itself is read from and which are put on the module rather than on a member of it.
 /// </summary>
-public interface IAssemblyHandler
+public interface IAssemblyHandler : IAttributeContainer
 {
     /// <summary>
     /// Append a reference to <paramref name="targetAssembly"/> to the assembly which is handled.

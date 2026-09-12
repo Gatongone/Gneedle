@@ -143,9 +143,10 @@ internal static class ErrorMessages
     internal const string TYPE_IS_INTERFACE = "An interface cannot be the base type of a type which is added.";
 
     /// <summary>
-    /// A type which is not an interface was given as an interface of a type which is to be added.
+    /// A type which is not an interface was given as an interface, whether of a type which is to be added or of one
+    /// which is handled.
     /// </summary>
-    internal const string TYPE_IS_NOT_INTERFACE = "A type which is not an interface was given as an interface of a type which is added.";
+    internal const string TYPE_IS_NOT_INTERFACE = "A type which is not an interface was given as an interface.";
 
     /// <summary>
     /// A type which cannot be assigned to the type which was asked for was given. The placeholder is the name of the

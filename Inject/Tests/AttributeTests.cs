@@ -198,4 +198,76 @@ public class AttributeTests
     }
 
     #endregion
+
+    #region Assembly
+
+    [Test]
+    public void AddAttribute_On_The_Assembly_Puts_The_Attribute_On_The_Assembly()
+    {
+        var assembly = Assembly.Create("AssemblyAttributeAssembly");
+        var handler = (AssemblyHandler) assembly.Handler;
+
+        handler.AddAttribute<MarkerAttribute>("hello");
+
+        var attribute = assembly.Source.CustomAttributes.Single(carried => carried.AttributeType.FullName == typeof(MarkerAttribute).FullName);
+        Assert.That(attribute.ConstructorArguments[0].Value, Is.EqualTo("hello"));
+        Assert.That(CarriesMarker(handler.GetCecilType(typeof(MarkerAttribute)).Definition), Is.False);
+    }
+
+    [Test]
+    public void ContainsAttribute_On_The_Assembly_Reports_The_Attribute_Which_Was_Added()
+    {
+        var assembly = Assembly.Create("AssemblyAttributeContainsAssembly");
+        var handler = (AssemblyHandler) assembly.Handler;
+
+        Assert.That(handler.ContainsAttribute<MarkerAttribute>(), Is.False);
+        handler.AddAttribute(typeof(MarkerAttribute), "hello");
+        Assert.That(handler.ContainsAttribute<MarkerAttribute>(), Is.True);
+    }
+
+    [Test]
+    public void AddAttribute_On_The_Assembly_Produces_An_Assembly_Which_Reads_Back()
+    {
+        var assembly = Assembly.Create("AssemblyAttributeReadableAssembly");
+        ((AssemblyHandler) assembly.Handler).AddAttribute<MarkerAttribute>("hello");
+
+        using var stream = new MemoryStream();
+        assembly.SaveTo(stream);
+        stream.Position = 0;
+
+        var reread = AssemblyDefinition.ReadAssembly(stream);
+        var attribute = reread.MainModule.Assembly.CustomAttributes.Single(carried => carried.AttributeType.FullName == typeof(MarkerAttribute).FullName);
+        Assert.That(attribute.ConstructorArguments[0].Value, Is.EqualTo("hello"));
+    }
+
+    #endregion
+
+    #region Method
+
+    [Test]
+    public void AddAttribute_On_A_Method_Puts_The_Attribute_On_The_Method()
+    {
+        var host = NewHost("MethodAttributeAssembly");
+        var method = host.AddMethod("Run", MethodFlags.Public).GetHandler();
+
+        method.AddAttribute<MarkerAttribute>("hello");
+
+        var definition = ((MethodHandler) method).Source;
+        Assert.That(definition.CustomAttributes.Single().AttributeType.FullName, Is.EqualTo(typeof(MarkerAttribute).FullName));
+        // The attribute belongs to the method, so the type which declares it is left without it.
+        Assert.That(host.Source.CustomAttributes.Any(carried => carried.AttributeType.FullName == typeof(MarkerAttribute).FullName), Is.False);
+    }
+
+    [Test]
+    public void ContainsAttribute_On_A_Method_Reports_The_Attribute_Which_Was_Added()
+    {
+        var host = NewHost("MethodAttributeContainsAssembly");
+        var method = host.AddMethod("Run", MethodFlags.Public).GetHandler();
+
+        Assert.That(method.ContainsAttribute<MarkerAttribute>(), Is.False);
+        method.AddAttribute(typeof(MarkerAttribute), "hello");
+        Assert.That(method.ContainsAttribute<MarkerAttribute>(), Is.True);
+    }
+
+    #endregion
 }

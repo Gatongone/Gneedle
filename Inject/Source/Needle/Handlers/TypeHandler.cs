@@ -47,6 +47,15 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     public bool ContainsInterface(IType interfaceType) => Source.Interfaces.Any(implementation => TypeName.HasSameName(implementation.InterfaceType, interfaceType));
 
     /// <inheritdoc/>
+    public void AddInterface(IType interfaceType)
+    {
+        // The interface is resolved by the assembly handler, because the type which is handled is given a reference of
+        // its own module to it, and the one which the caller named belongs to the module which declares it.
+        var implementation = new InterfaceImplementation(AssemblyHandler.ResolveParameterType(Source, interfaceType));
+        Source.Interfaces.Add(implementation);
+    }
+
+    /// <inheritdoc/>
     public bool ContainsAttribute(IType attributeType) => Source.CustomAttributes.Any(attribute => TypeName.HasSameName(attribute.AttributeType, attributeType));
 
     /// <inheritdoc/>
@@ -167,33 +176,6 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         if (!method.IsAbstract) methodHandler.SetBody(DefaultMethodBody.ThrowException);
 
         return methodHandler;
-    }
-
-    /// <summary>
-    /// Add custom attribute to this type definition.
-    /// </summary>
-    /// <param name="arguments">Arguments of the attribute constructor calling.</param>
-    /// <typeparam name="TAttribute">Type of the attribute.</typeparam>
-    public void AddAttribute<TAttribute>(params object[] arguments) where TAttribute : Attribute
-    {
-        var attributeDef = AssemblyHandler.GetCecilType(typeof(TAttribute)).Definition;
-        var attribute = attributeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
-        Source.CustomAttributes.Add(attribute);
-    }
-
-    /// <summary>
-    /// Add custom attribute to this type definition.
-    /// </summary>
-    /// <param name="attributeType">Type of the attribute.</param>
-    /// <param name="arguments">Arguments of the attribute constructor calling.</param>
-    /// <exception cref="ArgumentException">Thrown when the <c>attributeType</c> cannot assign to <see cref="System.Attribute"/>.</exception>
-    public void AddAttribute(Type attributeType, params object[] arguments)
-    {
-        if (!typeof(Attribute).IsAssignableFrom(attributeType))
-            throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_ASSIGN_TO_TARGET_TYPE, typeof(Attribute)));
-        var attributeDef = AssemblyHandler.GetCecilType(attributeType).Definition;
-        var attribute = attributeDef.CreateCustomAttribute(AssemblyHandler.Assembly.Source.MainModule, arguments);
-        Source.CustomAttributes.Add(attribute);
     }
 
     /// <summary>
