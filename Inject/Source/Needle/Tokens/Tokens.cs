@@ -201,13 +201,15 @@ public static class Proceed
     internal const string TYPE_NAME = $"{nameof(Gneedle)}.{nameof(Inject)}.{nameof(Proceed)}";
 
     /// <summary>
-    /// Get the method which holds the body of the method which is woven around.
+    /// Get the method which holds the body of the method which is woven around.<para/>
+    /// The member which the call proceeds into is the member being woven rather than one which is named, so the call
+    /// takes no name: a template is woven around one member at a time, and that member is the one whose body was taken
+    /// over. What the generic argument describes is the signature of that body, which is the signature of the member.
     /// </summary>
-    /// <param name="name">Name of the method, which is for reading alone and takes no part in the resolving.</param>
     /// <typeparam name="TMethod">Method signature without name.</typeparam>
     /// <returns>The symbol of the method.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
-    public static TMethod Method<TMethod>(string name) where TMethod : Delegate => throw new InjectionNotEffectiveException();
+    public static TMethod Method<TMethod>() where TMethod : Delegate => throw new InjectionNotEffectiveException();
 }
 
 /// <summary>

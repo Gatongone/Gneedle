@@ -426,7 +426,9 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <summary>
     /// Replace the operand of instruction at current index. If the instruction is `ldstr {member_name}` and the nearest `call` instruction
     /// is one of the instance member accessors in Gneedle.Inject, parse the member name and flags, and replace the instruction with
-    /// the one to get the member reference. Otherwise, replace the instruction with the one imported to current module.
+    /// the one to get the member reference. Otherwise, replace the instruction with the one imported to current module.<para/>
+    /// The symbol which proceeds is the one which carries no name, so the call is the whole of it and the type which
+    /// declares it is what identifies it, in the place where the name of the others identifies them.
     /// </summary>
     /// <param name="currentIndex">Index of the instruction to replace operand.</param>
     /// <param name="filter">The instruction filter to replace the instruction.</param>
@@ -446,7 +448,6 @@ internal sealed partial class MethodHandler : IMethodHandler
         // - Gneedle.Inject.Base.Property(string)
         // - Gneedle.Inject.This.Method(string)
         // - Gneedle.Inject.Base.Method(string)
-        // - Gneedle.Inject.Proceed.Method(string), where the call is a generic instance method
         // which ILCode just look like:
         // IL_0000: ldstr {field_name}
         // IL_0005: call class [Gneedle.Inject]Gneedle.Inject.ValuableMember [Gneedle.Inject]Gneedle.Inject.This::Field(string)
@@ -456,7 +457,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             DeclaringType:
             {
-                Name     : nameof(This) or nameof(Base) or nameof(Object) or nameof(Static) or nameof(Proceed),
+                Name     : nameof(This) or nameof(Base) or nameof(Object) or nameof(Static),
                 Namespace: nameof(Gneedle) + "." + nameof(Inject)
             }
         } callingMethod)
@@ -474,6 +475,22 @@ internal sealed partial class MethodHandler : IMethodHandler
         if (memberFlag is not MemberSymbols.None && currentIns.Operand is MethodReference)
         {
             ParseMember(memberName, memberFlag, currentIndex, filter, targetDef);
+        }
+        // The symbol which proceeds carries no name, so there is no instruction ahead of the call which identifies it:
+        // the call is the whole of the symbol, and the type which declares it does what the name of the others does.
+        // Which member it stands for is settled by the member being woven, whose body was taken over rather than named.
+        else if (currentIns.Operand is MethodReference proceedCall
+                 && GetInstanceMemberFlag(proceedCall).HasFlag(MemberSymbols.Proceed))
+        {
+            // A call which hands the symbol a name is a template which was compiled against a weaver which read one, and
+            // the name would be left on the stack ahead of the call which is written in its place.
+            if (proceedCall.Parameters.Count != 0)
+            {
+                throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, nameof(Proceed) + "." + nameof(Proceed.Method)));
+            }
+
+            ParseMethod(nameof(Proceed) + "." + nameof(Proceed.Method),
+                        MemberSymbols.Proceed | MemberSymbols.Method, currentIndex, null, filter, targetDef);
         }
         else
         {
@@ -547,7 +564,9 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         else if (memberSymbol.HasFlag(MemberSymbols.Method))
         {
-            ParseMethod(memberName, memberSymbol, currentIndex, filter, targetDef);
+            // The name is the instruction ahead of the call, which is where every symbol but the one which proceeds
+            // writes it: that one is recognized by the call alone and reaches ParseMethod without a name.
+            ParseMethod(memberName, memberSymbol, currentIndex + 1, currentIndex, filter, targetDef);
         }
     }
 

@@ -10,7 +10,7 @@ namespace Gneedle.Inject.Test;
 
 /// <summary>
 /// Signature of the method which the templates below proceed through, which a template names as the generic argument
-/// of <see cref="Proceed.Method{TMethod}(string)"/>.
+/// of <see cref="Proceed.Method{TMethod}()"/>.
 /// </summary>
 public delegate int IntBinaryOp(int left, int right);
 
@@ -22,17 +22,17 @@ public static class AroundTemplates
     /// <summary>
     /// Double both arguments, proceed with them, and add one to what the original returned.
     /// </summary>
-    public static int DoubleThenProceedThenAddOne(int left, int right) => Proceed.Method<IntBinaryOp>("Add")(left * 2, right * 2) + 1;
+    public static int DoubleThenProceedThenAddOne(int left, int right) => Proceed.Method<IntBinaryOp>()(left * 2, right * 2) + 1;
 
     /// <summary>
     /// Proceed with the arguments as they are.
     /// </summary>
-    public static int ProceedOnly(int left, int right) => Proceed.Method<IntBinaryOp>("Add")(left, right);
+    public static int ProceedOnly(int left, int right) => Proceed.Method<IntBinaryOp>()(left, right);
 
     /// <summary>
     /// A template whose return type does not match the method, which the around body refuses.
     /// </summary>
-    public static long ProceedWithAnotherReturnType(int left, int right) => Proceed.Method<IntBinaryOp>("Add")(left, right);
+    public static long ProceedWithAnotherReturnType(int left, int right) => Proceed.Method<IntBinaryOp>()(left, right);
 
     /// <summary>
     /// A template whose parameters do not match the method, which the around body refuses.
@@ -50,7 +50,7 @@ public class AroundInstanceTemplates
     /// <summary>
     /// Double both arguments, proceed with them, and add one to what the original returned.
     /// </summary>
-    public int DoubleThenProceedThenAddOne(int left, int right) => Proceed.Method<IntBinaryOp>("Add")(left * 2, right * 2) + 1;
+    public int DoubleThenProceedThenAddOne(int left, int right) => Proceed.Method<IntBinaryOp>()(left * 2, right * 2) + 1;
 }
 
 /// <summary>
@@ -74,7 +74,7 @@ public static class WideAroundTemplates
     /// Proceed with the arguments reversed, so that a load which reached another argument is told apart from one which
     /// reached the right one.
     /// </summary>
-    public static int ReversedThenAddOne(int a, int b, int c, int d) => Proceed.Method<IntQuadOp>(nameof(Number))(d, c, b, a) + 1;
+    public static int ReversedThenAddOne(int a, int b, int c, int d) => Proceed.Method<IntQuadOp>()(d, c, b, a) + 1;
 }
 
 /// <summary>
@@ -93,7 +93,7 @@ public static class GenericAroundTemplates
     /// <summary>
     /// Proceed with the value as it is.
     /// </summary>
-    public static M_0 Passthrough(M_0 value) => Proceed.Method<PassthroughOp>(nameof(Passthrough))(value);
+    public static M_0 Passthrough(M_0 value) => Proceed.Method<PassthroughOp>()(value);
 }
 
 /// <summary>
@@ -369,7 +369,7 @@ public class AroundBodyTests
 
         var thrown = Assert.Throws<ArgumentException>(() => run.AroundBody(() =>
         {
-            Proceed.Method<Action>("Run")();
+            Proceed.Method<Action>()();
             Console.WriteLine(capture);
         }));
 
