@@ -95,6 +95,8 @@ namespace Gneedle.Aspect
                 RegisterResolution();
 
                 var image = assembly.InMemoryAssembly.PeData;
+                LoadWhatTheWeavingReads(image);
+
                 var loaded = AssemblyLoader.LoadFromBytes(image);
                 var (changed, result) = Injections.Apply(loaded, image, removesTheWeaver: true,
                                                          reportError: message => diagnostics.Add(Error(message)));
@@ -131,6 +133,49 @@ namespace Gneedle.Aspect
             DiagnosticType = DiagnosticType.Error,
             MessageData    = message
         };
+
+        /// <summary>
+        /// Load every assembly which the image being woven names a type of, before the weaving reads any of them.
+        /// </summary>
+        /// <remarks>
+        /// The runtime loads an assembly which a type of another one is declared by when that type is read, which the
+        /// weaving does with the reflection of the members of the assembly. The runner of the post processors answers
+        /// such a request from the folders it was given, one folder per <c>-assemblyFolders</c> of the compilation,
+        /// and it looks a folder up for the simple name of the assembly alone. That list does not hold the folder which
+        /// the modules of Unity lie in, which is a folder inside the one it does hold, so an assembly of the editor is
+        /// not found by it - and the runner throws where it finds nothing rather than leaving the request to whoever
+        /// answers after it, which is why the weaving cannot answer it either. A request which is never made is the
+        /// only one which cannot fail: everything the image names is loaded here, and what the weaving reads afterwards
+        /// is already read.
+        /// </remarks>
+        /// <param name="image">The bytes of the assembly which is woven.</param>
+        private static void LoadWhatTheWeavingReads(byte[] image)
+        {
+            using var stream = new MemoryStream(image);
+            using var definition = Mono.Cecil.AssemblyDefinition.ReadAssembly(stream);
+
+            foreach (var reference in definition.MainModule.GetTypeReferences())
+            {
+                if (reference.Scope is not Mono.Cecil.AssemblyNameReference scope) continue;
+                if (!s_References.TryGetValue(scope.Name, out var path)) continue;
+
+                // An assembly which is loaded already is left where it is: a second copy of it would hold second types,
+                // and the request for it would be answered with the copy which is there.
+                if (AppDomain.CurrentDomain.GetAssemblies().Any(loaded => loaded.GetName().Name == scope.Name)) continue;
+
+                try
+                {
+                    var fullPath = Path.GetFullPath(path);
+                    if (File.Exists(fullPath)) Assembly.LoadFrom(fullPath);
+                }
+                catch (Exception exception)
+                {
+                    // An assembly which cannot be loaded here is left to the runtime, which fails where it is needed,
+                    // and what was tried for it is reported with the failure.
+                    s_Unresolved[scope.Name] = $"it could not be loaded from '{path}'. {exception.Message}";
+                }
+            }
+        }
 
         /// <summary>
         /// Look the assemblies of the compilation up along the paths which the compilation named them by.
