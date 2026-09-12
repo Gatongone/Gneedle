@@ -110,7 +110,7 @@ namespace Gneedle.Inject.Test
 
         public delegate string NameGetter();
 
-        // region Target fixture
+        #region Target fixture
 
         /// <summary>
         /// Create the target assembly and the real types which the stubs stand for. The real types carry the same full
@@ -182,9 +182,9 @@ namespace Gneedle.Inject.Test
             return method;
         }
 
-        // endregion
+        #endregion
 
-        // region Member access
+        #region Member access
 
         [Test]
         public void SetBody_Replaces_The_Stub_Field()
@@ -245,9 +245,9 @@ namespace Gneedle.Inject.Test
                                                                         && reference.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
         }
 
-        // endregion
+        #endregion
 
-        // region Nested in a type shape
+        #region Nested in a type shape
 
         [Test]
         public void SetBody_Replaces_The_Stub_Nested_In_A_Generic_Argument()
@@ -283,9 +283,9 @@ namespace Gneedle.Inject.Test
             Assert.That(((GenericInstanceType) variable.VariableType).GenericArguments[0].Module, Is.SameAs(method.Source.Module));
         }
 
-        // endregion
+        #endregion
 
-        // region The produced assembly
+        #region The produced assembly
 
         [Test]
         public void SetBody_Does_Not_Leak_The_Stub_Into_The_Produced_Assembly()
@@ -366,9 +366,9 @@ namespace Gneedle.Inject.Test
             Assert.That(call!.DeclaringType.Module, Is.SameAs(method.Source.Module));
         }
 
-        // endregion
+        #endregion
 
-        // region Public API
+        #region Public API
 
         [Test]
         public void WithBaseType_Replaces_The_Stub()
@@ -406,9 +406,9 @@ namespace Gneedle.Inject.Test
             Assert.That(parameter.Module, Is.SameAs(method.Source.Module));
         }
 
-        // endregion
+        #endregion
 
-        // region The resolver
+        #region The resolver
 
         [Test]
         public void ResolveTypeFromAssembly_Resolves_A_Type_Of_The_Target_Assembly()
@@ -569,9 +569,9 @@ namespace Gneedle.Inject.Test
         public void ResolveTypeFromAssembly_With_An_Unknown_Assembly_Throws()
             => Assert.Throws<ArgumentException>(() => CecilExtensions.ResolveTypeFromAssembly(NewTarget().Source.MainModule, "No.Such.Assembly", $"{Ns}.{nameof(Stub)}"));
 
-        // endregion
+        #endregion
 
-        // region Failure
+        #region Failure
 
         [Test]
         public void SetBody_With_A_Stub_Which_The_Target_Does_Not_Declare_Throws()
@@ -589,6 +589,6 @@ namespace Gneedle.Inject.Test
             Assert.That(exception!.Message, Does.Contain("No.Such.Assembly"));
         }
 
-        // endregion
+        #endregion
     }
 }

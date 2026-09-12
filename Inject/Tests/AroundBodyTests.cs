@@ -83,7 +83,7 @@ public class AroundBodyTests
 
     private const string ProceedMethodName = "<Add>k__Proceed";
 
-    // region Fixture
+    #region Fixture
 
     /// <summary>
     /// Create a host which holds <c>public int Add(int left, int right)</c> whose body adds its two arguments, so that
@@ -143,9 +143,9 @@ public class AroundBodyTests
 
     private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
 
-    // endregion
+    #endregion
 
-    // region The woven method runs
+    #region The woven method runs
 
     /// <summary>
     /// Weave the template around the method and run it.<para/>
@@ -180,9 +180,9 @@ public class AroundBodyTests
         Assert.That(result, Is.EqualTo(15));
     }
 
-    // endregion
+    #endregion
 
-    // region The woven method is well formed
+    #region The woven method is well formed
 
     [Test]
     public void AroundBody_Moves_The_Original_Body_To_A_Generated_Method()
@@ -304,9 +304,9 @@ public class AroundBodyTests
         Assert.That(emitted.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Stloc_0), Is.True);
     }
 
-    // endregion
+    #endregion
 
-    // region Refusals
+    #region Refusals
 
     [Test]
     public void AroundBody_Of_An_Abstract_Method_Throws()
@@ -378,9 +378,9 @@ public class AroundBodyTests
         Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add").SetBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
     }
 
-    // endregion
+    #endregion
 
-    // region The generic method
+    #region The generic method
 
     [Test]
     public void AroundBody_Of_A_Generic_Method_Mirrors_The_Generic_Parameters()
@@ -438,9 +438,9 @@ public class AroundBodyTests
         Assert.That(identity.Invoke(null, ["hello"]), Is.EqualTo("hello"));
     }
 
-    // endregion
+    #endregion
 
-    // region A method which the decorator added
+    #region A method which the decorator added
 
     [Test]
     public void MethodDecorator_Around_Of_A_Method_It_Added_Proceeds_Into_The_Body_Which_Was_Added()
@@ -465,5 +465,5 @@ public class AroundBodyTests
         Assert.That(method.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.Name == ProceedMethodName), Is.True);
     }
 
-    // endregion
+    #endregion
 }
