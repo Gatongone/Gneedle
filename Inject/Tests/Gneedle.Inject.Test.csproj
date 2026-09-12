@@ -10,6 +10,15 @@
         <OutputType>Library</OutputType>
         <LangVersion>12</LangVersion>
         <RootNamespace>Gneedle.Inject.Test</RootNamespace>
+
+        <!-- The templates which the tests weave are the IL which the compiler wrote for them, and the tests read that
+             IL back: a local variable of a template, the instructions which stand before it, and the shape of a body
+             are all asserted on. A build which optimizes this assembly takes them out of it - a local which is only
+             ever null and read once is not a local at all under optimization, so the template compiles to the value
+             which was folded into the call - and the tests which read it fail for what the compiler did rather than
+             for what the weaver did. The assembly which holds the templates is therefore never optimized, whichever
+             configuration the tests are built in. -->
+        <Optimize>false</Optimize>
     </PropertyGroup>
 
     <ItemGroup>
