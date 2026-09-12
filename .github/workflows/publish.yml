@@ -149,16 +149,17 @@ jobs:
 
       - name: Log in to nuget.org
         # The key which the two pushes below are made with is one which nuget.org issues for this run alone: it is asked
-        # for here rather than kept in the repository as a secret, and it is valid for an hour, which is why it is asked
-        # for after the packages are packed rather than before.
+        # for here rather than kept in the repository, and it is valid for an hour, which is why it is asked for after
+        # the packages are packed rather than before.
         #
-        # The identity is the one `id-token: write` gives this run, and nuget.org answers it with a key for the profile
-        # which the policy that was configured for it names - the name of the profile, which is not the address of the
-        # account.
+        # The identity is the one `id-token: write` gives this run, and what nuget.org answers it with is a key for the
+        # profile which the policy configured there names.
         uses: NuGet/login@v1
         id: nuget
         with:
-          user: ${{ secrets.NUGET_USER }}
+          # Name of the profile on nuget.org, which is written out rather than kept as a secret: it is the name that
+          # anyone reads on that site, and it is what a key is asked for with.
+          user: Gatongone
 
       - name: Push the packages of NuGet
         # The weaver is pushed before the aspect weaver, which names it as a dependency of the same version: a package
