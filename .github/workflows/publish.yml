@@ -216,5 +216,14 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
+          # A release which was given notes when it was made keeps them, which is what the first release of a version
+          # is given: the commits of the whole history are what would be written for it otherwise, and they say nothing
+          # about what the version is. What a release which was made without any is given is the commits between it and
+          # the release before it.
+          if [ -n "$(gh release view "$TAG" --json body --jq .body)" ]; then
+            echo "the release holds notes already, and they are left as they are"
+            exit 0
+          fi
+
           python .github/scripts/release-notes.py "$TAG" > "$RUNNER_TEMP/notes.md"
           gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
