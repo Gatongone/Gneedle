@@ -16,6 +16,10 @@ namespace Gneedle.Aspect.Test;
 [TestFixture]
 public class AssemblyInjectTests
 {
+    /// <summary>
+    /// Full name of the type whose members the injectors of the fixtures are put on, which is the type the assembly
+    /// which was woven is read back for.
+    /// </summary>
     private const string TargetType = "Gneedle.Aspect.Test.Fixtures.Target";
 
     /// <summary>
@@ -26,7 +30,16 @@ public class AssemblyInjectTests
     /// </summary>
     private const string ThrowBodyAttributeName = "Gneedle.Aspect.Test.ThrowBodyAttribute";
 
+    /// <summary>
+    /// The directory which each test copies the assembly into and writes its project to, which is a directory of its
+    /// own per test, because the task writes the assembly back to the file it read.
+    /// </summary>
     private string m_WorkDirectory = null!;
+
+    /// <summary>
+    /// Path of the file which the injectors of the recording attribute append the members they were asked to inject
+    /// into, which is what the tests read to tell which members were walked.
+    /// </summary>
     private string m_InjectionLog = null!;
 
     [SetUp]

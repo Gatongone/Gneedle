@@ -2,9 +2,23 @@ using Gneedle.Inject;
 
 namespace Gneedle.Aspect;
 
+/// <summary>
+/// The build task which weaves the assembly a project built: it reads the assembly from the file it was written to,
+/// applies the injectors which the assembly declares to it, and writes the result back over that file.<para/>
+/// The task is run by the target which the package writes into a project, and so are its two properties read, so that
+/// weaving is a part of the build that produced the assembly rather than a step of its own after it.
+/// </summary>
 public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
 {
+    /// <summary>
+    /// Path of the project which was built, which is read to tell whether that project turns the aspect off. The
+    /// project is not written to.
+    /// </summary>
     [Required] public string ProjectPath { get; private set; }
+
+    /// <summary>
+    /// Path of the assembly which the project built, which is the file which the weaving reads and writes back.
+    /// </summary>
     [Required] public string TargetPath { get; private set; }
 
     /// <summary>
@@ -17,6 +31,13 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     /// </summary>
     public string? KeepWeaver { get; set; }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The assembly is written back only when an injector changed it, so a project which declares none, and one which
+    /// turns the aspect off, are answered with the assembly they built. A member which an injector names and the
+    /// assembly does not hold is reported as an error, and the task fails on it rather than reporting a build which
+    /// carried on with an assembly which was woven only in part.
+    /// </remarks>
     public override bool Execute()
     {
         var project = ProjectRootElement.Open(ProjectPath);

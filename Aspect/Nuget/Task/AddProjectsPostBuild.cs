@@ -1,25 +1,39 @@
 ﻿namespace Gneedle.Aspect;
 
 /// <summary>
-/// Add <see cref="AssemblyInject"/> task to PostBuildEvent when the project use ProjectReference item to refer Gneedle.Aspect project with solution.
+/// The build task which runs once the weaver itself was built: it walks the solution the weaver is built with, and
+/// writes the target which runs <see cref="AssemblyInject"/> into every project of that solution which refers to the
+/// weaver.<para/>
+/// A project which refers to the weaver by a project reference is built from a checkout of it rather than from the
+/// package, so it does not read what the package writes into a build, and this is what gives it the weaving instead.
+/// The task runs both ways: a project which refers to the weaver and no longer disables the aspect is written to, and
+/// one which stopped referring to it, or which disables the aspect, is taken back out of again, so that what the task
+/// writes is a function of the solution and not a matter of how often it ran.
 /// </summary>
 public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
 {
     /// <summary>
-    /// Gneedle.Aspect name.
+    /// Name of the weaver, which is the name of the project and of the package which a project of the solution is
+    /// looked for a reference to by.
     /// </summary>
     public string ProjectName { get; private set; }
 
     /// <summary>
-    /// Path of the solution that manages Gneedle.Aspect.csproj.
+    /// Path of the solution which the weaver is built with, whose projects are the ones which the target is written
+    /// into.
     /// </summary>
     public string SolutionPath { get; private set; }
 
     /// <summary>
-    /// Gneedle.Aspect.dll path.
+    /// Path of the assembly of the weaver, which is what the task which the written target runs is looked for in.
     /// </summary>
     public string TargetPath { get; private set; }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// A project which cannot be read is passed over rather than reported, because the solution stands beside the
+    /// projects which it groups: what it names and the disk no longer holds is not a failure of the weaving.
+    /// </remarks>
     public override bool Execute()
     {
         var solution = SolutionFile.Parse(SolutionPath);
@@ -43,6 +57,13 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
         return true;
     }
 
+    /// <summary>
+    /// Write what the target of a project should be, which is the target when the project is one which the weaving is
+    /// written into and nothing when it is not, and report whether the project named it before.
+    /// </summary>
+    /// <param name="project">The project which is read and written.</param>
+    /// <param name="projectName">Name of the project, which is what the change is reported by.</param>
+    /// <returns>Whether the project was changed, and so is to be written back to its file.</returns>
     private bool TryProcessProject(ProjectRootElement project, string projectName)
     {
         var dirty = false;
@@ -64,8 +85,19 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
         return dirty;
     }
 
+    /// <summary>
+    /// Whether the project is one which the weaving is written into, which is one which refers to the weaver and does
+    /// not turn the aspect off.
+    /// </summary>
+    /// <param name="project">The project which is read.</param>
+    /// <returns>Whether the target belongs in the project.</returns>
     private bool VerifyProject(ProjectRootElement project) => project.ContainsReference(ProjectName) && !project.VerifyAspectDisable();
 
+    /// <summary>
+    /// Write the target which weaves, and the task which the target runs, into the project.
+    /// </summary>
+    /// <param name="project">The project which is written.</param>
+    /// <returns>Whether either of them was added, which is false when the project held both.</returns>
     private bool AddElements(ProjectRootElement project)
     {
         var postBuild = project.RequireBuildEvent(BuildEventType.PostBuild, TaskConstants.TARGET, out var isTargetAdd);
@@ -85,6 +117,12 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
         return isTargetAdd || isTaskAdd;
     }
 
+    /// <summary>
+    /// Take the target which weaves, and the task which the target runs, back out of a project which the weaving no
+    /// longer belongs in.
+    /// </summary>
+    /// <param name="project">The project which is written.</param>
+    /// <returns>Whether either of them was there, which is false when the project held neither.</returns>
     private bool CleanElements(ProjectRootElement project)
     {
         var removed = false;

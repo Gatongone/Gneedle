@@ -12,9 +12,19 @@ namespace Gneedle.Aspect.Test;
 [TestFixture]
 public class AddProjectsPostBuildTests
 {
+    /// <summary>
+    /// The type a solution gives an entry which is a folder rather than a project.
+    /// </summary>
     private const string SolutionFolder = "{2150E333-8FDC-42A3-9474-1A3956D46DE8}";
+
+    /// <summary>
+    /// The type a solution gives an entry which is a C# project.
+    /// </summary>
     private const string Project = "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}";
 
+    /// <summary>
+    /// The directory which the solution and its projects are written into, which is a directory of its own per test.
+    /// </summary>
     private string m_WorkDirectory = null!;
 
     [SetUp]
