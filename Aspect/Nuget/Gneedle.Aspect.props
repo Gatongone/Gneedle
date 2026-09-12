@@ -1,0 +1,16 @@
+<Project>
+   <PropertyGroup>
+      <AspectId>Gneedle.Aspect</AspectId>
+      <AspectProjPath>..</AspectProjPath>
+      <!-- A full framework MSBuild cannot load the netstandard2.1 build, so the runtime of MSBuild tells which one to
+           load. The two conditions used to be the wrong way round, which made a dotnet build load the net472 one.
+           The task is held under tools, which is the folder of the package which the build loads it from. -->
+      <AspectOutPath Condition="$(MSBuildRuntimeType) == 'Core'">$(AspectProjPath)\tools\netstandard2.1</AspectOutPath>
+      <AspectOutPath Condition="$(MSBuildRuntimeType) != 'Core'">$(AspectProjPath)\tools\net472</AspectOutPath>
+
+      <!-- The properties which a project is described by are read from the project itself: See the section of the
+           readme which is named for them. This one is given a default here, because the targets are read whether or not
+           the project which they run in says anything about it. -->
+      <KeepWeaver Condition="'$(KeepWeaver)' == ''">false</KeepWeaver>
+   </PropertyGroup>
+</Project>

@@ -1,0 +1,5 @@
+# The files of this repository are UTF-8 without a byte order mark. `utf-8` is that; `utf-8-bom` is the other.
+root = true
+
+[*]
+charset = utf-8

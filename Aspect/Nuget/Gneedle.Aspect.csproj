@@ -1,0 +1,81 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- The metadata which both packages are published with, which the repository keeps in one file. It is imported
+         rather than found by walking up from here, because the file is not a Directory.Build.props and the two projects
+         which are packed are the only ones which need it. -->
+    <Import Project="..\..\Build\Package.props"/>
+
+    <PropertyGroup>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Gneedle.Aspect</RootNamespace>
+        <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
+        <LangVersion>12</LangVersion>
+
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Description>Gneedle.Aspect is the aspect weaver: an MSBuild task which applies the injectors of a project to the assembly which it builds, so that weaving needs no step of its own beyond the package. An injector is an attribute which implements one of the interfaces of Gneedle.Inject, for a method or a field or a property as well as for a type or for the assembly, and says what to do with the member it is put on. By the time the assembly is written the injectors have been applied and the attributes have done their work, so the task removes them with the types which declare them and drops the reference to the weaver, leaving nothing of the weaver in the assembly which was woven.</Description>
+        <PackageTags>Aspect</PackageTags>
+        <Title>Gneedle.Aspect</Title>
+
+        <!-- The task is not a reference of the project which installs the package, it is what the build of that project
+             loads and runs, so nothing of it goes to lib. What it needs is packed under tools instead, beside the
+             assemblies which it loads at run time, which is where the build looks for them. -->
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackTools</TargetsForTfmSpecificContentInPackage>
+
+        <!-- The build loads the task from the folder of the package which holds it and resolves the assemblies it is
+             compiled against from that same folder, so they are packed beside it and have to be in the output of every
+             framework which is packed. A project reference is copied there by itself, while the assemblies which come
+             from a package are not copied out of one which is not an application. -->
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <AspectOutPath Condition="$(MSBuildRuntimeType) == 'Core'">$(MSBuildThisFileDirectory)bin\$(Configuration)\netstandard2.1</AspectOutPath>
+        <AspectOutPath Condition="$(MSBuildRuntimeType) != 'Core'">$(MSBuildThisFileDirectory)bin\$(Configuration)\net472</AspectOutPath>
+        <AspectTargetPath>$(AspectOutPath)\Gneedle.Aspect.dll</AspectTargetPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- The assemblies of MSBuild are given to a task by the build which loads it, so they are referenced to compile
+             against and are neither copied out nor named as dependencies of the package. Copying them out pulls the
+             frameworks they were built for into the output of every project which references this one, where they do
+             not resolve, and a package which names them asks of its consumers what the build already provides. -->
+        <PackageReference Include="Microsoft.Build" Version="17.6.3" PrivateAssets="all" ExcludeAssets="runtime"/>
+        <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.6.3" PrivateAssets="all" ExcludeAssets="runtime"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\Inject\Source\Gneedle.Inject.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- What the project which installs the package reads: the props which point the build at the task, and the
+             target which runs it. Both are taken from the folder of the package which the build imports by itself. -->
+        <None Include="$(MSBuildProjectName).props" Pack="true" PackagePath="build\"/>
+        <None Include="$(MSBuildProjectName).targets" Pack="true" PackagePath="build\"/>
+    </ItemGroup>
+
+    <!-- The task and the assemblies which it loads at run time, packed for each framework which the build loads one of.
+         A framework which the build never loads the task of needs none of them: the props picks between the two. -->
+    <Target Name="PackTools">
+        <ItemGroup Condition="'$(TargetFramework)' == 'net472' Or '$(TargetFramework)' == 'netstandard2.1'">
+            <TfmSpecificPackageFile Include="$(TargetDir)$(MSBuildProjectName).dll" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)$(MSBuildProjectName).pdb" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)Gneedle.Inject.dll" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)Gneedle.Inject.pdb" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)Mono.Cecil*.dll" PackagePath="tools\$(TargetFramework)\"/>
+        </ItemGroup>
+    </Target>
+
+    <!-- The name of a task is qualified by the namespace of its type, while the project name is the one which a
+         reference to this project names. Nothing in this file declares $(ProjectName), so both were empty: the task was
+         found by its own name alone, and it was given no name to look for, which made it clean rather than add. -->
+    <UsingTask TaskName="$(RootNamespace).AddProjectsPostBuild" AssemblyFile="$(AspectTargetPath)"/>
+    <!-- The scan walks the solution which this project is built with, and a build of the project on its own has none:
+         it leaves the solution properties at the literal `*Undefined*`, which is not a path, so the scan is skipped
+         there rather than handed something the task cannot parse. -->
+    <Target Name="SolutionScan" AfterTargets="PostBuildEvent" Condition="Exists('$(SolutionPath)') And Exists('$(AspectTargetPath)')">
+        <AddProjectsPostBuild ProjectName="$(MSBuildProjectName)" SolutionPath="$(SolutionPath)" TargetPath="$(AspectTargetPath)"/>
+    </Target>
+</Project>

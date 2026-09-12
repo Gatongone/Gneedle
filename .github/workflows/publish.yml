@@ -1,0 +1,190 @@
+# Publishing a release publishes what the release names: the version is the tag which the release was given, and every
+# package which this repository carries is packed with that version and pushed.
+#
+# What is published is committed, and the tag is moved to the commit which holds it. That is what makes the version a
+# part of the release rather than a part of this run: the packages of Unity are published twice, npm is handed what
+# this run packs, and OpenUPM packs the tree of the tag of its own accord - it clones the repository at the tag - so
+# the version its readers are given is the one in that tree. A tag which names a version its own tree does not carry is
+# a release which OpenUPM publishes under the version the tree carries, or refuses where that version is on its
+# registry already. GitHub writes the tag when the release is published, which is before this run, so the two are
+# brought together by moving the tag onto the commit which holds the version.
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+# The commit which carries the version is pushed to the branch and the tag of the release is moved to it, and the last
+# step writes the notes of the release: the two of them are writes to the repository which the release belongs to.
+#
+# The packages of Unity are published to npm through a trusted publisher rather than through a token, which is the
+# identity this run is given by GitHub for the step to present to npm: `id-token: write` is what it is given. A package
+# which npm has never been given cannot be configured for one - the settings of a package are reached through the
+# package - so the first version of each is published by hand, once, from a terminal which is signed in.
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    # Every framework which the test projects are built for is tested here, and the tests of net472 are run by the
+    # framework itself, which the runners of Linux do not carry.
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          # The branch which the release was cut from, and the commits between this release and the one before it, are
+          # read out of the history of the repository, which the branches and the tags have to be fetched for.
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # 5.0 runs the tests which are built for net5.0. Every other framework is built and run by the SDK of the
+          # runner, which is the newest one it carries.
+          dotnet-version: 5.0.x
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # 22.14 carries the runtime which publishing through a trusted publisher asks for, and the registry is named
+          # so that the .npmrc which is written for it is the one which a publish reads.
+          node-version: 22.14
+          registry-url: https://registry.npmjs.org
+
+      - name: Set up npm
+        # The publisher of a trusted publisher is the npm CLI itself: 11.15 is the one which stages a package, and the
+        # one which the Node above carries is older than that.
+        shell: bash
+        run: npm install --global npm@11
+
+      - name: Take the version from the tag of the release
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Write the version into the files which carry one
+        shell: bash
+        run: python .github/scripts/set-version.py "${{ steps.version.outputs.version }}"
+
+      - name: Read the version back out of the files
+        # What is published is packed from these files rather than from the tag, so the version is read back out of
+        # them and the run stops here when one of them does not hold it.
+        shell: bash
+        run: python .github/scripts/set-version.py --check "${{ steps.version.outputs.version }}"
+
+      - name: Test
+        shell: bash
+        run: |
+          dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -c Release
+          dotnet test Aspect/Tests/Gneedle.Aspect.Test.csproj -c Release
+
+      - name: Build the weaver which the package of Unity ships
+        # The package of Unity carries the weaver as a plugin which is compiled before it, and the one in the repository
+        # is the one which was built when it was written there last: it is built again from the tag being released, so
+        # that what is published, and the commit which is pushed, carry the weaver of the release they belong to.
+        shell: bash
+        run: dotnet build Inject/Source/Gneedle.Inject.csproj -f netstandard2.1 -c Release
+
+      - name: Commit what is being published, and move the tag to it
+        # The commit carries everything which the release publishes: the version in each file which names one, and the
+        # weaver which the package of Unity ships. It is pushed to the branch which the release was cut from, and the
+        # tag of the release is moved to it, so that what the tag names and what its tree carries are one release.
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          if git diff --staged --quiet; then
+            echo "the version was committed already, which is the case when a release is published again"
+          else
+            git commit -m "chore: release $TAG"
+          fi
+
+          # The branch which the release was cut from, which is the one it names, and failing that the one which holds
+          # the commit which was tagged. A release published from a tag which was pushed by hand names the tag here
+          # rather than a branch, so what it names is not taken on trust.
+          TARGET="${{ github.event.release.target_commitish }}"
+          if ! git ls-remote --exit-code --heads origin "$TARGET" > /dev/null 2>&1; then
+            TAGGED=$(git rev-parse "$TAG^{commit}")
+
+            # The branch which points at the tagged commit, which is the branch the tag was cut from.
+            TARGET=$(git for-each-ref --format='%(refname:short) %(objectname)' refs/remotes/origin \
+                     | sed 's|^origin/||' | grep -v '^HEAD ' \
+                     | awk -v commit="$TAGGED" '$2 == commit { print $1 }' | head -1)
+
+            # Failing that, a branch which the tagged commit is somewhere in the history of, which is the case when
+            # the branch was pushed to after the tag was cut. The push below refuses it, and says so.
+            if [ -z "$TARGET" ]; then
+              TARGET=$(git branch -r --contains "$TAG" --format='%(refname:short)' | sed 's|^origin/||' | grep -v '^HEAD$' | head -1)
+            fi
+          fi
+          echo "pushing to $TARGET"
+
+          # The branch first: a push which the branch refuses stops the run here, with the tag where it was and nothing
+          # published, rather than with a tag which was moved and a branch which was not.
+          git push origin "HEAD:$TARGET"
+
+          git tag -f "$TAG"
+          git push -f origin "$TAG"
+
+      - name: Pack the packages of NuGet
+        shell: bash
+        run: |
+          dotnet pack Inject/Source/Gneedle.Inject.csproj -c Release -o "$RUNNER_TEMP/nuget"
+          dotnet pack Aspect/Nuget/Gneedle.Aspect.csproj -c Release -o "$RUNNER_TEMP/nuget"
+
+      - name: Push the packages of NuGet
+        # The weaver is pushed before the aspect weaver, which names it as a dependency of the same version: a package
+        # which is published while the one it depends on is not is a package which cannot be installed.
+        shell: bash
+        run: |
+          dotnet nuget push "$RUNNER_TEMP/nuget/Gneedle.Inject.${{ steps.version.outputs.version }}.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push "$RUNNER_TEMP/nuget/Gneedle.Aspect.${{ steps.version.outputs.version }}.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Publish the packages of Unity
+        # The packages of Unity are published to npm, which the Package Manager reads them from through a scoped
+        # registry, and no token is read to publish them: the identity of this run is the one GitHub writes for it, and
+        # npm answers that identity with a package of its own accord when the repository, the workflow and the job are
+        # the ones a trusted publisher of the package was configured with.
+        #
+        # They are staged rather than published, which is what a trusted publisher is configured with by default: the
+        # version is put in the queue which npm holds for the package, and a maintainer approves it there, with the
+        # second factor which publishing from a terminal asks for. A trusted publisher which is allowed to publish
+        # its own versions makes the two words below `publish` and `stage publish` instead.
+        #
+        # OpenUPM is the other place these are published, and nothing is pushed to it from here: it reads the packages
+        # out of the tree of the tag, which was moved onto this release above.
+        shell: bash
+        run: |
+          # A publish which fails is tried again, because the registry refuses a request which arrives while another
+          # one for the same name is being answered.
+          stage() {
+            for attempt in 1 2 3; do
+              if npm stage publish; then return 0; fi
+              echo "staging $1 failed on attempt $attempt, trying again"
+              sleep 5
+            done
+            return 1
+          }
+
+          cd Inject/Unity && stage com.gatongone.gneedle.inject
+          cd "$GITHUB_WORKSPACE/Aspect/Unity" && stage com.gatongone.gneedle.aspect
+
+      - name: Write the notes of the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python .github/scripts/release-notes.py "$TAG" > "$RUNNER_TEMP/notes.md"
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
