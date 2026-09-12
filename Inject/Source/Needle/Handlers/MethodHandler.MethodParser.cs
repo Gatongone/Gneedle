@@ -531,17 +531,17 @@ partial class MethodHandler
     private TypeReference? GetArgType(Instruction instruction, MethodDefinition targetDef)
     {
         var isStatic = targetDef.IsStatic;
-        if (instruction.OpCode == OpCodes.Ldarg_S && instruction.Operand is ParameterReference parameter)
-        {
-            return parameter.ParameterType.ParseGenericTokens(Source, Source.Module);
-        }
+        if (!instruction.TryGetLdargIndex(!isStatic, out var slot)) return null;
+        if (!isStatic && slot == 0) return targetDef.DeclaringType;
 
-        if (!instruction.TryGetLdargIndex(out var index)) return null;
+        // The load may name a slot which the template holds no parameter for, which is a body the weaving refuses with a
+        // message of its own rather than a type to compare against.
+        var position = slot - (isStatic ? 0 : 1);
+        if (position < 0 || position >= targetDef.Parameters.Count) return null;
+
         // The parameter of a template is a token when it stands for a generic parameter of the method being woven, just
         // as the parameter of a delegate is, so it is parsed to that parameter before the type is compared with anything.
-        return (!isStatic && index == 0
-            ? targetDef.DeclaringType
-            : targetDef.Parameters[index + (isStatic ? 0 : -1)].ParameterType).ParseGenericTokens(Source, Source.Module);
+        return targetDef.Parameters[position].ParameterType.ParseGenericTokens(Source, Source.Module);
     }
 
     /// <summary>

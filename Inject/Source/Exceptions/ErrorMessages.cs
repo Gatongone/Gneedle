@@ -167,16 +167,10 @@ internal static class ErrorMessages
     internal const string INVALID_FROM_ASSEMBLY_TYPE = "The type which the FromAssemblyAttribute names cannot be found in the assembly it names. Type: {0}, Assembly: {1}.";
 
     /// <summary>
-    /// The first argument of a template is loaded where the template and the member which is woven are of different
-    /// types, so what the argument holds is not what the member is written against.
+    /// The template belongs to an instance and reads it, which is the template's own receiver rather than an argument
+    /// of the member being woven. The placeholder is the member.
     /// </summary>
-    internal const string LDARG0_CONVERT_FAILED = "The template and the member which is woven are of different types, so the first argument of the template cannot be loaded in it. Instruction: ldarg.0";
-
-    /// <summary>
-    /// The template belongs to an instance and reads it, and the member being woven is static, which holds no such
-    /// argument. The placeholder is the member.
-    /// </summary>
-    internal const string TEMPLATE_READS_ITS_OWN_INSTANCE = "The template reads the instance which it belongs to, which a static member does not hold. A template is a static method, and a lambda which captures a variable is an instance method of the type which holds the capture. Method: {0}.";
+    internal const string TEMPLATE_READS_ITS_OWN_INSTANCE = "The template reads the instance which it belongs to, which is no argument of the member being woven. A template is a static method, and a lambda which captures a variable is an instance method of the type which holds the capture. Method: {0}.";
 
     /// <summary>
     /// The array which the image of an assembly was to be written to is smaller than the image. The placeholder is the

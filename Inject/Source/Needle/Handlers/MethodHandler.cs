@@ -109,11 +109,18 @@ internal sealed partial class MethodHandler : IMethodHandler
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
         }
 
-        // Load arguments, call base method, return.
-        var isStatic = Source.IsStatic;
-        for (var i = 0; i < Source.Parameters.Count; i++)
+        // Load the receiver, then the arguments, call the base method, and return. The receiver of an instance is an
+        // argument of the call as much as the others are, and it is the one which no parameter of the member holds.
+        // Every argument beyond it is named by its parameter rather than by the slot which it holds, because the slot
+        // of an argument is the position of the parameter shifted by the receiver, and only the write knows the shift.
+        if (!Source.IsStatic)
         {
-            il.Emit(OpCodes.Ldarg, i + (isStatic ? 0 : 1));
+            il.Emit(OpCodes.Ldarg_0);
+        }
+
+        foreach (var parameter in Source.Parameters)
+        {
+            il.Emit(OpCodes.Ldarg, parameter);
         }
 
         il.Emit(baseMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, Source.Module.ImportReference(baseMethod));
@@ -321,10 +328,12 @@ internal sealed partial class MethodHandler : IMethodHandler
 
             var instruction = instructions[index];
 
-            // Replace Ldarg.
-            if (instruction.OpCode == OpCodes.Ldarg_0 || instruction.OpCode == OpCodes.Ldarg_1 || instruction.OpCode == OpCodes.Ldarg)
+            // Replace Ldarg. Every form of the load is translated rather than the two which carry the first slot, because
+            // each of them names an argument of the template, and what the member being woven holds at that slot is
+            // another argument whenever the two do not agree on belonging to an instance.
+            if (instruction.TryGetLdargIndex(!targetDef.IsStatic, out var slot))
             {
-                filter.Replace(index, Instruction.Create(GetLdargCode(targetDef, instruction)));
+                filter.Replace(index, CreateLdarg(slot, targetDef));
                 continue;
             }
 
@@ -340,46 +349,78 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
-    /// Get the OpCode to load argument based on the source method definition and the instruction in target method definition.
-    /// If the instruction is Ldarg0, we need to check if the source method is static or not, and if the target method is static or not,
-    /// to determine whether to replace it with Ldarg1 or keep it as Ldarg0. If the instruction is Ldarg1,
-    /// we also need to check if the source method is static and the target method is not static to determine whether to replace it with Ldarg0 or keep it as Ldarg1.
-    /// For other Ldarg instructions, we keep them unchanged.
+    /// The instruction which loads the argument at <paramref name="slot"/> of the template, written so that it loads the
+    /// argument which the member being woven holds at that slot.
     /// </summary>
-    /// <param name="methodDef">The target method definition to check.</param>
-    /// <param name="instruction">The instruction to check.</param>
-    /// <returns>The OpCode to load argument after translation.</returns>
-    /// <exception cref="ArgumentException">Thrown when the instruction is Ldarg0 but the source and target method static-ness are not compatible.</exception>
-    private OpCode GetLdargCode(MethodDefinition methodDef, Instruction instruction)
+    /// <param name="slot">The slot which the template names, as the IL of the template holds it: the receiver of the
+    /// template takes the first slot when the template belongs to an instance.</param>
+    /// <param name="templateDef">The template whose body names the slot.</param>
+    /// <returns>The instruction which loads the argument in the member being woven.</returns>
+    /// <exception cref="ArgumentException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
+    private Instruction CreateLdarg(int slot, MethodDefinition templateDef)
     {
-        // Resolve Ldarg0.
-        if (instruction.OpCode == OpCodes.Ldarg_0 || instruction.OpCode == OpCodes.Ldarg && instruction.Operand.Equals(0))
+        var parameter = GetParameterAt(slot, templateDef);
+
+        // A macro form carries the slot in the opcode rather than as an operand, so the macro is chosen by the slot
+        // which the argument holds in the member being woven, which is not the position of the parameter: the receiver
+        // of an instance member takes the slot ahead of the first of them. A slot which no macro holds is loaded
+        // through the operand form, which names the parameter itself and leaves the slot of it to be written from the
+        // parameter, where the one form of the slot is settled rather than written twice.
+        return GetShiftedSlot(slot, templateDef) switch
         {
-            return Source.IsStatic switch
-            {
-                // The template belongs to no instance, so what it loads first is its first argument: the member being
-                // woven holds the same argument, at the slot after its receiver when it belongs to an instance.
-                false when methodDef.IsStatic => OpCodes.Ldarg_1,
+            0 => Instruction.Create(OpCodes.Ldarg_0),
+            1 => Instruction.Create(OpCodes.Ldarg_1),
+            2 => Instruction.Create(OpCodes.Ldarg_2),
+            3 => Instruction.Create(OpCodes.Ldarg_3),
+            _ => Instruction.Create(OpCodes.Ldarg, parameter)
+        };
+    }
 
-                // Neither belongs to an instance, so their first arguments are at the same slot.
-                true when methodDef.IsStatic => instruction.OpCode,
-
-                // The template belongs to an instance, so what it loads first is that instance rather than an argument,
-                // and a load of it cannot be written into the member: a static member holds no such argument, and an
-                // instance one holds another instance in its place. A lambda which captures a variable is an instance
-                // method of the type which holds the capture, so a template written as one is a template of this kind.
-                true => throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_READS_ITS_OWN_INSTANCE, Source.FullName)),
-                _    => throw new ArgumentException(ErrorMessages.LDARG0_CONVERT_FAILED)
-            };
+    /// <summary>
+    /// The slot which the argument at <paramref name="slot"/> of the template holds in the member being woven.
+    /// </summary>
+    /// <param name="slot">The slot which the template names.</param>
+    /// <param name="templateDef">The template whose body names the slot.</param>
+    /// <returns>The slot which the same argument holds in the member being woven.</returns>
+    /// <exception cref="ArgumentException">Thrown when the template reads its own instance.</exception>
+    private int GetShiftedSlot(int slot, MethodDefinition templateDef)
+    {
+        // What the template reads at the slot of its own receiver is that receiver rather than an argument, and no
+        // member can be given it: a static member holds no such argument, and an instance one holds another instance in
+        // its place. A lambda which captures a variable is an instance method of the type which holds the capture, so a
+        // template written as one is a template of this kind.
+        if (!templateDef.IsStatic && slot == 0)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_READS_ITS_OWN_INSTANCE, Source.FullName));
         }
 
-        // Resolve Ldarg1.
-        if (instruction.OpCode == OpCodes.Ldarg_1 || instruction.OpCode == OpCodes.Ldarg && instruction.Operand.Equals(1))
+        // The two hold the same arguments in the same order, so an argument moves by one slot exactly when one of them
+        // belongs to an instance and the other does not: the receiver of the one which does takes the first slot.
+        return slot + (Source.IsStatic ? 0 : 1) - (templateDef.IsStatic ? 0 : 1);
+    }
+
+    /// <summary>
+    /// The parameter which the template reads or writes at a slot, which is the parameter of the member being woven that
+    /// holds the same argument.
+    /// </summary>
+    /// <remarks>
+    /// The slot is resolved against the member being woven rather than against the template, because it is the member
+    /// which holds the parameter that is written as the operand. The position of that parameter is the position which
+    /// the argument holds in the template as well, so it is the slot with the receivers of the two taken off it.
+    /// </remarks>
+    /// <param name="slot">The slot which the template names.</param>
+    /// <param name="templateDef">The template whose body names the slot.</param>
+    /// <returns>The parameter of the member being woven which holds the same argument.</returns>
+    /// <exception cref="ArgumentException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
+    private ParameterDefinition GetParameterAt(int slot, MethodDefinition templateDef)
+    {
+        var position = GetShiftedSlot(slot, templateDef) - (Source.IsStatic ? 0 : 1);
+        if (position < 0 || position >= Source.Parameters.Count)
         {
-            return Source.IsStatic && !methodDef.IsStatic ? OpCodes.Ldarg_0 : instruction.OpCode;
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, position, Source.FullName));
         }
 
-        return instruction.OpCode;
+        return Source.Parameters[position];
     }
 
     /// <summary>
@@ -436,7 +477,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
         else
         {
-            FilterOperand(currentIns, currentIndex, filter);
+            FilterOperand(currentIns, currentIndex, filter, targetDef);
         }
     }
 
@@ -446,7 +487,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="currentIns">The instruction with non-imported operand.</param>
     /// <param name="currentIndex">Index of the instruction.</param>
     /// <param name="filter">The instruction filter to replace the instruction.</param>
-    private void FilterOperand(Instruction currentIns, int currentIndex, InstructionFilter filter)
+    /// <param name="targetDef">The method definition being scanned (source of the instructions).</param>
+    private void FilterOperand(Instruction currentIns, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         switch (currentIns.Operand)
         {
@@ -459,16 +501,12 @@ internal sealed partial class MethodHandler : IMethodHandler
                 break;
             // The parameter of the template is matched to the parameter of the same position rather than to the one of
             // the same name: they are the parameters of two different methods, and the name which the template gave its
-            // own takes no part in it. The opcode is kept, because the position which is written is the one which the
-            // parameter holds in the method being woven, and that method accounts for its receiver by itself, just as
-            // the macro opcodes which GetLdargCode translates do.
+            // own takes no part in it. The opcode is kept, because the load or store is an instruction of the member
+            // being woven, which accounts for its receiver by itself. The forms of ldarg never reach here: each of them
+            // is translated by ParseBody, which reaches the macro forms as well.
             case ParameterDefinition parameterDef:
-                if (parameterDef.Index >= Source.Parameters.Count)
-                {
-                    throw new ArgumentException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, parameterDef.Index, Source.FullName));
-                }
-
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, Source.Parameters[parameterDef.Index]));
+                var parameter = GetParameterAt(parameterDef.Index, targetDef);
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, parameter));
                 break;
             // The type of the field may hold generic parameter tokens, just like List<Gneedle.Inject.T_0>::SomeField.
             // It may also hold a declaring type which stands for the type of another assembly, which is replaced below.

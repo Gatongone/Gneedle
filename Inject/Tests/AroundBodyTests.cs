@@ -54,6 +54,30 @@ public class AroundInstanceTemplates
 }
 
 /// <summary>
+/// Signature of the four argument method which the templates below proceed through.<para/>
+/// A template of four arguments and more is loaded by an operand which names the parameter rather than by one of the
+/// four macro opcodes, which carry the slot in the opcode itself.
+/// </summary>
+public delegate int IntQuadOp(int a, int b, int c, int d);
+
+/// <summary>
+/// Templates whose argument loads reach past the four slots which a macro opcode holds.
+/// </summary>
+public static class WideAroundTemplates
+{
+    /// <summary>
+    /// The four arguments as a number, which is given as the body of the member which the template below wraps.
+    /// </summary>
+    public static int Number(int a, int b, int c, int d) => a * 1000 + b * 100 + c * 10 + d;
+
+    /// <summary>
+    /// Proceed with the arguments reversed, so that a load which reached another argument is told apart from one which
+    /// reached the right one.
+    /// </summary>
+    public static int ReversedThenAddOne(int a, int b, int c, int d) => Proceed.Method<IntQuadOp>(nameof(Number))(d, c, b, a) + 1;
+}
+
+/// <summary>
 /// Signature of the generic method which the templates below proceed through.<para/>
 /// It names the first generic parameter of the method which is woven around through the
 /// <c>Gneedle.Inject.M_0</c> token rather than declaring a generic parameter of its own, because a delegate cannot.
@@ -178,6 +202,29 @@ public class AroundBodyTests
         var result = WeaveAndInvoke("AroundBodyInstanceAssembly", false, typeof(AroundInstanceTemplates), nameof(AroundInstanceTemplates.DoubleThenProceedThenAddOne), [3, 4]);
 
         Assert.That(result, Is.EqualTo(15));
+    }
+
+    [Test]
+    public void AroundBody_Reads_Every_Argument_Of_A_Static_Template_At_The_Slot_Of_An_Instance_Member()
+    {
+        // The member which is wrapped holds a receiver ahead of its arguments, so every load of an argument of the
+        // template is written one slot after the one which the template names, whichever form of the opcode carries it.
+        var assembly = Assembly.Create("AroundBodyWideArgumentsAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+
+        var method = host.AddMethod("Number", intType, [],
+                                    [new Parameter(intType), new Parameter(intType), new Parameter(intType), new Parameter(intType)],
+                                    MethodFlags.Public);
+        method.SetBody(Template(typeof(WideAroundTemplates), nameof(WideAroundTemplates.Number)));
+        method.AroundBody(Template(typeof(WideAroundTemplates), nameof(WideAroundTemplates.ReversedThenAddOne)));
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        // 1234 reversed is 4321, and the template adds one to what it returned: 4322 rather than 3212, which is what
+        // the arguments come to when the loads keep the slots of the template.
+        Assert.That(type.GetMethod("Number")!.Invoke(Activator.CreateInstance(type), [1, 2, 3, 4]), Is.EqualTo(4322));
     }
 
     #endregion
