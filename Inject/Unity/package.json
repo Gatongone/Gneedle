@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "license": "MIT",
   "displayName": "Gneedle.Inject",
-  "description": "",
+  "description": "Gneedle.Inject is the weaver of Gneedle: it rewrites the IL of an assembly through Mono.Cecil and weaves a body into it from a template, which is an ordinary C# method. The template reaches the members of the type it is woven into through the placeholders This, Base, Object, Static and Proceed, and names a generic parameter of that type through the tokens T_0 to T_20 and M_0 to M_20. The weaver is carried as a plugin of the project, so that the assemblies of the project can be woven by a tool of your own or by the aspect weaver beside this package.",
   "author": {
     "name": "Gatongone",
     "email": "gatongone@gmail.com",
