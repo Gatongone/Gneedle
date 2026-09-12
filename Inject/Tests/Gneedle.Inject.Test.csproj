@@ -6,7 +6,13 @@
 
         <IsPackable>false</IsPackable>
         <IsTestProject>true</IsTestProject>
-        <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
+
+        <!-- The frameworks which the tests are built for and run on. netstandard2.1 is not one of them: an assembly of
+             tests is run rather than referred to, and there is no runtime which runs one built for a standard, so a test
+             run which holds it fails whole - the two which pass are answered, and the command still reports failure.
+             The library is built for netstandard2.1 whether or not this is, which is what a Unity project reaches the
+             weaver through, and a build of it which does not compile is a build which fails. -->
+        <TargetFrameworks>net5.0;net472</TargetFrameworks>
         <OutputType>Library</OutputType>
         <LangVersion>12</LangVersion>
         <RootNamespace>Gneedle.Inject.Test</RootNamespace>
