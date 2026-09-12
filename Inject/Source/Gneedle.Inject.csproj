@@ -13,7 +13,10 @@
         <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <!-- A package is made by `dotnet pack`, which builds the frameworks which it packs. The property which makes a
+             build pack as well is not set, because it works the other way round: a `dotnet pack` of a project which
+             sets it packs what a build left behind rather than building that, and run where nothing was built it fails
+             with "File not found" for the assembly of every framework which it was to pack. -->
         <Description>Gneedle.Inject is the weaver. It builds and rewrites the IL of .NET assemblies through Mono.Cecil, and weaves a body from a template, which is an ordinary C# method: the template reaches the members of the type it is woven into through the placeholders This, Base, Object, Static and Proceed, and names a generic parameter of that type through the tokens T_0 to T_20 and M_0 to M_20. Around advice keeps the body which the method already held and lets the template proceed into it. It is driven the same way from a code generator, from a tool of your own, or from the build task in Gneedle.Aspect.</Description>
         <PackageTags>Inject</PackageTags>
         <Title>Gneedle.Inject</Title>

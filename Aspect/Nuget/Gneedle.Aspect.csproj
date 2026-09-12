@@ -12,7 +12,10 @@
         <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
         <LangVersion>12</LangVersion>
 
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <!-- A package is made by `dotnet pack`, which builds the frameworks which it packs. The property which makes a
+             build pack as well is not set, because it works the other way round: a `dotnet pack` of a project which
+             sets it packs what a build left behind rather than building that, and run where nothing was built it fails
+             with "File not found" for the assembly of every framework which it was to pack. -->
         <Description>Gneedle.Aspect is the aspect weaver: an MSBuild task which applies the injectors of a project to the assembly which it builds, so that weaving needs no step of its own beyond the package. An injector is an attribute which implements one of the interfaces of Gneedle.Inject, for a method or a field or a property as well as for a type or for the assembly, and says what to do with the member it is put on. By the time the assembly is written the injectors have been applied and the attributes have done their work, so the task removes them with the types which declare them and drops the reference to the weaver, leaving nothing of the weaver in the assembly which was woven.</Description>
         <PackageTags>Aspect</PackageTags>
         <Title>Gneedle.Aspect</Title>
