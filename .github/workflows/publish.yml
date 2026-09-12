@@ -165,9 +165,20 @@ jobs:
         # out of the tree of the tag, which was moved onto this release above.
         shell: bash
         run: |
-          # A publish which fails is tried again, because the registry refuses a request which arrives while another
-          # one for the same name is being answered.
+          VERSION="${{ steps.version.outputs.version }}"
+
           stage() {
+            # A version which the registry holds already is left where it stands rather than published again, which the
+            # registry refuses: the first version of each of these was published by hand, before a trusted publisher
+            # could be configured for it at all, so a release which names that version finds it there and is answered
+            # rather than failing - and a release which is published twice is answered the same way.
+            if npm view "$1@$VERSION" version > /dev/null 2>&1; then
+              echo "$1@$VERSION is on the registry already, and is left there"
+              return 0
+            fi
+
+            # A publish which fails is tried again, because the registry refuses a request which arrives while another
+            # one for the same name is being answered.
             for attempt in 1 2 3; do
               if npm stage publish; then return 0; fi
               echo "staging $1 failed on attempt $attempt, trying again"
