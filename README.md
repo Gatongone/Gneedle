@@ -216,6 +216,17 @@ A default body is asked for the same way, when no template is needed: `WithBody(
 | `T_0`–`T_20`, `M_0`–`M_20`                          | the first to the twenty-first generic parameter of the declaring type, or of the method |
 | `ValuableMember<T>`                                 | the value of a field or a property, without the boxing that `ValuableMember` costs     |
 
+The name which a placeholder is given is read out of the template itself, and the one instruction which the call follows is what holds it: a name is therefore one which the compiler writes there — a literal, a `nameof`, or a constant of the template — rather than one which the template computes while it runs.
+
+```csharp
+// The name of a member may be a constant of the template, since a constant is what the compiler writes there.
+private const string Name = "Compute";
+
+public static int ByAConstant() => This.Method<Func<int>>(Name)();
+```
+
+A name which no load stands ahead of is refused where the weaving runs, rather than left as a call which would reach the placeholder, and fail, when the member which was woven ran.
+
 Where a generic parameter cannot be named by a `System.Type` — in the signature of a delegate, in a local variable, in a return type — a token stands in for it, and the weaver turns it into the parameter of the method being woven:
 
 ```csharp
