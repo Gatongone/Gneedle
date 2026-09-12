@@ -16,5 +16,7 @@
   ],
   "dependencies": {
     "com.unity.nuget.mono-cecil": "1.11.6"
-  }
+  },
+  "documentationUrl": "https://github.com/Gatongone/Gneedle/blob/main/README.md#inject",
+  "changelogUrl": "https://github.com/Gatongone/Gneedle/releases"
 }

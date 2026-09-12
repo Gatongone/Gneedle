@@ -16,5 +16,7 @@
   ],
   "dependencies": {
     "com.gatongone.gneedle.inject": "0.0.1"
-  }
+  },
+  "documentationUrl": "https://github.com/Gatongone/Gneedle/blob/main/README.md#aspect",
+  "changelogUrl": "https://github.com/Gatongone/Gneedle/releases"
 }
