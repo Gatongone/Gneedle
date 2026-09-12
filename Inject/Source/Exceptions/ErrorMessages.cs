@@ -173,6 +173,13 @@ internal static class ErrorMessages
     internal const string PROCEED_INVOKE_RETURN_TYPE_MISMATCH = "The type which the call to Proceed.Invoke hands back is not the type which the member being woven hands back. Type: {0}, Method: {1}.";
 
     /// <summary>
+    /// A placeholder is given a name which is not written where the call is, so there is no instruction ahead of it for
+    /// the weaving to read the name out of. The placeholders are the member which the call names and the member being
+    /// woven.
+    /// </summary>
+    internal const string NAME_IS_NOT_WRITTEN = "The name which this placeholder is given is not written where the call is. The weaving reads the name of a member out of the instruction ahead of the call, so a name is a literal, a nameof, or a constant of the template, rather than one which the template computes. Member: {0}, Method: {1}.";
+
+    /// <summary>
     /// The template names a type which the compiler wrote for a body of the template's own — a lambda, a local
     /// function, an async body or an iterator — which holds that body as a method of its own rather than as
     /// instructions of the template. The placeholders are the reference which names it and the member.

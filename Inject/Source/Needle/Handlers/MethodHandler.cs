@@ -763,6 +763,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // It may also hold a declaring type which stands for the type of another assembly, which the parsing below
             // replaces by the real one.
             case MethodReference methodRef:
+                RefuseANameWhichIsNotWritten(methodRef, currentIndex, filter);
                 RefuseTheCompilersOwnType(methodRef.DeclaringType, methodRef.FullName);
                 var importedMethod = Source.Module.ImportReference(methodRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
@@ -792,6 +793,32 @@ internal sealed partial class MethodHandler : IMethodHandler
                 RefuseTheCompilersOwnType(typeRef, typeRef.FullName);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, typeRef.ParseGenericTokens(Source, Source.Module)));
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Refuse a placeholder which is given a name the weaving has nowhere to read: the name of a member is read out of
+    /// the instruction which loads it, which is the one the call follows, so what a template computes is a name which
+    /// nothing holds.<para/>
+    /// Every name of a placeholder is written where the call is — a literal, a `nameof`, or a constant of the template,
+    /// which the compiler writes as the one instruction all the same — so a call which follows anything else is one the
+    /// weaving would leave as it was written, and the member which was woven would reach the placeholder when it ran.
+    /// </summary>
+    /// <param name="member">The member which the call names.</param>
+    /// <param name="currentIndex">Index of the instruction of the call.</param>
+    /// <param name="filter">The instruction filter which holds the instructions.</param>
+    /// <exception cref="ArgumentException">Thrown when the name of the placeholder is not written where the call is.</exception>
+    private void RefuseANameWhichIsNotWritten(MemberReference member, int currentIndex, InstructionFilter filter)
+    {
+        // Only the members which a template names with a string are read this way: the instance which is pushed and the
+        // type which another member is looked up on are reached through the instructions around the call.
+        if (member.DeclaringType.FullName is not (This.TYPE_NAME or Base.TYPE_NAME or Object.TYPE_NAME or Static.TYPE_NAME)) return;
+        if (member.Name is not (nameof(This.Field) or nameof(This.Property) or nameof(This.Method))) return;
+
+        // The name is what the call follows, and it is read for a name which no load stands ahead of.
+        if (currentIndex == 0 || filter.Target[currentIndex - 1].OpCode != OpCodes.Ldstr)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.NAME_IS_NOT_WRITTEN, member.FullName, Source.FullName));
         }
     }
 
