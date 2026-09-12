@@ -681,18 +681,26 @@ internal sealed partial class MethodHandler : IMethodHandler
         // The symbol which proceeds carries no name, so there is no instruction ahead of the call which identifies it:
         // the call is the whole of the symbol, and the type which declares it does what the name of the others does.
         // Which member it stands for is settled by the member being woven, whose body was taken over rather than named.
-        else if (currentIns.Operand is MethodReference proceedCall
-                 && GetInstanceMemberFlag(proceedCall).HasFlag(MemberSymbols.Proceed))
+        else if (currentIns.Operand is MethodReference proceedCall && proceedCall.DeclaringType.FullName == Proceed.TYPE_NAME)
         {
-            // A call which hands the symbol a name is a template which was compiled against a weaver which read one, and
-            // the name would be left on the stack ahead of the call which is written in its place.
-            if (proceedCall.Parameters.Count != 0)
+            // The type declares the two symbols which reach the body that was taken over: the one which names a
+            // signature for the call to be made with, and the one which takes the arguments which the template itself
+            // was given. Which of the two it is, is the name of the call.
+            if (proceedCall.Name == nameof(Proceed.Invoke))
             {
+                ParseProceedInvoke(currentIndex, proceedCall, filter, targetDef);
+            }
+            else if (proceedCall.Parameters.Count != 0)
+            {
+                // A call which hands the symbol a name is a template which was compiled against a weaver which read one,
+                // and the name would be left on the stack ahead of the call which is written in its place.
                 throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, nameof(Proceed) + "." + nameof(Proceed.Method)));
             }
-
-            ParseMethod(nameof(Proceed) + "." + nameof(Proceed.Method),
-                        MemberSymbols.Proceed | MemberSymbols.Method, currentIndex, null, filter, targetDef);
+            else
+            {
+                ParseMethod(nameof(Proceed) + "." + nameof(Proceed.Method),
+                            MemberSymbols.Proceed | MemberSymbols.Method, currentIndex, null, filter, targetDef);
+            }
         }
         else
         {
@@ -870,9 +878,10 @@ internal sealed partial class MethodHandler : IMethodHandler
         private readonly Instruction?[] m_Replacements = new Instruction[target.Count];
 
         /// <summary>
-        /// The instruction to insert before the original instruction at index. If null, it means no instruction to insert.
+        /// The instructions to insert before the original instruction at index, in the order they were inserted. If
+        /// null, it means no instruction to insert.
         /// </summary>
-        private readonly Instruction?[] m_Insert = new Instruction[target.Count];
+        private readonly List<Instruction>?[] m_Insert = new List<Instruction>?[target.Count];
 
         /// <summary>
         /// Key: the instruction with non-imported operand.
@@ -922,7 +931,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         /// </summary>
         /// <param name="index">Index of the instruction to insert before.</param>
         /// <param name="ins"> The instruction to insert.</param>
-        public void Insert(int index, Instruction ins) => m_Insert[index] = ins;
+        public void Insert(int index, Instruction ins) => (m_Insert[index] ??= []).Add(ins);
 
         /// <summary>
         /// Apply the instruction translations to source collection. For each instruction in target collection,
@@ -941,16 +950,18 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         /// <summary>
-        /// If there is an instruction to insert before current index, add it to source.
+        /// If there are instructions to insert before current index, add them to source in the order they were
+        /// inserted, which is the order they are read in: the receiver of a call before the arguments of it.
         /// </summary>
-        /// <param name="source">The source collection to add instruction.</param>
+        /// <param name="source">The source collection to add instructions.</param>
         /// <param name="index">Index of the instruction in target collection.</param>
         private void AddInsertInstruction(ICollection<Instruction> source, int index)
         {
-            var insert = m_Insert[index];
-            if (insert != null)
+            if (m_Insert[index] is not { } insert) return;
+
+            foreach (var instruction in insert)
             {
-                source.Add(insert);
+                source.Add(instruction);
             }
         }
 

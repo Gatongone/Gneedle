@@ -3,6 +3,54 @@ namespace Gneedle.Inject;
 partial class MethodHandler
 {
     /// <summary>
+    /// Parse the call which proceeds into the body that was taken over with the arguments which the template itself was
+    /// given, which is the symbol that names no signature: the member which is woven keeps the signature of the
+    /// template, so the arguments of the call are the parameters of the template, in the order they are declared in.
+    /// </summary>
+    /// <param name="callIndex">Index of the instruction of the call to <see cref="Proceed.Invoke{TResult}"/>.</param>
+    /// <param name="call">The reference of that call, which names the type the body hands back where it hands one back.</param>
+    /// <param name="filter">The final instruction's container.</param>
+    /// <param name="targetDef">The template method which the instructions are copied from.</param>
+    /// <exception cref="ArgumentException">Thrown when the template proceeds without a body being woven around, or when the type which the call hands back is not the one which the member hands back.</exception>
+    private void ParseProceedInvoke(int callIndex, MethodReference call, InstructionFilter filter, MethodDefinition targetDef)
+    {
+        // The body which was taken over is what the call stands for, and a template which proceeds without one being
+        // taken over is a mistake of its own rather than a member which could not be found.
+        if (m_ProceedMethodName == null)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.PROCEED_WITHOUT_AROUND_BODY, nameof(Proceed) + "." + nameof(Proceed.Invoke)));
+        }
+
+        // The type of the value which the call hands back is written at the call and the type which the member hands
+        // back is written at the member, so the two are compared rather than left to the runtime to find disagreeing.
+        var handedBack = call is GenericInstanceMethod genericCall ? genericCall.GenericArguments[0] : Source.Module.TypeSystem.Void;
+        if (!TypeName.HasSameName(handedBack.ParseGenericTokens(Source, Source.Module), Source.ReturnType))
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.PROCEED_INVOKE_RETURN_TYPE_MISMATCH, handedBack.FullName, Source.FullName));
+        }
+
+        var proceed = Source.DeclaringType.Methods.FirstOrDefault(methodDef => methodDef.Name == m_ProceedMethodName)
+                      ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, m_ProceedMethodName));
+
+        // The receiver of the member comes first where the generated method belongs to an instance, and it is the
+        // receiver of the member which is written rather than the one of the template: the call is an instruction of the
+        // body which is woven, where the slot zero is the member. The arguments follow it in the order which the
+        // template declares its parameters in, which is the order of the parameters of the member.
+        if (!proceed.IsStatic)
+        {
+            filter.Insert(callIndex, Instruction.Create(OpCodes.Ldarg_0));
+        }
+
+        for (var position = 0; position < Source.Parameters.Count; position++)
+        {
+            filter.Insert(callIndex, CreateLdarg(position + (targetDef.IsStatic ? 0 : 1), targetDef));
+        }
+
+        // The call of the generated method takes the place of the call which proceeds.
+        filter.Replace(callIndex, Instruction.Create(OpCodes.Call, GetCallableReference(proceed)));
+    }
+
+    /// <summary>
     /// Parse the symbol to actual method operation.
     /// </summary>
     /// <example>

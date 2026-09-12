@@ -210,6 +210,25 @@ public static class Proceed
     /// <returns>The symbol of the method.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
     public static TMethod Method<TMethod>() where TMethod : Delegate => throw new InjectionNotEffectiveException();
+
+    /// <summary>
+    /// Call the body which was taken over with the arguments which the template itself was given, and hand back what
+    /// that body hands back.<para/>
+    /// The template of an around body keeps the signature of the member which is woven, so its parameters are the
+    /// arguments of that member, and a call which passes them on names no signature of its own: the type of the value
+    /// which is handed back is what the call names, and the weaving writes the arguments of the template into the call.
+    /// </summary>
+    /// <typeparam name="TResult">Type of the value which the body hands back, which is the type of the member.</typeparam>
+    /// <returns>The value which the body of the member hands back.</returns>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
+    public static TResult Invoke<TResult>() => throw new InjectionNotEffectiveException();
+
+    /// <summary>
+    /// Call the body which was taken over with the arguments which the template itself was given, where the member
+    /// which is woven hands nothing back.
+    /// </summary>
+    /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
+    public static void Invoke() => throw new InjectionNotEffectiveException();
 }
 
 /// <summary>

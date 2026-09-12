@@ -167,6 +167,12 @@ internal static class ErrorMessages
     internal const string INVALID_FROM_ASSEMBLY_TYPE = "The type which the FromAssemblyAttribute names cannot be found in the assembly it names. Type: {0}, Assembly: {1}.";
 
     /// <summary>
+    /// A template calls <see cref="Proceed.Invoke{TResult}"/> for a type which the member being woven does not hand
+    /// back. The placeholders are the type which the call names and the member.
+    /// </summary>
+    internal const string PROCEED_INVOKE_RETURN_TYPE_MISMATCH = "The type which the call to Proceed.Invoke hands back is not the type which the member being woven hands back. Type: {0}, Method: {1}.";
+
+    /// <summary>
     /// The template belongs to an instance and reads it, which is the template's own receiver rather than an argument
     /// of the member being woven. The placeholder is the member.
     /// </summary>
