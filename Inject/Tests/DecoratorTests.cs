@@ -27,6 +27,113 @@ public class DecoratorTests
         return (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
     }
 
+    #region ClassDecorator
+
+    [Test]
+    public void AddClass_WithGenericParameter_Creates_Generic_Class()
+    {
+        var asm = Assembly.Create("DecoratorAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+
+        var classHandler = (ClassHandler) handler.AddClass("GenericClass", Ns, ClassFlags.Public)
+                                                 .WithGenericParameter("T")
+                                                 .GetHandler();
+
+        Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(1));
+        Assert.That(classHandler.Source.GenericParameters[0].Name, Is.EqualTo("T"));
+    }
+
+    [Test]
+    public void AddClass_WithBaseType_Sets_Correct_BaseType()
+    {
+        var asm = Assembly.Create("DecoratorAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+
+        var classHandler = (ClassHandler) handler.AddClass("DerivedClass", Ns, ClassFlags.Public)
+                                                 .WithBaseType(typeof(TestBaseClass))
+                                                 .GetHandler();
+
+        Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
+    }
+
+    [Test]
+    public void AddClass_WithInterface_Adds_Interface_Implementation()
+    {
+        var asm = Assembly.Create("DecoratorAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+
+        var classHandler = (ClassHandler) handler.AddClass("ImplClass", Ns, ClassFlags.Public)
+                                                 .WithInterface(typeof(ITestInterface))
+                                                 .GetHandler();
+
+        Assert.That(classHandler.Source.Interfaces.Count, Is.GreaterThan(0));
+        Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+    }
+
+    [Test]
+    public void AddClass_WithGenericParameter_And_BaseType_Creates_Generic_Derived_Class()
+    {
+        var asm = Assembly.Create("DecoratorAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+
+        var classHandler = (ClassHandler) handler.AddClass("GenericDerived", Ns, ClassFlags.Public)
+                                                 .WithGenericParameter("T")
+                                                 .WithBaseType(typeof(TestBaseClass))
+                                                 .GetHandler();
+
+        Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(1));
+        Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
+    }
+
+    [Test]
+    public void AddClass_WithGenericParameter_And_Interface_Creates_Generic_Class_With_Interface()
+    {
+        var asm = Assembly.Create("DecoratorAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+
+        var classHandler = (ClassHandler) handler.AddClass("GenericImpl", Ns, ClassFlags.Public)
+                                                 .WithGenericParameter("T")
+                                                 .WithInterface(typeof(ITestInterface))
+                                                 .GetHandler();
+
+        Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(1));
+        Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+    }
+
+    [Test]
+    public void AddClass_WithBaseType_And_Interface_Creates_Derived_Class_With_Interface()
+    {
+        var asm = Assembly.Create("DecoratorAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+
+        var classHandler = (ClassHandler) handler.AddClass("DerivedImpl", Ns, ClassFlags.Public)
+                                                 .WithBaseType(typeof(TestBaseClass))
+                                                 .WithInterface(typeof(ITestInterface))
+                                                 .GetHandler();
+
+        Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
+        Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+    }
+
+    [Test]
+    public void AddClass_WithAllDecorators_Creates_Generic_Derived_Class_With_Interface()
+    {
+        var asm = Assembly.Create("DecoratorAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+
+        var classHandler = (ClassHandler) handler.AddClass("FullyDecoratedClass", Ns, ClassFlags.Public)
+                                                 .WithGenericParameter("T")
+                                                 .WithGenericParameter("U")
+                                                 .WithBaseType(typeof(TestBaseClass))
+                                                 .WithInterface(typeof(ITestInterface))
+                                                 .GetHandler();
+
+        Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(2));
+        Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
+        Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+    }
+    #endregion
+
     #region MethodDecorator
 
     [Test]
