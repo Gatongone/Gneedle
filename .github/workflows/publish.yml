@@ -1,0 +1,107 @@
+# Publishing a release publishes what the release names: the version is the tag which it was given, and every package
+# which this repository carries is packed with that version and pushed.
+#
+# Nothing of the repository is written to. The files which carry a version are given the one of the tag on the runner
+# which packs them, so a release can be published, withdrawn and published again without leaving a commit behind, and
+# the commit a tag points at is the commit which was reviewed.
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+# The last step writes the notes of the release, which is a write to the repository the release belongs to.
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    # The tests are run on Windows, which runs the tests of every framework which the test projects are built for: the
+    # ones for net472 are run by the framework itself, which the runners of Linux do not carry.
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          # The notes of the release are written from the commits between it and the release before it, which the tags
+          # have to be read for.
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # 5.0 runs the tests which are built for net5.0. Every other framework is built and run by the SDK of the
+          # runner, which is the newest one it carries.
+          dotnet-version: 5.0.x
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Take the version from the tag of the release
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Write the version into the files which carry one
+        shell: bash
+        run: python .github/scripts/set-version.py "${{ steps.version.outputs.version }}"
+
+      - name: Test
+        shell: bash
+        run: |
+          dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -c Release
+          dotnet test Aspect/Tests/Gneedle.Aspect.Test.csproj -c Release
+
+      - name: Build the weaver which the package of Unity ships
+        # The package of Unity carries the weaver as a plugin which is compiled before it, and the one in the repository
+        # is the one which was built when it was written there last: it is built again from the tag being released, so
+        # that the package which is published carries the weaver of the release it belongs to.
+        shell: bash
+        run: dotnet build Inject/Source/Gneedle.Inject.csproj -f netstandard2.1 -c Release
+
+      - name: Pack the packages of NuGet
+        shell: bash
+        run: |
+          dotnet pack Inject/Source/Gneedle.Inject.csproj -c Release -o "$RUNNER_TEMP/nuget"
+          dotnet pack Aspect/Nuget/Gneedle.Aspect.csproj -c Release -o "$RUNNER_TEMP/nuget"
+
+      - name: Push the packages of NuGet
+        # The weaver is pushed before the aspect weaver, which names it as a dependency of the same version: a package
+        # which is published while the one it depends on is not is a package which cannot be installed.
+        shell: bash
+        run: |
+          dotnet nuget push "$RUNNER_TEMP/nuget/Gneedle.Inject.${{ steps.version.outputs.version }}.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push "$RUNNER_TEMP/nuget/Gneedle.Aspect.${{ steps.version.outputs.version }}.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Publish the packages of Unity
+        # The packages of Unity are published to npm, which the Package Manager reads them from through a scoped
+        # registry. The version of each `package.json` was written before this step, so what npm is handed is the
+        # release which is being published.
+        #
+        # OpenUPM is the other place these two are published, and it is not published to from here: it reads a package
+        # out of the tree of the tag which was released, so the version it finds is the one which that tree holds
+        # rather than the one written on this runner. The two agree while a release is tagged at a commit whose
+        # `package.json` already names it, which is what committing the version ahead of the tag does.
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd Inject/Unity && npm publish
+          cd ../../Aspect/Unity && npm publish
+
+      - name: Write the notes of the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python .github/scripts/release-notes.py "$TAG" > "$RUNNER_TEMP/notes.md"
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
