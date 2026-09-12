@@ -2,6 +2,10 @@ using System.Runtime.CompilerServices;
 
 namespace Gneedle.Inject.Test;
 
+/// <summary>
+/// Tests for adding a type of each kind to the assembly through the handler which adds it, which is a class, a struct and
+/// an enum, and for reading the handler of the kind which a type of the assembly is.
+/// </summary>
 [TestFixture]
 public class TypeInjectorTests
 {
@@ -9,6 +13,8 @@ public class TypeInjectorTests
 
     private static AssemblyHandler CreateHandler()
         => (AssemblyHandler) Assembly.Create("TestAssembly").Handler;
+
+    #region Struct
 
     [Test]
     public void AddStruct_Creates_ValueType()
@@ -76,6 +82,34 @@ public class TypeInjectorTests
     }
 
     [Test]
+    public void AddStruct_WithInterface_Type_Adds_Interface()
+    {
+        var handler = CreateHandler();
+        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public)
+                                   .WithInterface(typeof(System.IDisposable))
+                                   .GetHandler();
+
+        var def = ((StructHandler) structHandler).Source;
+        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(System.IDisposable).FullName), Is.True);
+    }
+
+    [Test]
+    public void AddStruct_WithInterface_IType_Adds_Interface()
+    {
+        var handler = CreateHandler();
+        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public)
+                                   .WithInterface(typeof(System.IComparable).ToGneedleType())
+                                   .GetHandler();
+
+        var def = ((StructHandler) structHandler).Source;
+        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(System.IComparable).FullName), Is.True);
+    }
+
+    #endregion
+
+    #region Class
+
+    [Test]
     public void AddClass_Creates_ReferenceType()
     {
         var handler = CreateHandler();
@@ -102,6 +136,71 @@ public class TypeInjectorTests
         Assert.Catch<ArgumentException>(() => handler.AddClass("Dup", Ns, ClassFlags.Public));
     }
 
+    #endregion
+
+    #region Enum
+
+    [Test]
+    public void AddEnum_Creates_Enum_With_Int_Underlying_Type()
+    {
+        var handler = CreateHandler();
+        var enumHandler = handler.AddEnum("MyEnum", Ns, EnumFlags.Public).GetHandler();
+
+        var def = ((EnumHandler) enumHandler).Source;
+        Assert.That(def.IsEnum, Is.True);
+        Assert.That(def.IsValueType, Is.True);
+        Assert.That(def.BaseType!.FullName, Is.EqualTo(typeof(Enum).FullName));
+        Assert.That(def.Fields.Any(f => f.Name == "value__" && f.FieldType.FullName == typeof(int).FullName), Is.True);
+    }
+
+    [Test]
+    public void AddEnum_WithUnderlyingType_Sets_Value_Field_Type()
+    {
+        var handler = CreateHandler();
+        var enumHandler = handler.AddEnum("MyEnum", Ns, EnumFlags.Public)
+                                 .WithUnderlyingType(typeof(byte))
+                                 .GetHandler();
+
+        var def = ((EnumHandler) enumHandler).Source;
+        var valueField = def.Fields.First(f => f.Name == "value__");
+        Assert.That(valueField.FieldType.FullName, Is.EqualTo(typeof(byte).FullName));
+    }
+
+    [Test]
+    public void AddEnum_WithFlagsAttribute_Adds_FlagsAttribute()
+    {
+        var handler = CreateHandler();
+        var enumHandler = handler.AddEnum("MyEnum", Ns, EnumFlags.Public)
+                                 .WithFlagsAttribute()
+                                 .GetHandler();
+
+        var def = ((EnumHandler) enumHandler).Source;
+        Assert.That(def.CustomAttributes.Any(a => a.AttributeType.Name == nameof(FlagsAttribute)), Is.True);
+    }
+
+    [Test]
+    public void AddEnum_Redefined_Throws()
+    {
+        var handler = CreateHandler();
+        handler.AddEnum("Dup", Ns, EnumFlags.Public).GetHandler();
+
+        Assert.Catch<ArgumentException>(() => handler.AddEnum("Dup", Ns, EnumFlags.Public));
+    }
+
+    [Test]
+    public void AddEnum_Appends_To_Module()
+    {
+        var handler = CreateHandler();
+        handler.AddEnum("MyEnum", Ns, EnumFlags.Public).GetHandler();
+
+        var found = handler.GetType($"{Ns}.MyEnum");
+        Assert.That(found, Is.Not.Null);
+    }
+
+    #endregion
+
+    #region GetType
+
     [Test]
     public void GetType_Returns_StructHandler_For_ValueType()
     {
@@ -124,33 +223,21 @@ public class TypeInjectorTests
     }
 
     [Test]
+    public void GetType_Returns_EnumHandler_For_Enum()
+    {
+        var handler = CreateHandler();
+        handler.AddEnum("MyEnum", Ns, EnumFlags.Public).WithUnderlyingType(typeof(int)).GetHandler();
+
+        var found = handler.GetType($"{Ns}.MyEnum");
+        Assert.That(found, Is.InstanceOf<IEnumHandler>());
+    }
+
+    [Test]
     public void GetType_Unknown_Returns_Null()
     {
         var handler = CreateHandler();
         Assert.That(handler.GetType($"{Ns}.DoesNotExist"), Is.Null);
     }
 
-    [Test]
-    public void AddStruct_WithInterface_Type_Adds_Interface()
-    {
-        var handler = CreateHandler();
-        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public)
-                                   .WithInterface(typeof(System.IDisposable))
-                                   .GetHandler();
-
-        var def = ((StructHandler) structHandler).Source;
-        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(System.IDisposable).FullName), Is.True);
-    }
-
-    [Test]
-    public void AddStruct_WithInterface_IType_Adds_Interface()
-    {
-        var handler = CreateHandler();
-        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public)
-                                   .WithInterface(typeof(System.IComparable).ToGneedleType())
-                                   .GetHandler();
-
-        var def = ((StructHandler) structHandler).Source;
-        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(System.IComparable).FullName), Is.True);
-    }
+    #endregion
 }
