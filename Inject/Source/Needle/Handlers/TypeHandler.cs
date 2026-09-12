@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Inject;
+namespace Gneedle.Inject;
 
 /// <summary>
 /// Represents a handler for a type of the metadata which is built, which reads its members and adds new ones to it.

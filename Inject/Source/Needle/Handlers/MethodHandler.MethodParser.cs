@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Inject;
+namespace Gneedle.Inject;
 
 partial class MethodHandler
 {

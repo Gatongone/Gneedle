@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Inject;
+namespace Gneedle.Inject;
 
 /// <summary>
 /// Decorator for describing class implementation and generic information.

@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;

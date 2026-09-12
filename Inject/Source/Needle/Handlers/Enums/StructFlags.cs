@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Inject;
+namespace Gneedle.Inject;
 
 /// <summary>
 /// Represents the modifier of a class.

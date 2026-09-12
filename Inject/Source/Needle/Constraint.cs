@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
 
 namespace Gneedle.Inject;

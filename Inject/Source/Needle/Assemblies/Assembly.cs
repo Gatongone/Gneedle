@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Inject;
+namespace Gneedle.Inject;
 
 /// <summary>
 /// Writing for <see cref="Mono.Cecil.AssemblyDefinition"/> to target file or memories.

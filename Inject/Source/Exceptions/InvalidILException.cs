@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Inject;
+namespace Gneedle.Inject;
 
 /// <summary>
 /// Thrown when the instructions which a template compiles a symbol of it into are not the shape which the weaving

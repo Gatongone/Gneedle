@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Aspect;
+namespace Gneedle.Aspect;
 
 /// <summary>
 /// The names which the package and the project it weaves agree on: the two properties which a project sets to say how

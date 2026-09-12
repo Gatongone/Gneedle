@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Inject;
+namespace Gneedle.Inject;
 
 /// <summary>
 /// Thrown when a member which stands for one of the type which is woven is called where it is written rather than from

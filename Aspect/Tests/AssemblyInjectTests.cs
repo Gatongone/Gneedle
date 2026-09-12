@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Gneedle.Inject;
 using Mono.Cecil;
 using Assembly = Gneedle.Inject.Assembly;

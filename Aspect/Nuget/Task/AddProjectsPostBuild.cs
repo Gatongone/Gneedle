@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Aspect;
+namespace Gneedle.Aspect;
 
 /// <summary>
 /// The build task which runs once the weaver itself was built: it walks the solution the weaver is built with, and

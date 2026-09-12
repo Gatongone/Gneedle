@@ -1,4 +1,4 @@
-﻿using Gneedle.Inject;
+using Gneedle.Inject;
 
 namespace Gneedle.Aspect;
 

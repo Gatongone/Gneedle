@@ -1,4 +1,4 @@
-﻿namespace Gneedle.Inject;
+namespace Gneedle.Inject;
 
 /// <summary>
 /// Represents a handler for an assembly, which resolves the types which it declares and adds new ones to it.

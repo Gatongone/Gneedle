@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gneedle.Inject", "Inject\Source\Gneedle.Inject.csproj", "{F84BE3EB-1982-4085-8A30-C54E898B9EF3}"
 EndProject
