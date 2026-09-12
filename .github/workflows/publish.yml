@@ -17,10 +17,15 @@ on:
 # The commit which carries the version is pushed to the branch and the tag of the release is moved to it, and the last
 # step writes the notes of the release: the two of them are writes to the repository which the release belongs to.
 #
-# The packages of Unity are published to npm through a trusted publisher rather than through a token, which is the
-# identity this run is given by GitHub for the step to present to npm: `id-token: write` is what it is given. A package
-# which npm has never been given cannot be configured for one - the settings of a package are reached through the
-# package - so the first version of each is published by hand, once, from a terminal which is signed in.
+# No token is kept for either registry. Both of them are published to through a trusted publisher, which is the identity
+# this run is given by GitHub for the step to present to the registry: `id-token: write` is what it is given, and what it
+# is answered with is a credential for this run alone - a key of nuget.org which is valid for an hour, and npm's own
+# identity, which its step stages a version with.
+#
+# The two differ in what has to be done before either answers. nuget.org is configured per account, so a policy covers
+# every package of it and there is nothing to set up for a package which was never published. npm is configured per
+# package, and the settings of a package are reached through the package, so the first version of each package of Unity
+# is published by hand, once, from a terminal which is signed in.
 permissions:
   contents: write
   id-token: write
@@ -142,13 +147,26 @@ jobs:
           dotnet pack Inject/Source/Gneedle.Inject.csproj -c Release -o "$RUNNER_TEMP/nuget"
           dotnet pack Aspect/Nuget/Gneedle.Aspect.csproj -c Release -o "$RUNNER_TEMP/nuget"
 
+      - name: Log in to nuget.org
+        # The key which the two pushes below are made with is one which nuget.org issues for this run alone: it is asked
+        # for here rather than kept in the repository as a secret, and it is valid for an hour, which is why it is asked
+        # for after the packages are packed rather than before.
+        #
+        # The identity is the one `id-token: write` gives this run, and nuget.org answers it with a key for the profile
+        # which the policy that was configured for it names - the name of the profile, which is not the address of the
+        # account.
+        uses: NuGet/login@v1
+        id: nuget
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Push the packages of NuGet
         # The weaver is pushed before the aspect weaver, which names it as a dependency of the same version: a package
         # which is published while the one it depends on is not is a package which cannot be installed.
         shell: bash
         run: |
-          dotnet nuget push "$RUNNER_TEMP/nuget/Gneedle.Inject.${{ steps.version.outputs.version }}.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
-          dotnet nuget push "$RUNNER_TEMP/nuget/Gneedle.Aspect.${{ steps.version.outputs.version }}.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push "$RUNNER_TEMP/nuget/Gneedle.Inject.${{ steps.version.outputs.version }}.nupkg" --api-key "${{ steps.nuget.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          dotnet nuget push "$RUNNER_TEMP/nuget/Gneedle.Aspect.${{ steps.version.outputs.version }}.nupkg" --api-key "${{ steps.nuget.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Publish the packages of Unity
         # The packages of Unity are published to npm, which the Package Manager reads them from through a scoped
