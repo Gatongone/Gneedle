@@ -12,10 +12,27 @@ namespace Gneedle.Inject;
 /// <param name="declaringTypeHandler">Handler of the type which declares the property.</param>
 internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declaringTypeHandler, MethodAttributes? accessorAttributes = null) : IPropertyHandler, IAttributeContainer
 {
+    /// <summary>
+    /// Name of the property.
+    /// </summary>
     public string Name => Source.Name;
+
+    /// <summary>
+    /// Full name of the property, which is its name qualified by the type which declares it.
+    /// </summary>
     public string FullName => Source.FullName;
-    private           MethodHandler?     m_Setter;
-    private           MethodHandler?     m_Getter;
+
+    /// <summary>
+    /// The handler of the setter which was read or written, which is kept so that the accessor is read out of the
+    /// metadata once rather than again at each ask.
+    /// </summary>
+    private MethodHandler? m_Setter;
+
+    /// <summary>
+    /// The handler of the getter which was read or written, which is kept so that the accessor is read out of the
+    /// metadata once rather than again at each ask.
+    /// </summary>
+    private MethodHandler? m_Getter;
 
     /// <summary>
     /// The attributes which an accessor is created with, which are the attributes of the property when the decorator
@@ -59,6 +76,15 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         return m_Setter ??= Source.SetMethod == null ? null : new MethodHandler(Source.SetMethod, DeclaringTypeHandler);
     }
 
+    /// <summary>
+    /// Give the getter of the property a body of a kind which can be written from the property alone, which the getter
+    /// is added to the type for first when the property holds none.<para/>
+    /// <see cref="DefaultPropertyBody.WithFieldOperation"/> writes the getter against the backing field
+    /// <c>&lt;{Name}&gt;k__BackingField</c>, which is added to the type when it does not hold one, and is static
+    /// exactly when the getter is.
+    /// </summary>
+    /// <param name="body">The kind of body which the getter is given.</param>
+    /// <exception cref="ArgumentException">Thrown when the getter which the property holds is one which a body cannot be written for, or when the body has no getter form.</exception>
     public void SetGetter(DefaultPropertyBody body)
     {
         if (Source.GetMethod == null)
@@ -119,6 +145,15 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         m_Getter.Source.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
     }
 
+    /// <summary>
+    /// Give the setter of the property a body of a kind which can be written from the property alone, which the setter
+    /// is added to the type for first when the property holds none.<para/>
+    /// <see cref="DefaultPropertyBody.WithFieldOperation"/> writes the setter against the backing field
+    /// <c>&lt;{Name}&gt;k__BackingField</c>, which is added to the type when it does not hold one, and is static
+    /// exactly when the setter is.
+    /// </summary>
+    /// <param name="body">The kind of body which the setter is given.</param>
+    /// <exception cref="ArgumentException">Thrown when the setter which the property holds is one which a body cannot be written for, or when a body which operates on a field is asked for on an indexer.</exception>
     public void SetSetter(DefaultPropertyBody body)
     {
         if (Source.SetMethod == null)
@@ -193,6 +228,14 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         setterBody.Add(Instruction.Create(OpCodes.Ret));
     }
 
+    /// <summary>
+    /// Copy the body of a member into the setter of the property, which the setter is added to the type for first when
+    /// the property holds none.<para/>
+    /// The member takes the value which is set, and takes the index before it when the property is an indexer, so a
+    /// member of two parameters describes an indexer whose index type is the type of its first parameter.
+    /// </summary>
+    /// <param name="body">The member whose body the setter is given.</param>
+    /// <exception cref="ArgumentException">Thrown when the member takes more than the value and the index, or when its last parameter is not the type of the property.</exception>
     public void SetSetter(MethodInfo body)
     {
         // Indexer has more than one parameter or the parameter type does not match the property type.
@@ -225,6 +268,15 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         m_Setter.SetBody(body);
     }
 
+    /// <summary>
+    /// Copy the body of a member into the getter of the property, which the getter is added to the type for first when
+    /// the property holds none.<para/>
+    /// The member takes the index when the property is an indexer, so a member of one parameter describes an indexer
+    /// whose index type is the type of that parameter, and a member which takes none describes the getter of a property
+    /// of the type itself.
+    /// </summary>
+    /// <param name="body">The member whose body the getter is given.</param>
+    /// <exception cref="ArgumentException">Thrown when the member takes more than the index, or when what it hands back is not the type of the property.</exception>
     public void SetGetter(MethodInfo body)
     {
         // Indexer has more than one parameter or the parameter type does not match the property type.

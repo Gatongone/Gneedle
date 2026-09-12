@@ -8,9 +8,24 @@ namespace Gneedle.Inject;
 /// </summary>
 public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
 {
+    /// <summary>
+    /// Handler of the type which the field is appended to when the chain ends.
+    /// </summary>
     private readonly TypeHandler m_TypeHandler;
+
+    /// <summary>
+    /// Name of the field which the chain describes.
+    /// </summary>
     private readonly string m_FieldName;
+
+    /// <summary>
+    /// Flags of the field which the chain describes.
+    /// </summary>
     private readonly FieldFlags m_FieldFlags;
+
+    /// <summary>
+    /// Type of the value which the field holds, which is <see cref="object"/> until another is asked for.
+    /// </summary>
     private IType m_FieldType = typeof(object).ToGneedleType();
 
     /// <summary>

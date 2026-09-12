@@ -50,7 +50,20 @@ public abstract class Assembly : IDisposable
     /// </summary>
     public IAssemblyHandler Handler => m_Handler.Value;
 
+    /// <summary>
+    /// The cache of the stream which the assembly was read from, which the assembly is written back through when it is
+    /// saved to the path it was read from, and which is released with it.
+    /// </summary>
     private          IAssemblyCache?        m_AssemblyCache;
+
+    /// <summary>
+    /// The handler of the assembly, which is made when it is first asked for.
+    /// </summary>
+    /// <remarks>
+    /// It is made lazily because an assembly which is only read is never handled: building the handler reads the
+    /// assemblies which the module refers to and caches the types of the module, none of which a caller that reads an
+    /// assembly to write it elsewhere has any use for.
+    /// </remarks>
     private readonly Lazy<IAssemblyHandler> m_Handler;
 
     /// <summary>

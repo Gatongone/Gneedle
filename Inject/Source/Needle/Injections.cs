@@ -147,6 +147,12 @@ public static class Injections
             return changed;
         }
 
+        /// <summary>
+        /// Apply the injectors which the assembly itself declares, which are the attributes put on the assembly rather
+        /// than on a member of it.
+        /// </summary>
+        /// <param name="assemblyHandler">Handler of the assembly which the injectors are applied to.</param>
+        /// <returns>Whether the assembly declares an injector at all.</returns>
         private bool ProcessAssembleInjector(AssemblyHandler assemblyHandler)
         {
             var injectors = assembly.GetCustomAttributes(inherit: false)
@@ -162,6 +168,13 @@ public static class Injections
             return true;
         }
 
+        /// <summary>
+        /// Apply the injectors which one type declares, each of them asked of the kind of handler it injects into, so
+        /// that one which is put on a type of another kind is reported rather than passed over.
+        /// </summary>
+        /// <param name="assemblyHandler">Handler of the assembly which the type belongs to.</param>
+        /// <param name="type">The type whose injectors are applied.</param>
+        /// <returns>Whether an injector was applied.</returns>
         private bool ProcessTypeInjector(AssemblyHandler assemblyHandler, Type type)
         {
             var dirty = false;
@@ -227,6 +240,14 @@ public static class Injections
             return dirty;
         }
 
+        /// <summary>
+        /// Apply the injectors which one method carries, which are looked up in the assembly by the name and the
+        /// parameters of the method rather than by the method itself.
+        /// </summary>
+        /// <param name="typeHandler">Handler of the type which declares the method.</param>
+        /// <param name="runtimeType">The type which the method belongs to, which what is reported names.</param>
+        /// <param name="methodInfo">The method whose injectors are applied.</param>
+        /// <returns>Whether an injector was applied.</returns>
         private bool ProcessMethodInjector(IMethodContainer typeHandler, Type runtimeType, MethodInfo methodInfo)
         {
             if (methodInfo.GetCustomAttributes(inherit: false)
@@ -253,6 +274,14 @@ public static class Injections
             return injected;
         }
 
+        /// <summary>
+        /// Apply the injectors which one field carries, which are looked up in the assembly by the name of the field
+        /// rather than by the field itself.
+        /// </summary>
+        /// <param name="typeHandler">Handler of the type which declares the field.</param>
+        /// <param name="runtimeType">The type which the field belongs to, which what is reported names.</param>
+        /// <param name="fieldInfo">The field whose injectors are applied.</param>
+        /// <returns>Whether an injector was applied.</returns>
         private bool ProcessFieldInjector(IFieldContainer typeHandler, Type runtimeType, FieldInfo fieldInfo)
         {
             if (fieldInfo.GetCustomAttributes(inherit: false)
@@ -277,6 +306,14 @@ public static class Injections
             return injected;
         }
 
+        /// <summary>
+        /// Apply the injectors which one property carries, which are looked up in the assembly by the name of the
+        /// property rather than by the property itself.
+        /// </summary>
+        /// <param name="typeHandler">Handler of the type which declares the property.</param>
+        /// <param name="runtimeType">The type which the property belongs to, which what is reported names.</param>
+        /// <param name="propertyInfo">The property whose injectors are applied.</param>
+        /// <returns>Whether an injector was applied.</returns>
         private bool ProcessPropertyInjector(IPropertyContainer typeHandler, Type runtimeType, PropertyInfo propertyInfo)
         {
             if (propertyInfo.GetCustomAttributes(inherit: false)

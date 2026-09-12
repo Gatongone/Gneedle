@@ -6,9 +6,24 @@
 /// </summary>
 public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
 {
+    /// <summary>
+    /// Handler of the assembly which the enum belongs to, which the members of the enum are added through.
+    /// </summary>
     private readonly AssemblyHandler m_AssemblyHandler;
+
+    /// <summary>
+    /// The enum which the chain describes, which is the definition the members are appended to.
+    /// </summary>
     private readonly TypeDefinition m_TypeDefinition;
+
+    /// <summary>
+    /// Type of the values of the enum.
+    /// </summary>
     private TypeReference m_UnderlyingType;
+
+    /// <summary>
+    /// Whether the enum is given <see cref="FlagsAttribute"/>, which says that its values are bit flags which combine.
+    /// </summary>
     private bool m_WithFlagsAttribute;
 
     /// <summary>

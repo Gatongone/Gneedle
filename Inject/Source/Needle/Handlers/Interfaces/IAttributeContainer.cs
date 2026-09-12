@@ -26,13 +26,17 @@ public interface IAttributeContainer
 /// </summary>
 public static class AttributeExtensions
 {
+    /// <param name="container">The container which the attributes are read from and written to.</param>
     extension(IAttributeContainer container)
     {
         /// <inheritdoc cref="IAttributeContainer.ContainsAttribute(IType)"/>
         public bool ContainsAttribute(Type attributeType) => container.ContainsAttribute(attributeType.ToGneedleType());
 
-        /// <inheritdoc cref="IAttributeContainer.ContainsAttribute(IType)"/>
+        /// <summary>
+        /// Check whether the container carries an attribute of the given type.
+        /// </summary>
         /// <typeparam name="TAttribute">The type of the attribute.</typeparam>
+        /// <returns>Whether the container carries the attribute.</returns>
         public bool ContainsAttribute<TAttribute>() where TAttribute : Attribute => container.ContainsAttribute(typeof(TAttribute));
     }
 }

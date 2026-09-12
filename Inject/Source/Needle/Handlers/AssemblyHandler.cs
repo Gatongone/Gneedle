@@ -96,6 +96,10 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         AddType(module.ImportReference(typeof(decimal)));
         return;
 
+        /// <summary>
+        /// Cache a type of the type system of the module, which is the kind the weaver writes the most of.
+        /// </summary>
+        /// <param name="typeReference">The type which is cached.</param>
         void AddType(TypeReference typeReference)
         {
             // The type system of the module owns the reference, so it is a valid reference of the target assembly.

@@ -8,13 +8,49 @@ namespace Gneedle.Inject;
 /// </summary>
 public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
 {
+    /// <summary>
+    /// Handler of the type which the method is appended to when the chain ends.
+    /// </summary>
     private readonly TypeHandler m_TypeHandler;
+
+    /// <summary>
+    /// Name of the method which the chain describes.
+    /// </summary>
     private readonly string m_MethodName;
+
+    /// <summary>
+    /// Flags of the method which the chain describes.
+    /// </summary>
     private readonly MethodFlags m_MethodFlags;
+
+    /// <summary>
+    /// Type of the value which the method hands back, which is <see cref="void"/> until another is asked for.
+    /// </summary>
     private IType m_ReturnType = typeof(void).ToGneedleType();
+
+    /// <summary>
+    /// The generic parameters of the method, in the order they were asked for, which is the order their tokens are
+    /// numbered in.
+    /// </summary>
     private readonly List<GenericParameterType> m_GenericParameters = [];
+
+    /// <summary>
+    /// The parameters of the method, in the order they were asked for, which is the order a template reads them by.
+    /// </summary>
     private readonly List<Parameter> m_Parameters = [];
+
+    /// <summary>
+    /// The body of a kind which can be written from the member alone, which the last <see cref="IBodyDecorator.WithBody(DefaultMethodBody)"/> left.
+    /// </summary>
+    /// <remarks>
+    /// The two ways of describing a body replace each other, so at most one of this and <see cref="m_BodyMethod"/> is
+    /// set: the one which was asked for last is the one which is applied.
+    /// </remarks>
     private DefaultMethodBody? m_DefaultBody;
+
+    /// <summary>
+    /// The member whose body is copied, which the last <see cref="IBodyDecorator.WithBody(MethodInfo)"/> left.
+    /// </summary>
     private MethodInfo? m_BodyMethod;
 
     /// <summary>

@@ -9,13 +9,50 @@ namespace Gneedle.Inject;
 /// </summary>
 public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
 {
+    /// <summary>
+    /// Handler of the type which the property is appended to when the chain ends.
+    /// </summary>
     private readonly TypeHandler m_TypeHandler;
+
+    /// <summary>
+    /// Name of the property which the chain describes.
+    /// </summary>
     private readonly string m_PropertyName;
+
+    /// <summary>
+    /// Flags of the property which the chain describes.
+    /// </summary>
     private readonly PropertyFlags m_PropertyFlags;
+
+    /// <summary>
+    /// Type of the value which the property holds, which is <see cref="object"/> until another is asked for.
+    /// </summary>
     private IType m_PropertyType = typeof(object).ToGneedleType();
+
+    /// <summary>
+    /// The body of the getter of a kind which can be written from the member alone, which the last
+    /// <c>WithGetter(DefaultPropertyBody)</c> left.
+    /// </summary>
     private DefaultPropertyBody? m_GetterBody;
+
+    /// <summary>
+    /// The member whose body the getter copies, which the last <c>WithGetter(MethodInfo)</c> left.
+    /// </summary>
+    /// <remarks>
+    /// The getter and the setter are described apart from each other, so what is set here says nothing about what the
+    /// setter does, and the two ways of describing the body of one accessor replace each other within it.
+    /// </remarks>
     private MethodInfo? m_GetterBodyMethod;
+
+    /// <summary>
+    /// The body of the setter of a kind which can be written from the member alone, which the last
+    /// <c>WithSetter(DefaultPropertyBody)</c> left.
+    /// </summary>
     private DefaultPropertyBody? m_SetterBody;
+
+    /// <summary>
+    /// The member whose body the setter copies, which the last <c>WithSetter(MethodInfo)</c> left.
+    /// </summary>
     private MethodInfo? m_SetterBodyMethod;
 
     /// <summary>

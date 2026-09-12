@@ -5,6 +5,10 @@ namespace Gneedle.Inject;
 /// </summary>
 internal class EnumHandler(AssemblyHandler assemblyHandler, TypeDefinition source, TypeReference underlyingType) : TypeHandler(assemblyHandler, source), IEnumHandler
 {
+    /// <summary>
+    /// The attributes of a member of an enum, which is a public static literal field whose value is written beside it,
+    /// which is the only shape an enum member can be declared in.
+    /// </summary>
     private const FieldAttributes ENUM_MEMBER_ATTRS = FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.Literal | FieldAttributes.HasDefault;
 
     /// <inheritdoc/>

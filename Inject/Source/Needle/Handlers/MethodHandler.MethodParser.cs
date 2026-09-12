@@ -192,6 +192,22 @@ partial class MethodHandler
         return genericInstance;
     }
 
+    /// <summary>
+    /// The method which a symbol of a template stands for: a member of the type being woven, a member of its base type,
+    /// a member of the instance the template names, a member of the type it names statically, or the method which holds
+    /// the body that was taken over.<para/>
+    /// The instructions and the position of the symbol among them are read as well, because the instance which a member
+    /// reached through <see cref="MemberSymbols.Object"/> or through <see cref="MemberSymbols.Static"/> belongs to is
+    /// written in the instruction before the name, and the type of it is what the member is looked up on.
+    /// </summary>
+    /// <param name="memberSymbol">The symbol which the template reached the member through.</param>
+    /// <param name="methodName">Name of the member.</param>
+    /// <param name="currentIndex">Index of the instruction which loads the name of the member.</param>
+    /// <param name="instructions">The instructions of the body which is parsed.</param>
+    /// <param name="parameters">The types of the arguments which the member is called with, which the member that is found has to be described by.</param>
+    /// <param name="targetDef">The template which the instructions are read out of.</param>
+    /// <returns>The method which the symbol stands for, or null when the symbol is not one which names a method.</returns>
+    /// <exception cref="ArgumentException">Thrown when the member cannot be resolved, or when the template proceeds without a body being woven around.</exception>
     private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, IReadOnlyList<Instruction> instructions, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef)
     {
         if (memberSymbol.HasFlag(MemberSymbols.Base))
@@ -290,6 +306,16 @@ partial class MethodHandler
         return null;
     }
 
+    /// <summary>
+    /// The method which a template reaches through a generic parameter, which is looked up on each of the constraints
+    /// of the parameter in turn: the parameter itself holds no definition to look a method up on, and a call on one
+    /// which is unconstrained would be invalid IL.
+    /// </summary>
+    /// <param name="target">The generic parameter which the member is reached through.</param>
+    /// <param name="methodName">Name of the member.</param>
+    /// <param name="parameters">The types of the arguments which the member is called with.</param>
+    /// <returns>The method which the constraints of the parameter describe.</returns>
+    /// <exception cref="ArgumentException">Thrown when no constraint holds a method of that name and signature.</exception>
     private MethodDefinition GetMethodFromConstraint(GenericParameter target, string methodName, IReadOnlyList<TypeReference> parameters)
     {
         MethodDefinition? methodDef = null;
@@ -305,6 +331,19 @@ partial class MethodHandler
         return methodDef ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
     }
 
+    /// <summary>
+    /// Find the instruction which invokes the delegate that a method symbol was parsed into, which is the first
+    /// instruction after the symbol that calls a member of that delegate's type with the arguments the stack holds.<para/>
+    /// The stack is walked from the beginning of the body rather than from the symbol, because the values which the call
+    /// is handed are pushed before it and by instructions of their own, so what the call reads can only be told by
+    /// carrying the stack along from where it is empty.
+    /// </summary>
+    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="callIndex">Index of the instruction which loads the delegate.</param>
+    /// <param name="delegateType">Type of the delegate which the symbol was parsed into.</param>
+    /// <param name="targetDef">The template which the instructions belong to.</param>
+    /// <param name="index">Index of the instruction which invokes the delegate.</param>
+    /// <returns>Whether the instruction was found, which is false when the body invokes no such delegate after the symbol.</returns>
     private bool TryGetNextInvoke(IReadOnlyList<Instruction> bodyInstructions, int callIndex, TypeReference delegateType, MethodDefinition targetDef, out int index)
     {
         // This stack is used to ensure that the method parameters are of the same type as the method signature before they're all pushed to the stack.
@@ -338,12 +377,23 @@ partial class MethodHandler
         // The delegate Invoke expects the stack to hold [delegate-receiver, arg1, ...argN].
         // We only compare the top N entries (the arguments) against the delegate's Invoke
         // parameters, ignoring the receiver sitting below them.
+        /// <summary>
+        /// Whether an instruction is the one which invokes the delegate that is looked for, which is a call of the
+        /// <c>Invoke</c> of that delegate's type with the arguments the stack holds the types of.
+        /// </summary>
+        /// <param name="ins">The instruction which is asked about.</param>
+        /// <returns>Whether the instruction invokes the delegate.</returns>
         bool MatchTargetInvoke(Instruction ins)
             => (ins.OpCode == OpCodes.Callvirt || ins.OpCode == OpCodes.Call)   // It's not double that the instruction must be 'call' type.
                 && ins.Operand is MethodReference {Name: "Invoke"} callMethod   // We only check the 'invoke' method from Delegate.
                 && TypeName.HasSameName(delegateType, callMethod.DeclaringType) // Make sure declaring types are the same.
                 && TopOfStackMatches(callMethod);                               // Make sure the top-of-stack types match the invoke parameters.
 
+        /// <summary>
+        /// Whether the top of the stack holds the arguments which a call of a member is made with.
+        /// </summary>
+        /// <param name="callMethod">The member which the call reads.</param>
+        /// <returns>Whether the values which were pushed last are the arguments of the call.</returns>
         bool TopOfStackMatches(MethodReference callMethod)
         {
             var invokeParameters = callMethod.Parameters;
@@ -431,6 +481,14 @@ partial class MethodHandler
         }
     }
 
+    /// <summary>
+    /// The type of the value which an instruction leaves on the stack, which is read off the instruction itself where
+    /// the instruction writes that type into it, and off the member the instruction loads where it reads one.
+    /// </summary>
+    /// <param name="ins">The instruction which is read.</param>
+    /// <param name="targetDef">The template which the instruction belongs to.</param>
+    /// <param name="type">The type of the value which the instruction leaves, or null when it leaves none.</param>
+    /// <returns>Whether the instruction leaves a value on the stack, <see cref="void"/> being none.</returns>
     private bool TryGetStackType(Instruction ins, MethodDefinition targetDef, out TypeReference? type)
     {
         var module = Source.Module;
@@ -463,6 +521,13 @@ partial class MethodHandler
         return type != null && type != typeSystem.Void;
     }
 
+    /// <summary>
+    /// The type of the argument which an instruction loads, which is the type of the parameter at the position it
+    /// loads, or the type which declares the template when it loads the receiver.
+    /// </summary>
+    /// <param name="instruction">The instruction which loads the argument.</param>
+    /// <param name="targetDef">The template which the instruction belongs to, whose parameters and staticness the position is read against.</param>
+    /// <returns>The type of the argument, or null when the instruction loads none.</returns>
     private TypeReference? GetArgType(Instruction instruction, MethodDefinition targetDef)
     {
         var isStatic = targetDef.IsStatic;
@@ -479,6 +544,12 @@ partial class MethodHandler
             : targetDef.Parameters[index + (isStatic ? 0 : -1)].ParameterType).ParseGenericTokens(Source, Source.Module);
     }
 
+    /// <summary>
+    /// What a call hands back, with the generic return of a generic method, and of a method of a generic type, resolved
+    /// to the argument which the call was given.
+    /// </summary>
+    /// <param name="methodRef">The method which the call reads.</param>
+    /// <returns>The type of the value which the call leaves on the stack.</returns>
     private static TypeReference ResolveMethodReturnType(MethodReference methodRef)
     {
         if (methodRef.ReturnType is not GenericParameter parameter) return methodRef.ReturnType;
@@ -498,17 +569,39 @@ partial class MethodHandler
             ? genericArguments[parameter.Position]
             : parameterType;
 
+    /// <summary>
+    /// The stack which the body being parsed builds as it is walked, which holds the type of every value that is pushed
+    /// so that the arguments a call is made with can be compared with the parameters of the member it calls.<para/>
+    /// The values themselves are of no interest, and the instruction which pushed each of them is kept only so that a
+    /// value which is read out of the stack again can be told apart from one which was never on it.
+    /// </summary>
     private class ParameterStack
     {
+        /// <summary>
+        /// The instruction which pushed each of the values, in the order they were pushed.
+        /// </summary>
         public readonly List<Instruction>   Ins   = [];
+
+        /// <summary>
+        /// The type of each of the values, in the order they were pushed, which is the order of <see cref="Ins"/>.
+        /// </summary>
         public readonly List<TypeReference> Types = [];
 
+        /// <summary>
+        /// Put a value of a type on top of the stack.
+        /// </summary>
+        /// <param name="ins">The instruction which pushed it.</param>
+        /// <param name="type">The type of the value.</param>
         public void Push(Instruction ins, TypeReference type)
         {
             Ins.Add(ins);
             Types.Add(type);
         }
 
+        /// <summary>
+        /// Take the values which were pushed last off the stack.
+        /// </summary>
+        /// <param name="count">How many values to take off.</param>
         public void Pop(int count)
         {
             for (var i = 0; i < count; i++)
@@ -518,6 +611,10 @@ partial class MethodHandler
             }
         }
 
+        /// <summary>
+        /// Take the value which was pushed last off the stack.
+        /// </summary>
+        /// <returns>The instruction which pushed the value and the type of it.</returns>
         public (Instruction Ins, TypeReference Type) Pop()
         {
             var result = (Ins[Ins.Count - 1], Types[Types.Count - 1]);

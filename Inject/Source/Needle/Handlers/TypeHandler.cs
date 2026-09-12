@@ -196,6 +196,13 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         Source.CustomAttributes.Add(attribute);
     }
 
+    /// <summary>
+    /// Whether two handlers are of the same type of the metadata, which is what two handlers of one type are: the
+    /// handlers are made as they are asked for rather than kept, so a caller which holds one of a type before asking
+    /// for it again tells the two apart by this.
+    /// </summary>
+    /// <param name="other">The handler which is compared with this one.</param>
+    /// <returns>Whether the two handle the same type.</returns>
     public bool Equals(TypeHandler? other)
     {
         if (ReferenceEquals(null, other)) return false;
@@ -203,6 +210,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         return Source.Equals(other.Source);
     }
 
+    /// <inheritdoc/>
     public override bool Equals(object? obj)
     {
         if (ReferenceEquals(null, obj)) return false;
@@ -210,6 +218,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         return obj.GetType() == GetType() && Equals((TypeHandler) obj);
     }
 
+    /// <inheritdoc/>
     public override int GetHashCode() => Source.GetHashCode();
 
     /// <summary>
