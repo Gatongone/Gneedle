@@ -45,6 +45,12 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     private MethodInfo? m_GetterBodyMethod;
 
     /// <summary>
+    /// The instance which the delegate of <see cref="m_GetterBodyMethod"/> was made from, which holds what the
+    /// template captured, or null when the getter was given as a method alone, or when the template captured nothing.
+    /// </summary>
+    private object? m_GetterClosure;
+
+    /// <summary>
     /// The body of the setter of a kind which can be written from the member alone, which the last
     /// <c>WithSetter(DefaultPropertyBody)</c> left.
     /// </summary>
@@ -54,6 +60,12 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// The member whose body the setter copies, which the last <c>WithSetter(MethodInfo)</c> left.
     /// </summary>
     private MethodInfo? m_SetterBodyMethod;
+
+    /// <summary>
+    /// The instance which the delegate of <see cref="m_SetterBodyMethod"/> was made from, which holds what the
+    /// template captured, or null when the setter was given as a method alone, or when the template captured nothing.
+    /// </summary>
+    private object? m_SetterClosure;
 
     /// <summary>
     /// Create a decorator which describes a property before it is appended to the module.
@@ -89,6 +101,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         // is applied. They are held for one accessor alone, because a getter and a setter do not depend on each other.
         m_GetterBody       = body;
         m_GetterBodyMethod = null;
+        m_GetterClosure    = null;
         return this;
     }
 
@@ -97,6 +110,16 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     {
         m_GetterBodyMethod = method;
         m_GetterBody       = null;
+        m_GetterClosure    = null;
+        return this;
+    }
+
+    /// <inheritdoc cref="WithGetter(MethodInfo)"/>
+    /// <param name="delegation">The delegate which holds the body, and the instance which holds what it captured.</param>
+    internal IAccessorDecorator WithGetter(Delegate delegation)
+    {
+        WithGetter(delegation.Method);
+        m_GetterClosure = delegation.Target;
         return this;
     }
 
@@ -105,6 +128,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     {
         m_SetterBody       = body;
         m_SetterBodyMethod = null;
+        m_SetterClosure    = null;
         return this;
     }
 
@@ -113,6 +137,16 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     {
         m_SetterBodyMethod = method;
         m_SetterBody       = null;
+        m_SetterClosure    = null;
+        return this;
+    }
+
+    /// <inheritdoc cref="WithSetter(MethodInfo)"/>
+    /// <param name="delegation">The delegate which holds the body, and the instance which holds what it captured.</param>
+    internal IAccessorDecorator WithSetter(Delegate delegation)
+    {
+        WithSetter(delegation.Method);
+        m_SetterClosure = delegation.Target;
         return this;
     }
 
@@ -134,7 +168,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         // it, so a property whose accessor was described no body holds none of that accessor.
         if (m_GetterBodyMethod is { } getterBody)
         {
-            handler.SetGetter(getterBody);
+            handler.SetGetter(getterBody, m_GetterClosure);
         }
         else if (m_GetterBody is { } defaultGetterBody)
         {
@@ -143,7 +177,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
 
         if (m_SetterBodyMethod is { } setterBody)
         {
-            handler.SetSetter(setterBody);
+            handler.SetSetter(setterBody, m_SetterClosure);
         }
         else if (m_SetterBody is { } defaultSetterBody)
         {

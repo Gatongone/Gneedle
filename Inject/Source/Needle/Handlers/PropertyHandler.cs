@@ -236,7 +236,15 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// </summary>
     /// <param name="body">The member whose body the setter is given.</param>
     /// <exception cref="ArgumentException">Thrown when the member takes more than the value and the index, or when its last parameter is not the type of the property.</exception>
-    public void SetSetter(MethodInfo body)
+    public void SetSetter(MethodInfo body) => SetSetter(body, null);
+
+    /// <summary>
+    /// Set the body of the setter from the template which the delegate holds, and from the instance which holds what
+    /// that template captured.
+    /// </summary>
+    /// <param name="body">The template whose body the setter is given.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    internal void SetSetter(MethodInfo body, object? closure)
     {
         // Indexer has more than one parameter or the parameter type does not match the property type.
         var paramLength = body.GetParameters().Length;
@@ -265,7 +273,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
 
         m_Setter = new MethodHandler(Source.SetMethod, DeclaringTypeHandler);
         VerifyHoldsBody(m_Setter.Source);
-        m_Setter.SetBody(body);
+        m_Setter.SetBody(body, closure);
     }
 
     /// <summary>
@@ -277,7 +285,15 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// </summary>
     /// <param name="body">The member whose body the getter is given.</param>
     /// <exception cref="ArgumentException">Thrown when the member takes more than the index, or when what it hands back is not the type of the property.</exception>
-    public void SetGetter(MethodInfo body)
+    public void SetGetter(MethodInfo body) => SetGetter(body, null);
+
+    /// <summary>
+    /// Set the body of the getter from the template which the delegate holds, and from the instance which holds what
+    /// that template captured.
+    /// </summary>
+    /// <param name="body">The template whose body the getter is given.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    internal void SetGetter(MethodInfo body, object? closure)
     {
         // Indexer has more than one parameter or the parameter type does not match the property type.
         if (body.GetParameters().Length > 1 || !TypeName.HasSameName(body.ReturnType, Source.PropertyType))
@@ -299,7 +315,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
 
         m_Getter = new MethodHandler(Source.GetMethod, DeclaringTypeHandler);
         VerifyHoldsBody(m_Getter.Source);
-        m_Getter.SetBody(body);
+        m_Getter.SetBody(body, closure);
     }
 
     /// <summary>

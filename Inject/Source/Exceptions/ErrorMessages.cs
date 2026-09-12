@@ -173,6 +173,13 @@ internal static class ErrorMessages
     internal const string TEMPLATE_READS_ITS_OWN_INSTANCE = "The template reads the instance which it belongs to, which is no argument of the member being woven. A template is a static method, and a lambda which captures a variable is an instance method of the type which holds the capture. Method: {0}.";
 
     /// <summary>
+    /// The template reads a variable which it captured, and a value of that type cannot be written into the member
+    /// being woven, where the value would have to be held. The placeholders are the name of the field which holds it,
+    /// the name of the type, and the member.
+    /// </summary>
+    internal const string TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN = "The template captures a variable whose value cannot be written into the member being woven, where a string, a number, a character, a boolean, an enumeration, a null of a reference type can. Field: {0}, Type: {1}, Method: {2}.";
+
+    /// <summary>
     /// The array which the image of an assembly was to be written to is smaller than the image. The placeholder is the
     /// number of bytes which the image takes.
     /// </summary>

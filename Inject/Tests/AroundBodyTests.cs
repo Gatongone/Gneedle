@@ -97,6 +97,47 @@ public static class GenericAroundTemplates
 }
 
 /// <summary>
+/// A template which belongs to an instance of a type which the sources name, which reads a member of that instance
+/// rather than a variable of the method it is written in.
+/// </summary>
+public class InstanceFieldTemplates
+{
+    /// <summary>
+    /// A value which the instance holds, which a template of it reads off the instance rather than out of itself.
+    /// </summary>
+    private readonly int m_Value = 7;
+
+    /// <summary>
+    /// Read the field of the instance which this template belongs to.
+    /// </summary>
+    public int ReadsItsOwnField(int value) => value + m_Value;
+}
+
+/// <summary>
+/// A template which is a lambda of an instance of a type which the sources name, and which reads a member of that
+/// instance rather than a variable of the method it is written in.
+/// </summary>
+public class InstanceCaptureTemplate
+{
+    /// <summary>
+    /// The value which the lambda below reaches off the instance which the closure holds.
+    /// </summary>
+    private readonly int m_Captured;
+
+    /// <summary>
+    /// Create the instance which holds what the lambda reaches.
+    /// </summary>
+    /// <param name="captured">The value which the instance holds.</param>
+    public InstanceCaptureTemplate(int captured) => m_Captured = captured;
+
+    /// <summary>
+    /// Weave the lambda, which proceeds and adds the value of this instance, around the method.
+    /// </summary>
+    /// <param name="handler">The handler of the method which is woven around.</param>
+    public void Weave(IMethodHandler handler) => handler.AroundBody(() => Proceed.Method<Func<int>>()() + m_Captured);
+}
+
+/// <summary>
 /// Tests for the around version of <see cref="IMethodHandler.SetBody(MethodInfo)"/>, which keeps the body of the method
 /// and lets the template proceed through it.
 /// </summary>
@@ -356,22 +397,85 @@ public class AroundBodyTests
     #region Refusals
 
     [Test]
-    public void AroundBody_Of_A_Template_Which_Reads_The_Instance_It_Belongs_To_Throws()
+    public void AroundBody_Of_A_Template_Which_Captures_A_Variable_Writes_The_Value_Into_The_Member()
     {
-        // A lambda which captures a variable is an instance method of the type which holds the capture, so its body
-        // begins by loading the instance which it belongs to. A static method holds no such argument, and the weaving of
-        // one used to leave that load as it was written: the member was given an argument which it does not hold, and
-        // the runtime refused the whole type for it rather than the member.
-        var assembly = Assembly.Create("AroundBodyReceiverAssembly");
+        // A lambda which captures a variable is an instance method of the type which the compiler wrote to hold what it
+        // captured, and it reads each of them off the instance of that type which the delegate was made from. That
+        // instance belongs to the run of the injector and not to the assembly being woven, so the value is written into
+        // the member instead: the woven body reaches the same value, and holds no instance which it could not.
+        var assembly = Assembly.Create("AroundBodyCapturedValueAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        run.SetBody(DefaultMethodBody.WithDefaultReturn);
+        var captured = 41;
+
+        run.AroundBody(() => Proceed.Method<Func<int>>()() + captured);
+
+        var body = ((MethodHandler) run).Source.Body;
+        // Nothing reads the instance which the delegate held, and the value which was captured stands in the body.
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+
+        // The body which was taken over hands back the default of int, which what the template captured is added to.
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(41));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Captures_A_Member_Of_Its_Instance_Writes_The_Value_Into_The_Member()
+    {
+        // A lambda of an instance of a type which the sources name captures that instance rather than one of the
+        // variables of the method it is written in, so the closure holds the instance and what the template reads is a
+        // member of it, which is read off the instance the delegate holds.
+        var assembly = Assembly.Create("AroundBodyInstanceCaptureAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        run.SetBody(DefaultMethodBody.WithDefaultReturn);
+
+        new InstanceCaptureTemplate(7).Weave(run);
+
+        var body = ((MethodHandler) run).Source.Body;
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 7), Is.True);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(7));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Captures_A_Value_Which_Cannot_Be_Written_Throws()
+    {
+        // What a template captured is written into the member as a value of its own, which only a string, a number, a
+        // character, a boolean, an enumeration or a null of a reference type has a form for. A capture of any other
+        // type is named rather than woven into a member which the runtime would refuse.
+        var assembly = Assembly.Create("AroundBodyUnwritableCaptureAssembly");
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
         var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        var capture = "captured";
+        var captured = new object();
 
         var thrown = Assert.Throws<ArgumentException>(() => run.AroundBody(() =>
         {
             Proceed.Method<Action>()();
-            Console.WriteLine(capture);
+            Console.WriteLine(captured);
         }));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be written"));
+        Assert.That(thrown!.Message, Does.Contain("captured"));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Given_As_A_Method_Which_Reads_Its_Instance_Throws()
+    {
+        // A template which is given as the method alone is given no instance, so what it reads off the instance it
+        // belongs to is held by nothing, and there is no value of it to write into the member being woven.
+        var assembly = Assembly.Create("AroundBodyInstanceFieldAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        var one = host.AddMethod("One", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+        one.SetBody(DefaultMethodBody.WithDefaultReturn);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => one.AroundBody(typeof(InstanceFieldTemplates).GetMethod(nameof(InstanceFieldTemplates.ReadsItsOwnField))!));
 
         Assert.That(thrown!.Message, Does.Contain("instance which it belongs to"));
     }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
@@ -26,6 +27,15 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// source method is not woven around.
     /// </summary>
     private string? m_ProceedMethodName;
+
+    /// <summary>
+    /// The instance which the delegate of the template was made from, whose fields hold the variables which the
+    /// template captured, or null when the template was given as a method rather than as the delegate of it.<para/>
+    /// A lambda which captures a variable is an instance method of the type which the compiler wrote to hold it, and it
+    /// reads what it captured off that instance. The values themselves are held by the delegate, which the weaving is
+    /// given while the injector runs, so what the template captured is written where the template read it.
+    /// </summary>
+    private object? m_TemplateClosure;
 
     /// <summary>
     /// Gets the name of the source method definition. It is used for debugging and logging purposes to identify the method being manipulated.
@@ -170,11 +180,71 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
+    /// Set the body of the method from the delegate which holds the template, which is the template itself where the
+    /// template captured nothing and the instance which holds what it captured where it did.
+    /// </summary>
+    /// <param name="handler">The handler of the method.</param>
+    /// <param name="template">The delegate which the template was made into.</param>
+    public static void SetBody(IMethodHandler handler, Delegate template)
+        => SetBody(handler, template.Method, template.Target);
+
+    /// <summary>
+    /// Set the body of the method from a template which was given as the method alone, so that what the template
+    /// captured, if it captured anything, is held by nothing.
+    /// </summary>
+    /// <param name="handler">The handler of the method.</param>
+    /// <param name="method">The template which holds the body to copy.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    public static void SetBody(IMethodHandler handler, MethodInfo method, object? closure)
+    {
+        if (closure != null && handler is MethodHandler concrete)
+        {
+            concrete.SetBody(method, closure);
+            return;
+        }
+
+        handler.SetBody(method);
+    }
+
+    /// <summary>
+    /// Set the body of the method to run around the one which it holds, from the delegate which holds the template.
+    /// </summary>
+    /// <param name="handler">The handler of the method.</param>
+    /// <param name="template">The delegate which the template was made into.</param>
+    public static void AroundBody(IMethodHandler handler, Delegate template)
+        => AroundBody(handler, template.Method, template.Target);
+
+    /// <summary>
+    /// Set the body of the method to run around the one which it holds, from a template which was given as the method
+    /// alone, so that what the template captured, if it captured anything, is held by nothing.
+    /// </summary>
+    /// <param name="handler">The handler of the method.</param>
+    /// <param name="method">The template which holds the body to weave around.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    public static void AroundBody(IMethodHandler handler, MethodInfo method, object? closure)
+    {
+        if (closure != null && handler is MethodHandler concrete)
+        {
+            concrete.AroundBody(method, closure);
+            return;
+        }
+
+        handler.AroundBody(method);
+    }
+
+    /// <summary>
     /// Set the method body of source method definition to be the same as the target method definition.
     /// We need to parse the instructions in target method body and translate them to make them work in source method body,
     /// </summary>
     /// <param name="method"></param>
-    public void SetBody(MethodInfo method)
+    public void SetBody(MethodInfo method) => SetBody(method, null);
+
+    /// <summary>
+    /// Set the method body to be the one which the template holds.
+    /// </summary>
+    /// <param name="method">The template which holds the body to copy.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    internal void SetBody(MethodInfo method, object? closure)
     {
         var targetDef = Source.Module.ImportReference(method).Resolve();
         var instructions = targetDef.Body.Instructions;
@@ -185,7 +255,9 @@ internal sealed partial class MethodHandler : IMethodHandler
         // Copy target method variables to source.
         CopyVariables(targetDef, Source);
 
+        m_TemplateClosure = closure;
         ParseBody(instructions, targetDef);
+        m_TemplateClosure = null;
 
         ParseReturnType(targetDef.ReturnType);
     }
@@ -198,7 +270,16 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="method">The template which holds the body to weave around.</param>
     /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
-    public void AroundBody(MethodInfo method)
+    public void AroundBody(MethodInfo method) => AroundBody(method, null);
+
+    /// <summary>
+    /// Set the body of the method to run around the body which it holds, which the template reaches through
+    /// <see cref="Proceed"/>.
+    /// </summary>
+    /// <param name="method">The template which holds the body to weave around.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
+    internal void AroundBody(MethodInfo method, object? closure)
     {
         var templateDef = Source.Module.ImportReference(method).Resolve();
 
@@ -273,7 +354,9 @@ internal sealed partial class MethodHandler : IMethodHandler
         // type by now. The return type is deliberately left alone: the template keeps the signature of the method, which
         // was checked above, so parsing it as SetBody does would only write an equal type again.
         CopyVariables(templateDef, Source);
+        m_TemplateClosure = closure;
         ParseBody(templateDef.Body.Instructions, templateDef);
+        m_TemplateClosure = null;
     }
 
     /// <summary>
@@ -328,6 +411,9 @@ internal sealed partial class MethodHandler : IMethodHandler
 
             var instruction = instructions[index];
 
+            // Write what the template captured where it read it.
+            if (TryInlineCapture(instructions, index, targetDef, filter)) continue;
+
             // Replace Ldarg. Every form of the load is translated rather than the two which carry the first slot, because
             // each of them names an argument of the template, and what the member being woven holds at that slot is
             // another argument whenever the two do not agree on belonging to an instance.
@@ -346,6 +432,122 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         // Apply translations to body.
         filter.ApplyTo(Source.Body.Instructions);
+    }
+
+    /// <summary>
+    /// Write the value which the template captured where the template read it, which is the pair of the instance it
+    /// belongs to being loaded and the field of that instance being read.
+    /// </summary>
+    /// <remarks>
+    /// A lambda which captures a variable is an instance method of the type which the compiler wrote to hold what it
+    /// captured, and it reads each of them off the instance of that type which the delegate was made from. That
+    /// instance belongs to the run of the injector rather than to the assembly being woven, so what it holds is written
+    /// into the member as the value itself, which is what makes the template reach the same value at run time.
+    /// </remarks>
+    /// <param name="instructions">The instructions of the body which is parsed.</param>
+    /// <param name="index">Index of the instruction which may be the load of the instance.</param>
+    /// <param name="templateDef">The template which the instructions belong to.</param>
+    /// <param name="filter">The instruction filter to replace the instructions.</param>
+    /// <returns>Whether a captured value was written, which is false when the pair is not a read of one.</returns>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value which cannot be written.</exception>
+    private bool TryInlineCapture(Mono.Collections.Generic.Collection<Instruction> instructions, int index, MethodDefinition templateDef, InstructionFilter filter)
+    {
+        if (m_TemplateClosure == null || index + 1 >= instructions.Count) return false;
+
+        // The load of the instance is the one which names the receiver of the template, and the reads of the fields
+        // which are reached through it follow, one after the next.
+        if (!instructions[index].TryGetLdargIndex(!templateDef.IsStatic, out var slot) || slot != 0) return false;
+
+        // The first read is the one which reads the instance which the template belongs to, which is the instance the
+        // delegate held, and each read after it reaches into the value which the one before handed back: a lambda of an
+        // instance captures that instance, and what it reads off it is a member of the instance rather than of the
+        // method which holds it.
+        var declaringType = templateDef.DeclaringType;
+        var fields  = new List<FieldReference>();
+        var readIndex = index + 1;
+        while (readIndex < instructions.Count
+               && instructions[readIndex] is { OpCode.Code: Code.Ldfld, Operand: FieldReference field }
+               && TypeName.HasSameName(field.DeclaringType, fields.Count == 0 ? declaringType : fields[fields.Count - 1].FieldType))
+        {
+            fields.Add(field);
+            readIndex++;
+        }
+
+        if (fields.Count == 0) return false;
+
+        // What the template captured is read off the instance which the delegate held, which is the instance the
+        // template was written in, and off what each field of the chain holds in its turn.
+        object? captured = m_TemplateClosure;
+        foreach (var field in fields)
+        {
+            var member = captured?.GetType().GetField(field.Name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (member == null)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, field.Name, field.FieldType.FullName, Source.FullName));
+            }
+
+            captured = member.GetValue(captured);
+        }
+
+        if (!TryCreateLiteral(fields[fields.Count - 1].FieldType, captured, out var literal))
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, fields[fields.Count - 1].Name, fields[fields.Count - 1].FieldType.FullName, Source.FullName));
+        }
+
+        filter.Replace(index, literal!);
+        for (var read = index + 1; read <= index + fields.Count; read++)
+        {
+            filter.Skip(read);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The instruction which loads the value which a template captured, for the kinds of value which one instruction
+    /// can hold.
+    /// </summary>
+    /// <param name="fieldType">The type which the field of the capture holds, which is the type the value is read as
+    /// rather than the one the value reports: a boxed value reports the type it was boxed from.</param>
+    /// <param name="value">The value which the instance holds.</param>
+    /// <param name="literal">The instruction which loads the value, or null when there is none.</param>
+    /// <returns>Whether the value can be written, which is false for every value but a string, a number, a character, a
+    /// boolean, an enumeration and a null of a reference type.</returns>
+    private static bool TryCreateLiteral(TypeReference fieldType, object? value, out Instruction? literal)
+    {
+        var metadata = fieldType.MetadataType;
+
+        // An enumeration is held as a value of the type under it, which is the type the stack carries. What the instance
+        // holds is the enumeration boxed, so it is read as that value before it is written, which is what the box of it
+        // holds and what the metadata of the field is named by.
+        if (metadata == MetadataType.ValueType && fieldType.Resolve() is { IsEnum: true } enumDef)
+        {
+            metadata = enumDef.GetEnumUnderlyingType().MetadataType;
+            if (value != null) value = Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()), CultureInfo.InvariantCulture);
+        }
+
+        literal = metadata switch
+        {
+            MetadataType.String when value is string text          => Instruction.Create(OpCodes.Ldstr, text),
+            MetadataType.Boolean when value is bool flag           => Instruction.Create(OpCodes.Ldc_I4, flag ? 1 : 0),
+            MetadataType.Char when value is char character         => Instruction.Create(OpCodes.Ldc_I4, character),
+            MetadataType.SByte when value is sbyte number          => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Byte when value is byte number            => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Int16 when value is short number          => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.UInt16 when value is ushort number        => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Int32 when value is int number            => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.UInt32 when value is uint number          => Instruction.Create(OpCodes.Ldc_I4, unchecked((int) number)),
+            MetadataType.Int64 when value is long number           => Instruction.Create(OpCodes.Ldc_I8, number),
+            MetadataType.UInt64 when value is ulong number         => Instruction.Create(OpCodes.Ldc_I8, unchecked((long) number)),
+            MetadataType.Single when value is float number         => Instruction.Create(OpCodes.Ldc_R4, number),
+            MetadataType.Double when value is double number        => Instruction.Create(OpCodes.Ldc_R8, number),
+            // A null is the same value of every reference type, and the member which it is written into names the type.
+            MetadataType.Class or MetadataType.Object or MetadataType.String or MetadataType.Array when value is null
+                => Instruction.Create(OpCodes.Ldnull),
+            _ => null
+        };
+
+        return literal != null;
     }
 
     /// <summary>

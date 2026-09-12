@@ -76,13 +76,16 @@ public interface IPropertyHandler : IAttributeContainer
 public static class PropertyExtensions
 {
     /// <summary>
-    /// Set the body of the getter from the delegate which holds the IL to copy.
+    /// Set the body of the getter from the delegate which holds the IL to copy.<para/>
+    /// A template may capture the variables which it is written among, and the delegate is what holds the values of
+    /// them: it is given to the weaving rather than the method alone, so that what the template captured is written
+    /// into the accessor being woven.
     /// </summary>
     /// <param name="decorator">The decorator which describes the property.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
     public static PropertyDecorator.IAccessorDecorator WithGetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
-        => decorator.WithGetter(delegation.Method);
+        => decorator is PropertyDecorator propertyDecorator ? propertyDecorator.WithGetter(delegation) : decorator.WithGetter(delegation.Method);
 
     /// <summary>
     /// Set the body of the setter from the delegate which holds the IL to copy.
@@ -91,5 +94,5 @@ public static class PropertyExtensions
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
     public static PropertyDecorator.IAccessorDecorator WithSetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
-        => decorator.WithSetter(delegation.Method);
+        => decorator is PropertyDecorator propertyDecorator ? propertyDecorator.WithSetter(delegation) : decorator.WithSetter(delegation.Method);
 }
