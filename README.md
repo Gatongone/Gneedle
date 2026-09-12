@@ -10,6 +10,7 @@ An aspect weaver usually asks you to learn a language of its own to say what sho
 
 Where an assembly is built decides that form of it is used, and the two are the same weaver: a .NET project is given an MSBuild task, and a Unity project is given an IL post processor, that the compilation pipeline of the editor runs. Both of them read the same attributes, drive the same library, and leave the same assembly behind.
 
+> [!IMPORTANT]
 > This project is still in the early stages of development, which means that I may break compatibility in order to fix major bugs or include critical features.
 
 # Principle
@@ -27,6 +28,18 @@ None of that could be expressed without [Mono.Cecil](https://github.com/jbevain/
 Around advice keeps the body that the target already had instead of discarding it. That body is moved to a generated method of the declaring type, and the template reaches it through `Proceed`, so that the advice can inspect the arguments, call the original, and return what it chose.
 
 The attribute that names an injector is only the way the build finds out what to do. By the time the assembly is written the injector has been applied and the attribute has done its work, so the weaver takes it back out along with the reference to itself: the assembly that was woven carries neither the attributes nor the weaver that read them.
+
+> [!WARNING]
+> A template is an ordinary method, and almost all of one is carried. The instructions are copied with the regions which
+protect them, so a `try` of a template catches where it was woven, a `using` disposes there, a `lock` releases there,
+and a `foreach` over an enumerator which is disposable disposes it there. The branches are carried — `if`, `switch`,
+`goto` and the loops — and the locals of the template are remapped to the body which is woven.
+> What is not carried is a construct which the compiler writes as a method of its own. A lambda, a local function, an
+`async` body and an iterator body each live in a method beside the one the template is: the body of an `async` template,
+and of one which yields, is the stub which starts a state machine, whose `MoveNext` holds what was written, and a lambda
+leaves a type of its own which is private to the assembly the template was compiled into. Such a template is refused
+where the weaving runs, rather than written into a member which would reach for that type and fail when it is run.
+> Two more constructs are refused where the weaving runs: a template which reads the instance it belongs to, and one which captures a value which has no form of its own.
 
 # Requirement
 
@@ -203,6 +216,17 @@ A default body is asked for the same way, when no template is needed: `WithBody(
 | `T_0`–`T_20`, `M_0`–`M_20`                          | the first to the twenty-first generic parameter of the declaring type, or of the method |
 | `ValuableMember<T>`                                 | the value of a field or a property, without the boxing that `ValuableMember` costs     |
 
+The name which a placeholder is given is read out of the template itself, and the one instruction which the call follows is what holds it: a name is therefore one which the compiler writes there — a literal, a `nameof`, or a constant of the template — rather than one which the template computes while it runs.
+
+```csharp
+// The name of a member may be a constant of the template, since a constant is what the compiler writes there.
+private const string Name = "Compute";
+
+public static int ByAConstant() => This.Method<Func<int>>(Name)();
+```
+
+A name which no load stands ahead of is refused where the weaving runs, rather than left as a call which would reach the placeholder, and fail, when the member which was woven ran.
+
 Where a generic parameter cannot be named by a `System.Type` — in the signature of a delegate, in a local variable, in a return type — a token stands in for it, and the weaver turns it into the parameter of the method being woven:
 
 ```csharp
@@ -307,10 +331,10 @@ A type that your code still names — through `typeof`, a field, a signature —
 
 Two properties change what is done with a project, and they answer different questions: whether anything is woven into the project at all, and whether the weaver is left in the assembly once it has been.
 
-| Property     | Value     | What it does                                                                                                                                               |
-|--------------|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Aspect`     | `disable` | Nothing is woven into the project. The scan of the solution does not add the target to it, and the task returns without reading its assembly.              |
-| `KeepWeaver` | `true`    | The attributes that the injectors were read from, and the reference to the weaver that they name, are kept in the assembly. Both are removed by default. |
+| Property     | Values           | Default  | What it does                                                                                                                                                                                                                                               |
+|--------------|------------------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Aspect`     | `disable/enable` | `enable` | `disable` leaves the aspect out of the project: the scan of the solution does not add the target to it, and the task returns without reading its assembly. A project which sets any other value, and one which does not set the property at all, is woven. |
+| `KeepWeaver` | `true/false`     | `false`  | `true` keeps the attributes that the injectors were read from, and the reference to the weaver that they name, in the assembly. `false` takes both back out, which is what leaves the woven assembly standing alone.                                       |
 
 ```xml
 <PropertyGroup>
@@ -328,7 +352,9 @@ Two properties change what is done with a project, and they answer different que
 
 `Aspect` is for a project that has nothing to weave: one that only declares the attributes for other projects to read, or one whose assembly is woven by something other than this build. A project that declares attributes that another project weaves with wants `KeepWeaver`, because removing them would leave that other project with nothing to name.
 
-`Aspect` is read out of the project file itself, because the scan of a solution reads the projects that it walks without building them, and a property that comes from an imported file is not in a project's own file. `KeepWeaver` is passed to the task by the build, so it is an ordinary property, set on the command line as well as in the project file.
+`Aspect` is read out of the project file itself, because the scan of a solution reads the projects that it walks without building them, and a property that comes from an imported file is not in a project's own file. The value it is read for is `disable` alone, as the letters are written: any other value, down to another case of the same word, is a project which is woven. `KeepWeaver` is matched without regard to case, and it is passed to the task by the build, so it is an ordinary property: it is set on the command line as well as in the project file.
+
+Neither property is read by the IL post processor which a Unity project is given, so neither is set there; what a Unity project is woven by is under [Unity Editor](#unity-editor).
 
 ### Unity Editor
 

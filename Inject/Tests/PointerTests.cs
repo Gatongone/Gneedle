@@ -78,6 +78,25 @@ public class PointerTests
         // Immediately invokes the returned delegate -> branch that rewrites to a direct call.
         public static int InvokeInstanceMethod(int a, int b) => This.Method<IntBinaryOp>("Add")(a, b);
 
+        /// <summary>
+        /// Name the method through a value which the template computes, which is a name the weaving has nowhere to read.
+        /// </summary>
+        public static int InvokeByNameWhichIsComputed()
+        {
+            var name = "Add";
+            return This.Method<IntBinaryOp>(name)(1, 2);
+        }
+
+        /// <summary>
+        /// Name the method through a constant of the template, which the compiler writes where the call is, so that the
+        /// weaving reads the same name a literal gives it.
+        /// </summary>
+        public static int InvokeByNameWhichIsAConstant()
+        {
+            const string name = "Add";
+            return This.Method<IntBinaryOp>(name)(1, 2);
+        }
+
         // Returns the delegate without invoking -> branch that builds a delegate (ldftn+newobj).
         public static IntBinaryOp GetInstanceMethodDelegate() => This.Method<IntBinaryOp>("Add");
 
@@ -460,6 +479,44 @@ public class PointerTests
         echo.Body.GetILProcessor().Emit(OpCodes.Ret);
         host.Source.Methods.Add(echo);
         return host;
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Name_Which_Is_A_Constant_Is_Read_Like_A_Literal()
+    {
+        // A constant of the template is what the compiler writes where the call is, so a name which is one is the name
+        // which is read out of the instruction ahead of the call.
+        var host = NewHostWithAdd(isVirtual: false);
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeByNameWhichIsAConstant)));
+
+        Assert.That(((MethodHandler) method).Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference
+                                                                                        && reference.Name == "Add"), Is.True);
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Name_Which_Is_Not_Written_Throws()
+    {
+        // The name is read out of the instruction ahead of the call, so a name which the template computes is one which
+        // nothing holds: the weaving used to leave the call as it was written, and the member which was woven reached
+        // the placeholder and threw when it ran. It is refused where the weaving runs instead, by name.
+        var host = NewHostWithAdd(isVirtual: false);
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [],
+            MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeByNameWhichIsComputed))));
+
+        Assert.That(thrown!.Message, Does.Contain("is not written where the call is"));
     }
 
     [Test]

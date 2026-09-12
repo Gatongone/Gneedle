@@ -1,4 +1,5 @@
 using Mono.Cecil;
+using MethodInfo = System.Reflection.MethodInfo;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 
 namespace Gneedle.Inject.Test;
@@ -13,6 +14,145 @@ public class WideBodyTemplates
     /// The five arguments as a number.
     /// </summary>
     public int Number(int a, int b, int c, int d, int e) => a * 10000 + b * 1000 + c * 100 + d * 10 + e;
+}
+
+/// <summary>
+/// Templates which hold the constructs which the weaving carries or refuses, so that what the readme says of them is
+/// what the weaving does.
+/// </summary>
+public static class ConstructTemplates
+{
+    /// <summary>
+    /// Catch what the body throws, and hand back 42 where the catch ran.
+    /// </summary>
+    public static int Catch(int value)
+    {
+        try { throw new InvalidOperationException("thrown by the template"); }
+        catch (InvalidOperationException) { return 42; }
+    }
+
+    /// <summary>
+    /// Add to a value in a finally, and hand back 12 where the finally ran where it was written and 2 where it did not.
+    /// </summary>
+    public static int Finally(int value)
+    {
+        var result = value;
+        try { result += 1; }
+        finally { result += 10; }
+        return result;
+    }
+
+    /// <summary>
+    /// Dispose in a using, and hand back 42 where the dispose ran.
+    /// </summary>
+    public static int Using(int value)
+    {
+        using (new DisposableThing()) { }
+        return DisposableThing.Disposed ? 42 : 0;
+    }
+
+    /// <summary>
+    /// Take a lock, and hand back 42 where the lock was released.
+    /// </summary>
+    public static int Lock(int value)
+    {
+        var gate = new object();
+        lock (gate) { value += 1; }
+        return Monitor.IsEntered(gate) ? 0 : 42;
+    }
+
+    /// <summary>
+    /// Enumerate a disposable enumerator, and hand back 43 where the dispose ran and the value came through.
+    /// </summary>
+    public static int Foreach(int value)
+    {
+        var total = 0;
+        foreach (var item in new DisposableElements(value)) { total += item; }
+        return DisposableElements.Disposed ? total + 42 : 0;
+    }
+
+    /// <summary>
+    /// A lambda written inside the template, which is a method of a type the compiler wrote for it.
+    /// </summary>
+    public static int Lambda(int value)
+    {
+        Func<int, int> add = x => x + 1;
+        return add(value);
+    }
+
+    /// <summary>
+    /// A lambda which captures a local of the template, which the compiler holds in a type of its own.
+    /// </summary>
+    public static int LambdaWhichCaptured(int value)
+    {
+        var offset = 1;
+        Func<int, int> add = x => x + offset;
+        return add(value);
+    }
+
+    /// <summary>
+    /// A body which the compiler writes as a state machine of its own.
+    /// </summary>
+    public static async Task<int> Async(int value)
+    {
+        await Task.Yield();
+        return value + 1;
+    }
+}
+
+/// <summary>
+/// A disposable which remembers whether it was disposed.
+/// </summary>
+public sealed class DisposableThing : IDisposable
+{
+    /// <summary>Whether Dispose ran.</summary>
+    public static bool Disposed;
+
+    /// <inheritdoc/>
+    public void Dispose() => Disposed = true;
+}
+
+/// <summary>
+/// An enumeration whose enumerator is disposable, so that the foreach which reads it is written with a try.
+/// </summary>
+public sealed class DisposableElements(int value) : IEnumerable<int>
+{
+    /// <summary>Whether the enumerator was disposed.</summary>
+    public static bool Disposed;
+
+    /// <inheritdoc/>
+    public IEnumerator<int> GetEnumerator() => new Enumerator(value);
+
+    /// <inheritdoc/>
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+    private sealed class Enumerator(int value) : IEnumerator<int>
+    {
+        /// <summary>Whether the single value of the enumeration was read.</summary>
+        private bool m_Read;
+
+        /// <inheritdoc/>
+        public int Current { get; private set; }
+
+        /// <inheritdoc/>
+        object System.Collections.IEnumerator.Current => Current;
+
+        /// <inheritdoc/>
+        public bool MoveNext()
+        {
+            if (m_Read) return false;
+
+            m_Read  = true;
+            Current = value;
+            return true;
+        }
+
+        /// <inheritdoc/>
+        public void Reset() => m_Read = false;
+
+        /// <inheritdoc/>
+        public void Dispose() => Disposed = true;
+    }
 }
 
 /// <summary>
@@ -221,6 +361,117 @@ public class SetBodyTests
         var type = assembly.Load().GetType($"{Ns}.Calc")!;
         var number = type.GetMethod("Number")!;
         Assert.That(number.Invoke(Activator.CreateInstance(type), [1, 2, 3, 4, 5]), Is.EqualTo(12345));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Catches_Runs_The_Catch()
+    {
+        // The instructions of a template are carried with the regions which protect them, so what a template catches is
+        // caught where it was woven rather than let out of the member.
+        var probe = NewProbe(nameof(ConstructTemplates.Catch));
+
+        Assert.That(probe.Invoke(null, [1]), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Adds_In_A_Finally_Hands_Back_What_The_Finally_Made()
+    {
+        var probe = NewProbe(nameof(ConstructTemplates.Finally));
+
+        Assert.That(probe.Invoke(null, [1]), Is.EqualTo(12));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Disposes_In_A_Using_Disposes()
+    {
+        ConstructTemplatesReset();
+        var probe = NewProbe(nameof(ConstructTemplates.Using));
+
+        Assert.That(probe.Invoke(null, [1]), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Takes_A_Lock_Releases_It()
+    {
+        var probe = NewProbe(nameof(ConstructTemplates.Lock));
+
+        Assert.That(probe.Invoke(null, [1]), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Enumerates_A_Disposable_Enumerator_Disposes_It()
+    {
+        ConstructTemplatesReset();
+        var probe = NewProbe(nameof(ConstructTemplates.Foreach));
+
+        Assert.That(probe.Invoke(null, [1]), Is.EqualTo(43));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Holds_A_Lambda_Throws()
+    {
+        // A lambda is a method of a type which the compiler writes beside the template, and which is private to the
+        // assembly the template was compiled into: the weaving refuses it rather than writing a member which fails
+        // when it is run.
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Lambda))!));
+
+        Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Holds_A_Lambda_Which_Captured_Throws()
+    {
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        Assert.Throws<ArgumentException>(
+            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LambdaWhichCaptured))!));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Is_Async_Throws()
+    {
+        // The body of an async method is the stub which starts a state machine, whose MoveNext holds what was written,
+        // so what the weaving would carry is the stub rather than the body which the template was written with.
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        Assert.Throws<ArgumentException>(
+            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Async))!));
+    }
+
+    /// <summary>
+    /// Weave the named template into <c>public static int Probe(int value)</c> of an assembly of its own, and hand back
+    /// the method of the type which was woven, so that what the template holds can be run.
+    /// </summary>
+    /// <param name="templateName">Name of the template of <see cref="ConstructTemplates"/> which is woven.</param>
+    /// <returns>The method which was woven.</returns>
+    private static MethodInfo NewProbe(string templateName)
+    {
+        var assembly = Assembly.Create($"SetBody{templateName}Assembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        var method = host.AddMethod("Probe", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+
+        method.SetBody(typeof(ConstructTemplates).GetMethod(templateName)!);
+
+        return assembly.Load().GetType($"{Ns}.Calc")!.GetMethod("Probe")!;
+    }
+
+    /// <summary>
+    /// Forget what the constructs of the templates remember, so that a test of one of them reads only what it did.
+    /// </summary>
+    private static void ConstructTemplatesReset()
+    {
+        DisposableThing.Disposed = false;
+        DisposableElements.Disposed = false;
     }
 
     #endregion
