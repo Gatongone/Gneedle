@@ -59,6 +59,11 @@ public class InjectionsTests
         // The attribute has done its work by now, so it is gone from the member and from the assembly which declares it.
         Assert.That(type.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == MarkerAttributeName), Is.False,
                     "the mark was left on the member.");
+
+        // An assembly which names itself cannot be read back, so the assembly which was produced names no assembly of its
+        // own name, the one it is written to included.
+        Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == read.Name.Name), Is.False,
+                    "the woven assembly refers to itself.");
         Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == MarkerAttributeName), Is.False,
                     "the attribute which the injector was read from was left in the assembly.");
     }

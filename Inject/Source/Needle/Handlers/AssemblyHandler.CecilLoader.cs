@@ -150,6 +150,18 @@ partial class AssemblyHandler
         // If has imported, then return from cache.
         if (m_TypeCache.TryGetValue(new TypeName(type), out var cecilType)) return cecilType;
 
+        // A type which the assembly being woven declares is taken from the module rather than imported from the runtime.
+        // The import of a type names the assembly which declares it, and the name of the assembly which is being written
+        // is a reference of an assembly to itself, which no loader reads back: the whole of the assembly which the
+        // weaving produced would be discarded, declared to be referring to itself.
+        if (type.Assembly.GetName().Name == Assembly.Source.Name.Name)
+        {
+            var declaredType = FindDeclaredType(type) ?? throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);
+            cecilType                                  = new CecilType(declaredType, declaredType);
+            m_TypeCache[new TypeName(type).ToString()] = cecilType;
+            return cecilType;
+        }
+
         // A reference cycle cannot be represented in metadata, so it is rejected before the type is imported. The
         // assembly of the type does not have to be read for it, because the reflection type knows its references.
         if (type.Assembly.GetReferencedAssemblies().Any(name => name.FullName.Equals(Assembly.Source.FullName)))
@@ -179,5 +191,24 @@ partial class AssemblyHandler
         cecilType                                  = new CecilType(targetTypeRef.Resolve(), targetTypeRef);
         m_TypeCache[new TypeName(type).ToString()] = cecilType;
         return cecilType;
+    }
+
+    /// <summary>
+    /// Find the definition of a type which the assembly being woven declares.
+    /// </summary>
+    /// <param name="type">The type which is declared.</param>
+    /// <returns>The definition of the type, or null when the assembly does not declare it.</returns>
+    private TypeDefinition? FindDeclaredType(Type type)
+    {
+        var declaring = type.DeclaringType;
+
+        // The name of a type which is declared by another one is qualified by the type which declares it, which Cecil
+        // writes out itself, so only the name of the type is compared there.
+        if (declaring == null)
+        {
+            return Assembly.Source.Modules.SelectMany(module => module.Types).FirstOrDefault(candidate => candidate.FullName == type.FullName);
+        }
+
+        return FindDeclaredType(declaring)?.NestedTypes.FirstOrDefault(nested => nested.Name == type.Name);
     }
 }

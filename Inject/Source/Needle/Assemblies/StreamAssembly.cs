@@ -59,6 +59,12 @@ internal sealed class StreamAssembly(IAssemblyCache cache, AssemblySymbol symbol
         // which was read from a stream, is resolvable. It is given here because the resolver of a module cannot be
         // replaced once it was created.
         parameters.AssemblyResolver = new CachedAssemblyResolver(new DefaultAssemblyResolver());
+
+        // The type of the framework which is woven into an assembly is imported from the framework of whoever weaves,
+        // which is not the framework of the assembly that is read: a build which runs on .NET hands the assembly it
+        // writes a reference to the System.Private.CoreLib of that build, which neither .NET Framework nor Mono can
+        // load. The importer which names the standard instead is the one the assemblies which are created are given.
+        parameters.ReflectionImporterProvider = SPCLReflectionImporterProvider.Instance;
         return parameters;
     }
 }
