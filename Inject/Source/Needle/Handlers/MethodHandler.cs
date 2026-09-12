@@ -357,9 +357,19 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             return Source.IsStatic switch
             {
+                // The template belongs to no instance, so what it loads first is its first argument: the member being
+                // woven holds the same argument, at the slot after its receiver when it belongs to an instance.
                 false when methodDef.IsStatic => OpCodes.Ldarg_1,
-                true                          => instruction.OpCode,
-                _                             => throw new ArgumentException(ErrorMessages.LDARG0_CONVERT_FAILED)
+
+                // Neither belongs to an instance, so their first arguments are at the same slot.
+                true when methodDef.IsStatic => instruction.OpCode,
+
+                // The template belongs to an instance, so what it loads first is that instance rather than an argument,
+                // and a load of it cannot be written into the member: a static member holds no such argument, and an
+                // instance one holds another instance in its place. A lambda which captures a variable is an instance
+                // method of the type which holds the capture, so a template written as one is a template of this kind.
+                true => throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_READS_ITS_OWN_INSTANCE, Source.FullName)),
+                _    => throw new ArgumentException(ErrorMessages.LDARG0_CONVERT_FAILED)
             };
         }
 

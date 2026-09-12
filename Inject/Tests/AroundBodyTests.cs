@@ -309,6 +309,27 @@ public class AroundBodyTests
     #region Refusals
 
     [Test]
+    public void AroundBody_Of_A_Template_Which_Reads_The_Instance_It_Belongs_To_Throws()
+    {
+        // A lambda which captures a variable is an instance method of the type which holds the capture, so its body
+        // begins by loading the instance which it belongs to. A static method holds no such argument, and the weaving of
+        // one used to leave that load as it was written: the member was given an argument which it does not hold, and
+        // the runtime refused the whole type for it rather than the member.
+        var assembly = Assembly.Create("AroundBodyReceiverAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var capture = "captured";
+
+        var thrown = Assert.Throws<ArgumentException>(() => run.AroundBody(() =>
+        {
+            Proceed.Method<Action>("Run")();
+            Console.WriteLine(capture);
+        }));
+
+        Assert.That(thrown!.Message, Does.Contain("instance which it belongs to"));
+    }
+
+    [Test]
     public void AroundBody_Of_An_Abstract_Method_Throws()
     {
         var (_, host, add) = NewHost(true);
