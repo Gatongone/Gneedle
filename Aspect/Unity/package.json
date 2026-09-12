@@ -1,0 +1,20 @@
+{
+  "name": "com.gatongone.gneedle.aspect",
+  "version": "0.0.1",
+  "license": "MIT",
+  "displayName": "Gneedle.Aspect",
+  "description": "",
+  "author": {
+    "name": "Gatongone",
+    "email": "gatongone@gmail.com",
+    "url": "https://www.github.com/gatongone"
+  },
+  "unity": "2021.3",
+  "type": "tools",
+  "keywords": [
+    "Utils","Aspect"
+  ],
+  "dependencies": {
+    "com.gatongone.gneedle.inject": "0.0.1"
+  }
+}

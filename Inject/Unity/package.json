@@ -1,0 +1,20 @@
+{
+  "name": "com.gatongone.gneedle.inject",
+  "version": "0.0.1",
+  "license": "MIT",
+  "displayName": "Gneedle.Inject",
+  "description": "",
+  "author": {
+    "name": "Gatongone",
+    "email": "gatongone@gmail.com",
+    "url": "https://www.github.com/gatongone"
+  },
+  "unity": "2021.3",
+  "type": "tools",
+  "keywords": [
+    "Utils","Inject"
+  ],
+  "dependencies": {
+    "com.unity.nuget.mono-cecil": "1.11.6"
+  }
+}

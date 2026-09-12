@@ -27,4 +27,33 @@
       <PackageReference Include="Mono.Cecil" Version="0.11.5" />
     </ItemGroup>
 
+    <PropertyGroup>
+        <!-- Where the Unity package of this library keeps the weaver. Unity loads the assemblies which a package ships
+             rather than building them from source, so the one which is built here is copied there to keep the two in
+             step, and the copy is a part of the build rather than a step which is remembered. -->
+        <UnityPluginDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\Unity\Plugins'))</UnityPluginDirectory>
+    </PropertyGroup>
+
+    <!-- The framework which the copy is made from is the one which Unity loads a plugin of: the editor and the player
+         of a Unity 2021.3 project are built against netstandard2.1, where the other two are for a driver which runs
+         beside a build. A build of the other frameworks therefore leaves the plugin as it was, and so does a build
+         which was already copied before it. -->
+    <Target Name="CopyToUnityPlugin" AfterTargets="Build" Condition="'$(TargetFramework)' == 'netstandard2.1'"
+            Inputs="$(TargetPath);$(TargetDir)$(TargetName).pdb"
+            Outputs="$(UnityPluginDirectory)\$(TargetName).dll;$(UnityPluginDirectory)\$(TargetName).pdb">
+        <ItemGroup>
+            <UnityPluginAssembly Include="$(TargetPath)"/>
+            <UnityPluginAssembly Include="$(TargetDir)$(TargetName).pdb" Condition="Exists('$(TargetDir)$(TargetName).pdb')"/>
+        </ItemGroup>
+
+        <!-- Only the assembly and its symbols are written over, so the .meta files of Unity, which are what the editor
+             identifies a plugin by, are left where they are. The target is skipped whole while the plugin is newer than
+             what was built, which is what tells that the two are in step without writing either of them. -->
+        <Copy SourceFiles="@(UnityPluginAssembly)" DestinationFolder="$(UnityPluginDirectory)" SkipUnchangedFiles="true"/>
+        <!-- Which configuration was built is reported with it, because the copy is not kept to the release one: a build
+             of either puts the plugin which Unity loads in step with the sources, and which of them is there is what the
+             line tells. -->
+        <Message Text="Copy to Unity plugin: %(UnityPluginAssembly.Filename)%(UnityPluginAssembly.Extension) ($(Configuration))" Importance="high"/>
+    </Target>
+
 </Project>
