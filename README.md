@@ -1,3 +1,5 @@
+# Gneedle
+
 Gneedle is an IL weaving library and an aspect weaver for .NET.
 
 An aspect weaver usually asks you to learn a language of its own to say what should happen where. Gneedle asks for a plain C# method instead: the body you write is the body that ends up in the assembly, with the operands pointed at the members it names. That template is compiled by the same compiler as the rest of your code, checked by it, and debugged by the same tools.
@@ -49,18 +51,77 @@ Or, in the project file:
 
 ## Unity
 
-The same two are packages of Unity as well, installed from this repository by path through the Package Manager:
+The same two are packages of Unity as well. The Package Manager reads a package either out of a git repository or out of a registry, and both of them are open to these two.
+
+### From the repository
+
+A package is installed by the path it lies at, and a revision may be named after that path, so that a tag holds what is installed to a release:
 
 ```json
 {
-  "dependencies": {
-    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity",
-    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity"
+  "dependencies":
+  {
+    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.1",
+    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.1"
   }
 }
 ```
 
-This is a `Packages/manifest.json`, that the Package Manager window writes as well: *Add package from git URL* takes the one of the two that is wanted. A revision may be appended to the path — `?path=Aspect/Unity#<tag or branch>` — to hold the package at a tag or a branch rather than at whatever the default branch is at the time.
+Both lines are written even where only one of the two is used, and the aspect weaver is the one that is used alone. A package that names another names a version of it, and that version is read out of a registry rather than along the path, so the weaver is installed beside the aspect weaver or not at all.
+
+This is a `Packages/manifest.json`, that the Package Manager window writes as well: *Add package from git URL* takes the one of the two that is wanted.
+
+### From NPMJS 
+
+The same two are published to npm under the names above, which the Package Manager reads through a scoped registry:
+
+```json
+{
+  "scopedRegistries":
+  [
+    {
+      "name": "npmjs",
+      "url": "https://registry.npmjs.org",
+      "scopes": ["com.gatongone"]
+    }
+  ],
+  "dependencies":
+  {
+    "com.gatongone.gneedle.inject": "0.0.1",
+    "com.gatongone.gneedle.aspect": "0.0.1"
+  }
+}
+```
+
+What is installed this way is held at the version that is named until another is, which is the difference between the two ways in: a package is taken from a registry by version, and from a repository by revision.
+
+### From OpenUPM
+
+[OpenUPM](https://openupm.com/) builds a package out of the tags of the repository that declares it, and serves what it builds from a registry of its own. The same two are listed there under the names above:
+
+```json
+{
+  "scopedRegistries":
+  [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": ["com.gatongone"]
+    }
+  ],
+  "dependencies":
+  {
+    "com.gatongone.gneedle.inject": "0.0.1",
+    "com.gatongone.gneedle.aspect": "0.0.1"
+  }
+}
+```
+
+Its own command line writes that registry into the manifest and takes the package in one step, which is the way its documentation recommends:
+
+```
+openupm add com.gatongone.gneedle.aspect
+```
 
 # Features
 
