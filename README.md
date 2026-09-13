@@ -19,7 +19,8 @@ A template is an ordinary method. It reaches the members of the type it will be 
 
 Weaving is therefore a rewrite rather than a compilation. The body of the template is copied instruction by instruction, and each operand is pointed at the member of the target that the placeholder named: a field read becomes `ldfld` of that field, a call on `This` becomes a call on the type being woven, a token becomes a generic parameter of the method or of the type that declares it. A local variable or a branch of the template is remapped to its counterpart in the body that is being woven.
 
-A template may capture a variable as well, by being written as a lambda. What it captured is nothing the target holds, so it is not copied: it belongs to the run that wove the assembly rather than to the type that was woven, and the delegate which the template is handed over as is what holds it. The weaver reads the value out of that delegate while the injector runs and writes the value itself where the template read it, so the woven member carries the value as a constant and behaves as if it had stood in the template's source. The delegating overloads are given the delegate rather than the method alone for that reason — `SetBody` and `AroundBody` of a handler, and `WithBody`, `WithGetter` and `WithSetter` of a decorator — and a template handed over as a `MethodInfo` holds nothing to read, so one which reads the instance it belongs to is refused.
+A template may capture a variable as well, by being written as a lambda. What it captured is nothing the target holds, so it is not copied: it belongs to the run that wove the assembly rather than to the type that was woven, and the delegate which the template is handed over as is what holds it. The weaver reads the value out of that delegate while the injector runs and writes the value itself where the template read it, so the woven member carries the value as a constant and behaves as if it
+had stood in the template's source. The delegating overloads are given the delegate rather than the method alone for that reason — `SetBody` and `AroundBody` of a handler, and `WithBody`, `WithGetter` and `WithSetter` of a decorator — and a template handed over as a `MethodInfo` holds nothing to read, so one which reads the instance it belongs to is refused.
 
 What may be captured is settled by what the woven body can hold: a string, an integer or a floating point number of any width, a character, a boolean, an enumeration, and a null of a reference type are written, and a capture of any other type is refused by name rather than woven into a member which would fail when it ran.
 
@@ -31,14 +32,16 @@ The attribute that names an injector is only the way the build finds out what to
 
 > [!WARNING]
 > A template is an ordinary method, and almost all of one is carried. The instructions are copied with the regions which
-protect them, so a `try` of a template catches where it was woven, a `using` disposes there, a `lock` releases there,
-and a `foreach` over an enumerator which is disposable disposes it there. The branches are carried — `if`, `switch`,
+> protect them, so a `try` of a template catches where it was woven, a `using` disposes there, a `lock` releases there,
+> and a `foreach` over an enumerator which is disposable disposes it there. The branches are carried — `if`, `switch`,
 `goto` and the loops — and the locals of the template are remapped to the body which is woven.
+>
 > What is not carried is a construct which the compiler writes as a method of its own. A lambda, a local function, an
 `async` body and an iterator body each live in a method beside the one the template is: the body of an `async` template,
-and of one which yields, is the stub which starts a state machine, whose `MoveNext` holds what was written, and a lambda
-leaves a type of its own which is private to the assembly the template was compiled into. Such a template is refused
-where the weaving runs, rather than written into a member which would reach for that type and fail when it is run.
+> and of one which yields, is the stub which starts a state machine, whose `MoveNext` holds what was written, and a lambda
+> leaves a type of its own which is private to the assembly the template was compiled into. Such a template is refused
+> where the weaving runs, rather than written into a member which would reach for that type and fail when it is run.
+>
 > Two more constructs are refused where the weaving runs: a template which reads the instance it belongs to, and one which captures a value which has no form of its own.
 
 # Requirement
@@ -59,13 +62,15 @@ dotnet add package Gneedle.Aspect
 Or, in the project file:
 
 ```xml
-<PackageReference Include="Gneedle.Aspect" Version="0.0.1" />
+
+<PackageReference Include="Gneedle.Aspect" Version="0.0.1"/>
 ```
 
 `Gneedle.Inject` is a dependency of it, so the weaver that the task weaves with is installed along with it. It is also the package to reference on its own, and the only one, when you drive the weaving yourself or when you write an injector, because the interfaces that one implements are declared in it:
 
 ```xml
-<PackageReference Include="Gneedle.Inject" Version="0.0.1" />
+
+<PackageReference Include="Gneedle.Inject" Version="0.0.1"/>
 ```
 
 ## Unity
@@ -78,8 +83,7 @@ A package is installed by the path it lies at, and a revision may be named after
 
 ```json
 {
-  "dependencies":
-  {
+  "dependencies": {
     "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.1",
     "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.1"
   }
@@ -90,22 +94,22 @@ Both lines are written even where only one of the two is used, and the aspect we
 
 This is a `Packages/manifest.json`, that the Package Manager window writes as well: *Add package from git URL* takes the one of the two that is wanted.
 
-### From NPMJS 
+### From NPMJS
 
 The same two are published to npm under the names above, which the Package Manager reads through a scoped registry:
 
 ```json
 {
-  "scopedRegistries":
-  [
+  "scopedRegistries": [
     {
       "name": "npmjs",
       "url": "https://registry.npmjs.org",
-      "scopes": ["com.gatongone"]
+      "scopes": [
+        "com.gatongone"
+      ]
     }
   ],
-  "dependencies":
-  {
+  "dependencies": {
     "com.gatongone.gneedle.inject": "0.0.1",
     "com.gatongone.gneedle.aspect": "0.0.1"
   }
@@ -120,16 +124,16 @@ What is installed this way is held at the version that is named until another is
 
 ```json
 {
-  "scopedRegistries":
-  [
+  "scopedRegistries": [
     {
       "name": "OpenUPM",
       "url": "https://package.openupm.com",
-      "scopes": ["com.gatongone"]
+      "scopes": [
+        "com.gatongone"
+      ]
     }
   ],
-  "dependencies":
-  {
+  "dependencies": {
     "com.gatongone.gneedle.inject": "0.0.1",
     "com.gatongone.gneedle.aspect": "0.0.1"
   }
@@ -175,6 +179,12 @@ if (changed) File.WriteAllBytes("path/to/AnAssembly.dll", woven);
 
 The attributes and the reference to the weaver are taken out of the image by default, which is what leaves the woven assembly standing alone; `removesTheWeaver: false` keeps them. What an injector is, and which member each of the interfaces of one is read for, is under [Aspect](#aspect).
 
+> [!IMPORTANT]
+> An assembly that no file holds (location missing) — one that an editor has just compiled in memory , or loaded from network stream — is given to the weaving through `AssemblyLoader.LoadFromBytes` loads the assembly from its image and remembers the bytes, and `Remember` does the same for an assembly that the runtime loaded by another way. That image is what a type of such an assembly is resolved against, which is how a template names a type of it
+> through [a stub](#referring-to-a-type-you-cannot-reference). An assembly which the runtime loaded out of a file is read where that file lies, and one that it loaded from bytes in another way is read out of the memory of the process, which only Windows can do.
+>
+> The assemblies of the weaver are answered to such an assembly as well, and to one of those alone: the weaver that its templates were compiled against is resolved to the weaver which is weaving it, rather than to a copy that would have to lie beside the image.
+
 ### Weaving a body from a template
 
 A template names the members of the type it is woven into. Each placeholder is a call that throws when the template is run on its own:
@@ -206,15 +216,15 @@ A default body is asked for the same way, when no template is needed: `WithBody(
 
 ### The placeholders
 
-| Placeholder                                         | Names                                                                                   |
-|-----------------------------------------------------|-----------------------------------------------------------------------------------------|
-| `This.Field<T>("name")`, `This.Property<T>("name")` | a field or a property of the type being woven, read and written through `Get` and `Set` |
-| `This.Method<TDelegate>("name")`                    | a method of the type being woven, called through the delegate that gives its signature |
-| `Base.Field`, `Base.Property`, `Base.Method`        | the same, on the type that the target derives from                                     |
-| `Object(instance).Field`, `.Property`, `.Method`    | the same, on an instance the template pushed                                            |
-| `Static.From("Full.Type.Name").Method`              | the same, on a type named by a string                                                   |
-| `T_0`–`T_20`, `M_0`–`M_20`                          | the first to the twenty-first generic parameter of the declaring type, or of the method |
-| `ValuableMember<T>`                                 | the value of a field or a property, without the boxing that `ValuableMember` costs     |
+| Placeholder                                                                      | Names                                                                                   |
+|----------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+| `This.Field<T>("name")`, `This.Property<T>("name")`                              | a field or a property of the type being woven, read and written through `Get` and `Set` |
+| `This.Method<TDelegate>("name")`                                                 | a method of the type being woven, called through the delegate that gives its signature  |
+| `Base.Field`, `Base.Property`, `Base.Method`                                     | the same, on the type that the target derives from                                      |
+| `Object(instance).Field`, `Object(instance).Property`, `Object(instance).Method` | the same, on an instance the template pushed                                            |
+| `Static.From("Full.Type.Name").Method`                                           | the same, on a type named by a string                                                   |
+| `T_0`–`T_20`, `M_0`–`M_20`                                                       | the first to the twenty-first generic parameter of the declaring type, or of the method |
+| `ValuableMember<T>`                                                              | the value of a field or a property, without the boxing that `ValuableMember` costs      |
 
 The name which a placeholder is given is read out of the template itself, and the one instruction which the call follows is what holds it: a name is therefore one which the compiler writes there — a literal, a `nameof`, or a constant of the template — rather than one which the template computes while it runs.
 
@@ -337,22 +347,25 @@ Two properties change what is done with a project, and they answer different que
 | `KeepWeaver` | `true/false`     | `false`  | `true` keeps the attributes that the injectors were read from, and the reference to the weaver that they name, in the assembly. `false` takes both back out, which is what leaves the woven assembly standing alone.                                       |
 
 ```xml
+
 <PropertyGroup>
-  <!-- Nothing is woven into this project. -->
-  <Aspect>disable</Aspect>
+    <!-- Nothing is woven into this project. -->
+    <Aspect>disable</Aspect>
 </PropertyGroup>
 ```
 
 ```xml
+
 <PropertyGroup>
-  <!-- The attributes are kept in the assembly, and the reference to the weaver with them. -->
-  <KeepWeaver>true</KeepWeaver>
+    <!-- The attributes are kept in the assembly, and the reference to the weaver with them. -->
+    <KeepWeaver>true</KeepWeaver>
 </PropertyGroup>
 ```
 
 `Aspect` is for a project that has nothing to weave: one that only declares the attributes for other projects to read, or one whose assembly is woven by something other than this build. A project that declares attributes that another project weaves with wants `KeepWeaver`, because removing them would leave that other project with nothing to name.
 
-`Aspect` is read out of the project file itself, because the scan of a solution reads the projects that it walks without building them, and a property that comes from an imported file is not in a project's own file. The value it is read for is `disable` alone, as the letters are written: any other value, down to another case of the same word, is a project which is woven. `KeepWeaver` is matched without regard to case, and it is passed to the task by the build, so it is an ordinary property: it is set on the command line as well as in the project file.
+`Aspect` is read out of the project file itself, because the scan of a solution reads the projects that it walks without building them, and a property that comes from an imported file is not in a project's own file. The value it is read for is `disable` alone, as the letters are written: any other value, down to another case of the same word, is a project which is woven. `KeepWeaver` is matched without regard to case, and it is passed to the task by the build, so it is an ordinary property: it
+is set on the command line as well as in the project file.
 
 Neither property is read by the IL post processor which a Unity project is given, so neither is set there; what a Unity project is woven by is under [Unity Editor](#unity-editor).
 
