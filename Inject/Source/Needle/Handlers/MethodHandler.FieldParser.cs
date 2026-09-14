@@ -112,7 +112,7 @@ partial class MethodHandler
         // Skip the array init sequence if this is Object.Field with new Object(param).
         if (skipArrayInitCount > 0)
         {
-            for (int i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
+            for (var i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
             {
                 filter.Skip(i);
             }
@@ -121,7 +121,7 @@ partial class MethodHandler
         // Skip the Static.From sequence if this is Static.Field.
         if (skipStaticFromCount > 0)
         {
-            for (int i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
+            for (var i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
             {
                 filter.Skip(i);
             }

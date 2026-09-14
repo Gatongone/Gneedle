@@ -517,7 +517,7 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         // What the template captured is read off the instance which the delegate held, which is the instance the
         // template was written in, and off what each field of the chain holds in its turn.
-        object? captured = m_TemplateClosure;
+        var captured = m_TemplateClosure;
         foreach (var field in fields)
         {
             var member = captured?.GetType().GetField(field.Name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);

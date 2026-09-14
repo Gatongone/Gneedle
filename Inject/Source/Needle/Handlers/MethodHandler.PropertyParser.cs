@@ -54,7 +54,7 @@ partial class MethodHandler
         if (memberSymbol.HasFlag(MemberSymbols.Object) && currentIndex >= 1)
         {
             var prevIns = filter.Target[currentIndex - 1];
-            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
+            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference {Name: ".ctor", DeclaringType: var declType}
                 && declType.FullName == Object.TYPE_NAME)
             {
                 var baseIdx = currentIndex - 7;
@@ -63,7 +63,7 @@ partial class MethodHandler
                     && filter.Target[baseIdx + 1].OpCode == OpCodes.Newarr
                     && filter.Target[baseIdx + 2].OpCode == OpCodes.Dup
                     && filter.Target[baseIdx + 3].OpCode.Code == Code.Ldc_I4_0
-                    && (filter.Target[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S)
+                    && filter.Target[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S
                     && filter.Target[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
                 {
                     skipArrayInitCount = 7;
@@ -77,13 +77,13 @@ partial class MethodHandler
         else if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
         {
             var callFromIns = filter.Target[currentIndex - 1];
-            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference { Name: "From", DeclaringType: var declType }
+            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference {Name: "From", DeclaringType: var declType}
                 && declType.FullName == Static.TYPE_NAME)
             {
                 var ldstrIns = filter.Target[currentIndex - 2];
                 if (ldstrIns.OpCode == OpCodes.Ldstr && ldstrIns.Operand is string fullTypeName)
                 {
-                    skipStaticFromCount = 2;
+                    skipStaticFromCount      = 2;
                     declaringTypeFromPattern = DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition;
                 }
             }
@@ -102,7 +102,7 @@ partial class MethodHandler
         // Skip the array init sequence if this is Object.Property with new Object(param).
         if (skipArrayInitCount > 0)
         {
-            for (int i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
+            for (var i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
             {
                 filter.Skip(i);
             }
@@ -111,7 +111,7 @@ partial class MethodHandler
         // Skip the Static.From sequence if this is Static.Property.
         if (skipStaticFromCount > 0)
         {
-            for (int i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
+            for (var i = currentIndex - skipStaticFromCount; i < currentIndex; i++)
             {
                 filter.Skip(i);
             }
