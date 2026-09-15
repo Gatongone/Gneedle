@@ -88,7 +88,12 @@ public interface IMethodContainer
     MethodDecorator.IGenericParameterDecorator AddMethod(string methodName, MethodFlags methodFlags);
 
     /// <summary>
-    /// Gets a method handler for the specified method name and parameter types. If the method is not found, returns null.
+    /// Gets a method handler for the specified method name and parameter types. If the method is not found, returns null.<para/>
+    /// Methods of base types are looked for only when parameter types are given, and the first one which they match is
+    /// the one which is answered with. A call which names no parameter type asks for the method of that name alone,
+    /// which is the first one which the type itself declares, whatever its signature: a method which takes no parameter
+    /// is asked for by the empty signature rather than by no types, which is what a lookup of a caller that holds the
+    /// signature is for.
     /// </summary>
     /// <param name="methodName">The name of the method to retrieve.</param>
     /// <param name="parameterTypes">The parameter types of the method to retrieve.</param>

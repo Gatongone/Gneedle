@@ -252,4 +252,26 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     /// <returns>The method from the base type.</returns>
     internal MethodDefinition? GetMethodInBase(string methodName, IReadOnlyList<TypeReference> parameters)
         => AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, methodName, parameters);
+
+    /// <summary>
+    /// Get the method which a signature names, which is the name of the method and the types of the parameters of it.<para/>
+    /// A method of a base type is a method of the type as well, so the base types are walked for it. The signature is
+    /// what tells two methods of one name apart, which a lookup by the name alone does not: a method which takes no
+    /// parameter carries the empty signature rather than none at all.
+    /// </summary>
+    /// <param name="methodName">Name of the method.</param>
+    /// <param name="parameterTypes">Types of the parameters of the method, which is empty for a method which takes none.</param>
+    /// <returns>The method which the signature names, or null when the type and its base types hold none.</returns>
+    internal IMethodHandler? GetMethodBySignature(string methodName, IList<IType> parameterTypes)
+    {
+        var curType = Source;
+        while (curType != null)
+        {
+            var methodDef = curType.Methods.FirstOrDefault(method => method.Name == methodName && method.Parameters.SameWith(parameterTypes));
+            if (methodDef != null) return new MethodHandler(methodDef, this);
+            curType = curType.BaseType == null ? null : AssemblyHandler.GetCecilType(curType.BaseType).Definition;
+        }
+
+        return null;
+    }
 }
