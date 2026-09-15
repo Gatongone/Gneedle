@@ -14,7 +14,7 @@
              weaver through, and a build of it which does not compile is a build which fails. -->
         <TargetFrameworks>net5.0;net472</TargetFrameworks>
         <OutputType>Library</OutputType>
-        <LangVersion>12</LangVersion>
+        <LangVersion>preview</LangVersion>
         <RootNamespace>Gneedle.Inject.Test</RootNamespace>
 
         <!-- The templates which the tests weave are the IL which the compiler wrote for them, and the tests read that

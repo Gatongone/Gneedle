@@ -12,6 +12,9 @@ namespace Gneedle.Inject;
 /// <param name="declaringTypeHandler">Handler of the type which declares the property.</param>
 internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declaringTypeHandler, MethodAttributes? accessorAttributes = null) : IPropertyHandler, IAttributeContainer
 {
+    /// <inheritdoc/>
+    public PropertyFlags Flags => Source.ToPropertyFlags();
+
     /// <summary>
     /// Name of the property.
     /// </summary>

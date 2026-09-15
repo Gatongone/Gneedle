@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Gneedle.Inject;
 
 /// <summary>
@@ -10,18 +12,18 @@ public enum StructFlags
     /// The fields of the struct cannot be assigned after it was created, which is marked by an
     /// <c>IsReadOnlyAttribute</c>.
     /// </summary>
-    ReadOnly  = 1 << 0,
+    ReadOnly = 1 << 0,
 
     /// <summary>
     /// The struct can only live on the stack, which is marked by an <c>IsByRefLikeAttribute</c> and by an
     /// <c>ObsoleteAttribute</c> which keeps it out of the fields of another type.
     /// </summary>
-    Ref       = 1 << 1,
+    Ref = 1 << 1,
 
     /// <summary>
     /// The struct is visible to the types of every assembly.
     /// </summary>
-    Public    = 1 << 2,
+    Public = 1 << 2,
 
     /// <summary>
     /// The struct is visible to the types which derive from the type which declares it.
@@ -31,12 +33,12 @@ public enum StructFlags
     /// <summary>
     /// The struct is visible to the types of the assembly which declares it alone.
     /// </summary>
-    Internal  = 1 << 4,
+    Internal = 1 << 4,
 
     /// <summary>
     /// The struct is visible to the type which declares it alone.
     /// </summary>
-    Private   = 1 << 5
+    Private = 1 << 5
 }
 
 /// <summary>
@@ -81,6 +83,63 @@ internal static class StructFlagExtensions
                 _                                                 => 0 // No access modifier flag is set
             };
             return typeAttributes;
+        }
+    }
+
+    /// <param name="typeDefinition">The struct definition which is read.</param>
+    extension(TypeDefinition typeDefinition)
+    {
+        /// <summary>
+        /// Reads the flags of the struct which the definition declares, which is the inverse of the two conversions
+        /// above: the visibility is the one which the attributes name, and a readonly struct and a ref struct are the
+        /// two kinds which are written as an attribute of the type rather than as an attribute of it, so the attributes
+        /// are what they are read from.
+        /// </summary>
+        /// <returns><see cref="StructFlags"/> corresponding to the definition.</returns>
+        internal StructFlags ToStructFlags()
+        {
+            var attributes = typeDefinition.Attributes;
+            var structFlags = (StructFlags) 0;
+
+            // The visibility of a nested struct is written in the nested shape of it, which is none of the two shapes a
+            // struct declared at the top of a module is written with, so the one which declares the definition tells the
+            // two kinds apart.
+            if (typeDefinition.IsNested)
+            {
+                structFlags |= (attributes & TypeAttributes.VisibilityMask) switch
+                {
+                    TypeAttributes.NestedPublic      => StructFlags.Public,
+                    TypeAttributes.NestedAssembly    => StructFlags.Internal,
+                    TypeAttributes.NestedFamily      => StructFlags.Protected,
+                    TypeAttributes.NestedPrivate     => StructFlags.Private,
+                    TypeAttributes.NestedFamORAssem  => StructFlags.Protected | StructFlags.Internal,
+                    TypeAttributes.NestedFamANDAssem => StructFlags.Private | StructFlags.Protected,
+                    _                                => 0 // No access modifier flag is set
+                };
+            }
+            else
+            {
+                // A struct declared at the top of a module is public unless it names no visibility, and the shape which
+                // names none of the visibilities is the internal one.
+                structFlags |= (attributes & TypeAttributes.VisibilityMask) == TypeAttributes.NotPublic
+                    ? StructFlags.Internal
+                    : StructFlags.Public;
+            }
+
+            // The kind of struct which can only live on the stack and the one whose fields cannot be assigned after it
+            // was created are both marked by an attribute of the type, which is what tells them apart from the plain
+            // struct which carries none.
+            if (typeDefinition.CustomAttributes.Any(attribute => attribute.AttributeType.Name == nameof(IsByRefLikeAttribute)))
+            {
+                structFlags |= StructFlags.Ref;
+            }
+
+            if (typeDefinition.CustomAttributes.Any(attribute => attribute.AttributeType.Name == nameof(IsReadOnlyAttribute)))
+            {
+                structFlags |= StructFlags.ReadOnly;
+            }
+
+            return structFlags;
         }
     }
 }

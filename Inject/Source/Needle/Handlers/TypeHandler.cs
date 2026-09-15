@@ -43,7 +43,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         Source          = source;
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IInterfaceContainer.ContainsInterface" />
     public bool ContainsInterface(IType interfaceType) => Source.Interfaces.Any(implementation => TypeName.HasSameName(implementation.InterfaceType, interfaceType));
 
     /// <inheritdoc/>
@@ -66,7 +66,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         Source.CustomAttributes.Add(attribute);
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IMethodContainer.GetMethod(string, IType[])" />
     public IMethodHandler? GetMethod(string methodName, params IType[] parameterTypes)
     {
         var curType = Source;
@@ -88,6 +88,16 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         return methodDef == null ? null : new MethodHandler(methodDef, this);
     }
 
+    /// <inheritdoc cref="IMethodContainer.GetMethods()"/>
+    public IMethodHandler[] GetMethods() => GetMethods(0);
+
+    /// <inheritdoc cref="IMethodContainer.GetMethods(MethodFlags)"/>
+    public IMethodHandler[] GetMethods(MethodFlags methodFlags)
+        => Source.Methods
+            .Where(method => method.ToMethodFlags().HasFlag(methodFlags))
+            .Select(method => (IMethodHandler) new MethodHandler(method, this))
+            .ToArray();
+
     /// <inheritdoc/>
     public MethodDecorator.IGenericParameterDecorator AddMethod(string methodName, MethodFlags methodFlags)
         => new MethodDecorator(this, methodName, methodFlags);
@@ -99,21 +109,41 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     public PropertyDecorator.IPropertyTypeDecorator AddProperty(string propertyName, PropertyFlags propertyFlags)
         => new PropertyDecorator(this, propertyName, propertyFlags);
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IFieldContainer.GetField" />
     public IFieldHandler? GetField(string fieldName)
     {
         var fieldRef = AssemblyHandler.GetFieldFromType(Source, fieldName);
         return fieldRef == null ? null : new FieldHandler((FieldDefinition) fieldRef, this);
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IFieldContainer.GetFields()" />
+    public IFieldHandler[] GetFields() => GetFields(0);
+
+    /// <inheritdoc cref="IFieldContainer.GetFields(FieldFlags)" />
+    public IFieldHandler[] GetFields(FieldFlags fieldFlags)
+        => Source.Fields
+            .Where(field => field.ToFieldFlags().HasFlag(fieldFlags))
+            .Select(IFieldHandler (field) => new FieldHandler(field, this))
+            .ToArray();
+
+    /// <inheritdoc cref="IPropertyContainer.GetProperty" />
     public IPropertyHandler? GetProperty(string propertyName)
     {
         var propDef = AssemblyHandler.GetPropertyFromType(Source, propertyName);
         return propDef == null ? null : new PropertyHandler(propDef, this);
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc cref="IPropertyContainer.GetProperties()"/>
+    public IPropertyHandler[] GetProperties() => GetProperties(0);
+
+    /// <inheritdoc cref="IPropertyContainer.GetProperties(PropertyFlags)"/>
+    public IPropertyHandler[] GetProperties(PropertyFlags propertyFlags)
+        => Source.Properties
+            .Where(property => property.ToPropertyFlags().HasFlag(propertyFlags))
+            .Select(property => (IPropertyHandler) new PropertyHandler(property, this))
+            .ToArray();
+
+    /// <inheritdoc cref="IMethodContainer.AddMethod"/>
     public IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, Parameter[] parameters, MethodFlags methodFlags)
     {
         // Set method attributes, and check the validity of method attributes according to method name.

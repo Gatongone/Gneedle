@@ -8,6 +8,9 @@ namespace Gneedle.Inject;
 internal class ClassHandler(AssemblyHandler assemblyHandler, TypeDefinition source) : TypeHandler(assemblyHandler, source), IClassHandler
 {
     /// <inheritdoc/>
+    public ClassFlags Flags => Source.ToClassFlags();
+
+    /// <inheritdoc/>
     public IClassHandler BaseType
     {
         get
