@@ -1,0 +1,9 @@
+# Every text file of this repository lies with LF, wherever it is checked out: the line endings of the machine which a
+# checkout is made on are not the ones a commit carries, so a working tree which differs from the repository in every
+# line of every file is a diff which hides the one line that changed. A file which is not text is left as it lies, and
+# the plugin which the package of Unity carries is an assembly rather than text, so it is named here rather than told
+# apart by its content.
+* text=auto eol=lf
+
+*.dll binary
+*.pdb binary
