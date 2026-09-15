@@ -16,6 +16,9 @@ internal class FieldHandler(FieldDefinition fieldDef, TypeHandler declaringTypeH
     internal readonly TypeHandler DeclaringTypeHandler = declaringTypeHandler;
 
     /// <inheritdoc/>
+    public FieldFlags Flags => Source.ToFieldFlags();
+
+    /// <inheritdoc/>
     public string Name => Source.Name;
 
     /// <inheritdoc/>

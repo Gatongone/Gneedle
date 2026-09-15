@@ -8,6 +8,13 @@ namespace Gneedle.Inject;
 public interface IMethodHandler : IAttributeContainer
 {
     /// <summary>
+    /// Flags of the method, which are the visibility and the modifiers which the definition declares. An abstract method
+    /// is a virtual one as well, and the flags name it by the narrower of the two shapes, which is
+    /// <see cref="MethodFlags.Abstract"/>.
+    /// </summary>
+    MethodFlags Flags { get; }
+
+    /// <summary>
     /// Name of the method.
     /// </summary>
     string Name { get; }
@@ -52,29 +59,33 @@ public interface IMethodHandler : IAttributeContainer
 /// </summary>
 public static class MethodExtensions
 {
-    /// <summary>
-    /// Set the body of the method from the delegate which holds the IL to copy.<para/>
-    /// A template may capture the variables which it is written among, and the delegate is what holds the values of
-    /// them: it is given to the weaving rather than the method alone, so that what the template captured is written
-    /// into the member being woven.
-    /// </summary>
     /// <param name="methodHandler">The handler of the method.</param>
-    /// <param name="delegation">The delegate which holds the body.</param>
-    public static void SetBody(this IMethodHandler methodHandler, Delegate delegation) => MethodHandler.SetBody(methodHandler, delegation);
+    extension(IMethodHandler methodHandler)
+    {
+        /// <summary>
+        /// Set the body of the method from the delegate which holds the IL to copy.<para/>
+        /// A template may capture the variables which it is written among, and the delegate is what holds the values of
+        /// them: it is given to the weaving rather than the method alone, so that what the template captured is written
+        /// into the member being woven.
+        /// </summary>
+        /// <param name="delegation">The delegate which holds the body.</param>
+        public void SetBody(Delegate delegation) => MethodHandler.SetBody(methodHandler, delegation);
 
-    /// <summary>
-    /// Set the body of the method from the delegate which holds the IL to copy.
-    /// </summary>
-    /// <param name="decorator">The decorator which describes the method.</param>
-    /// <param name="delegation">The delegate which holds the body.</param>
-    /// <returns>Result for chains calling.</returns>
-    public static MethodDecorator.ITypeDecorator WithBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
-        => decorator is MethodDecorator methodDecorator ? methodDecorator.WithBody(delegation) : decorator.WithBody(delegation.Method);
+        /// <summary>
+        /// Set the body of the method to run around the body which it holds, from the delegate which holds the template.
+        /// </summary>
+        /// <param name="delegation">The delegate which holds the body to weave around.</param>
+        public void AroundBody(Delegate delegation) => MethodHandler.AroundBody(methodHandler, delegation);
 
-    /// <summary>
-    /// Set the body of the method to run around the body which it holds, from the delegate which holds the template.
-    /// </summary>
-    /// <param name="methodHandler">The handler of the method.</param>
-    /// <param name="delegation">The delegate which holds the body to weave around.</param>
-    public static void AroundBody(this IMethodHandler methodHandler, Delegate delegation) => MethodHandler.AroundBody(methodHandler, delegation);
+        /// <summary>
+        /// Whether the method is the constructor of the type, which is the one which runs once for the type rather than
+        /// once for each instance of it.
+        /// </summary>
+        public bool IsStaticCtor => methodHandler.Flags.HasFlag(MethodFlags.Static) && methodHandler.Name == ".cctor";
+
+        /// <summary>
+        /// Whether the method is the constructor of an instance of the type.
+        /// </summary>
+        public bool IsInstanceCtor => !methodHandler.Flags.HasFlag(MethodFlags.Static) && methodHandler.Name == ".ctor";
+    }
 }

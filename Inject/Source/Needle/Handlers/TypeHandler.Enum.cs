@@ -12,6 +12,9 @@ internal class EnumHandler(AssemblyHandler assemblyHandler, TypeDefinition sourc
     private const FieldAttributes ENUM_MEMBER_ATTRS = FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.Literal | FieldAttributes.HasDefault;
 
     /// <inheritdoc/>
+    public EnumFlags Flags => Source.ToEnumFlags();
+
+    /// <inheritdoc/>
     public Type UnderlyingType { get; } = Type.GetType(underlyingType.FullName)!;
 
     /// <inheritdoc/>

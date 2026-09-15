@@ -5,4 +5,8 @@ namespace Gneedle.Inject;
 /// </summary>
 /// <param name="assemblyHandler">Handler of the assembly which declares the struct.</param>
 /// <param name="source">The struct definition which is handled.</param>
-internal class StructHandler(AssemblyHandler assemblyHandler, TypeDefinition source) : TypeHandler(assemblyHandler, source), IStructHandler;
+internal class StructHandler(AssemblyHandler assemblyHandler, TypeDefinition source) : TypeHandler(assemblyHandler, source), IStructHandler
+{
+    /// <inheritdoc/>
+    public StructFlags Flags => Source.ToStructFlags();
+}

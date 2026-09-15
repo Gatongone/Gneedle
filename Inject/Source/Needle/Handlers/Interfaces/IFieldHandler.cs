@@ -6,6 +6,11 @@ namespace Gneedle.Inject;
 public interface IFieldHandler : IAttributeContainer
 {
     /// <summary>
+    /// Flags of the field, which are the visibility and the modifiers which the definition declares.
+    /// </summary>
+    FieldFlags Flags { get; }
+
+    /// <summary>
     /// Gets the name of the field.
     /// </summary>
     string Name { get; }

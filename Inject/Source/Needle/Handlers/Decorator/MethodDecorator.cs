@@ -119,9 +119,9 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     {
         // The two ways of describing a body replace each other, so that the one which was asked for last is the one which
         // is applied.
-        m_DefaultBody  = body;
-        m_BodyMethod   = null;
-        m_BodyClosure  = null;
+        m_DefaultBody = body;
+        m_BodyMethod  = null;
+        m_BodyClosure = null;
         return this;
     }
 
@@ -258,4 +258,16 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// <returns>Result for chains calling.</returns>
         IGenericParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
     }
+}
+
+public static class MethodDecoratorExtensions
+{
+    /// <summary>
+    /// Set the body of the method from the delegate which holds the IL to copy.
+    /// </summary>
+    /// <param name="decorator">The decorator which describes the method.</param>
+    /// <param name="delegation">The delegate which holds the body.</param>
+    /// <returns>Result for chains calling.</returns>
+    public static MethodDecorator.ITypeDecorator WithBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
+        => decorator is MethodDecorator methodDecorator ? methodDecorator.WithBody(delegation) : decorator.WithBody(delegation.Method);
 }

@@ -70,4 +70,32 @@ internal static class FieldFlagExtensions
             return attributes;
         }
     }
+
+    /// <param name="fieldDefinition">The field definition which is read.</param>
+    extension(FieldDefinition fieldDefinition)
+    {
+        /// <summary>
+        /// Reads the flags of the field which the definition declares, which is the inverse of the conversion above.
+        /// </summary>
+        /// <returns><see cref="FieldFlags"/> corresponding to the definition.</returns>
+        internal FieldFlags ToFieldFlags()
+        {
+            var attributes = fieldDefinition.Attributes;
+            var fieldFlags = (attributes & FieldAttributes.FieldAccessMask) switch
+            {
+                FieldAttributes.Public      => FieldFlags.Public,
+                FieldAttributes.Assembly    => FieldFlags.Internal,
+                FieldAttributes.Family      => FieldFlags.Protected,
+                FieldAttributes.Private     => FieldFlags.Private,
+                FieldAttributes.FamORAssem  => FieldFlags.Protected | FieldFlags.Internal,
+                FieldAttributes.FamANDAssem => FieldFlags.Private | FieldFlags.Protected,
+                _                           => (FieldFlags) 0 // No access modifier flag is set
+            };
+
+            if (fieldDefinition.IsStatic) fieldFlags   |= FieldFlags.Static;
+            if (fieldDefinition.IsInitOnly) fieldFlags |= FieldFlags.ReadOnly;
+
+            return fieldFlags;
+        }
+    }
 }

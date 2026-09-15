@@ -51,6 +51,84 @@ public interface ITypeHandler : IAttributeContainer
     /// Namespace of the type. Setting it moves the type which is handled into another namespace.
     /// </summary>
     string Namespace { get; set; }
+
+    /// <summary>
+    /// Gets a property handler for the specified property name. If the property is not found, returns null.
+    /// </summary>
+    /// <param name="propertyName">The name of the property to retrieve.</param>
+    /// <returns>An <see cref="IPropertyHandler"/> for the specified property, or null if the property is not found.</returns>
+    IPropertyHandler? GetProperty(string propertyName);
+
+    /// <summary>
+    /// Get the handlers of every property which the type declares, in the order in which it declares them.<para/>
+    /// The properties of a base type are left out, because they are not the ones which the type declares.
+    /// </summary>
+    /// <returns>The handlers of the properties.</returns>
+    IPropertyHandler[] GetProperties();
+
+    /// <summary>
+    /// Get the handlers of the properties which carry every flag which is named, in the order in which the type declares
+    /// them. The flags of a property are the ones of the accessor which it holds, which is the getter, or the setter when
+    /// the property holds no getter. A query which names no flag answers with every property which the type declares.
+    /// </summary>
+    /// <param name="propertyFlags">The flags which the properties carry.</param>
+    /// <returns>The handlers of the properties which carry the flags.</returns>
+    IPropertyHandler[] GetProperties(PropertyFlags propertyFlags);
+
+    /// <summary>
+    /// Gets a field handler for the specified field name. If the field is not found, returns null.
+    /// </summary>
+    /// <param name="fieldName">The name of the field to retrieve.</param>
+    /// <returns>An <see cref="IFieldHandler"/> for the specified field, or null if the field is not found.</returns>
+    IFieldHandler? GetField(string fieldName);
+
+    /// <summary>
+    /// Get the handlers of every field which the type declares, in the order in which it declares them.<para/>
+    /// The fields of a base type are left out, because they are not the ones which the type declares.
+    /// </summary>
+    /// <returns>The handlers of the fields.</returns>
+    IFieldHandler[] GetFields();
+
+    /// <summary>
+    /// Get the handlers of the fields which carry every flag which is named, in the order in which the type declares
+    /// them. A query which names no flag answers with every field which the type declares.
+    /// </summary>
+    /// <param name="fieldFlags">The flags which the fields carry.</param>
+    /// <returns>The handlers of the fields which carry the flags.</returns>
+    IFieldHandler[] GetFields(FieldFlags fieldFlags);
+
+    /// <summary>
+    /// Gets a method handler for the specified method name and parameter types. If the method is not found, returns null.
+    /// </summary>
+    /// <param name="methodName">The name of the method to retrieve.</param>
+    /// <param name="parameterTypes">The parameter types of the method to retrieve.</param>
+    /// <returns>An <see cref="IMethodHandler"/> for the specified method, or null if the method is not found.</returns>
+    IMethodHandler? GetMethod(string methodName, params IType[] parameterTypes);
+
+    /// <summary>
+    /// Get the handlers of every method which the type declares, in the order in which it declares them, the overloads
+    /// of one name included.<para/>
+    /// The methods of a base type are left out, because they are not the ones which the type declares.
+    /// </summary>
+    /// <returns>The handlers of the methods.</returns>
+    IMethodHandler[] GetMethods();
+
+    /// <summary>
+    /// Get the handlers of the methods which carry every flag which is named, in the order in which the type declares
+    /// them. An abstract method is a virtual one as well, and the flags name it by the narrower of the two shapes, so a
+    /// query of the virtual ones answers with the methods which are virtual alone. A query which names no flag answers
+    /// with every method which the type declares.
+    /// </summary>
+    /// <param name="methodFlags">The flags which the methods carry.</param>
+    /// <returns>The handlers of the methods which carry the flags.</returns>
+    IMethodHandler[] GetMethods(MethodFlags methodFlags);
+
+    /// <summary>
+    /// Checks if the container contains the specified interface type.
+    /// </summary>
+    /// <param name="interfaceType">The interface type to check for.</param>
+    /// <returns>True if the container contains the specified interface type; otherwise, false.</returns>
+    bool ContainsInterface(IType interfaceType);
 }
 
 /// <summary>
@@ -72,6 +150,21 @@ public interface IFieldContainer
     /// <param name="fieldName">The name of the field to retrieve.</param>
     /// <returns>An <see cref="IFieldHandler"/> for the specified field, or null if the field is not found.</returns>
     IFieldHandler? GetField(string fieldName);
+
+    /// <summary>
+    /// Get the handlers of every field which the type declares, in the order in which it declares them.<para/>
+    /// The fields of a base type are left out, because they are not the ones which the type declares.
+    /// </summary>
+    /// <returns>The handlers of the fields.</returns>
+    IFieldHandler[] GetFields();
+
+    /// <summary>
+    /// Get the handlers of the fields which carry every flag which is named, in the order in which the type declares
+    /// them. A query which names no flag answers with every field which the type declares.
+    /// </summary>
+    /// <param name="fieldFlags">The flags which the fields carry.</param>
+    /// <returns>The handlers of the fields which carry the flags.</returns>
+    IFieldHandler[] GetFields(FieldFlags fieldFlags);
 }
 
 /// <summary>
@@ -99,6 +192,24 @@ public interface IMethodContainer
     /// <param name="parameterTypes">The parameter types of the method to retrieve.</param>
     /// <returns>An <see cref="IMethodHandler"/> for the specified method, or null if the method is not found.</returns>
     IMethodHandler? GetMethod(string methodName, params IType[] parameterTypes);
+
+    /// <summary>
+    /// Get the handlers of every method which the type declares, in the order in which it declares them, the overloads
+    /// of one name included.<para/>
+    /// The methods of a base type are left out, because they are not the ones which the type declares.
+    /// </summary>
+    /// <returns>The handlers of the methods.</returns>
+    IMethodHandler[] GetMethods();
+
+    /// <summary>
+    /// Get the handlers of the methods which carry every flag which is named, in the order in which the type declares
+    /// them. An abstract method is a virtual one as well, and the flags name it by the narrower of the two shapes, so a
+    /// query of the virtual ones answers with the methods which are virtual alone. A query which names no flag answers
+    /// with every method which the type declares.
+    /// </summary>
+    /// <param name="methodFlags">The flags which the methods carry.</param>
+    /// <returns>The handlers of the methods which carry the flags.</returns>
+    IMethodHandler[] GetMethods(MethodFlags methodFlags);
 }
 
 /// <summary>
@@ -120,23 +231,59 @@ public interface IPropertyContainer
     /// <param name="propertyName">The name of the property to retrieve.</param>
     /// <returns>An <see cref="IPropertyHandler"/> for the specified property, or null if the property is not found.</returns>
     IPropertyHandler? GetProperty(string propertyName);
+
+    /// <summary>
+    /// Get the handlers of the properties which carry every flag which is named, in the order in which the type declares
+    /// them. The flags of a property are the ones of the accessor which it holds, which is the getter, or the setter when
+    /// the property holds no getter. A query which names no flag answers with every property which the type declares.
+    /// </summary>
+    /// <param name="propertyFlags">The flags which the properties carry.</param>
+    /// <returns>The handlers of the properties which carry the flags.</returns>
+    IPropertyHandler[] GetProperties(PropertyFlags propertyFlags);
+
+    /// <summary>
+    /// Get the handlers of every property which the type declares, in the order in which it declares them.<para/>
+    /// The properties of a base type are left out, because they are not the ones which the type declares.
+    /// </summary>
+    /// <returns>The handlers of the properties.</returns>
+    IPropertyHandler[] GetProperties();
 }
 
 /// <summary>
 /// Represents a handler for a class type, providing access to its base type, interfaces, fields, methods, and properties.
 /// </summary>
-public interface IClassHandler : ITypeHandler, IBaseTypeContainer, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer;
+public interface IClassHandler : ITypeHandler, IBaseTypeContainer, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer
+{
+    /// <summary>
+    /// Flags of the class, which are the visibility and the modifiers which the definition declares. A class which was
+    /// declared static is written as an abstract and sealed one, and it is read back as <see cref="ClassFlags.Static"/>.
+    /// </summary>
+    ClassFlags Flags { get; }
+}
 
 /// <summary>
 /// Represents a handler for a struct type, providing access to its interfaces, fields, methods, and properties.
 /// </summary>
-public interface IStructHandler : ITypeHandler, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer;
+public interface IStructHandler : ITypeHandler, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer
+{
+    /// <summary>
+    /// Flags of the struct, which are the visibility which the definition declares and the two kinds which it is marked
+    /// as by an attribute: the one which can only live on the stack, and the one whose fields cannot be assigned after
+    /// it was created.
+    /// </summary>
+    StructFlags Flags { get; }
+}
 
 /// <summary>
 /// Represents a handler for an enum type, providing access to its fields and methods.
 /// </summary>
 public interface IEnumHandler : ITypeHandler
 {
+    /// <summary>
+    /// Flags of the enum, which are the visibility which the definition declares, an enum holding nothing else.
+    /// </summary>
+    EnumFlags Flags { get; }
+
     /// <summary>
     /// Gets the underlying type of the enum (e.g., int, byte, etc.).
     /// </summary>

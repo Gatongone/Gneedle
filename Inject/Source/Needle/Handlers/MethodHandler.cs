@@ -40,6 +40,9 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     private object? m_TemplateClosure;
 
+    /// <inheritdoc/>
+    public MethodFlags Flags => Source.ToMethodFlags();
+
     /// <summary>
     /// Gets the name of the source method definition. It is used for debugging and logging purposes to identify the method being manipulated.
     /// </summary>
