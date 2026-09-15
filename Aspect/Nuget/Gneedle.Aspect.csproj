@@ -74,11 +74,25 @@
     <!-- The name of a task is qualified by the namespace of its type, while the project name is the one which a
          reference to this project names. Nothing in this file declares $(ProjectName), so both were empty: the task was
          found by its own name alone, and it was given no name to look for, which made it clean rather than add. -->
-    <UsingTask TaskName="$(RootNamespace).AddProjectsPostBuild" AssemblyFile="$(AspectTargetPath)"/>
+    <PropertyGroup>
+        <!-- Whether a build of this repository weaves the projects of its own solution, which is done by loading the
+             task from the very folder which this project builds into. Such a build holds the assembly of the task open
+             for as long as the node it was loaded into lives, and the nodes of MSBuild are reused across builds, so the
+             next build of this project cannot write over the assembly it is replacing: it fails on its own output with
+             MSB3021 and MSB3027, and a rebuild of the solution fails every time. The scan is therefore off unless it is
+             asked for, and while it is off a build never loads the task and never holds its own output open.
+
+             A solution which is built with it on pays for what it does: `-nodeReuse:false` on the build which runs the
+             scan, or a `dotnet build-server shutdown` before the next one, because the node which loaded the task is
+             the node which would otherwise be reused with the assembly still open. -->
+        <GneedleSelfWeave Condition="'$(GneedleSelfWeave)' == ''">false</GneedleSelfWeave>
+    </PropertyGroup>
+
+    <UsingTask TaskName="$(RootNamespace).AddProjectsPostBuild" AssemblyFile="$(AspectTargetPath)" Condition="'$(GneedleSelfWeave)' == 'true'"/>
     <!-- The scan walks the solution which this project is built with, and a build of the project on its own has none:
          it leaves the solution properties at the literal `*Undefined*`, which is not a path, so the scan is skipped
          there rather than handed something the task cannot parse. -->
-    <Target Name="SolutionScan" AfterTargets="PostBuildEvent" Condition="Exists('$(SolutionPath)') And Exists('$(AspectTargetPath)')">
+    <Target Name="SolutionScan" AfterTargets="PostBuildEvent" Condition="'$(GneedleSelfWeave)' == 'true' And Exists('$(SolutionPath)') And Exists('$(AspectTargetPath)')">
         <AddProjectsPostBuild ProjectName="$(MSBuildProjectName)" SolutionPath="$(SolutionPath)" TargetPath="$(AspectTargetPath)"/>
     </Target>
 </Project>

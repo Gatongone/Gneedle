@@ -92,9 +92,11 @@ jobs:
       - name: Build the weaver which the package of Unity ships
         # The package of Unity carries the weaver as a plugin which is compiled before it, and the one in the repository
         # is the one which was built when it was written there last: it is built again from the tag being released, so
-        # that what is published, and the commit which is pushed, carry the weaver of the release they belong to.
+        # that what is published, and the commit which is pushed, carry the weaver of the release they belong to. The
+        # build of the project copies it to the plugin on its own only when the copy is asked for, which it is here:
+        # a plain build leaves the plugin where it is, so that a working tree is not dirtied by being built.
         shell: bash
-        run: dotnet build Inject/Source/Gneedle.Inject.csproj -f netstandard2.1 -c Release
+        run: dotnet build Inject/Source/Gneedle.Inject.csproj -f netstandard2.1 -c Release -p:CopyWeaverToUnity=true
 
       - name: Commit what is being published, and move the tag to it
         # The commit carries everything which the release publishes: the version in each file which names one, and the
