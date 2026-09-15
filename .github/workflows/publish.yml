@@ -66,6 +66,14 @@ jobs:
         shell: bash
         run: npm install --global npm@11
 
+      - name: Test the script which writes the version into the files
+        # The version is written into every file which names one, and the readmes are read by whoever is deciding what
+        # to install, so a readme which was left at the version of the release before this one is a reader who is sent
+        # to a package of that version. What keeps the two together is the script below, which is tested here before it
+        # is run: a placeholder which stopped matching the readme it was written for stops the run at this step.
+        shell: bash
+        run: python .github/scripts/set-version-tests.py
+
       - name: Take the version from the tag of the release
         id: version
         shell: bash
