@@ -474,6 +474,29 @@ public class SetBodyTests
         DisposableElements.Disposed = false;
     }
 
+    [Test]
+    public void SetBody_Of_A_Template_Which_Cannot_Be_Woven_Leaves_The_Body_As_It_Was()
+    {
+        // A method which is added carries a body of its own before it is given one, and the template is parsed into the
+        // body which takes its place: the parse is the step which refuses a template, so what the member holds when a
+        // template is refused is what tells whether the refusal left the member as it was.
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+        var source = SourceOf(method);
+        var body = source.Body;
+        var instructions = body.Instructions.ToArray();
+
+        Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Lambda))!));
+
+        // The body is the one the member held rather than a new one which the template wrote what it could into, and
+        // nothing of the template is in it: no variable and no handler of it is left where the body was replaced.
+        Assert.That(source.Body, Is.SameAs(body));
+        Assert.That(source.Body.Instructions, Is.EqualTo(instructions));
+        Assert.That(source.Body.Variables, Is.Empty);
+        Assert.That(source.Body.ExceptionHandlers, Is.Empty);
+    }
+
     #endregion
 
     #region ThrowException

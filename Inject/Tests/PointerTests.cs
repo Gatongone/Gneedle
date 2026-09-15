@@ -49,6 +49,10 @@ public class PointerTests
         public static int ReadInstanceProperty() => This.Property<int>("Prop").Get();
         public static void WriteInstanceProperty(int v) => This.Property<int>("Prop").Set(v);
 
+        // A static property is reached through the placeholder which an instance one is, which is where the two
+        // templates are the same: whether a receiver is written is decided by the member which the name finds.
+        public static int ReadStaticProperty() => This.Property<int>("Value").Get();
+
         // Generic field on a Host<T>: exercises the field.ContainsGenericParameter branch
         // that builds a FieldReference via MakeGenericInstanceType (cecil issue #954).
         public static T_0 ReadGenericField() => This.Field<T_0>("value").Get();
@@ -137,6 +141,17 @@ public class PointerTests
         public static int ObjectField_Get(HelperClass h) => new Object(h).Field<int>("PublicField").Get();
         public static void ObjectField_Set(HelperClass h, int v) => new Object(h).Field<int>("PublicField").Set(v);
 
+        /// <summary>
+        /// The instance of <c>Object</c> is held in a local of the template rather than read off a parameter where the
+        /// name of the field is written, so the sequence which names the type of the instance is not the one which the
+        /// weaving reads a type off.
+        /// </summary>
+        public static int ObjectField_OfAnInstanceInALocal(HelperClass h)
+        {
+            var instance = h;
+            return new Object(instance).Field<int>("PublicField").Get();
+        }
+
         // Object.Property get/set
         public static int ObjectProperty_Get(HelperClass h) => new Object(h).Property<int>("PublicProperty").Get();
         public static void ObjectProperty_Set(HelperClass h, int v) => new Object(h).Property<int>("PublicProperty").Set(v);
@@ -150,6 +165,16 @@ public class PointerTests
         // Static.Field get/set (will use LocalStatic type from test setup)
         public static int StaticField_Get() => Static.From("Gneedle.Test.Generated.LocalStatic").Field<int>("StaticField").Get();
         public static void StaticField_Set(int v) => Static.From("Gneedle.Test.Generated.LocalStatic").Field<int>("StaticField").Set(v);
+
+        /// <summary>
+        /// The type which <c>Static</c> names is held in a local of the template rather than written where the name of
+        /// the field is, which is a name the weaving has nowhere to read.
+        /// </summary>
+        public static int StaticField_OfATypeInALocal()
+        {
+            var typeName = "Gneedle.Test.Generated.LocalStatic";
+            return Static.From(typeName).Field<int>("StaticField").Get();
+        }
 
         // Static.Property get/set
         public static int StaticProperty_Get() => Static.From("Gneedle.Test.Generated.LocalStatic").Property<int>("StaticProperty").Get();
@@ -241,9 +266,15 @@ public class PointerTests
     #region This: a property
 
     /// <summary>
-    /// Create a host which declares a property of the given name, with the accessors which are asked for.
+    /// The value which the getter of a property of a host hands back, which a weave of it is run to read.
     /// </summary>
-    private static TypeHandler NewHostWithProperty(string propertyName, bool withGetter, bool withSetter, bool isVirtual)
+    private const int PropertyValue = 4242;
+
+    /// <summary>
+    /// Create a host which declares a property of the given name, with the accessors which are asked for, which are
+    /// static when that is asked for.
+    /// </summary>
+    private static TypeHandler NewHostWithProperty(string propertyName, bool withGetter, bool withSetter, bool isVirtual, bool isStatic = false)
     {
         var handler = (AssemblyHandler) Assembly.Create("MemberInjectionPropAssembly").Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
@@ -251,12 +282,18 @@ public class PointerTests
         var propertyType = module.TypeSystem.Int32;
         var property = new PropertyDefinition(propertyName, PropertyAttributes.None, propertyType);
         var methodAttrs = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig
+                          | (isStatic ? MethodAttributes.Static : 0)
                           | (isVirtual ? MethodAttributes.Virtual | MethodAttributes.NewSlot : 0);
 
         if (withGetter)
         {
             var getter = new MethodDefinition($"get_{propertyName}", methodAttrs, propertyType) { DeclaringType = host.Source };
-            getter.Body.GetILProcessor().Emit(OpCodes.Ret);
+            // The getter hands back a value of its own rather than reading a field, so that a weave which calls it can
+            // be run and not only read: a body which returns from a member which hands back an int without leaving one
+            // on the stack is not IL which the runtime accepts.
+            var il = getter.Body.GetILProcessor();
+            il.Emit(OpCodes.Ldc_I4, PropertyValue);
+            il.Emit(OpCodes.Ret);
             property.GetMethod = getter;
             host.Source.Methods.Add(getter);
         }
@@ -761,6 +798,22 @@ public class PointerTests
         Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
     }
 
+    [Test]
+    public void ObjectField_Of_An_Instance_Which_Is_Held_In_A_Local_Throws()
+    {
+        // The type which the field is looked up on is named by the sequence which leads to the name of the field, and a
+        // sequence which the weaving does not recognize names no type at all. The name is not looked up on the member
+        // being woven instead, which holds a field of that name of its own here: the field of the template is one of the
+        // instance the template holds, and a name which is woven into another member than the one it names is worse
+        // than a name which is refused.
+        var host = NewHostWithField("PublicField", isStatic: false);
+        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_OfAnInstanceInALocal))));
+
+        Assert.That(thrown!.Message, Does.Contain("PublicField"));
+    }
+
     #endregion
 
     #region Static
@@ -828,6 +881,20 @@ public class PointerTests
     }
 
     [Test]
+    public void StaticField_Of_A_Type_Which_Is_Held_In_A_Local_Throws()
+    {
+        // The type which the field is looked up on is the name which the template writes where the field is named, so a
+        // name which the template computed reaches the weaving nowhere: the member being woven is not the type which
+        // the field is named of, and the name is refused rather than looked up on it.
+        var host = NewHostWithField("StaticField", isStatic: true);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+
+        var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.StaticField_OfATypeInALocal))));
+
+        Assert.That(thrown!.Message, Does.Contain("StaticField"));
+    }
+
+    [Test]
     public void StaticField_Set_Rewrites_To_Stsfld()
     {
         var asm = Assembly.Create("StaticFieldAssembly");
@@ -870,6 +937,29 @@ public class PointerTests
 
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && i.Operand is MethodReference mr && mr.Name == "get_StaticProperty"), Is.True);
         Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
+
+        // The property holds a getter and no setter, and the member which is woven is static: no receiver is written,
+        // because the property being reached is of a static member and the accessor of it is static as well. A receiver
+        // written here is the load of a `this` which the member does not have.
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False);
+    }
+
+    [Test]
+    public void StaticReadOnlyProperty_Of_This_Runs_The_Getter()
+    {
+        // The live case of the two accessors of a property which are not both there: a static property which only
+        // hands a value back. What the weave writes for it is a call without a receiver, and a load of `this` written
+        // where the member is static is a body which the runtime refuses to run, so the member is run rather than read.
+        var host = NewHostWithProperty("Value", withGetter: true, withSetter: false, isVirtual: false, isStatic: true);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadStaticProperty)));
+
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && i.Operand is MethodReference mr && mr.Name == "get_Value"), Is.True);
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False);
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(PropertyValue));
     }
 
     [Test]

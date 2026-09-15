@@ -18,9 +18,14 @@ public interface IMethodHandler : IAttributeContainer
     ITypeHandler DeclaringTypeHandler { get; }
 
     /// <summary>
-    /// Set the body of the method from the method which holds the IL to copy.
+    /// Set the body of the method from the method which holds the IL to copy.<para/>
+    /// The return type of the template becomes the return type of the method, which is a contract of the call rather
+    /// than something which is checked against the method: a template which stands for the return type of the member
+    /// being woven writes <see cref="T_0"/> or <see cref="M_0"/> where that type stands, and the weaving resolves the
+    /// token to the type of the member.
     /// </summary>
     /// <param name="method">The method which holds the body.</param>
+    /// <exception cref="ArgumentException">Thrown when the template cannot be read, in which case the method is left as it was.</exception>
     void SetBody(MethodInfo method);
 
     /// <summary>

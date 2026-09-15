@@ -90,17 +90,23 @@ partial class MethodHandler
             }
         }
 
-        var declaringType = declaringTypeFromPattern ?? DeclaringTypeHandler.Source;
-
         var field = memberSymbol.HasFlag(MemberSymbols.Base)
             ? DeclaringTypeHandler.GetFieldInBase(memberName)
             : memberSymbol.HasFlag(MemberSymbols.Object) || memberSymbol.HasFlag(MemberSymbols.Static)
-                ? DeclaringTypeHandler.AssemblyHandler.GetFieldFromType(declaringType, memberName)
+                // The field of an Object or a Static symbol is one of another type than the member being woven, and the
+                // sequence which leads to the name of it is what names that type: a sequence which the weaving does not
+                // recognize names none, so the name is refused rather than looked up on the member being woven, which
+                // holds a field of that name by coincidence at most.
+                ? DeclaringTypeHandler.AssemblyHandler.GetFieldFromType(declaringTypeFromPattern ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName)), memberName)
                 : DeclaringTypeHandler.GetFieldInThis(memberName);
         if (field == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
         }
+
+        // The field is reached through the type which the sequence named, which is the member being woven for the
+        // symbols which carry no such sequence: the branch above refuses an Object or a Static which named none.
+        var declaringType = declaringTypeFromPattern ?? DeclaringTypeHandler.Source;
         var fieldRef = field.ContainsGenericParameter
             // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
             // Related to issue: https://github.com/jbevain/cecil/issues/954

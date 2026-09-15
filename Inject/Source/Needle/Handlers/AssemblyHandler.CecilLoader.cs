@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Gneedle.Inject;
 
 partial class AssemblyHandler
@@ -191,6 +193,36 @@ partial class AssemblyHandler
         cecilType                                  = new CecilType(targetTypeRef.Resolve(), targetTypeRef);
         m_TypeCache[new TypeName(type).ToString()] = cecilType;
         return cecilType;
+    }
+
+    /// <summary>
+    /// Get the definition of the method which a template names, which is read out of the module when the assembly being
+    /// woven declares it and imported from the runtime otherwise.
+    /// </summary>
+    /// <remarks>
+    /// A template is given as the reflection of a method, and the import of one names the assembly which declares it.
+    /// The name of the assembly which is being written is a reference of an assembly to itself, which no loader reads
+    /// back, so a template of the assembly itself is found in the module rather than imported: a project which writes
+    /// its templates where it writes the members they are woven into is the case, which is every weaving of an assembly
+    /// by the build which produced it.
+    /// </remarks>
+    /// <param name="template">The method which holds the body to weave.</param>
+    /// <returns>The definition of the template.</returns>
+    /// <exception cref="ArgumentException">Thrown when the assembly being woven declares the template and its module does not hold it.</exception>
+    internal MethodDefinition ResolveTemplate(MethodInfo template)
+    {
+        if (template.DeclaringType == null || template.DeclaringType.Assembly.GetName().Name != Assembly.Source.Name.Name)
+        {
+            return Assembly.Source.MainModule.ImportReference(template).Resolve();
+        }
+
+        // The name of a method alone does not tell two of one name apart, so the signature is what the template is
+        // looked for by, as the reflection names it: the parameters of the definition are matched with the types of the
+        // parameters of the template, of which a template that takes none holds the empty signature.
+        var parameterTypes = template.GetParameters().Select(parameter => parameter.ParameterType).ToArray();
+        var declaredMethod = FindDeclaredType(template.DeclaringType)?.Methods
+                                               .FirstOrDefault(method => method.Name == template.Name && method.Parameters.SameWith(parameterTypes));
+        return declaredMethod ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, $"{template.DeclaringType.FullName}.{template.Name}"));
     }
 
     /// <summary>

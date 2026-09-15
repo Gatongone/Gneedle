@@ -193,6 +193,12 @@ internal static class ErrorMessages
     internal const string TEMPLATE_READS_ITS_OWN_INSTANCE = "The template reads the instance which it belongs to, which is no argument of the member being woven. A template is a static method, and a lambda which captures a variable is an instance method of the type which holds the capture. Method: {0}.";
 
     /// <summary>
+    /// The template holds no body to copy, which a member which is abstract, or which is a pinvoke, or which an
+    /// interface declares does. The placeholder is the template.
+    /// </summary>
+    internal const string TEMPLATE_HAS_NO_BODY = "The template holds no body, which a member which is abstract, a pinvoke, or a method which an interface declares is: there are no instructions of it to weave with. Template: {0}.";
+
+    /// <summary>
     /// The template reads a variable which it captured, and a value of that type cannot be written into the member
     /// being woven, where the value would have to be held. The placeholders are the name of the field which holds it,
     /// the name of the type, and the member.

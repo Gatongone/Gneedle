@@ -56,6 +56,13 @@ public static class AroundTemplates
     }
 
     /// <summary>
+    /// Name a member which the member being woven does not hold, which the parse of the template refuses. The signature
+    /// is the one of the member which it is woven around, so that what refuses it is the member which is missing rather
+    /// than the signature.
+    /// </summary>
+    public static int ReadAMissingField(int left, int right) => This.Field<int>("Missing").Get();
+
+    /// <summary>
     /// A template whose return type does not match the method, which the around body refuses.
     /// </summary>
     public static long ProceedWithAnotherReturnType(int left, int right) => Proceed.Method<IntBinaryOp>()(left, right);
@@ -668,6 +675,57 @@ public class AroundBodyTests
         host.Source.Fields.Add(new FieldDefinition(ProceedMethodName, FieldAttributes.Private, add.ReturnType));
 
         Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Cannot_Be_Woven_Leaves_The_Member_As_It_Was()
+    {
+        // The body of the member is taken over in the course of being woven around, and the template is parsed after
+        // it: a template which cannot be parsed is the case which tells whether the member survives the attempt. It
+        // holds the body it held, the declaring type declares no method of its own, and the weave which is done next
+        // is done as the first one rather than refused for one which never happened.
+        var (assembly, host, add) = NewHost(true);
+        var body = add.Body;
+        var instructions = body.Instructions.ToArray();
+
+        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add")
+           .AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ReadAMissingField))));
+
+        // The member holds the very body object it held, with the very instructions in it, and neither a variable nor
+        // a handler of the template was written into it: what the parse wrote went to a body which was discarded.
+        Assert.That(add.Body, Is.SameAs(body));
+        Assert.That(add.Body.Instructions, Is.EqualTo(instructions));
+        Assert.That(add.Body.Variables, Is.Empty);
+        Assert.That(add.Body.ExceptionHandlers, Is.Empty);
+        Assert.That(host.Source.Methods.Any(method => method.Name == ProceedMethodName), Is.False);
+
+        // A second attempt which fails leaves as little behind as the first one did: nothing of the member is carried
+        // from one attempt into the next, and nothing of the template either.
+        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add")
+           .AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ReadAMissingField))));
+
+        Assert.That(add.Body, Is.SameAs(body));
+        Assert.That(add.Body.Instructions, Is.EqualTo(instructions));
+        Assert.That(add.Body.Variables, Is.Empty);
+        Assert.That(add.Body.ExceptionHandlers, Is.Empty);
+        Assert.That(host.Source.Methods.Any(method => method.Name == ProceedMethodName), Is.False);
+
+        // The weave which is done next is done as the first one rather than refused for one which never happened, and
+        // the body which it takes over is the one which the attempts above left alone: what the member held before
+        // them is what the generated method holds after it, in the image as it is written rather than in memory only.
+        HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
+
+        var generated = host.Source.Methods.Single(method => method.Name == ProceedMethodName);
+        Assert.That(generated.Body.Instructions, Is.EqualTo(instructions));
+
+        using var stream = new MemoryStream();
+        assembly.SaveTo(stream);
+        stream.Position = 0;
+
+        var reread = AssemblyDefinition.ReadAssembly(stream);
+        var emitted = reread.MainModule.GetType($"{Ns}.Host")!.Methods.Single(method => method.Name == ProceedMethodName);
+        Assert.That(emitted.Body.Instructions.Select(instruction => instruction.OpCode),
+                    Is.EqualTo(new[] {OpCodes.Ldarg_0, OpCodes.Ldarg_1, OpCodes.Add, OpCodes.Ret}));
     }
 
     [Test]
