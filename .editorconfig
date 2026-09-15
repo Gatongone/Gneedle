@@ -1,8 +1,12 @@
 # The files of this repository are UTF-8 without a byte order mark. `utf-8` is that; `utf-8-bom` is the other.
 # A text file of it lies with LF, which `.gitattributes` gives a checkout as well, so that an editor writes no other
 # line ending back and leaves a working tree which differs from the repository in every line of every file.
+# A text file of it ends where its last line ends rather than on a newline of its own, which is what
+# `insert_final_newline` asks an editor for: the newline which an editor adds to the file it saves is a line which the
+# repository does not carry, so a file which is saved for another reason is a diff of the last line of it.
 root = true
 
 [*]
 charset = utf-8
 end_of_line = lf
+insert_final_newline = false
