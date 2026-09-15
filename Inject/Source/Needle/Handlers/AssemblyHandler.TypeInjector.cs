@@ -70,7 +70,13 @@ partial class AssemblyHandler
     }
 
     /// <inheritdoc/>
-    public ITypeHandler GetType(Type type) => new TypeHandler(this, GetCecilType(type).Definition);
+    public ITypeHandler GetType(Type type)
+    {
+        // The handler is the one of the kind which the definition is, as it is for a definition and for a name, because
+        // the kind is what decides which of the injectors of a type applies to it: a handler which every type is
+        // answered with alike holds no kind, which refuses an injector that names one for a type of every kind there is.
+        return GetType(GetCecilType(type).Definition);
+    }
 
     /// <inheritdoc/>
     public ClassDecorator AddClass(string typeName, string typeNamespace, ClassFlags classFlags)

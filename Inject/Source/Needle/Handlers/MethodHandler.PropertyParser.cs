@@ -117,7 +117,13 @@ partial class MethodHandler
             }
         }
 
-        if (propertyDef.GetMethod is not {IsStatic: true} || propertyDef.SetMethod is not {IsStatic: true})
+        // The accessor which is called is the one which tells whether a receiver is written, because it is the one which
+        // the call below reaches: a static accessor takes no receiver, and an instance one takes the member as its own.
+        // The accessor which is not called says nothing about it, and a property which holds only the one being called
+        // is what makes that worth saying: reading staticness off both of them together takes the accessor which is not
+        // there for one which is not static, and writes a load of `this` into a member which is static.
+        var calledAccessor = isGet ? propertyDef.GetMethod : propertyDef.SetMethod;
+        if (calledAccessor is not {IsStatic: true})
         {
             // ldstr {property_name} -> ldarg.0
             filter.Replace(currentIndex, Instruction.Create(OpCodes.Ldarg_0));

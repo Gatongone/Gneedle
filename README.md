@@ -63,14 +63,14 @@ Or, in the project file:
 
 ```xml
 
-<PackageReference Include="Gneedle.Aspect" Version="0.0.1"/>
+<PackageReference Include="Gneedle.Aspect" Version="0.0.2"/>
 ```
 
 `Gneedle.Inject` is a dependency of it, so the weaver that the task weaves with is installed along with it. It is also the package to reference on its own, and the only one, when you drive the weaving yourself or when you write an injector, because the interfaces that one implements are declared in it:
 
 ```xml
 
-<PackageReference Include="Gneedle.Inject" Version="0.0.1"/>
+<PackageReference Include="Gneedle.Inject" Version="0.0.2"/>
 ```
 
 ## Unity
@@ -84,8 +84,8 @@ A package is installed by the path it lies at, and a revision may be named after
 ```json
 {
   "dependencies": {
-    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.1",
-    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.1"
+    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.2",
+    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.2"
   }
 }
 ```
@@ -110,8 +110,8 @@ The same two are published to npm under the names above, which the Package Manag
     }
   ],
   "dependencies": {
-    "com.gatongone.gneedle.inject": "0.0.1",
-    "com.gatongone.gneedle.aspect": "0.0.1"
+    "com.gatongone.gneedle.inject": "0.0.2",
+    "com.gatongone.gneedle.aspect": "0.0.2"
   }
 }
 ```
@@ -134,8 +134,8 @@ What is installed this way is held at the version that is named until another is
     }
   ],
   "dependencies": {
-    "com.gatongone.gneedle.inject": "0.0.1",
-    "com.gatongone.gneedle.aspect": "0.0.1"
+    "com.gatongone.gneedle.inject": "0.0.2",
+    "com.gatongone.gneedle.aspect": "0.0.2"
   }
 }
 ```
@@ -180,7 +180,7 @@ if (changed) File.WriteAllBytes("path/to/AnAssembly.dll", woven);
 The attributes and the reference to the weaver are taken out of the image by default, which is what leaves the woven assembly standing alone; `removesTheWeaver: false` keeps them. What an injector is, and which member each of the interfaces of one is read for, is under [Aspect](#aspect).
 
 > [!IMPORTANT]
-> An assembly that no file holds (location missing) — one that an editor has just compiled in memory , or loaded from network stream — is given to the weaving through `AssemblyLoader.LoadFromBytes` loads the assembly from its image and remembers the bytes, and `Remember` does the same for an assembly that the runtime loaded by another way. That image is what a type of such an assembly is resolved against, which is how a template names a type of it
+> An assembly that no file holds (location missing) — one that an editor has just compiled in memory, or loaded from network stream — is given to the weaving through `AssemblyLoader.LoadFromBytes`, which loads the assembly from its image and remembers the bytes, and `Remember` does the same for an assembly that the runtime loaded by another way. That image is what a type of such an assembly is resolved against, which is how a template names a type of it
 > through [a stub](#referring-to-a-type-you-cannot-reference). An assembly which the runtime loaded out of a file is read where that file lies, and one that it loaded from bytes in another way is read out of the memory of the process, which only Windows can do.
 >
 > The assemblies of the weaver are answered to such an assembly as well, and to one of those alone: the weaver that its templates were compiled against is resolved to the weaver which is weaving it, rather than to a copy that would have to lie beside the image.
@@ -216,15 +216,15 @@ A default body is asked for the same way, when no template is needed: `WithBody(
 
 ### The placeholders
 
-| Placeholder                                                                      | Names                                                                                   |
-|----------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
-| `This.Field<T>("name")`, `This.Property<T>("name")`                              | a field or a property of the type being woven, read and written through `Get` and `Set` |
-| `This.Method<TDelegate>("name")`                                                 | a method of the type being woven, called through the delegate that gives its signature  |
-| `Base.Field`, `Base.Property`, `Base.Method`                                     | the same, on the type that the target derives from                                      |
-| `Object(instance).Field`, `Object(instance).Property`, `Object(instance).Method` | the same, on an instance the template pushed                                            |
-| `Static.From("Full.Type.Name").Method`                                           | the same, on a type named by a string                                                   |
-| `T_0`–`T_20`, `M_0`–`M_20`                                                       | the first to the twenty-first generic parameter of the declaring type, or of the method |
-| `ValuableMember<T>`                                                              | the value of a field or a property, without the boxing that `ValuableMember` costs      |
+| Placeholder                                                                                  | Names                                                                                   |
+|--------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+| `This.Field<T>("name")`, `This.Property<T>("name")`                                          | a field or a property of the type being woven, read and written through `Get` and `Set` |
+| `This.Method<TDelegate>("name")`                                                             | a method of the type being woven, called through the delegate that gives its signature  |
+| `Base.Field`, `Base.Property`, `Base.Method`                                                 | the same, on the type that the target derives from                                      |
+| `new Object(instance).Field`, `new Object(instance).Property`, `new Object(instance).Method` | the same, on an instance the template pushed                                            |
+| `Static.From("Full.Type.Name").Method`                                                       | the same, on a type named by a string                                                   |
+| `T_0`–`T_20`, `M_0`–`M_20`                                                                 | the first to the twenty-first generic parameter of the declaring type, or of the method |
+| `ValuableMember<T>`                                                                          | the value of a field or a property of a value type, which `ValuableMember` would box    |
 
 The name which a placeholder is given is read out of the template itself, and the one instruction which the call follows is what holds it: a name is therefore one which the compiler writes there — a literal, a `nameof`, or a constant of the template — rather than one which the template computes while it runs.
 
@@ -329,7 +329,7 @@ public sealed class LogMessageAttribute(string message) : Attribute, IMethodInje
 }
 ```
 
-Which member an interface is read for: `IAssemblyInjector` for the assembly and `ITypeInjector` for a type, `IClassInjector`, `IStructInjector` and `IEnumInjector` for a type of that kind, and `IMethodInjector`, `IFieldInjector` and `IPropertyInjector` for a member. Every member of a type is looked at, thatever way a caller could reach it, and an injector that names a kind of type that it was put on is reported rather than passed over.
+Which member an interface is read for: `IAssemblyInjector` for the assembly and `ITypeInjector` for a type, `IClassInjector`, `IStructInjector` and `IEnumInjector` for a type of that kind, and `IMethodInjector`, `IFieldInjector` and `IPropertyInjector` for a member. Every member of a type is looked at, whatever way a caller could reach it, and an injector that names a kind of type that it was put on is reported rather than passed over.
 
 ### What is left in the assembly
 

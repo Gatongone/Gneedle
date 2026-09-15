@@ -10,3 +10,6 @@
 [Oo]bj
 [Ll]og
 Gneedle.sln.DotSettings.user
+
+# Python
+__pycache__/

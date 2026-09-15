@@ -22,7 +22,7 @@ public static class Injections
     /// <param name="image">The bytes of the image which the assembly was loaded from.</param>
     /// <param name="removesTheWeaver">Whether the attributes and the reference to this library are taken back out. They are removed by default, which leaves the woven assembly standing alone.</param>
     /// <param name="reportError">Where a member which an injector names and the assembly does not hold is reported, or null when nothing reports it.</param>
-    /// <returns>Whether the assembly was changed, and the image which holds the result.</returns>
+    /// <returns>Whether the assembly was changed, and the image which holds the result. A run which reported anything hands back the image it was given rather than the one it wove, because a report leaves an assembly which is woven in part, which no caller could tell from one which was woven whole.</returns>
     public static (bool Changed, byte[] Image) Apply(System.Reflection.Assembly assembly, byte[] image,
                                                      bool removesTheWeaver = true, Action<string>? reportError = null)
         => new Injection(assembly, image, removesTheWeaver, reportError).Run();
@@ -86,6 +86,15 @@ public static class Injections
         private static readonly string[] PropertyInjectorNames = [typeof(IPropertyInjector).FullName!];
 
         /// <summary>
+        /// Whether anything was reported of this run.<para/>
+        /// A report is made of a member which could not be woven, and one which could not be woven leaves the assembly
+        /// woven in part: the injectors which ran before it hold, and the ones which would have run after it do not.
+        /// An image of that is one which no caller can tell from an image which was woven whole, so no image at all is
+        /// handed back of a run which reported anything.
+        /// </summary>
+        private bool m_Reported;
+
+        /// <summary>
         /// Apply every injector of the assembly.
         /// </summary>
         public (bool Changed, byte[] Image) Run()
@@ -118,7 +127,11 @@ public static class Injections
             // them for another one to weave with keeps them, and keeps the weaver which they name.
             if (removesTheWeaver) changed |= handler.RemoveTheWeaver();
 
-            if (!changed) return (false, image);
+            // The assembly is written back only when an injector changed it and nothing was reported of the run, which
+            // is what keeps an assembly which is woven in part from being taken for one which was woven whole. The
+            // caller which was given no image of a run which reported anything holds the one it gave, which is the
+            // assembly it built.
+            if (!changed || m_Reported) return (false, image);
 
             using var result = new MemoryStream();
             target.SaveTo(result);
@@ -129,7 +142,11 @@ public static class Injections
         /// Report a member which an injector named and the assembly does not hold.
         /// </summary>
         /// <param name="message">What is reported.</param>
-        private void Report(string message) => reportError?.Invoke(message);
+        private void Report(string message)
+        {
+            m_Reported = true;
+            reportError?.Invoke(message);
+        }
 
         /// <summary>
         /// Whether a member carries an attribute whose type implements one of the interfaces which are named.
@@ -188,11 +205,15 @@ public static class Injections
             changed |= ProcessTypeInjector(handler, type);
             if (!type.IsClass && type is not {IsValueType: true, IsEnum: false}) return changed;
 
-            if (typeHandler is IMethodContainer methodContainer)
+            // A member is looked up on the handler of the type rather than on the container of the methods of it,
+            // because a method is looked up by the signature which the injector was put on beside its name, and the
+            // handler of the type is what answers for a signature. The cast stands on every handler which the assembly
+            // answers with for a type of its image being one of these.
+            if (typeHandler is TypeHandler members)
             {
                 foreach (var method in type.GetMethods(InjectedMembers))
                 {
-                    changed |= ProcessMethodInjector(methodContainer, type, method);
+                    changed |= ProcessMethodInjector(members, type, method);
                 }
             }
 
@@ -314,15 +335,18 @@ public static class Injections
 
         /// <summary>
         /// Apply the injectors which one method carries, which are looked up in the assembly by the name and the
-        /// parameters of the method rather than by the method itself.
+        /// parameters of the method rather than by the method itself.<para/>
+        /// The parameters are the ones which tell two methods of one name apart, and the empty signature which a method
+        /// that takes no parameter carries tells one of them apart from a member of the name which takes some: a lookup
+        /// by the name alone answers with the first of them, which is another member than the one the injector names.
         /// </summary>
         /// <param name="typeHandler">Handler of the type which declares the method.</param>
         /// <param name="runtimeType">The type which the method belongs to, which what is reported names.</param>
         /// <param name="methodInfo">The method whose injectors are applied.</param>
         /// <returns>Whether an injector was applied.</returns>
-        private bool ProcessMethodInjector(IMethodContainer typeHandler, Type runtimeType, MethodInfo methodInfo)
+        private bool ProcessMethodInjector(TypeHandler typeHandler, Type runtimeType, MethodInfo methodInfo)
         {
-            var methodHandler = typeHandler.GetMethod(methodInfo.Name, methodInfo.GetParameters().GetITypes());
+            var methodHandler = typeHandler.GetMethodBySignature(methodInfo.Name, methodInfo.GetParameters().GetITypes());
 
             // The attributes are asked of the metadata first, so that a member which carries no injector is left without
             // its reflection being read. A member which the assembly does not hold is left to the reflection, so that

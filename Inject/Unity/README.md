@@ -30,7 +30,7 @@ Through a registry, which is what the Package Manager takes a package of this na
   ],
   "dependencies":
   {
-    "com.gatongone.gneedle.inject": "0.0.1"
+    "com.gatongone.gneedle.inject": "0.0.2"
   }
 }
 ```
@@ -41,7 +41,7 @@ Or out of the repository, by the path which the package lies at, at a tag which 
 {
   "dependencies":
   {
-    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.1"
+    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.2"
   }
 }
 ```

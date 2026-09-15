@@ -328,6 +328,61 @@ public class AssemblyInjectTests
         Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although the injector was refused");
     }
 
+    /// <summary>
+    /// Build an assembly which holds a class whose field the marking injector is put on, and, when it is asked for, a
+    /// type which the class-only injector is put on, which it is refused for.<para/>
+    /// The injector which names a field is used rather than the ones which name a class, a struct or an enum, because
+    /// those are asked of the kind of the handler of the type, which a run of the injectors tells by the type itself.
+    /// </summary>
+    private string BuiltAssemblyWithAWovenField(string name, bool withTheRefusedType)
+        => BuiltAssembly(name, handler =>
+        {
+            // A field, which the injector which names a field marks as obsolete.
+            handler.AddClass("Woven", "Gneedle.Aspect.Test.Built", ClassFlags.Public)
+                   .GetHandler()
+                   .AddField("m_Marked", FieldFlags.Public | FieldFlags.Static)
+                   .WithType(typeof(int).ToGneedleType())
+                   .GetHandler()
+                   .AddAttribute(typeof(MarkFieldAttribute).ToGneedleType());
+
+            if (!withTheRefusedType) return;
+
+            // An injector which names the kind of type it applies to, put on a type of another kind, which it is
+            // refused for.
+            handler.AddStruct("NotAClass", "Gneedle.Aspect.Test.Built", StructFlags.Public)
+                   .GetHandler()
+                   .AddAttribute(typeof(ClassOnlyAttribute).ToGneedleType());
+        });
+
+    [Test]
+    public void An_Assembly_Which_Was_Woven_In_Part_Is_Not_Written()
+    {
+        // The injector below marks a field, so an assembly of that field alone is an assembly which the task writes,
+        // which is what the run at the end is told apart from nothing having been woven at all by.
+        var woven = BuiltAssemblyWithAWovenField("WovenAssembly", withTheRefusedType: false);
+        var (wovenResult, wovenEngine) = Inject(woven, Project());
+        Assert.That(wovenResult, Is.True, string.Join(Environment.NewLine, wovenEngine.Errors));
+
+        using (var read = AssemblyDefinition.ReadAssembly(woven))
+        {
+            var field = read.MainModule.GetType("Gneedle.Aspect.Test.Built.Woven")!.Fields.Single(candidate => candidate.Name == "m_Marked");
+            Assert.That(field.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == typeof(ObsoleteAttribute).FullName), Is.True,
+                        "the injector marked nothing, so nothing below stands on a weaving which changes an assembly.");
+        }
+
+        // A type which an injector is refused for does not take the members around it with it, and the build is told of
+        // it. An assembly which is woven in part is one which nothing could tell from a whole one, so nothing of it is
+        // written, and it stays as it was built.
+        var partlyWoven = BuiltAssemblyWithAWovenField("PartlyWovenAssembly", withTheRefusedType: true);
+        var before = File.ReadAllBytes(partlyWoven);
+
+        var (result, engine) = Inject(partlyWoven, Project());
+
+        Assert.That(result, Is.False);
+        Assert.That(engine.Errors.Single(), Does.Contain("is not a class"));
+        Assert.That(File.ReadAllBytes(partlyWoven), Is.EqualTo(before), "the assembly which was woven in part was written");
+    }
+
     #endregion
 }
 

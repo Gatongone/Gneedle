@@ -20,7 +20,11 @@ public interface IAssemblyHandler
     ITypeHandler? GetType(string typeFullName);
 
     /// <summary>
-    /// Get the handler of the type which the given runtime type stands for.
+    /// Get the handler of the type which the given runtime type stands for, which is the handler of the kind of that
+    /// type: a class, a struct and an enum are answered with a handler which names the kind of which it is, which is
+    /// what an injector that names a kind of type is applied through. A type which is of none of those kinds, an
+    /// interface being one, is answered with the handler of a type alone, which no injector that names a kind is
+    /// applied through.
     /// </summary>
     /// <param name="type">The type which need to be handled.</param>
     /// <returns>The handler of the type.</returns>

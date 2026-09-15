@@ -23,10 +23,13 @@ internal sealed partial class MethodHandler : IMethodHandler
     internal readonly TypeHandler DeclaringTypeHandler;
 
     /// <summary>
-    /// Name of the generated method which holds the body which the source method is woven around, or null when the
-    /// source method is not woven around.
+    /// The generated method which holds the body which the source method is woven around, or null when the source
+    /// method is not woven around.<para/>
+    /// The method itself is held rather than looked up on the declaring type by the name of it, because the template is
+    /// parsed before the declaring type declares the generated method: what a template proceeds into is the body which
+    /// was taken over, and that body belongs to this member whether or not the method which holds it is on the type yet.
     /// </summary>
-    private string? m_ProceedMethodName;
+    private MethodDefinition? m_ProceedMethod;
 
     /// <summary>
     /// The instance which the delegate of the template was made from, whose fields hold the variables which the
@@ -83,20 +86,33 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <inheritdoc/>
     public void SetBody(DefaultMethodBody defaultMethodBody)
     {
-        Source.Body = new MethodBody(Source);
-        var il = Source.Body.GetILProcessor();
-
-        switch (defaultMethodBody)
+        // The body is built beside the member rather than in it, and takes the place of the body which the member holds
+        // only once it is whole: the body which a base type does not hold is what CallFromBase refuses, and a refusal
+        // leaves the member holding the body it held rather than the one which was being written for it.
+        var previous = Source.Body;
+        var body     = new MethodBody(Source);
+        Source.Body  = body;
+        try
         {
-            case DefaultMethodBody.CallFromBase:
-                SetBodyCallFromBase(il);
-                break;
-            case DefaultMethodBody.ThrowException:
-                SetBodyThrowException(il);
-                break;
-            case DefaultMethodBody.WithDefaultReturn:
-                SetBodyWithDefaultReturn(il);
-                break;
+            var il = body.GetILProcessor();
+
+            switch (defaultMethodBody)
+            {
+                case DefaultMethodBody.CallFromBase:
+                    SetBodyCallFromBase(il);
+                    break;
+                case DefaultMethodBody.ThrowException:
+                    SetBodyThrowException(il);
+                    break;
+                case DefaultMethodBody.WithDefaultReturn:
+                    SetBodyWithDefaultReturn(il);
+                    break;
+            }
+        }
+        catch
+        {
+            Source.Body = previous;
+            throw;
         }
     }
 
@@ -246,20 +262,14 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
     internal void SetBody(MethodInfo method, object? closure)
     {
-        var targetDef = Source.Module.ImportReference(method).Resolve();
-        var instructions = targetDef.Body.Instructions;
+        var targetDef = DeclaringTypeHandler.AssemblyHandler.ResolveTemplate(method);
 
-        // Create a new body.
-        Source.Body = new MethodBody(Source);
-
-        // Copy target method variables to source.
-        CopyVariables(targetDef, Source);
-
-        m_TemplateClosure = closure;
-        ParseBody(instructions, targetDef);
-        m_TemplateClosure = null;
-
+        // The template is parsed into a body of its own, and the return type is parsed before that body is handed over:
+        // the member holds what it held until every step which can refuse the template has run, so a template which
+        // cannot be woven leaves the member as it was rather than half of the one which was to replace it.
+        var woven = ParseIntoABodyOfItsOwn(targetDef, closure);
         ParseReturnType(targetDef.ReturnType);
+        Source.Body = woven;
     }
 
     /// <summary>
@@ -281,7 +291,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
     internal void AroundBody(MethodInfo method, object? closure)
     {
-        var templateDef = Source.Module.ImportReference(method).Resolve();
+        var templateDef = DeclaringTypeHandler.AssemblyHandler.ResolveTemplate(method);
 
         // Every check runs before anything is changed, so that a weave which cannot be done leaves the method as it was.
         if (Source.IsAbstract || Source.IsPInvokeImpl || Source.IsRuntime || Source.IsInternalCall || !Source.HasBody)
@@ -290,7 +300,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         if (Source.IsConstructor) throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_TARGET_IS_CONSTRUCTOR, Source.FullName));
-        if (m_ProceedMethodName != null) throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_ALREADY_SET, Source.FullName));
+        if (m_ProceedMethod != null) throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_ALREADY_SET, Source.FullName));
 
         // The signature of the template is resolved against the method before it is compared, because a generic method is
         // matched through the M_[0-20] tokens of the template rather than through its own generic parameters: a template
@@ -315,6 +325,98 @@ internal sealed partial class MethodHandler : IMethodHandler
             throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_GENERATED_NAME_OCCUPIED, name));
         }
 
+        var generated = CreateProceedMethod(name);
+
+        // The template is parsed before the generated method is put on the declaring type, and the body of the member
+        // is not taken over until the template has been parsed, so that a template which cannot be parsed leaves the
+        // member holding the body it held and the type declaring no method of its own. What the template proceeds into
+        // is held by this weave rather than looked up on the type, which is what lets the parse run first.
+        m_ProceedMethod = generated;
+        MethodBody woven;
+        try
+        {
+            woven = ParseIntoABodyOfItsOwn(templateDef, closure);
+        }
+        catch
+        {
+            m_ProceedMethod = null;
+            throw;
+        }
+
+        // Nothing below refuses anything, which is what makes the weave whole: the generated method is declared by the
+        // type, the body which the member held is moved onto it, and the body which the template was parsed into takes
+        // the place of that body. The return type is deliberately left alone: the template keeps the signature of the
+        // member, which was checked above, so parsing it as SetBody does would only write an equal type again.
+        Source.DeclaringType.Methods.Add(generated);
+        MoveBodyTo(generated, Source);
+        Source.Body = woven;
+    }
+
+    /// <summary>
+    /// Parse the body of a template into a body of the member which the member does not hold yet.<para/>
+    /// The member holds the body it held for as long as the parse runs, so that a template which cannot be parsed
+    /// leaves the member as it was. The body which is handed back is put in place of that body by the caller which was
+    /// handed it, and never before: what the parse wrote goes with the body which was parsed rather than with the one
+    /// which the member held, and a parse which is refused discards that body whole.
+    /// </summary>
+    /// <param name="templateDef">The template which holds the body to parse.</param>
+    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    /// <returns>The body which the template was parsed into, which the member does not hold yet.</returns>
+    private MethodBody ParseIntoABodyOfItsOwn(MethodDefinition templateDef, object? closure)
+    {
+        // A template which holds no body is refused here rather than read: a member which is abstract, or which is a
+        // pinvoke, holds no instructions to copy, and reading them is what fails for a template which was named rather
+        // than for the member which it names.
+        if (!templateDef.HasBody)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HAS_NO_BODY, templateDef.FullName));
+        }
+
+        // The instructions are read before the body of the member is swapped, because the member may be the template
+        // itself, and the parse reads those instructions for as long as it runs.
+        var instructions = templateDef.Body.Instructions;
+        var previous     = Source.Body;
+        var woven        = new MethodBody(Source);
+
+        // Every read and write of the body of the member for as long as the parse runs reaches the new body rather than
+        // the one which the member holds, which is what leaves the member as it was when the parse is refused. The
+        // parse is the only thing which runs in the meanwhile, so nothing else is written to the body which is left
+        // behind: a step which is added to the weave belongs after this call rather than inside it.
+        Source.Body = woven;
+        try
+        {
+            // Copy target method variables to source.
+            CopyVariables(templateDef, Source);
+
+            m_TemplateClosure = closure;
+            ParseBody(instructions, templateDef);
+        }
+        catch
+        {
+            Source.Body = previous;
+            throw;
+        }
+        finally
+        {
+            // The closure is dropped whether the parse wrote it or was refused, so that a parse which runs next reads
+            // what it is given rather than what a parse which failed was given.
+            m_TemplateClosure = null;
+        }
+
+        Source.Body = previous;
+        return woven;
+    }
+
+    /// <summary>
+    /// Create the method of the declaring type which holds the body which the member is woven around, which the
+    /// template proceeds into.<para/>
+    /// The method is not put on the declaring type here: the template is parsed first, and a template which cannot be
+    /// parsed leaves the type declaring no method of its own.
+    /// </summary>
+    /// <param name="name">Name of the generated method.</param>
+    /// <returns>The generated method, which the declaring type does not declare yet.</returns>
+    private MethodDefinition CreateProceedMethod(string name)
+    {
         var generated = new MethodDefinition(name, MethodAttributes.Private | MethodAttributes.HideBySig
                                                   | (Source.IsStatic ? MethodAttributes.Static : 0), Source.ReturnType)
         {
@@ -344,19 +446,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             generated.GenericParameters.Add(copy);
         }
 
-        Source.DeclaringType.Methods.Add(generated);
-
-        MoveBodyTo(generated, Source);
-        Source.Body         = new MethodBody(Source);
-        m_ProceedMethodName = name;
-
-        // The template is parsed last, so that Proceed resolves through the generated method, which is on the declaring
-        // type by now. The return type is deliberately left alone: the template keeps the signature of the method, which
-        // was checked above, so parsing it as SetBody does would only write an equal type again.
-        CopyVariables(templateDef, Source);
-        m_TemplateClosure = closure;
-        ParseBody(templateDef.Body.Instructions, templateDef);
-        m_TemplateClosure = null;
+        return generated;
     }
 
     /// <summary>
@@ -463,9 +553,15 @@ internal sealed partial class MethodHandler : IMethodHandler
                     : Source.Module.ImportReference(handler.CatchType).ParseGenericTokens(Source, Source.Module)
             };
 
-            // A region which begins at nothing would protect nothing, and the two boundaries at the end of it stand for
-            // the end of the body, which is written by leaving them out rather than by naming an instruction.
-            if (carried.TryStart == null || carried.HandlerStart == null)
+            // A region which begins at nothing would protect nothing, and a boundary which the template holds and the
+            // body does not stand for not one of them: a region which ends at nothing is one which is taken for one
+            // which reaches the end of the body, so it would protect more than the template wrote it to. A boundary
+            // which the template holds none of stands for the end of the body, and is written by leaving it out rather
+            // than by naming an instruction.
+            if (carried.TryStart == null || carried.HandlerStart == null
+                || (handler.TryEnd != null && carried.TryEnd == null)
+                || (handler.HandlerEnd != null && carried.HandlerEnd == null)
+                || (handler.FilterStart != null && carried.FilterStart == null))
             {
                 throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, "$" + instructions.Count));
             }
@@ -850,6 +946,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="currentIndex">Index of the instruction of `ldstr {member_name}`.</param>
     /// <param name="filter"></param>
     /// <param name="targetDef">The method definition being scanned (source of the instructions).</param>
+    /// <exception cref="InvalidILException">Thrown when the call names no member kind which the weaving reads.</exception>
     private void ParseMember(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         if (memberSymbol.HasFlag(MemberSymbols.Field))
@@ -867,6 +964,16 @@ internal sealed partial class MethodHandler : IMethodHandler
             // The name is the instruction ahead of the call, which is where every symbol but the one which proceeds
             // writes it: that one is recognized by the call alone and reaches ParseMethod without a name.
             ParseMethod(memberName, memberSymbol, currentIndex + 1, currentIndex, filter, targetDef);
+        }
+
+        // A call which names no member kind is one of two things: the half of a pair which the member named beside it
+        // is read with, which is the instance an Object symbol is made of or the type which a Static symbol is written
+        // from, or a call which names nothing the weaving reads at all. Leaving the second one where it is leaves a call
+        // of a placeholder in the body, where nothing stands for a member of the type which is woven, so it throws for
+        // the call at run time rather than for the template at the weaving.
+        else if (!memberSymbol.HasFlag(MemberSymbols.Static) && !memberSymbol.HasFlag(MemberSymbols.Object))
+        {
+            throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
     }
 
@@ -1078,6 +1185,8 @@ internal sealed partial class MethodHandler : IMethodHandler
         /// would be a branch to nothing.
         /// </summary>
         /// <param name="source">The source collection which the instructions were applied to.</param>
+        /// <exception cref="InvalidILException">Thrown when an instruction which a branch names stands for nothing in the
+        /// body which was written, which leaves the branch reaching into the template rather than into the body.</exception>
         private void PointBranches(ICollection<Instruction> source)
         {
             var written = new HashSet<Instruction>(source);
@@ -1086,10 +1195,14 @@ internal sealed partial class MethodHandler : IMethodHandler
             {
                 // An instruction which the body holds stands where it stood, and one of another body, which a moved
                 // body carries, is not read against the instructions of this one.
-                if (instruction.Operand is not Instruction target || written.Contains(target)) continue;
+                if (instruction.Operand is not Instruction ins || written.Contains(ins)) continue;
 
-                var standing = Emitted(target);
-                if (standing != null) instruction.Operand = standing;
+                // What the branch was written to reach is what stands where the instruction it names stood, and an
+                // instruction which nothing stands for leaves the branch where it was: a branch which reaches an
+                // instruction of the template is one which reaches out of the body it is written in, which is not IL
+                // the runtime accepts.
+                var standing = Emitted(ins) ?? throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, "$" + Array.IndexOf(Target, ins)));
+                instruction.Operand = standing;
             }
         }
 

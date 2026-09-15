@@ -33,7 +33,12 @@
     <PropertyGroup>
         <!-- Where the Unity package of this library keeps the weaver. Unity loads the assemblies which a package ships
              rather than building them from source, so the one which is built here is copied there to keep the two in
-             step, and the copy is a part of the build rather than a step which is remembered. -->
+             step. The copy is asked for rather than made by every build, because the plugin is held by the repository
+             and every build of the framework below would write over it: a tree which was built in Debug would carry a
+             Debug weaver until something put the release one back, and a commit which took the tree whole would ship
+             it. A release asks for the copy, and so does a local build which is meant to update the plugin:
+
+                 dotnet build Inject\Source\Gneedle.Inject.csproj -f netstandard2.1 -c Release -p:CopyWeaverToUnity=true -->
         <UnityPluginDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\Unity\Plugins'))</UnityPluginDirectory>
     </PropertyGroup>
 
@@ -41,7 +46,8 @@
          of a Unity 2021.3 project are built against netstandard2.1, where the other two are for a driver which runs
          beside a build. A build of the other frameworks therefore leaves the plugin as it was, and so does a build
          which was already copied before it. -->
-    <Target Name="CopyToUnityPlugin" AfterTargets="Build" Condition="'$(TargetFramework)' == 'netstandard2.1'"
+    <Target Name="CopyToUnityPlugin" AfterTargets="Build"
+            Condition="'$(CopyWeaverToUnity)' == 'true' And '$(TargetFramework)' == 'netstandard2.1'"
             Inputs="$(TargetPath);$(TargetDir)$(TargetName).pdb"
             Outputs="$(UnityPluginDirectory)\$(TargetName).dll;$(UnityPluginDirectory)\$(TargetName).pdb">
         <ItemGroup>
