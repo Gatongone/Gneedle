@@ -1,6 +1,22 @@
 namespace Gneedle.Inject;
 
 /// <summary>
+/// The bound of the generic parameter tokens, which are the <c>T_</c> and the <c>M_</c> classes which this file declares.
+/// </summary>
+internal static class GenericTokens
+{
+    /// <summary>
+    /// The index of the last token of each kind, which is the highest position at which a template can name a generic
+    /// parameter.<para/>
+    /// The tokens are declared one class at a time, and the pattern which reads a token is made from this number rather
+    /// than holding one of its own: a token which is declared beyond the bound is a type which a template compiles
+    /// against and the weaving reads as an ordinary type of this library instead of as a generic parameter, which is a
+    /// body that is written and does not stand for what it says.
+    /// </summary>
+    internal const int HighestIndex = 20;
+}
+
+/// <summary>
 /// The generic parameter type of the type that the index of 0.
 /// </summary>
 public sealed class T_0 : Object;

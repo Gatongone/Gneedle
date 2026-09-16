@@ -656,6 +656,46 @@ public class GenericTokenTests
 
     #endregion
 
+    #region The tokens which are declared
+
+    /// <summary>
+    /// The numbers of the tokens which the library declares of one kind, read off the classes of it which are named
+    /// <c>Gneedle.Inject.{token}_</c> and the number of them.
+    /// </summary>
+    /// <param name="token">The letter which tells the token of the type from the token of the method.</param>
+    /// <returns>The numbers of the tokens, in the order of the numbers which they hold.</returns>
+    private static int[] DeclaredTokenIndexes(string token)
+    {
+        var prefix = $"{nameof(Gneedle)}.{nameof(Inject)}.{token}_";
+        return typeof(T_0).Assembly
+                          .GetTypes()
+                          .Select(type => type.FullName)
+                          .OfType<string>()
+                          .Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
+                          .Select(name => int.Parse(name.Substring(prefix.Length)))
+                          .OrderBy(index => index)
+                          .ToArray();
+    }
+
+    [Test]
+    public void The_Tokens_Which_Are_Declared_Are_The_Ones_Which_The_Weaving_Reads()
+    {
+        // A token is declared one class at a time and read by a pattern which is made from the bound of them, so the two
+        // are kept in step by the pattern rather than by hand: a token which is declared beyond the bound is a type which
+        // a template compiles against and the weaving reads as an ordinary type of the library, which is a body that is
+        // written and does not stand for what it says. This test is what holds the two together, because a class which
+        // is added to the file without the bound being moved is a mistake which nothing else reports.
+        var bound = Enumerable.Range(0, GenericTokens.HighestIndex + 1).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(DeclaredTokenIndexes("T"), Is.EqualTo(bound), "the tokens of the type which are declared are not the ones which the pattern reads.");
+            Assert.That(DeclaredTokenIndexes("M"), Is.EqualTo(bound), "the tokens of the method which are declared are not the ones which the pattern reads.");
+        });
+    }
+
+    #endregion
+
     /// <summary>
     /// Assert that neither the operand of the instruction nor the types it refers to hold a token type.
     /// </summary>

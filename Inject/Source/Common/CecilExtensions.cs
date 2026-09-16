@@ -203,10 +203,21 @@ internal static class CecilExtensions
     /// The token must be the whole type name. Otherwise a type which merely contains a token as its generic argument,
     /// just like <c>List&lt;Gneedle.Inject.T_0&gt;</c>, would be taken as the token itself.
     /// </remarks>
-    private static readonly Regex s_GenericTypeNamePattern = new(@$"^{nameof(Gneedle)}\.{nameof(Inject)}\.T_(1[0-9]|20|[0-9])$");
+    private static readonly Regex s_GenericTypeNamePattern = BuildTokenPattern("T");
 
     /// <inheritdoc cref="s_GenericTypeNamePattern"/>
-    private static readonly Regex s_GenericMethodNamePattern = new(@$"^{nameof(Gneedle)}\.{nameof(Inject)}\.M_(1[0-9]|20|[0-9])$");
+    private static readonly Regex s_GenericMethodNamePattern = BuildTokenPattern("M");
+
+    /// <summary>
+    /// Build the pattern which the token of a kind is read by, which is the name of the token and the number of it.<para/>
+    /// The numbers which the pattern reads are the ones which this library declares a token for, so the bound of them is
+    /// the one which the tokens are declared with rather than a second one written out here: a token which is declared
+    /// beyond it would be read as a type of this library rather than as the generic parameter it stands for.
+    /// </summary>
+    /// <param name="token">The letter which tells the token of the type from the token of the method.</param>
+    /// <returns>The pattern of the token.</returns>
+    private static Regex BuildTokenPattern(string token)
+        => new($@"^{nameof(Gneedle)}\.{nameof(Inject)}\.{token}_({string.Join("|", Enumerable.Range(0, GenericTokens.HighestIndex + 1))})$");
 
     /// <summary>
     /// Try to parse the index which the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] token of <paramref name="typeName"/> holds.
