@@ -204,6 +204,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="handler">The handler of the method.</param>
     /// <param name="template">The delegate which the template was made into.</param>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// this library builds, which holds nothing to write the value into.</exception>
     public static void SetBody(IMethodHandler handler, Delegate template)
         => SetBody(handler, template.Method, template.Target);
 
@@ -214,10 +216,20 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="handler">The handler of the method.</param>
     /// <param name="method">The template which holds the body to copy.</param>
     /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// this library builds, which holds nothing to write the value into.</exception>
     public static void SetBody(IMethodHandler handler, MethodInfo method, object? closure)
     {
-        if (closure != null && handler is MethodHandler concrete)
+        if (closure != null)
         {
+            // The value which the template captured is written into the method where the body is woven, which only the
+            // handler this library builds does: another implementation holds nothing for it, so the template is refused
+            // rather than read for the method alone, which would weave a body without the value which the template read.
+            if (handler is not MethodHandler concrete)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.HANDLER_HOLDS_NO_CAPTURE, handler.GetType().FullName));
+            }
+
             concrete.SetBody(method, closure);
             return;
         }
@@ -230,6 +242,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="handler">The handler of the method.</param>
     /// <param name="template">The delegate which the template was made into.</param>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// this library builds, which holds nothing to write the value into.</exception>
     public static void AroundBody(IMethodHandler handler, Delegate template)
         => AroundBody(handler, template.Method, template.Target);
 
@@ -240,10 +254,20 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="handler">The handler of the method.</param>
     /// <param name="method">The template which holds the body to weave around.</param>
     /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// this library builds, which holds nothing to write the value into.</exception>
     public static void AroundBody(IMethodHandler handler, MethodInfo method, object? closure)
     {
-        if (closure != null && handler is MethodHandler concrete)
+        if (closure != null)
         {
+            // The value which the template captured is written into the method where the body is woven, which only the
+            // handler this library builds does: another implementation holds nothing for it, so the template is refused
+            // rather than read for the method alone, which would weave a body without the value which the template read.
+            if (handler is not MethodHandler concrete)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.HANDLER_HOLDS_NO_CAPTURE, handler.GetType().FullName));
+            }
+
             concrete.AroundBody(method, closure);
             return;
         }

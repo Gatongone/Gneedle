@@ -22,6 +22,13 @@ internal static class ErrorMessages
     /// </summary>
     internal const string INVALID_IL = "The instructions which the template compiles the member into are not the shape which the weaving reads. Member: {0}.";
 
+    /// <summary>
+    /// The chain which describes a member was asked for a part of it after the member was built, which that member
+    /// holds nothing of: the chain is read where it builds the member, and what is described after that point reaches
+    /// nothing. The placeholder is the member.
+    /// </summary>
+    internal const string MEMBER_IS_ALREADY_BUILT = "The member which the decorator describes was built, so a part which is described after that is described to nothing. Member: {0}.";
+
     // Not supported exceptions:
 
     /// <summary>
@@ -205,6 +212,20 @@ internal static class ErrorMessages
     /// interface declares does. The placeholder is the template.
     /// </summary>
     internal const string TEMPLATE_HAS_NO_BODY = "The template holds no body, which a member which is abstract, a pinvoke, or a method which an interface declares is: there are no instructions of it to weave with. Template: {0}.";
+
+    /// <summary>
+    /// A body which a delegate describes was given to a decorator which this library does not build, which holds
+    /// nothing to write what the template captured into: the delegate is given rather than the method alone because the
+    /// value of a capture is read out of it, and a body which is described without that value is not the body which the
+    /// template says. The placeholder is the decorator.
+    /// </summary>
+    internal const string DECORATOR_HOLDS_NO_CAPTURE = "The decorator is not one which this library builds, so the delegate cannot be read for what the template captured. Decorator: {0}.";
+
+    /// <summary>
+    /// A template which a delegate holds was given to a handler which this library does not build, which holds nothing
+    /// to write what the template captured into. The placeholder is the handler.
+    /// </summary>
+    internal const string HANDLER_HOLDS_NO_CAPTURE = "The handler is not one which this library builds, so the delegate cannot be read for what the template captured. Handler: {0}.";
 
     /// <summary>
     /// The template reads a variable which it captured, and a value of that type cannot be written into the member

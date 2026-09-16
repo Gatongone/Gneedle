@@ -90,15 +90,42 @@ public static class PropertyExtensions
     /// <param name="decorator">The decorator which describes the property.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
+    /// <exception cref="ArgumentException">Thrown when the decorator is not the one which this library builds, which
+    /// holds nothing to write what the template captured into.</exception>
     public static PropertyDecorator.IAccessorDecorator WithGetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
-        => decorator is PropertyDecorator propertyDecorator ? propertyDecorator.WithGetter(delegation) : decorator.WithGetter(delegation.Method);
+    {
+        // The value of a capture is read out of the delegate where the body is woven, which only the decorator this
+        // library builds does: another implementation holds nothing for it, so the delegate is refused rather than read
+        // for the method alone, which would weave a body without the value which the template read.
+        if (decorator is not PropertyDecorator propertyDecorator)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
+        }
+
+        return propertyDecorator.WithGetter(delegation);
+    }
 
     /// <summary>
-    /// Set the body of the setter from the delegate which holds the IL to copy.
+    /// Set the body of the setter from the delegate which holds the IL to copy.<para/>
+    /// A template may capture the variables which it is written among, and the delegate is what holds the values of
+    /// them: it is given to the weaving rather than the method alone, so that what the template captured is written
+    /// into the accessor being woven.
     /// </summary>
     /// <param name="decorator">The decorator which describes the property.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
+    /// <exception cref="ArgumentException">Thrown when the decorator is not the one which this library builds, which
+    /// holds nothing to write what the template captured into.</exception>
     public static PropertyDecorator.IAccessorDecorator WithSetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
-        => decorator is PropertyDecorator propertyDecorator ? propertyDecorator.WithSetter(delegation) : decorator.WithSetter(delegation.Method);
+    {
+        // The value of a capture is read out of the delegate where the body is woven, which only the decorator this
+        // library builds does: another implementation holds nothing for it, so the delegate is refused rather than read
+        // for the method alone, which would weave a body without the value which the template read.
+        if (decorator is not PropertyDecorator propertyDecorator)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
+        }
+
+        return propertyDecorator.WithSetter(delegation);
+    }
 }

@@ -60,6 +60,13 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     private object? m_BodyClosure;
 
     /// <summary>
+    /// The handler of the method which the chain built, or null while the method is still being described: the chain
+    /// answers with it from the point where it ends, which is what makes a chain which is asked for the handler of the
+    /// method twice build one method rather than two of the same name.
+    /// </summary>
+    private IMethodHandler? m_Handler;
+
+    /// <summary>
     /// Create a decorator which describes a method before it is appended to the module.
     /// </summary>
     /// <param name="typeHandler">Handler of the type which the method is appended to.</param>
@@ -75,6 +82,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public IGenericParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
         m_GenericParameters.Add(new GenericParameterType(genericParameterName, constraints));
         return this;
     }
@@ -82,6 +90,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public IParameterDecorator WithParameter(Parameter parameter)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
         m_Parameters.Add(parameter);
         return this;
     }
@@ -89,6 +98,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public IParameterDecorator WithParameter(string name, IType parameterType)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
         m_Parameters.Add(new Parameter(name, parameterType));
         return this;
     }
@@ -96,6 +106,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public IParameterDecorator WithParameter(string name, Type parameterType)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
         m_Parameters.Add(new Parameter(name, parameterType.ToGneedleType()));
         return this;
     }
@@ -103,6 +114,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public IBodyDecorator WithReturnType(IType returnType)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
         m_ReturnType = returnType;
         return this;
     }
@@ -110,6 +122,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public IBodyDecorator WithReturnType(Type returnType)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
         m_ReturnType = returnType.ToGneedleType();
         return this;
     }
@@ -117,6 +130,8 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public ITypeDecorator WithBody(DefaultMethodBody body)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
+
         // The two ways of describing a body replace each other, so that the one which was asked for last is the one which
         // is applied.
         m_DefaultBody = body;
@@ -128,6 +143,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public ITypeDecorator WithBody(MethodInfo method)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
         m_BodyMethod  = method;
         m_DefaultBody = null;
         m_BodyClosure = null;
@@ -146,6 +162,10 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <inheritdoc/>
     public IMethodHandler GetHandler()
     {
+        // The method is appended to the type once, and the chain answers with the handler of it from then on: a chain
+        // which is asked for the handler of the method twice builds one method rather than two of the same name.
+        if (m_Handler is { } built) return built;
+
         var handler = m_TypeHandler.AddMethod(
             m_MethodName,
             m_ReturnType,
@@ -158,24 +178,30 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         if (m_BodyMethod is { } methodInfo) MethodHandler.SetBody(handler, methodInfo, m_BodyClosure);
         else if (m_DefaultBody is { } body) handler.SetBody(body);
 
+        m_Handler = handler;
         return handler;
     }
 
     /// <summary>
-    /// Decorator which completes the method. It is the end of the chain.
+    /// Decorator which completes the method. It is the end of the chain, which asks for the handler of the method which
+    /// the chain built and for nothing else.
     /// </summary>
     public interface ITypeDecorator
     {
         /// <summary>
-        /// Build method definition to module.
+        /// Build the method into the module and answer with the handler of the method which was built.<para/>
+        /// The method is built once: the chain answers with the handler of it from then on, and a part which is
+        /// described after that point is refused.
         /// </summary>
         /// <returns>Handler for method.</returns>
         IMethodHandler GetHandler();
     }
 
     /// <summary>
-    /// Decorator for describing method body. A body could only be described for a complete signature, so it is the
-    /// last part which could be described.
+    /// Decorator for describing method body. It is the last part of the chain, which the method is described to an end
+    /// by: the body is written for the signature which the levels before it made up, and a part which none of them
+    /// asked for keeps what it holds, which is the default of a method. So a method which holds no generic parameter,
+    /// no parameter and nothing to hand back is a method which this level alone describes.
     /// </summary>
     public interface IBodyDecorator : ITypeDecorator
     {
@@ -184,6 +210,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// </summary>
         /// <param name="body">Default method body.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the method was already built.</exception>
         ITypeDecorator WithBody(DefaultMethodBody body);
 
         /// <summary>
@@ -191,11 +218,13 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// </summary>
         /// <param name="method">Method which holds the body.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the method was already built.</exception>
         ITypeDecorator WithBody(MethodInfo method);
     }
 
     /// <summary>
-    /// Decorator for describing method return type.
+    /// Decorator for describing method return type. It is the level of the return type, which asks for the body as
+    /// well, because a body is written for the signature which the return type is a part of.
     /// </summary>
     public interface IReturnTypeDecorator : IBodyDecorator
     {
@@ -204,6 +233,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// </summary>
         /// <param name="returnType">Return type of method.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the method was already built.</exception>
         IBodyDecorator WithReturnType(IType returnType);
 
         /// <summary>
@@ -211,11 +241,14 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// </summary>
         /// <param name="returnType">Return type of method.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the method was already built.</exception>
         IBodyDecorator WithReturnType(Type returnType);
     }
 
     /// <summary>
-    /// Decorator for describing method parameters.
+    /// Decorator for describing method parameters. It is the level of the parameters, which asks for the return type
+    /// and the body as well, because both of those are the parts which come after the parameters in the order the parts
+    /// of a method depend on each other.
     /// </summary>
     public interface IParameterDecorator : IReturnTypeDecorator
     {
@@ -224,6 +257,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// </summary>
         /// <param name="parameter">Parameter name and type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the method was already built.</exception>
         IParameterDecorator WithParameter(Parameter parameter);
 
         /// <summary>
@@ -232,6 +266,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// <param name="name">Parameter name.</param>
         /// <param name="parameterType">Parameter type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the method was already built.</exception>
         IParameterDecorator WithParameter(string name, IType parameterType);
 
         /// <summary>
@@ -240,13 +275,19 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// <param name="name">Parameter name.</param>
         /// <param name="parameterType">Parameter type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the method was already built.</exception>
         IParameterDecorator WithParameter(string name, Type parameterType);
     }
 
     /// <summary>
-    /// Decorator for describing method generic parameters. It is the entry of the chain, which follows the order in
-    /// which the parts of a method depend on each other: the generic parameters, the parameters, the return type and
-    /// lastly the body. The flags are given to <c>ITypeHandler.AddMethod(name, flags)</c>.
+    /// Decorator for describing method generic parameters. It is the entry of the chain, which holds a level for each
+    /// part of a method in the order the parts depend on each other: the generic parameters, the parameters, the return
+    /// type and lastly the body. A level asks for the parts of itself and of the levels after it, so a part which the
+    /// method does not hold is passed by rather than described, and a level which was passed by is not asked for
+    /// again.<para/>
+    /// The chain describes the method until the method is built, which is where it ends: a part which is described
+    /// after that is refused, because what the chain holds is read where the method is built and nothing reads it
+    /// afterwards. The flags are given to <c>ITypeHandler.AddMethod(name, flags)</c>.
     /// </summary>
     public interface IGenericParameterDecorator : IParameterDecorator
     {
@@ -256,18 +297,37 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         /// <param name="genericParameterName">Generic parameter name.</param>
         /// <param name="constraints">Generic parameter constrains.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the method was already built.</exception>
         IGenericParameterDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
     }
 }
 
+/// <summary>
+/// Extensions for the decorator which describes a method, which name its body by a delegate.
+/// </summary>
 public static class MethodDecoratorExtensions
 {
     /// <summary>
-    /// Set the body of the method from the delegate which holds the IL to copy.
+    /// Set the body of the method from the delegate which holds the IL to copy.<para/>
+    /// A template may capture the variables which it is written among, and the delegate is what holds the values of
+    /// them: it is given to the weaving rather than the method alone, so that what the template captured is written
+    /// into the method being woven.
     /// </summary>
     /// <param name="decorator">The decorator which describes the method.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
+    /// <exception cref="ArgumentException">Thrown when the decorator is not the one which this library builds, which
+    /// holds nothing to write what the template captured into.</exception>
     public static MethodDecorator.ITypeDecorator WithBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
-        => decorator is MethodDecorator methodDecorator ? methodDecorator.WithBody(delegation) : decorator.WithBody(delegation.Method);
+    {
+        // The value of a capture is read out of the delegate where the body is woven, which only the decorator this
+        // library builds does: another implementation holds nothing for it, so the delegate is refused rather than read
+        // for the method alone, which would weave a body without the value which the template read.
+        if (decorator is not MethodDecorator methodDecorator)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
+        }
+
+        return methodDecorator.WithBody(delegation);
+    }
 }

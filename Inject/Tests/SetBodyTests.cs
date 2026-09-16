@@ -619,4 +619,69 @@ public class SetBodyTests
     }
 
     #endregion
+
+    #region The capture which a delegate holds
+
+    /// <summary>
+    /// A handler of a method which is not the one which this library builds, which holds nothing to write what a
+    /// template captured into.
+    /// </summary>
+    private sealed class ForeignMethodHandler : IMethodHandler
+    {
+        /// <summary>
+        /// The bodies which were described on it as the template alone, which stay empty where a delegate is refused
+        /// instead of being read for the method which it holds.
+        /// </summary>
+        internal List<MethodInfo> Bodies { get; } = [];
+
+        /// <inheritdoc cref="Bodies"/>
+        internal List<MethodInfo> Arounds { get; } = [];
+
+        /// <inheritdoc/>
+        public MethodFlags Flags => MethodFlags.Public;
+
+        /// <inheritdoc/>
+        public string Name => "Foreign";
+
+        /// <inheritdoc/>
+        public ITypeHandler DeclaringTypeHandler => throw new NotSupportedException("A handler of a test declares no type.");
+
+        /// <inheritdoc/>
+        public void SetBody(MethodInfo method) => Bodies.Add(method);
+
+        /// <inheritdoc/>
+        public void SetBody(DefaultMethodBody defaultMethodBody) { }
+
+        /// <inheritdoc/>
+        public void AroundBody(MethodInfo method) => Arounds.Add(method);
+
+        /// <inheritdoc/>
+        public bool ContainsAttribute(IType attributeType) => false;
+
+        /// <inheritdoc/>
+        public void AddAttribute(IType attributeType, params object[] arguments) { }
+    }
+
+    [Test]
+    public void A_Template_Which_Captured_A_Variable_Is_Refused_By_A_Handler_Of_Another_Implementation()
+    {
+        // What the template captured is held by the delegate rather than by the method, so a handler which this library
+        // does not build holds nothing to write it into: the value would be lost rather than woven, which is refused
+        // where the delegate is given rather than passed over.
+        var handler = new ForeignMethodHandler();
+        var captured = 41;
+
+        var body = Assert.Throws<ArgumentException>(() => handler.SetBody(() => captured));
+        var around = Assert.Throws<ArgumentException>(() => handler.AroundBody(() => captured));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(body!.Message, Does.Contain(nameof(ForeignMethodHandler)), "the message does not name the handler which was given.");
+            Assert.That(around!.Message, Does.Contain(nameof(ForeignMethodHandler)), "the message does not name the handler which was given.");
+            Assert.That(handler.Bodies, Is.Empty, "the body was described from the template alone, which loses what it captured.");
+            Assert.That(handler.Arounds, Is.Empty, "the around body was described from the template alone, which loses what it captured.");
+        });
+    }
+
+    #endregion
 }
