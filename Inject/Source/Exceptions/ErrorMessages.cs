@@ -62,9 +62,17 @@ internal static class ErrorMessages
     internal const string INVALID_TYPE_NAME = "The name does not name a type which the assembly holds.";
 
     /// <summary>
-    /// No constructor of an attribute takes the arguments which were given for it.
+    /// No constructor of an attribute takes the arguments which were given for it. The placeholder is the attribute
+    /// which the arguments were given for.
     /// </summary>
-    internal const string INVALID_PARAMETERS = "No constructor of the attribute takes the arguments which were given.";
+    internal const string INVALID_PARAMETERS = "No constructor of the attribute takes the arguments which were given. Attribute: {0}.";
+
+    /// <summary>
+    /// A null was given as one of the arguments of an attribute, which names no constructor: the type of an argument is
+    /// what a constructor is looked up by. The placeholders are the attribute which the arguments were given for and the
+    /// position of the null among them.
+    /// </summary>
+    internal const string NULL_ATTRIBUTE_ARGUMENT = "A null names no constructor, because the type of an argument is what one is looked up by. Attribute: {0}, Position: {1}.";
 
     /// <summary>
     /// The field which a template names cannot be resolved. The placeholder is that name.

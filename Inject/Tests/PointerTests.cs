@@ -144,6 +144,21 @@ public class PointerTests
         /// </summary>
         public static IntOp ObjectMethod_AsADelegate(HelperClass h) => new Object(h).Method<IntOp>("Calc");
 
+        /// <summary>
+        /// The instance of <c>Object</c> is named from a body which holds more locals than the macro opcodes of a local
+        /// address, so the ones beyond the third are stored and loaded in the operand form, whose operand the reader of
+        /// Cecil hands back as the variable itself rather than as the slot of it.
+        /// </summary>
+        public static int ObjectMethod_OfABodyWhichHoldsManyLocals(HelperClass h, int a)
+        {
+            var first = 1;
+            var second = first + 1;
+            var third = second + 1;
+            var fourth = third + 1;
+            var fifth = fourth + 1;
+            return new Object(h).Method<IntOp>("Calc")(a + fifth);
+        }
+
         // Object.Field get/set
         public static int ObjectField_Get(HelperClass h) => new Object(h).Field<int>("PublicField").Get();
         public static void ObjectField_Set(HelperClass h, int v) => new Object(h).Field<int>("PublicField").Set(v);
@@ -977,6 +992,28 @@ public class PointerTests
         var calc = (ObjectStaticTemplates.IntOp) type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new HelperClass()])!;
 
         Assert.That(calc(21), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void ObjectMethod_Of_A_Body_Which_Holds_Many_Locals_Is_Reached_Through_The_Instance_Which_Named_It()
+    {
+        // The stack which the weaving carries along the body while it looks for the call of the delegate is balanced over
+        // the locals of the template as well. A local beyond the third is stored and loaded in the operand form, whose
+        // operand the reader of Cecil hands back as the variable itself, which is read as the slot of it rather than cast.
+        var (_, host, method) = NewObjectHost("ObjectManyLocalsAssembly", [typeof(HelperClass), typeof(int)]);
+        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectMethod_OfABodyWhichHoldsManyLocals)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(instruction => instruction.Operand is MethodReference { Name: "Calc" }), Is.True,
+                    "the member which the template named was not called.");
+        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
+                    "the method is called on `this` rather than on the instance which the template named.");
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        var helper = new HelperClass();
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper, 16]), Is.EqualTo(42),
+                    "the body which held the locals was not woven into the member which runs.");
     }
 
     #endregion

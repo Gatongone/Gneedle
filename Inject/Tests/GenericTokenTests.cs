@@ -184,7 +184,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_10));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
     }
 
     [Test]
@@ -205,7 +205,9 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_1));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        var thrown = Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        Assert.That(thrown.Message, Does.Contain("T_1"), "the message does not name the token which was read.");
+        Assert.That(thrown.Message, Does.Contain(host.Source.FullName), "the message does not name the type which holds the parameters the token was counted on.");
     }
 
     [Test]
@@ -216,7 +218,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_20));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
     }
 
     #endregion
@@ -251,7 +253,9 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_0));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        var thrown = Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        Assert.That(thrown.Message, Does.Contain("M_0"), "the message does not name the token which was read.");
+        Assert.That(thrown.Message, Does.Contain(method.Source.FullName), "the message does not name the member which holds the parameters the token was counted on.");
     }
 
     [Test]
@@ -274,7 +278,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_10));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
     }
 
     #endregion
@@ -301,7 +305,7 @@ public class GenericTokenTests
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.SetBody(Template(nameof(Templates.ReturnSecondTypeGeneric))));
+        Assert.Throws<ArgumentException>(() => method.SetBody(Template(nameof(Templates.ReturnSecondTypeGeneric))));
     }
 
     #endregion
@@ -629,7 +633,7 @@ public class GenericTokenTests
     {
         var host = NewHost("T0");
 
-        Assert.Throws<IndexOutOfRangeException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
+        Assert.Throws<ArgumentException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
                                                                     MethodFlags.Public));
     }
 

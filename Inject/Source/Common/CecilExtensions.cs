@@ -55,21 +55,37 @@ internal static class CecilExtensions
         /// </summary>
         /// <param name="module">The provider of importing argument type references.</param>
         /// <param name="arguments">Arguments of the attribute constructor calling.</param>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown when <c>arguments</c> is null, which is a caller who left the arguments out rather than one who gave
+        /// none of them.
+        /// </exception>
         /// <exception cref="ArgumentException">
-        /// Thrown when the attribute doesn't contain any constructor which has argument types match with <c>parameters</c>.
+        /// Thrown when one of the arguments is null, which names no constructor, or when the attribute doesn't contain
+        /// any constructor which has argument types match with <c>arguments</c>.
         /// </exception>
         /// <returns>
         /// The custom attribute from <c>attributeDefinition</c> with parameters.
-        /// It would be null when the attribute definition not contains constructor with <c>parameters</c>.
         /// </returns>
         internal CustomAttribute CreateCustomAttribute(ModuleDefinition module, params object[] arguments)
         {
-            // Get argument types.
-            var argTypes = arguments.Select(parameter => parameter.GetType()).ToArray();
+            if (arguments == null) throw new ArgumentNullException(nameof(arguments));
+
+            // Get argument types. The type of an argument is what the constructor is looked up by, so a null names no
+            // constructor at all and is refused where it stands rather than read as a type of its own.
+            var argTypes = new Type[arguments.Length];
+            for (var index = 0; index < arguments.Length; index++)
+            {
+                if (arguments[index] == null)
+                {
+                    throw new ArgumentException(string.Format(ErrorMessages.NULL_ATTRIBUTE_ARGUMENT, attributeDefinition.FullName, index));
+                }
+
+                argTypes[index] = arguments[index].GetType();
+            }
 
             // Get the constructor matches with argTypes.
             var method = attributeDefinition.Methods.FirstOrDefault(method => method.IsConstructor && method.Parameters.SameWith(argTypes));
-            if (method == null) throw new ArgumentException(ErrorMessages.INVALID_PARAMETERS);
+            if (method == null) throw new ArgumentException(string.Format(ErrorMessages.INVALID_PARAMETERS, attributeDefinition.FullName));
 
             // Create custom attribute and append arguments. The constructor is imported rather than used as it is, because
             // the attribute is declared by another assembly whenever the type which carries it is not the one which
@@ -123,10 +139,15 @@ internal static class CecilExtensions
         }
 
         /// <summary>
-        /// Get stloc code index.
+        /// Get the slot of the local which a store names.
         /// </summary>
+        /// <remarks>
+        /// The slot is the position of the local among the variables of the body. The macro opcodes hold that slot in the
+        /// opcode, while the long ones hold it as an operand, which Cecil resolves to the variable itself wherever the
+        /// body still holds the method the operand belongs to, and leaves as the slot wherever it does not.
+        /// </remarks>
         /// <param name="index">Index of the stloc target. It would be -1 when return false.</param>
-        /// <returns>False when the instruction opcode is not a stloc type.</returns>
+        /// <returns>False when the instruction opcode is not a stloc type, or when its operand names no local.</returns>
         internal bool TryGetStlocIndex(out int index)
         {
             index = ins.OpCode.Code switch
@@ -135,18 +156,26 @@ internal static class CecilExtensions
                 Code.Stloc_1 => 1,
                 Code.Stloc_2 => 2,
                 Code.Stloc_3 => 3,
-                Code.Stloc_S => (int) ins.Operand,
-                Code.Stloc   => (int) ins.Operand,
-                _            => -1
+                Code.Stloc or Code.Stloc_S => ins.Operand switch
+                {
+                    int slot                   => slot,
+                    VariableReference variable => variable.Index,
+                    _                          => -1
+                },
+                _ => -1
             };
             return index != -1;
         }
 
         /// <summary>
-        /// Get ldloc code index.
+        /// Get the slot of the local which a load names.
         /// </summary>
+        /// <remarks>
+        /// The operand is read the way the one of a store is, which is described there. Both forms hand back the slot
+        /// rather than the variable, because a slot is what the caller addresses a local by.
+        /// </remarks>
         /// <param name="index">Index of the ldloc target. It would be -1 when return false.</param>
-        /// <returns>False when the instruction opcode is not a ldloc type.</returns>
+        /// <returns>False when the instruction opcode is not a ldloc type, or when its operand names no local.</returns>
         internal bool TryGetLdlocIndex(out int index)
         {
             index = ins.OpCode.Code switch
@@ -155,9 +184,13 @@ internal static class CecilExtensions
                 Code.Ldloc_1 => 1,
                 Code.Ldloc_2 => 2,
                 Code.Ldloc_3 => 3,
-                Code.Ldloc_S => (int) ins.Operand,
-                Code.Ldloc   => (int) ins.Operand,
-                _            => -1
+                Code.Ldloc or Code.Ldloc_S => ins.Operand switch
+                {
+                    int slot                   => slot,
+                    VariableReference variable => variable.Index,
+                    _                          => -1
+                },
+                _ => -1
             };
             return index != -1;
         }
@@ -212,7 +245,7 @@ internal static class CecilExtensions
     /// <param name="methodParameters">Generic parameters of the method.</param>
     /// <param name="parameter">The generic parameter which the token stands for.</param>
     /// <returns>Whether the <paramref name="type"/> is a token which could be resolved.</returns>
-    /// <exception cref="IndexOutOfRangeException">Throw when the token index out of the generic parameters count.</exception>
+    /// <exception cref="ArgumentException">Thrown when the token names a generic parameter at a position which neither the type being woven nor the method declares.</exception>
     internal static bool TryResolveGenericParameter(Type type, IMemberDefinition? typeProvider, IEnumerable<GenericParameter>? methodParameters,
                                                     out GenericParameter? parameter)
     {
@@ -226,7 +259,7 @@ internal static class CecilExtensions
             if (parameters == null) return false;
             if (index > parameters.Length - 1)
             {
-                throw new IndexOutOfRangeException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", type.FullName));
+                throw new ArgumentException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", type.FullName));
             }
 
             parameter = parameters[index];
@@ -243,7 +276,7 @@ internal static class CecilExtensions
         if (typeDef == null) return false;
         if (index > typeDef.GenericParameters.Count - 1)
         {
-            throw new IndexOutOfRangeException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
+            throw new ArgumentException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
         }
 
         parameter = typeDef.GenericParameters[index];
@@ -348,7 +381,7 @@ internal static class CecilExtensions
         /// <param name="provider">GenericParameters provider.</param>
         /// <param name="parameter">The generic parameter from type or method definition.</param>
         /// <returns>Whether the <c>typeReference</c> could passer as GenericParameter.</returns>
-        /// <exception cref="IndexOutOfRangeException">Throw when the <c>typeReference</c> index out of the <c>provider</c>'s GenericParameters count.</exception>
+        /// <exception cref="ArgumentException">Thrown when the <c>typeReference</c> names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal bool TryGetParsedGenericParameter(IMemberDefinition provider, out GenericParameter? parameter)
             => TryGetParsedGenericParameter(typeReference, provider, out parameter, out _, out _);
 
@@ -360,7 +393,7 @@ internal static class CecilExtensions
         /// <param name="index">The generic parameter index.</param>
         /// <param name="isFromMethod">Is the generic type from the method or from the method's declaring type.</param>
         /// <returns>Whether the <c>typeReference</c> could passer as GenericParameter.</returns>
-        /// <exception cref="IndexOutOfRangeException">Throw when the <c>typeReference</c> index out of the <c>provider</c>'s GenericParameters count.</exception>
+        /// <exception cref="ArgumentException">Thrown when the <c>typeReference</c> names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal bool TryGetParsedGenericParameter(IMemberDefinition provider, out GenericParameter? parameter, out int index, out bool isFromMethod)
         {
             parameter = default;
@@ -380,7 +413,7 @@ internal static class CecilExtensions
                 var typeParameters = typeDef.GenericParameters;
                 if (index > typeParameters.Count - 1)
                 {
-                    throw new IndexOutOfRangeException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
+                    throw new ArgumentException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
                 }
 
                 parameter = typeParameters[index];
@@ -392,7 +425,7 @@ internal static class CecilExtensions
             var methodParameters = methodDef.GenericParameters;
             if (index > methodParameters.Count - 1)
             {
-                throw new IndexOutOfRangeException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", methodDef.FullName));
+                throw new ArgumentException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", methodDef.FullName));
             }
 
             parameter = methodParameters[index];
@@ -409,7 +442,7 @@ internal static class CecilExtensions
         /// <returns>
         /// The type reference without any token. It is the generic parameter of the <c>provider</c> itself when the type reference is a token.
         /// </returns>
-        /// <exception cref="IndexOutOfRangeException">Throw when the token index out of the <c>provider</c>'s GenericParameters count.</exception>
+        /// <exception cref="ArgumentException">Thrown when a token of the type names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal TypeReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
         {
             // A type specification wraps another type, and the FullName of a wrapper which holds no affix
@@ -566,7 +599,7 @@ internal static class CecilExtensions
         /// <param name="provider">GenericParameters provider.</param>
         /// <param name="module">The module which the method reference belongs to.</param>
         /// <returns>The <c>methodReference</c> with all its tokens parsed.</returns>
-        /// <exception cref="IndexOutOfRangeException">Throw when the token index out of the <c>provider</c>'s GenericParameters count.</exception>
+        /// <exception cref="ArgumentException">Thrown when a token of the reference names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal MethodReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
         {
             methodReference.DeclaringType = methodReference.DeclaringType.ParseGenericTokens(provider, module);
@@ -602,7 +635,7 @@ internal static class CecilExtensions
         /// <param name="provider">GenericParameters provider.</param>
         /// <param name="module">The module which the field reference belongs to.</param>
         /// <returns>The <c>fieldReference</c> with all its tokens parsed.</returns>
-        /// <exception cref="IndexOutOfRangeException">Throw when the token index out of the <c>provider</c>'s GenericParameters count.</exception>
+        /// <exception cref="ArgumentException">Thrown when a token of the reference names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal FieldReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
         {
             fieldReference.DeclaringType = fieldReference.DeclaringType.ParseGenericTokens(provider, module);

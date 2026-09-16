@@ -93,7 +93,34 @@ public class AttributeTests
         var host = NewHost("AttributeArgumentAssembly");
 
         // MarkerAttribute takes a single string, so an int names no constructor of it.
-        Assert.Throws<ArgumentException>(() => host.AddAttribute<MarkerAttribute>(42));
+        var thrown = Assert.Throws<ArgumentException>(() => host.AddAttribute<MarkerAttribute>(42));
+
+        Assert.That(thrown.Message, Does.Contain(nameof(MarkerAttribute)), "the message does not name the attribute which holds no such constructor.");
+    }
+
+    [Test]
+    public void AddAttribute_With_A_Null_Argument_Throws()
+    {
+        // The type of an argument is what names the constructor which takes it, and the type of a null is none.
+        var host = NewHost("AttributeNullArgumentAssembly");
+        object? argument = null;
+
+        var thrown = Assert.Throws<ArgumentException>(() => host.AddAttribute<MarkerAttribute>(argument!));
+
+        Assert.That(thrown.Message, Does.Contain(nameof(MarkerAttribute)), "the message does not name the attribute which the null was given for.");
+    }
+
+    [Test]
+    public void AddAttribute_With_No_Arguments_Array_At_All_Throws()
+    {
+        // The arguments of an attribute are given one by one, so an array which holds none is not what a caller who
+        // passes none writes: a null array is a caller who left the arguments out rather than one who gave none, and the
+        // parameter which it was left for is the one the message names.
+        var host = NewHost("AttributeNullArgumentsAssembly");
+
+        var thrown = Assert.Throws<ArgumentNullException>(() => host.AddAttribute<MarkerAttribute>((object[]) null!));
+
+        Assert.That(thrown.ParamName, Is.EqualTo("arguments"));
     }
 
     [Test]
