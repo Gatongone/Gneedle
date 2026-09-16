@@ -84,9 +84,9 @@ public abstract class Assembly : IDisposable
     /// Create assembly.
     /// </summary>
     /// <inheritdoc cref="MemoryAssembly(string, byte[], byte[], byte[], string, ModuleKind)"/>
-    public static Assembly Create(string assemblyName, byte[]? publicKey = null, byte[]? pubicKeyToken = null, byte[]? hash = null, string? culture = null, ModuleKind moduleKind = ModuleKind.Dll)
+    public static Assembly Create(string assemblyName, byte[]? publicKey = null, byte[]? publicKeyToken = null, byte[]? hash = null, string? culture = null, ModuleKind moduleKind = ModuleKind.Dll)
     {
-        return new MemoryAssembly(assemblyName, publicKey, pubicKeyToken, hash, culture, moduleKind);
+        return new MemoryAssembly(assemblyName, publicKey, publicKeyToken, hash, culture, moduleKind);
     }
 
     /// <summary>
