@@ -100,10 +100,10 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
     /// <returns>Whether either of them was added, which is false when the project held both.</returns>
     private bool AddElements(ProjectRootElement project)
     {
-        var postBuild = project.RequireBuildEvent(BuildEventType.PostBuild, TaskConstants.TARGET, out var isTargetAdd);
+        var postBuild = project.RequirePostBuildTarget(TaskConstants.TARGET, out var isTargetChanged);
         if (!project.UsingTasks.Any(task => task.TaskName.Equals(typeof(AssemblyInject).FullName)))
         {
-            isTargetAdd = true;
+            isTargetChanged = true;
             project.AddUsingTask($"{ProjectName}.{nameof(AssemblyInject)}", TargetPath, string.Empty);
         }
 
@@ -114,7 +114,7 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
         // The target which is written here runs in a project which does not read the props of the package, so the
         // property is passed on where it is set and is left empty where it is not, which the task reads as its default.
         injectTask.SetParameter(nameof(AssemblyInject.KeepWeaver), $"$({TaskConstants.KEEP})");
-        return isTargetAdd || isTaskAdd;
+        return isTargetChanged || isTaskAdd;
     }
 
     /// <summary>

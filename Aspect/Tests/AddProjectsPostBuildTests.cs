@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Xml.Linq;
 
 namespace Gneedle.Aspect.Test;
 
@@ -64,6 +65,42 @@ public class AddProjectsPostBuildTests
             """);
         return path;
     }
+
+    /// <summary>
+    /// Write a project of the declaration given into a directory of its own, and return the path of it.<para/>
+    /// The declaration is what the project element of an SDK project wraps, so that a test writes the groups it is
+    /// about and nothing else.
+    /// </summary>
+    /// <param name="name">Name of the project, which is the name of its directory and of its file.</param>
+    /// <param name="declares">What the project declares.</param>
+    private string WriteProjectDeclaring(string name, string declares)
+    {
+        var directory = Path.Combine(m_WorkDirectory, name);
+        Directory.CreateDirectory(directory);
+
+        var path = Path.Combine(directory, $"{name}.csproj");
+        File.WriteAllText(path, $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+            {declares}</Project>
+            """);
+        return path;
+    }
+
+    /// <summary>
+    /// The target which a project declares under <paramref name="name"/>, or null when it declares none.
+    /// </summary>
+    /// <param name="project">The project which was read back from its file.</param>
+    /// <param name="name">Name of the target which is asked for.</param>
+    private static XElement? Target(XDocument project, string name)
+        => project.Descendants().FirstOrDefault(element => element.Name.LocalName == "Target" && (string?) element.Attribute("Name") == name);
+
+    /// <summary>
+    /// Whether a target runs the task which <paramref name="name"/> names, which is a child element of it rather than
+    /// anything its text holds.
+    /// </summary>
+    /// <param name="target">The target which is read.</param>
+    /// <param name="name">Name of the task which is asked for.</param>
+    private static bool Runs(XElement target, string name) => target.Elements().Any(element => element.Name.LocalName == name);
 
     /// <summary>
     /// Write a solution which holds the projects named, and a solution folder beside them when it is asked for, and
@@ -178,4 +215,185 @@ public class AddProjectsPostBuildTests
 
         Assert.That(File.ReadAllText(project), Does.Contain("KeepWeaver=\"$(KeepWeaver)\""));
     }
+
+    #region Reading a project the way the build reads it
+
+    [Test]
+    public void A_Target_Which_The_Project_Runs_On_The_Event_Is_Left_Alone()
+    {
+        // The target which the package writes is one of its own name, which is the name it is taken back out of a
+        // project by: a target which the project itself runs after the build is left where it is, and the target which
+        // weaves is added beside it rather than a task of the package being written into it.
+        var project = WriteProjectDeclaring("App", """
+            <PropertyGroup>
+              <TargetFramework>net5.0</TargetFramework>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="..\Gneedle.Aspect.csproj" />
+            </ItemGroup>
+            <Target Name="CopyTheOutput" AfterTargets="PostBuildEvent">
+              <Message Text="copied" Importance="high" />
+            </Target>
+
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        var written = XDocument.Load(project);
+        var woven = Target(written, "GneedleTarget");
+        Assert.That(woven, Is.Not.Null, "the target which weaves was not added to a project which runs a target of its own on the event.");
+        Assert.That(Runs(woven!, "AssemblyInject"), Is.True, "the target which weaves runs no task which weaves.");
+        Assert.That(Runs(Target(written, "CopyTheOutput")!, "AssemblyInject"), Is.False,
+                    "the task which weaves was written into a target which the project runs.");
+    }
+
+    [Test]
+    public void A_Property_Which_A_Later_Group_Sets_Is_The_One_Which_Is_Read()
+    {
+        // A project is read from its first line to its last, and a property holds the value of the last group which
+        // sets it: a project which turns the aspect off and on again is woven.
+        var project = WriteProjectDeclaring("App", """
+            <PropertyGroup>
+              <TargetFramework>net5.0</TargetFramework>
+              <Aspect>disable</Aspect>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="..\Gneedle.Aspect.csproj" />
+            </ItemGroup>
+            <PropertyGroup>
+              <Aspect>enable</Aspect>
+            </PropertyGroup>
+
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
+                    "a project which set the property back was left out of the weaving.");
+    }
+
+    [Test]
+    public void A_Property_Which_A_Later_Group_Sets_Back_Is_The_One_Which_Is_Read()
+    {
+        // The same the other way round, which is the order a project that was woven once and turns the aspect off
+        // again is written in.
+        var project = WriteProjectDeclaring("App", """
+            <PropertyGroup>
+              <TargetFramework>net5.0</TargetFramework>
+              <Aspect>enable</Aspect>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="..\Gneedle.Aspect.csproj" />
+            </ItemGroup>
+            <PropertyGroup>
+              <Aspect>disable</Aspect>
+            </PropertyGroup>
+
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(project), Does.Not.Contain("GneedleTarget"),
+                    "a project which turned the aspect off last was woven.");
+    }
+
+    [Test]
+    public void A_Property_Which_Is_Spelled_In_Another_Case_Is_Read()
+    {
+        // The build reads the name of a property without regard to case, so the property which the package reads is
+        // set by a project which spells it another way.
+        var project = WriteProjectDeclaring("App", """
+            <PropertyGroup>
+              <TargetFramework>net5.0</TargetFramework>
+              <aspect>disable</aspect>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="..\Gneedle.Aspect.csproj" />
+            </ItemGroup>
+
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(project), Does.Not.Contain("GneedleTarget"),
+                    "a project which turned the aspect off was woven.");
+    }
+
+    [Test]
+    public void A_Project_Reference_Which_Is_Spelled_In_Another_Case_Is_Read()
+    {
+        // A project reference names a file, and a file is the one its path names whatever the case of the letters in
+        // it, which is how the build reads the reference.
+        var project = WriteProjectDeclaring("App", """
+            <PropertyGroup>
+              <TargetFramework>net5.0</TargetFramework>
+            </PropertyGroup>
+            <ItemGroup>
+              <ProjectReference Include="..\gneedle.aspect.csproj" />
+            </ItemGroup>
+
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
+                    "a project which refers to the weaver was not woven.");
+    }
+
+    [Test]
+    public void A_Package_Reference_Which_Is_Spelled_In_Another_Case_Is_Read()
+    {
+        // A package is named by its id, which the registry it was published to holds without regard to case.
+        var project = WriteProjectDeclaring("App", """
+            <PropertyGroup>
+              <TargetFramework>net5.0</TargetFramework>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="gneedle.aspect" />
+            </ItemGroup>
+
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
+                    "a project which refers to the weaver was not woven.");
+    }
+
+    [Test]
+    public void An_Item_Which_Is_Spelled_In_Another_Case_Is_Read()
+    {
+        // The name of an item is read by the build without regard to case as well, so a project which writes the
+        // reference of the weaver another way is a project which refers to it.
+        var project = WriteProjectDeclaring("App", """
+            <PropertyGroup>
+              <TargetFramework>net5.0</TargetFramework>
+            </PropertyGroup>
+            <ItemGroup>
+              <projectreference Include="..\Gneedle.Aspect.csproj" />
+            </ItemGroup>
+
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
+                    "a project which refers to the weaver was not woven.");
+    }
+
+    #endregion
 }
