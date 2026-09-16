@@ -745,7 +745,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// The instruction which loads the receiver of a member which a template reached through an instance of its own.
     /// </summary>
     /// <remarks>
-    /// A template which names an instance of <c>Object</c> holds that instance in an argument of its own, and the member
+    /// A template which names an instance of <c>Instance</c> holds that instance in an argument of its own, and the member
     /// being woven holds the same argument at a slot which is the one the template names shifted by the receivers of the
     /// two. Writing the receiver of the member being woven instead is right only where the instance the template named
     /// is that receiver, which nothing makes it: the argument is what the template reached the member through, so it is
@@ -843,7 +843,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             DeclaringType:
             {
-                Name     : nameof(This) or nameof(Base) or nameof(Object) or nameof(Static),
+                Name     : nameof(This) or nameof(Base) or nameof(Instance) or nameof(Static),
                 Namespace: nameof(Gneedle) + "." + nameof(Inject)
             }
         } callingMethod)
@@ -956,7 +956,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     {
         // Only the members which a template names with a string are read this way: the instance which is pushed and the
         // type which another member is looked up on are reached through the instructions around the call.
-        if (member.DeclaringType.FullName is not (This.TYPE_NAME or Base.TYPE_NAME or Object.TYPE_NAME or Static.TYPE_NAME)) return;
+        if (member.DeclaringType.FullName is not (This.TYPE_NAME or Base.TYPE_NAME or Instance.TYPE_NAME or Static.TYPE_NAME)) return;
         if (member.Name is not (nameof(This.Field) or nameof(This.Property) or nameof(This.Method))) return;
 
         // The name is what the call follows, and it is read for a name which no load stands ahead of.
@@ -1015,11 +1015,11 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         // A call which names no member kind is one of two things: the half of a pair which the member named beside it
-        // is read with, which is the instance an Object symbol is made of or the type which a Static symbol is written
+        // is read with, which is the instance an Instance symbol is made of or the type which a Static symbol is written
         // from, or a call which names nothing the weaving reads at all. Leaving the second one where it is leaves a call
         // of a placeholder in the body, where nothing stands for a member of the type which is woven, so it throws for
         // the call at run time rather than for the template at the weaving.
-        else if (!memberSymbol.HasFlag(MemberSymbols.Static) && !memberSymbol.HasFlag(MemberSymbols.Object))
+        else if (!memberSymbol.HasFlag(MemberSymbols.Static) && !memberSymbol.HasFlag(MemberSymbols.Instance))
         {
             throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
@@ -1060,7 +1060,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             This.TYPE_NAME   => MemberSymbols.This,
             Base.TYPE_NAME   => MemberSymbols.Base,
-            Object.TYPE_NAME => MemberSymbols.Object,
+            Instance.TYPE_NAME => MemberSymbols.Instance,
             Static.TYPE_NAME => MemberSymbols.Static,
 
             // The only member which the pointer holds is the method which the advice proceeds through, so the kind of

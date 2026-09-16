@@ -111,15 +111,15 @@ public class GenericTokenTests
             return true;
         }
 
-        // The Object.Method templates whose receiver is typed by the token. The receiver is wrapped by
-        // `new Object(instance)`, which is the only way to place it before the `ldstr {method_name}`.
+        // The Instance.Method templates whose receiver is typed by the token. The receiver is wrapped by
+        // `new Instance(instance)`, which is the only way to place it before the `ldstr {method_name}`.
         public delegate string NameGetter();
 
-        public static string ObjectMethod_TokenReceiver(T_0 instance)
-            => new Object(instance).Method<NameGetter>("Name")();
+        public static string InstanceMethod_TokenReceiver(T_0 instance)
+            => new Instance(instance).Method<NameGetter>("Name")();
 
-        public static string ObjectMethod_SecondTokenReceiver(T_1 instance)
-            => new Object(instance).Method<NameGetter>("Name")();
+        public static string InstanceMethod_SecondTokenReceiver(T_1 instance)
+            => new Instance(instance).Method<NameGetter>("Name")();
     }
 
     private static TypeHandler NewHost(params string[] genericParameterNames)
@@ -540,14 +540,14 @@ public class GenericTokenTests
 
     #endregion
 
-    #region Tokens on the Object.Method path
+    #region Tokens on the Instance.Method path
 
     // The host is constrained so that the generic parameters have members to look up, which is the only way a member
     // call on a generic parameter typed instance could be produced as valid IL. The two constraints hold the same
     // method, so that the looked up one tells which generic parameter the token was mapped to.
     private static TypeHandler NewConstrainedHost()
     {
-        var handler = (AssemblyHandler) Assembly.Create("ObjectTokenAssembly").Handler;
+        var handler = (AssemblyHandler) Assembly.Create("InstanceTokenAssembly").Handler;
         return (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
                                        .WithGenericParameter("T0", Constraint.FromType<NamedHelperBase>())
                                        .WithGenericParameter("T1", Constraint.FromType<NamedSecondHelperBase>())
@@ -555,12 +555,12 @@ public class GenericTokenTests
     }
 
     [Test]
-    public void ObjectMethod_With_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_First_Generic_Parameter()
+    public void InstanceMethod_With_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_First_Generic_Parameter()
     {
         var host = NewConstrainedHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
 
-        method.SetBody(Template(nameof(Templates.ObjectMethod_TokenReceiver)));
+        method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiver)));
 
         var instructions = method.Source.Body.Instructions;
         // T_0 is the first generic parameter of the declaring type, so the method has to come from the first constraint.
@@ -568,17 +568,17 @@ public class GenericTokenTests
                                .FirstOrDefault(reference => reference.Name == nameof(NamedHelperBase.Name));
         Assert.That(call, Is.Not.Null);
         Assert.That(call!.DeclaringType.Name, Is.EqualTo(nameof(NamedHelperBase)));
-        Assert.That(instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
+        Assert.That(instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
         foreach (var instruction in instructions) AssertNoTokenType(instruction);
     }
 
     [Test]
-    public void ObjectMethod_With_Second_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_Second_Generic_Parameter()
+    public void InstanceMethod_With_Second_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_Second_Generic_Parameter()
     {
         var host = NewConstrainedHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T1"))], MethodFlags.Public);
 
-        method.SetBody(Template(nameof(Templates.ObjectMethod_SecondTokenReceiver)));
+        method.SetBody(Template(nameof(Templates.InstanceMethod_SecondTokenReceiver)));
 
         // The very same method name is held by both constraints, so the declaring type tells which one was used.
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()

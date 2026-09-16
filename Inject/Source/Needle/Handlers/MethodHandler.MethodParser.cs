@@ -106,17 +106,17 @@ partial class MethodHandler
                                     .Select(p => ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
                                     .ToArray();
 
-        // Detect Object.Method with new Object(param) syntax: need to skip the array init sequence.
+        // Detect Instance.Method with new Instance(param) syntax: need to skip the array init sequence.
         var skipArrayInitCount = 0;
         // The instance which the template reached the method through, which is the receiver of the call where the method
         // is not static: the sequence which builds the instance is dropped along with the name, so the argument it names
         // has to be loaded in place of the name.
         Instruction? receiverIns = null;
-        if (memberSymbol.HasFlag(MemberSymbols.Object) && nameIndex is { } name && name >= 1)
+        if (memberSymbol.HasFlag(MemberSymbols.Instance) && nameIndex is { } name && name >= 1)
         {
             var prevIns = filter.Target[name - 1];
             if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
-                && declType.FullName == Object.TYPE_NAME)
+                && declType.FullName == Instance.TYPE_NAME)
             {
                 // Verify the full array init pattern exists.
                 var baseIdx = name - 7;
@@ -151,7 +151,7 @@ partial class MethodHandler
         }
 
         // The index which is given is the one of the name, which is what the members reached through an instance of
-        // Object or Static are read against: a symbol which carries no name is not one of those, so the call stands in
+        // Instance or Static are read against: a symbol which carries no name is not one of those, so the call stands in
         // its place, where it is read by nothing.
         var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter.Target, parameters, targetDef);
         if (methodDef == null)
@@ -159,10 +159,10 @@ partial class MethodHandler
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
         }
 
-        // Skip the array init sequence if this is Object.Method with new Object(param), and the Static.From sequence if
+        // Skip the array init sequence if this is Instance.Method with new Instance(param), and the Static.From sequence if
         // this is Static.Method. The two are dropped whichever way the method is reached afterwards, which is the whole
         // of the sequence: a symbol which is handed back as a delegate reaches its member no less than one which invokes
-        // it, and the sequence which built the instance of `Object` is balanced by nothing but the name which ends it.
+        // it, and the sequence which built the instance of `Instance` is balanced by nothing but the name which ends it.
         if (skipArrayInitCount > 0 && nameIndex is { } arrayName)
         {
             for (var i = arrayName - skipArrayInitCount; i < arrayName; i++)
@@ -258,7 +258,7 @@ partial class MethodHandler
     /// a member of the instance the template names, a member of the type it names statically, or the method which holds
     /// the body that was taken over.<para/>
     /// The instructions and the position of the symbol among them are read as well, because the instance which a member
-    /// reached through <see cref="MemberSymbols.Object"/> or through <see cref="MemberSymbols.Static"/> belongs to is
+    /// reached through <see cref="MemberSymbols.Instance"/> or through <see cref="MemberSymbols.Static"/> belongs to is
     /// written in the instruction before the name, and the type of it is what the member is looked up on.
     /// </summary>
     /// <param name="memberSymbol">The symbol which the template reached the member through.</param>
@@ -298,17 +298,17 @@ partial class MethodHandler
             return proceed.Parameters.SameWith(parameters.ToArray()) ? proceed : null;
         }
 
-        if (memberSymbol.HasFlag(MemberSymbols.Object))
+        if (memberSymbol.HasFlag(MemberSymbols.Instance))
         {
             // The instruction before ldstr memberName may be:
             // 1. ldarg (direct parameter use) or
-            // 2. newobj Object::.ctor(object[]) — from new Object(instance) syntax.
-            //    Pattern: ldc.i4.1, newarr Object, dup, ldc.i4.0, ldarg.X, stelem.ref, newobj
+            // 2. newobj Instance::.ctor(object[]) — from new Instance(instance) syntax.
+            //    Pattern: ldc.i4.1, newarr Instance, dup, ldc.i4.0, ldarg.X, stelem.ref, newobj
             var prevIns = instructions[currentIndex - 1];
             Instruction? instanceIns = null;
 
             if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
-                && declType.FullName == Object.TYPE_NAME)
+                && declType.FullName == Instance.TYPE_NAME)
             {
                 // Backtrack to find the ldarg in the array initializer sequence.
                 // Expected: [currentIndex-7] ldc.i4.1, [-6] newarr, [-5] dup, [-4] ldc.i4.0, [-3] ldarg.X, [-2] stelem.ref, [-1] newobj

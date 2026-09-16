@@ -37,9 +37,9 @@ internal enum MemberSymbols
     Base = 0b0010000,
 
     /// <summary>
-    /// It stands for the operand should be parsed as other object pointer operation.
+    /// It stands for the operand should be parsed as the instance pointer which the template was given.
     /// </summary>
-    Object = 0b0100000,
+    Instance = 0b0100000,
 
     /// <summary>
     /// It stands for the operand should be parsed as other static pointer operation.
@@ -124,7 +124,7 @@ public static class This
     /// <param name="name">Property name.</param>
     /// <returns>The symbol of the property.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operation didn't be parsed.</exception>
-    public static ValuableMember<Object> Property(string name) => throw new InjectionNotEffectiveException();
+    public static ValuableMember<Instance> Property(string name) => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Get the field from <c>this</c> pointer.
@@ -132,7 +132,7 @@ public static class This
     /// <param name="name">Field name.</param>
     /// <returns>The symbol of the field.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
-    public static ValuableMember<Object> Field(string name) => throw new InjectionNotEffectiveException();
+    public static ValuableMember<Instance> Field(string name) => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Get the method from <c>this</c> pointer.
@@ -168,7 +168,7 @@ public static class Base
     /// <param name="name">Property name.</param>
     /// <returns>The symbol of the property.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operation didn't be parsed.</exception>
-    public static ValuableMember<Object> Property(string name) => throw new InjectionNotEffectiveException();
+    public static ValuableMember<Instance> Property(string name) => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Get the field from <c>base</c> pointer.
@@ -176,7 +176,7 @@ public static class Base
     /// <param name="name">Field name.</param>
     /// <returns>The symbol of the field.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
-    public static ValuableMember<Object> Field(string name) => throw new InjectionNotEffectiveException();
+    public static ValuableMember<Instance> Field(string name) => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Get the method from <c>base</c> pointer.
@@ -232,20 +232,22 @@ public static class Proceed
 }
 
 /// <summary>
-/// The symbol of the instance pointer.
+/// The symbol of the instance pointer.<para/>
+/// It is named after the instance which it holds rather than after the type of the framework, which it would otherwise
+/// shadow wherever a template is written among the usings of this library.
 /// </summary>
-public class Object
+public class Instance
 {
     /// <summary>
     /// Full name of the class.
     /// </summary>
-    internal const string TYPE_NAME = $"{nameof(Gneedle)}.{nameof(Inject)}.{nameof(Object)}";
+    internal const string TYPE_NAME = $"{nameof(Gneedle)}.{nameof(Inject)}.{nameof(Instance)}";
 
     /// <summary>
     /// Wrap the instance which the described member is read from or called on.
     /// </summary>
     /// <param name="args">The instance alone, so that the array which the compiler builds holds a single element.</param>
-    public Object(params object[] args) => throw new InjectionNotEffectiveException();
+    public Instance(params object[] args) => throw new InjectionNotEffectiveException();
 
     /// <inheritdoc cref="Property(string)"/>
     /// <typeparam name="TProperty">Property type.</typeparam>
@@ -261,7 +263,7 @@ public class Object
     /// <param name="name">Property name.</param>
     /// <returns>The symbol of the property.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operation didn't be parsed.</exception>
-    public ValuableMember<Object> Property(string name) => throw new InjectionNotEffectiveException();
+    public ValuableMember<Instance> Property(string name) => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Get the field from instance pointer.
@@ -269,7 +271,7 @@ public class Object
     /// <param name="name">Field name.</param>
     /// <returns>The symbol of the field.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
-    public ValuableMember<Object> Field(string name) => throw new InjectionNotEffectiveException();
+    public ValuableMember<Instance> Field(string name) => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Get the method from instance pointer.
@@ -313,7 +315,7 @@ public class Static
     /// <param name="name">Property name.</param>
     /// <returns>The symbol of the property.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operation didn't be parsed.</exception>
-    public ValuableMember<Object> Property(string name) => throw new InjectionNotEffectiveException();
+    public ValuableMember<Instance> Property(string name) => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Get the field from the static pointer.
@@ -321,7 +323,7 @@ public class Static
     /// <param name="name">Field name.</param>
     /// <returns>The symbol of the field.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
-    public ValuableMember<Object> Field(string name) => throw new InjectionNotEffectiveException();
+    public ValuableMember<Instance> Field(string name) => throw new InjectionNotEffectiveException();
 
     /// <summary>
     /// Get the method from the static pointer.

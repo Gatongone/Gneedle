@@ -15,7 +15,7 @@ Where an assembly is built decides that form of it is used, and the two are the 
 
 # Principle
 
-A template is an ordinary method. It reaches the members of the type it will be woven into through placeholders, that are calls into `Gneedle.Inject` — `This`, `Base`, `Object`, `Static`, `Proceed` — and it names a generic parameter of the target through the tokens `T_0`–`T_20` and `M_0`–`M_20`. Every placeholder throws when it runs, because a template is never meant to run as it is written; the weaver replaces each of them with the member it names.
+A template is an ordinary method. It reaches the members of the type it will be woven into through placeholders, that are calls into `Gneedle.Inject` — `This`, `Base`, `Instance`, `Static`, `Proceed` — and it names a generic parameter of the target through the tokens `T_0`–`T_20` and `M_0`–`M_20`. Every placeholder throws when it runs, because a template is never meant to run as it is written; the weaver replaces each of them with the member it names.
 
 Weaving is therefore a rewrite rather than a compilation. The body of the template is copied instruction by instruction, and each operand is pointed at the member of the target that the placeholder named: a field read becomes `ldfld` of that field, a call on `This` becomes a call on the type being woven, a token becomes a generic parameter of the method or of the type that declares it. A local variable or a branch of the template is remapped to its counterpart in the body that is being woven.
 
@@ -221,10 +221,12 @@ A default body is asked for the same way, when no template is needed: `WithBody(
 | `This.Field<T>("name")`, `This.Property<T>("name")`                                          | a field or a property of the type being woven, read and written through `Get` and `Set` |
 | `This.Method<TDelegate>("name")`                                                             | a method of the type being woven, called through the delegate that gives its signature  |
 | `Base.Field`, `Base.Property`, `Base.Method`                                                 | the same, on the type that the target derives from                                      |
-| `new Object(instance).Field`, `new Object(instance).Property`, `new Object(instance).Method` | the same, on an instance the template pushed                                            |
+| `new Instance(instance).Field`, `new Instance(instance).Property`, `new Instance(instance).Method` | the same, on an instance the template pushed                                       |
 | `Static.From("Full.Type.Name").Method`                                                       | the same, on a type named by a string                                                   |
 | `T_0`–`T_20`, `M_0`–`M_20`                                                                 | the first to the twenty-first generic parameter of the declaring type, or of the method |
 | `ValuableMember<T>`                                                                          | the value of a field or a property of a value type, which `ValuableMember` would box    |
+
+Each placeholder is named after what it reaches, and none of them is named after a type of the framework: a placeholder which was called `Object` would be the type which a template reads wherever it writes `Object` among the usings of this library, so that a field, a parameter or a return type which names the type of the framework would name the placeholder instead. The keyword `object` is not affected by it, and neither is a template which writes `System.Object` in full.
 
 The name which a placeholder is given is read out of the template itself, and the one instruction which the call follows is what holds it: a name is therefore one which the compiler writes there — a literal, a `nameof`, or a constant of the template — rather than one which the template computes while it runs.
 

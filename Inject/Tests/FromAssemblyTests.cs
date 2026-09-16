@@ -100,9 +100,9 @@ namespace Gneedle.Inject.Test
             public static Stub[] StubArray()          => new Stub[0];
             public static int    ReadNestedStubField() => OuterStub.Inner.Field;
 
-            public static string ObjectMethod_StubReceiver(Stub instance)   => new Object(instance).Method<NameGetter>("Read")();
-            public static int    ObjectField_StubReceiver(Stub instance)    => new Object(instance).Field<int>(nameof(Stub.Field)).Get();
-            public static int    ObjectProperty_StubReceiver(Stub instance) => new Object(instance).Property<int>(nameof(Stub.Property)).Get();
+            public static string InstanceMethod_StubReceiver(Stub instance)   => new Instance(instance).Method<NameGetter>("Read")();
+            public static int    InstanceField_StubReceiver(Stub instance)    => new Instance(instance).Field<int>(nameof(Stub.Field)).Get();
+            public static int    InstanceProperty_StubReceiver(Stub instance) => new Instance(instance).Property<int>(nameof(Stub.Property)).Get();
 
             public static int ReadAbsentStubField()       => AbsentStub.Field;
             public static int ReadUnresolvableStubField() => UnresolvableStub.Field;
@@ -233,7 +233,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Method()
         {
-            var method = Weave(nameof(Templates.ObjectMethod_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
+            var method = Weave(nameof(Templates.InstanceMethod_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
             var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                              .FirstOrDefault(reference => reference.Name == nameof(Stub.Read));
 
@@ -242,7 +242,7 @@ namespace Gneedle.Inject.Test
 
             // The marker itself is rewritten away, so none of its members survives.
             Assert.That(method.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference
-                                                                        && reference.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
+                                                                        && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
         }
 
         #endregion
@@ -347,7 +347,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Field()
         {
-            var method = Weave(nameof(Templates.ObjectField_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
+            var method = Weave(nameof(Templates.InstanceField_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
             var field = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<FieldReference>()
                               .FirstOrDefault(reference => reference.Name == nameof(Stub.Field));
 
@@ -358,7 +358,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Property()
         {
-            var method = Weave(nameof(Templates.ObjectProperty_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
+            var method = Weave(nameof(Templates.InstanceProperty_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
             var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                              .FirstOrDefault(reference => reference.Name == "get_Property");
 

@@ -13,7 +13,7 @@ namespace Gneedle.Inject.Test;
 
 /// <summary>
 /// Tests for the placeholders which a template reaches the members of the type it is woven into through: <c>This</c>,
-/// <c>Base</c>, <c>Object</c> and <c>Static</c>. Each of them is a call which throws when it runs, and each of them is
+/// <c>Base</c>, <c>Instance</c> and <c>Static</c>. Each of them is a call which throws when it runs, and each of them is
 /// rewritten to the member of the target which it names, which is what these tests read back out of the woven body.
 /// </summary>
 [TestFixture]
@@ -22,7 +22,7 @@ public class PointerTests
     private const string Ns = "Gneedle.Test.Generated";
 
     /// <summary>
-    /// The type which the templates of <c>Object</c> hold an instance of, and which the tests pass as the argument of a
+    /// The type which the templates of <c>Instance</c> hold an instance of, and which the tests pass as the argument of a
     /// method which is woven.
     /// </summary>
     public class HelperClass
@@ -128,67 +128,67 @@ public class PointerTests
     }
 
     /// <summary>
-    /// Templates which reach a member of an instance the template holds, through <c>Object</c>, and of a type which the
+    /// Templates which reach a member of an instance the template holds, through <c>Instance</c>, and of a type which the
     /// template names as a string, through <c>Static</c>.
     /// </summary>
-    public static class ObjectStaticTemplates
+    public static class InstanceStaticTemplates
     {
         public delegate int IntOp(int a);
 
-        // Object.Method with new Object(param) syntax
-        public static int ObjectMethod_NewSyntax(HelperClass h, int a) => new Object(h).Method<IntOp>("Calc")(a);
+        // Instance.Method with new Instance(param) syntax
+        public static int InstanceMethod_NewSyntax(HelperClass h, int a) => new Instance(h).Method<IntOp>("Calc")(a);
 
         /// <summary>
-        /// The delegate of <c>Object.Method</c> is handed back rather than invoked where the template names the method,
+        /// The delegate of <c>Instance.Method</c> is handed back rather than invoked where the template names the method,
         /// which is the shape the weaving reads without a call of it to follow.
         /// </summary>
-        public static IntOp ObjectMethod_AsADelegate(HelperClass h) => new Object(h).Method<IntOp>("Calc");
+        public static IntOp InstanceMethod_AsADelegate(HelperClass h) => new Instance(h).Method<IntOp>("Calc");
 
         /// <summary>
-        /// The instance of <c>Object</c> is named from a body which holds more locals than the macro opcodes of a local
+        /// The instance of <c>Instance</c> is named from a body which holds more locals than the macro opcodes of a local
         /// address, so the ones beyond the third are stored and loaded in the operand form, whose operand the reader of
         /// Cecil hands back as the variable itself rather than as the slot of it.
         /// </summary>
-        public static int ObjectMethod_OfABodyWhichHoldsManyLocals(HelperClass h, int a)
+        public static int InstanceMethod_OfABodyWhichHoldsManyLocals(HelperClass h, int a)
         {
             var first = 1;
             var second = first + 1;
             var third = second + 1;
             var fourth = third + 1;
             var fifth = fourth + 1;
-            return new Object(h).Method<IntOp>("Calc")(a + fifth);
+            return new Instance(h).Method<IntOp>("Calc")(a + fifth);
         }
 
-        // Object.Field get/set
-        public static int ObjectField_Get(HelperClass h) => new Object(h).Field<int>("PublicField").Get();
-        public static void ObjectField_Set(HelperClass h, int v) => new Object(h).Field<int>("PublicField").Set(v);
+        // Instance.Field get/set
+        public static int InstanceField_Get(HelperClass h) => new Instance(h).Field<int>("PublicField").Get();
+        public static void InstanceField_Set(HelperClass h, int v) => new Instance(h).Field<int>("PublicField").Set(v);
 
         /// <summary>
-        /// The field which the instance of <c>Object</c> names is static, so the member being woven is reached through
+        /// The field which the instance of <c>Instance</c> names is static, so the member being woven is reached through
         /// no receiver at all and the sequence which named the instance is dropped whole.
         /// </summary>
-        public static int ObjectStaticField_Get(HelperClass h) => new Object(h).Field<int>("StaticField").Get();
+        public static int InstanceStaticField_Get(HelperClass h) => new Instance(h).Field<int>("StaticField").Get();
 
         /// <summary>
-        /// The instance of <c>Object</c> is read off a parameter which no macro opcode of the template carries, so the
+        /// The instance of <c>Instance</c> is read off a parameter which no macro opcode of the template carries, so the
         /// load of it names the parameter rather than the slot, which is read back off the parameter it names.
         /// </summary>
-        public static int ObjectField_Get_OfALaterParameter(object a, object b, object c, object d, HelperClass h) => new Object(h).Field<int>("PublicField").Get();
+        public static int InstanceField_Get_OfALaterParameter(object a, object b, object c, object d, HelperClass h) => new Instance(h).Field<int>("PublicField").Get();
 
         /// <summary>
-        /// The instance of <c>Object</c> is held in a local of the template rather than read off a parameter where the
+        /// The instance of <c>Instance</c> is held in a local of the template rather than read off a parameter where the
         /// name of the field is written, so the sequence which names the type of the instance is not the one which the
         /// weaving reads a type off.
         /// </summary>
-        public static int ObjectField_OfAnInstanceInALocal(HelperClass h)
+        public static int InstanceField_OfAnInstanceInALocal(HelperClass h)
         {
             var instance = h;
-            return new Object(instance).Field<int>("PublicField").Get();
+            return new Instance(instance).Field<int>("PublicField").Get();
         }
 
-        // Object.Property get/set
-        public static int ObjectProperty_Get(HelperClass h) => new Object(h).Property<int>("PublicProperty").Get();
-        public static void ObjectProperty_Set(HelperClass h, int v) => new Object(h).Property<int>("PublicProperty").Set(v);
+        // Instance.Property get/set
+        public static int InstanceProperty_Get(HelperClass h) => new Instance(h).Property<int>("PublicProperty").Get();
+        public static void InstanceProperty_Set(HelperClass h, int v) => new Instance(h).Property<int>("PublicProperty").Set(v);
 
         // Static.Method with BCL type
         public static string StaticMethod_BCL() => Static.From("System.Environment").Method<Func<string>>("get_CommandLine")();
@@ -773,95 +773,95 @@ public class PointerTests
 
     #endregion
 
-    #region Object
+    #region Instance
 
     [Test]
-    public void ObjectMethod_With_NewObject_Syntax_Rewrites_To_Direct_Call()
+    public void InstanceMethod_With_NewInstance_Syntax_Rewrites_To_Direct_Call()
     {
-        var asm = Assembly.Create("ObjectPointerAssembly");
+        var asm = Assembly.Create("InstancePointerAssembly");
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
             [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectMethod_NewSyntax)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_NewSyntax)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
-        // Should rewrite to call/callvirt HelperClass::Calc, not call Object::Method
+        // Should rewrite to call/callvirt HelperClass::Calc, not call Instance::Method
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
                                  && i.Operand is MethodReference mr && mr.Name == "Calc"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MethodReference mr && mr.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
+        Assert.That(ins.Any(i => i.Operand is MethodReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
     }
 
     [Test]
-    public void ObjectField_Get_Rewrites_To_Ldfld()
+    public void InstanceField_Get_Rewrites_To_Ldfld()
     {
-        var asm = Assembly.Create("ObjectFieldAssembly");
+        var asm = Assembly.Create("InstanceFieldAssembly");
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_Get)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld && i.Operand is FieldReference fr && fr.Name == "PublicField"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
+        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
     }
 
     [Test]
-    public void ObjectField_Set_Rewrites_To_Stfld()
+    public void InstanceField_Set_Rewrites_To_Stfld()
     {
-        var asm = Assembly.Create("ObjectFieldAssembly");
+        var asm = Assembly.Create("InstanceFieldAssembly");
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_Set)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld && i.Operand is FieldReference fr && fr.Name == "PublicField"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
+        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
     }
 
     [Test]
-    public void ObjectProperty_Get_Rewrites_To_Call_Getter()
+    public void InstanceProperty_Get_Rewrites_To_Call_Getter()
     {
-        var asm = Assembly.Create("ObjectPropertyAssembly");
+        var asm = Assembly.Create("InstancePropertyAssembly");
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectProperty_Get)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_Get)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
                                  && i.Operand is MethodReference mr && mr.Name == "get_PublicProperty"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
+        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
     }
 
     [Test]
-    public void ObjectProperty_Set_Rewrites_To_Call_Setter()
+    public void InstanceProperty_Set_Rewrites_To_Call_Setter()
     {
-        var asm = Assembly.Create("ObjectPropertyAssembly");
+        var asm = Assembly.Create("InstancePropertyAssembly");
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectProperty_Set)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
                                  && i.Operand is MethodReference mr && mr.Name == "set_PublicProperty"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
+        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
     }
 
     [Test]
-    public void ObjectField_Of_An_Instance_Which_Is_Held_In_A_Local_Throws()
+    public void InstanceField_Of_An_Instance_Which_Is_Held_In_A_Local_Throws()
     {
         // The type which the field is looked up on is named by the sequence which leads to the name of the field, and a
         // sequence which the weaving does not recognize names no type at all. The name is not looked up on the member
@@ -871,19 +871,19 @@ public class PointerTests
         var host = NewHostWithField("PublicField", isStatic: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_OfAnInstanceInALocal))));
+        var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnInstanceInALocal))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
     }
 
     /// <summary>
     /// Create an assembly which holds a type of one method, which takes the arguments which the templates of
-    /// <c>Object</c> name and belongs to an instance unless it is asked not to.
+    /// <c>Instance</c> name and belongs to an instance unless it is asked not to.
     /// </summary>
     /// <param name="assemblyName">The name of the assembly, which is the identity the runtime loads it by.</param>
     /// <param name="parameters">The arguments of the member which is woven.</param>
     /// <param name="isStatic">Whether the member which is woven belongs to no instance.</param>
-    private static (Assembly Assembly, TypeHandler Host, MethodHandler Method) NewObjectHost(string assemblyName, Type[] parameters, bool isStatic = false)
+    private static (Assembly Assembly, TypeHandler Host, MethodHandler Method) NewInstanceHost(string assemblyName, Type[] parameters, bool isStatic = false)
     {
         var assembly = Assembly.Create(assemblyName);
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
@@ -924,26 +924,26 @@ public class PointerTests
     }
 
     [Test]
-    public void ObjectField_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
+    public void InstanceField_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
     {
         // The instance which the template names is a parameter of the template, and the member being woven holds that
         // argument at a slot of its own: what stands ahead of the field access is the load of that argument. The load
         // of `this` which stood there instead is another object than the one the template named, which the runtime
         // refuses where the types of the two do not meet.
-        var (_, _, method) = NewObjectHost("ObjectFieldReceiverAssembly", [typeof(HelperClass)]);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_Get)));
+        var (_, _, method) = NewInstanceHost("InstanceFieldReceiverAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get)));
 
         Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "PublicField").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
                     "the field is reached through `this` rather than through the instance which the template named.");
     }
 
     [Test]
-    public void ObjectField_Of_A_Later_Parameter_Loads_That_Argument_By_Its_Slot()
+    public void InstanceField_Of_A_Later_Parameter_Loads_That_Argument_By_Its_Slot()
     {
         // A slot which no macro opcode of the member being woven carries is written as the operand form, which names the
         // parameter rather than the slot, so what the receiver is read back off is the parameter the template named.
-        var (_, _, method) = NewObjectHost("ObjectLaterParameterAssembly", [typeof(object), typeof(object), typeof(object), typeof(object), typeof(HelperClass)]);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_Get_OfALaterParameter)));
+        var (_, _, method) = NewInstanceHost("InstanceLaterParameterAssembly", [typeof(object), typeof(object), typeof(object), typeof(object), typeof(HelperClass)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get_OfALaterParameter)));
 
         var receiver = ReceiverOf(method.Source.Body.Instructions.ToArray(), "PublicField");
         Assert.That(receiver.OpCode, Is.EqualTo(OpCodes.Ldarg));
@@ -952,33 +952,33 @@ public class PointerTests
     }
 
     [Test]
-    public void ObjectProperty_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
+    public void InstanceProperty_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
     {
-        var (_, _, method) = NewObjectHost("ObjectPropertyReceiverAssembly", [typeof(HelperClass)]);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectProperty_Get)));
+        var (_, _, method) = NewInstanceHost("InstancePropertyReceiverAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_Get)));
 
         Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "get_PublicProperty").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
                     "the property is reached through `this` rather than through the instance which the template named.");
     }
 
     [Test]
-    public void ObjectMethod_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
+    public void InstanceMethod_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
     {
-        var (_, _, method) = NewObjectHost("ObjectMethodReceiverAssembly", [typeof(HelperClass), typeof(int)]);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectMethod_NewSyntax)));
+        var (_, _, method) = NewInstanceHost("InstanceMethodReceiverAssembly", [typeof(HelperClass), typeof(int)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_NewSyntax)));
 
         Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "Calc", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldarg_1),
                     "the method is called on `this` rather than on the instance which the template named.");
     }
 
     [Test]
-    public void ObjectField_Of_A_Static_Field_Is_Reached_Through_No_Receiver()
+    public void InstanceField_Of_A_Static_Field_Is_Reached_Through_No_Receiver()
     {
-        // The field which the instance of `Object` names belongs to the type alone, so the member being woven holds no
+        // The field which the instance of `Instance` names belongs to the type alone, so the member being woven holds no
         // receiver for it: the sequence which named the instance is dropped whole, and the load of a `this` written
         // where the member is static is a body which the runtime refuses to run.
-        var (_, _, method) = NewObjectHost("ObjectStaticFieldReceiverAssembly", [typeof(HelperClass)]);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectStaticField_Get)));
+        var (_, _, method) = NewInstanceHost("InstanceStaticFieldReceiverAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceStaticField_Get)));
 
         var ins = method.Source.Body.Instructions.ToArray();
         Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && field.Name == "StaticField"), Is.True,
@@ -988,12 +988,12 @@ public class PointerTests
     }
 
     [Test]
-    public void ObjectMethod_Of_A_Parameter_Reads_The_Instance_Which_Was_Given()
+    public void InstanceMethod_Of_A_Parameter_Reads_The_Instance_Which_Was_Given()
     {
         // What the tests above read out of the body, run: a receiver which is the load of `this` reads the member of
         // another object than the one which was given, which is what the runtime refuses.
-        var (_, host, method) = NewObjectHost("ObjectFieldReceiverRunAssembly", [typeof(HelperClass)]);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_Get)));
+        var (_, host, method) = NewInstanceHost("InstanceFieldReceiverRunAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get)));
 
         var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
         var helper = new HelperClass { PublicField = 21 };
@@ -1002,34 +1002,34 @@ public class PointerTests
     }
 
     [Test]
-    public void ObjectMethod_Which_Is_Handed_Back_As_A_Delegate_Is_Reached_Through_The_Instance_Which_Named_It()
+    public void InstanceMethod_Which_Is_Handed_Back_As_A_Delegate_Is_Reached_Through_The_Instance_Which_Named_It()
     {
         // The method is not invoked where the template names it, so the instructions which named the type of it stand in
-        // the body until the delegate is built from the pointer of it. The sequence which built the instance of `Object`
+        // the body until the delegate is built from the pointer of it. The sequence which built the instance of `Instance`
         // is dropped with them, which it was not: what was left of it was an array on the stack of the woven member.
-        var (_, host, method) = NewObjectHost("ObjectDelegateReceiverAssembly", [typeof(HelperClass)]);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectMethod_AsADelegate)));
+        var (_, host, method) = NewInstanceHost("InstanceDelegateReceiverAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_AsADelegate)));
 
         var ins = method.Source.Body.Instructions.ToArray();
         Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Newarr), Is.False,
-                    "the array which built the instance of `Object` was left in the body.");
+                    "the array which built the instance of `Instance` was left in the body.");
         Assert.That(ReceiverOf(ins, "Calc").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
                     "the pointer of the method was taken ahead of `this` rather than of the instance which the template named.");
 
         var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
-        var calc = (ObjectStaticTemplates.IntOp) type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new HelperClass()])!;
+        var calc = (InstanceStaticTemplates.IntOp) type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new HelperClass()])!;
 
         Assert.That(calc(21), Is.EqualTo(42));
     }
 
     [Test]
-    public void ObjectMethod_Of_A_Body_Which_Holds_Many_Locals_Is_Reached_Through_The_Instance_Which_Named_It()
+    public void InstanceMethod_Of_A_Body_Which_Holds_Many_Locals_Is_Reached_Through_The_Instance_Which_Named_It()
     {
         // The stack which the weaving carries along the body while it looks for the call of the delegate is balanced over
         // the locals of the template as well. A local beyond the third is stored and loaded in the operand form, whose
         // operand the reader of Cecil hands back as the variable itself, which is read as the slot of it rather than cast.
-        var (_, host, method) = NewObjectHost("ObjectManyLocalsAssembly", [typeof(HelperClass), typeof(int)]);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectMethod_OfABodyWhichHoldsManyLocals)));
+        var (_, host, method) = NewInstanceHost("InstanceManyLocalsAssembly", [typeof(HelperClass), typeof(int)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfABodyWhichHoldsManyLocals)));
 
         var ins = method.Source.Body.Instructions.ToArray();
         Assert.That(ins.Any(instruction => instruction.Operand is MethodReference { Name: "Calc" }), Is.True,
@@ -1056,7 +1056,7 @@ public class PointerTests
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
         var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.StaticMethod_BCL)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticMethod_BCL)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -1080,7 +1080,7 @@ public class PointerTests
         staticClass.Source.Methods.Add(staticMethod);
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.StaticMethod_Local)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticMethod_Local)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -1102,7 +1102,7 @@ public class PointerTests
         staticClass.Source.Fields.Add(new FieldDefinition("StaticField", FieldAttributes.Public | FieldAttributes.Static, asm.Source.MainModule.TypeSystem.Int32));
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.StaticField_Get)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticField_Get)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -1119,7 +1119,7 @@ public class PointerTests
         var host = NewHostWithField("StaticField", isStatic: true);
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.StaticField_OfATypeInALocal))));
+        var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticField_OfATypeInALocal))));
 
         Assert.That(thrown!.Message, Does.Contain("StaticField"));
     }
@@ -1136,7 +1136,7 @@ public class PointerTests
         staticClass.Source.Fields.Add(new FieldDefinition("StaticField", FieldAttributes.Public | FieldAttributes.Static, asm.Source.MainModule.TypeSystem.Int32));
 
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.StaticField_Set)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticField_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -1161,7 +1161,7 @@ public class PointerTests
         staticClass.Source.Properties.Add(prop);
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.StaticProperty_Get)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticProperty_Get)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -1210,12 +1210,40 @@ public class PointerTests
         staticClass.Source.Properties.Add(prop);
 
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.StaticProperty_Set)));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticProperty_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && i.Operand is MethodReference mr && mr.Name == "set_StaticProperty"), Is.True);
         Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
+    }
+
+    #endregion
+
+    #region The name which the placeholder of the instance is declared under
+
+    /// <summary>
+    /// The placeholder which wraps the instance a template holds is declared under a name which says what it holds,
+    /// because a placeholder which was named after the type of the framework is the type which a template reads
+    /// wherever it writes that name among the usings of this library, the keyword <c>object</c> and the full name of
+    /// the type being all that is left of it: a template which declares a field, a parameter, a local or a return type
+    /// of that name reads the placeholder, and the body which is written from it names a member of the type being woven
+    /// where it meant to name a type of the framework.<para/>
+    /// The name which the weaving answers a member reference by is the full name of the class, which is built from the
+    /// name of the class where the class is declared: the class and the name are read together, so that a class which
+    /// is renamed is a class which the weaving knows by the name which it holds now.
+    /// </summary>
+    [Test]
+    public void The_Placeholder_Of_The_Instance_Is_Declared_Under_A_Name_Which_Shadows_Nothing()
+    {
+        var placeholder = typeof(This).Assembly.GetType("Gneedle.Inject.Instance");
+        Assert.That(placeholder, Is.Not.Null, "the placeholder of the instance is not declared under a name which says what it holds.");
+
+        var typeName = placeholder!.GetField("TYPE_NAME", BindingFlags.NonPublic | BindingFlags.Static)?.GetRawConstantValue() as string;
+        Assert.That(typeName, Is.EqualTo("Gneedle.Inject.Instance"), "the name which the weaving knows the placeholder by is not the full name of the class.");
+
+        Assert.That(typeof(This).Assembly.GetType("Gneedle.Inject.Object"), Is.Null,
+            "a class of this library is declared under a name which shadows the type of the framework.");
     }
 
     #endregion
