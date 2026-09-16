@@ -29,6 +29,7 @@ public class PointerTests
     {
         public int Calc(int a) => a * 2;
         public int PublicField;
+        public static int StaticField;
         public int PublicProperty { get; set; }
     }
 
@@ -137,9 +138,27 @@ public class PointerTests
         // Object.Method with new Object(param) syntax
         public static int ObjectMethod_NewSyntax(HelperClass h, int a) => new Object(h).Method<IntOp>("Calc")(a);
 
+        /// <summary>
+        /// The delegate of <c>Object.Method</c> is handed back rather than invoked where the template names the method,
+        /// which is the shape the weaving reads without a call of it to follow.
+        /// </summary>
+        public static IntOp ObjectMethod_AsADelegate(HelperClass h) => new Object(h).Method<IntOp>("Calc");
+
         // Object.Field get/set
         public static int ObjectField_Get(HelperClass h) => new Object(h).Field<int>("PublicField").Get();
         public static void ObjectField_Set(HelperClass h, int v) => new Object(h).Field<int>("PublicField").Set(v);
+
+        /// <summary>
+        /// The field which the instance of <c>Object</c> names is static, so the member being woven is reached through
+        /// no receiver at all and the sequence which named the instance is dropped whole.
+        /// </summary>
+        public static int ObjectStaticField_Get(HelperClass h) => new Object(h).Field<int>("StaticField").Get();
+
+        /// <summary>
+        /// The instance of <c>Object</c> is read off a parameter which no macro opcode of the template carries, so the
+        /// load of it names the parameter rather than the slot, which is read back off the parameter it names.
+        /// </summary>
+        public static int ObjectField_Get_OfALaterParameter(object a, object b, object c, object d, HelperClass h) => new Object(h).Field<int>("PublicField").Get();
 
         /// <summary>
         /// The instance of <c>Object</c> is held in a local of the template rather than read off a parameter where the
@@ -812,6 +831,152 @@ public class PointerTests
         var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_OfAnInstanceInALocal))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
+    }
+
+    /// <summary>
+    /// Create an assembly which holds a type of one method, which takes the arguments which the templates of
+    /// <c>Object</c> name and belongs to an instance unless it is asked not to.
+    /// </summary>
+    /// <param name="assemblyName">The name of the assembly, which is the identity the runtime loads it by.</param>
+    /// <param name="parameters">The arguments of the member which is woven.</param>
+    /// <param name="isStatic">Whether the member which is woven belongs to no instance.</param>
+    private static (Assembly Assembly, TypeHandler Host, MethodHandler Method) NewObjectHost(string assemblyName, Type[] parameters, bool isStatic = false)
+    {
+        var assembly = Assembly.Create(assemblyName);
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [],
+            parameters.Select(type => new Parameter(type.ToGneedleType())).ToArray(),
+            MethodFlags.Public | (isStatic ? MethodFlags.Static : 0));
+
+        if (isStatic) return (assembly, host, method);
+
+        // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it,
+        // which is what the tests below do to run the member which they wove.
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        return (assembly, host, method);
+    }
+
+    /// <summary>
+    /// The instruction which was written ahead of the arguments of the one which reaches the member of the given name,
+    /// which is the receiver of it.
+    /// </summary>
+    /// <param name="instructions">The body of the member which was woven.</param>
+    /// <param name="member">The name of the member which the instruction reaches.</param>
+    /// <param name="arguments">How many arguments the instruction which reaches the member reads, which stand between it and the receiver.</param>
+    private static Instruction ReceiverOf(Instruction[] instructions, string member, int arguments = 0)
+    {
+        for (var index = 1; index < instructions.Length; index++)
+        {
+            if (instructions[index].Operand is MemberReference reference && reference.Name == member) return instructions[index - 1 - arguments];
+        }
+
+        Assert.Fail($"No instruction reaching '{member}' was written.");
+        return null!;
+    }
+
+    [Test]
+    public void ObjectField_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
+    {
+        // The instance which the template names is a parameter of the template, and the member being woven holds that
+        // argument at a slot of its own: what stands ahead of the field access is the load of that argument. The load
+        // of `this` which stood there instead is another object than the one the template named, which the runtime
+        // refuses where the types of the two do not meet.
+        var (_, _, method) = NewObjectHost("ObjectFieldReceiverAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_Get)));
+
+        Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "PublicField").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
+                    "the field is reached through `this` rather than through the instance which the template named.");
+    }
+
+    [Test]
+    public void ObjectField_Of_A_Later_Parameter_Loads_That_Argument_By_Its_Slot()
+    {
+        // A slot which no macro opcode of the member being woven carries is written as the operand form, which names the
+        // parameter rather than the slot, so what the receiver is read back off is the parameter the template named.
+        var (_, _, method) = NewObjectHost("ObjectLaterParameterAssembly", [typeof(object), typeof(object), typeof(object), typeof(object), typeof(HelperClass)]);
+        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_Get_OfALaterParameter)));
+
+        var receiver = ReceiverOf(method.Source.Body.Instructions.ToArray(), "PublicField");
+        Assert.That(receiver.OpCode, Is.EqualTo(OpCodes.Ldarg));
+        Assert.That(((ParameterReference) receiver.Operand).Index, Is.EqualTo(4),
+                    "the argument was loaded from the slot of another parameter.");
+    }
+
+    [Test]
+    public void ObjectProperty_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
+    {
+        var (_, _, method) = NewObjectHost("ObjectPropertyReceiverAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectProperty_Get)));
+
+        Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "get_PublicProperty").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
+                    "the property is reached through `this` rather than through the instance which the template named.");
+    }
+
+    [Test]
+    public void ObjectMethod_Of_A_Parameter_Loads_The_Argument_Which_Holds_It()
+    {
+        var (_, _, method) = NewObjectHost("ObjectMethodReceiverAssembly", [typeof(HelperClass), typeof(int)]);
+        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectMethod_NewSyntax)));
+
+        Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "Calc", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldarg_1),
+                    "the method is called on `this` rather than on the instance which the template named.");
+    }
+
+    [Test]
+    public void ObjectField_Of_A_Static_Field_Is_Reached_Through_No_Receiver()
+    {
+        // The field which the instance of `Object` names belongs to the type alone, so the member being woven holds no
+        // receiver for it: the sequence which named the instance is dropped whole, and the load of a `this` written
+        // where the member is static is a body which the runtime refuses to run.
+        var (_, _, method) = NewObjectHost("ObjectStaticFieldReceiverAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectStaticField_Get)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && field.Name == "StaticField"), Is.True,
+                    "the static field was not read through the type which the template named.");
+        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
+                    "a receiver was written where the member being woven holds none.");
+    }
+
+    [Test]
+    public void ObjectMethod_Of_A_Parameter_Reads_The_Instance_Which_Was_Given()
+    {
+        // What the tests above read out of the body, run: a receiver which is the load of `this` reads the member of
+        // another object than the one which was given, which is what the runtime refuses.
+        var (_, host, method) = NewObjectHost("ObjectFieldReceiverRunAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectField_Get)));
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        var helper = new HelperClass { PublicField = 21 };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(21));
+    }
+
+    [Test]
+    public void ObjectMethod_Which_Is_Handed_Back_As_A_Delegate_Is_Reached_Through_The_Instance_Which_Named_It()
+    {
+        // The method is not invoked where the template names it, so the instructions which named the type of it stand in
+        // the body until the delegate is built from the pointer of it. The sequence which built the instance of `Object`
+        // is dropped with them, which it was not: what was left of it was an array on the stack of the woven member.
+        var (_, host, method) = NewObjectHost("ObjectDelegateReceiverAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(ObjectStaticTemplates), nameof(ObjectStaticTemplates.ObjectMethod_AsADelegate)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Newarr), Is.False,
+                    "the array which built the instance of `Object` was left in the body.");
+        Assert.That(ReceiverOf(ins, "Calc").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
+                    "the pointer of the method was taken ahead of `this` rather than of the instance which the template named.");
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        var calc = (ObjectStaticTemplates.IntOp) type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new HelperClass()])!;
+
+        Assert.That(calc(21), Is.EqualTo(42));
     }
 
     #endregion

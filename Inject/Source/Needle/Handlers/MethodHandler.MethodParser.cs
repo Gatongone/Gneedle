@@ -108,6 +108,10 @@ partial class MethodHandler
 
         // Detect Object.Method with new Object(param) syntax: need to skip the array init sequence.
         var skipArrayInitCount = 0;
+        // The instance which the template reached the method through, which is the receiver of the call where the method
+        // is not static: the sequence which builds the instance is dropped along with the name, so the argument it names
+        // has to be loaded in place of the name.
+        Instruction? receiverIns = null;
         if (memberSymbol.HasFlag(MemberSymbols.Object) && nameIndex is { } name && name >= 1)
         {
             var prevIns = filter.Target[name - 1];
@@ -125,6 +129,7 @@ partial class MethodHandler
                     && filter.Target[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
                 {
                     skipArrayInitCount = 7; // ldc.i4.1 through newobj
+                    receiverIns = filter.Target[baseIdx + 4];
                 }
             }
         }
@@ -155,27 +160,29 @@ partial class MethodHandler
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
         }
 
+        // Skip the array init sequence if this is Object.Method with new Object(param), and the Static.From sequence if
+        // this is Static.Method. The two are dropped whichever way the method is reached afterwards, which is the whole
+        // of the sequence: a symbol which is handed back as a delegate reaches its member no less than one which invokes
+        // it, and the sequence which built the instance of `Object` is balanced by nothing but the name which ends it.
+        if (skipArrayInitCount > 0 && nameIndex is { } arrayName)
+        {
+            for (var i = arrayName - skipArrayInitCount; i < arrayName; i++)
+            {
+                filter.Skip(i);
+            }
+        }
+
+        if (skipStaticFromCount > 0 && nameIndex is { } fromName)
+        {
+            for (var i = fromName - skipStaticFromCount; i < fromName; i++)
+            {
+                filter.Skip(i);
+            }
+        }
+
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
         if (TryGetNextInvoke(filter.Target, callIndex, delegateRef, targetDef, out var callvirtIndex))
         {
-            // Skip the array init sequence if this is Object.Method with new Object(param).
-            if (skipArrayInitCount > 0 && nameIndex is { } arrayName)
-            {
-                for (var i = arrayName - skipArrayInitCount; i < arrayName; i++)
-                {
-                    filter.Skip(i);
-                }
-            }
-
-            // Skip the Static.From sequence if this is Static.Method.
-            if (skipStaticFromCount > 0 && nameIndex is { } fromName)
-            {
-                for (var i = fromName - skipStaticFromCount; i < fromName; i++)
-                {
-                    filter.Skip(i);
-                }
-            }
-
             // The name of a symbol is dropped, and the receiver of a member of an instance is loaded in its place, which
             // is the instruction ahead of the call. A symbol which carries no name has no such instruction, so the load
             // is inserted ahead of the call instead. The call itself is dropped either way, and what the delegate was
@@ -187,7 +194,7 @@ partial class MethodHandler
 
             if (!methodDef.IsStatic)
             {
-                filter.Insert(callIndex, Instruction.Create(OpCodes.Ldarg_0));
+                filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef));
             }
 
             // Skip `call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types})`
@@ -211,7 +218,7 @@ partial class MethodHandler
 
             if (!methodDef.IsStatic)
             {
-                filter.Insert(callIndex, Instruction.Create(OpCodes.Ldarg_0));
+                filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef));
             }
 
             // call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types}) -> ldftn {return_type} {declaring_type}::{method_name}({parameter_types})

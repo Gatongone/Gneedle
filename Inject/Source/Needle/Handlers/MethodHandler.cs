@@ -718,6 +718,27 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
+    /// The instruction which loads the receiver of a member which a template reached through an instance of its own.
+    /// </summary>
+    /// <remarks>
+    /// A template which names an instance of <c>Object</c> holds that instance in an argument of its own, and the member
+    /// being woven holds the same argument at a slot which is the one the template names shifted by the receivers of the
+    /// two. Writing the receiver of the member being woven instead is right only where the instance the template named
+    /// is that receiver, which nothing makes it: the argument is what the template reached the member through, so it is
+    /// what the member has to be reached through in the body it is woven into.<para/>
+    /// A template which named no instance of its own reaches the member of the member being woven, whose receiver is the
+    /// load of <c>this</c> which the symbols that name a member of this type are written with.
+    /// </remarks>
+    /// <param name="instanceIns">The instruction of the template which loads the instance, or null when the template
+    /// named none of its own.</param>
+    /// <param name="templateDef">The template which the instance is read out of.</param>
+    /// <returns>The instruction which loads the receiver.</returns>
+    private Instruction CreateReceiver(Instruction? instanceIns, MethodDefinition templateDef)
+        => instanceIns is { } ins && ins.TryGetLdargIndex(!templateDef.IsStatic, out var slot)
+               ? CreateLdarg(slot, templateDef)
+               : Instruction.Create(OpCodes.Ldarg_0);
+
+    /// <summary>
     /// The slot which the argument at <paramref name="slot"/> of the template holds in the member being woven.
     /// </summary>
     /// <param name="slot">The slot which the template names.</param>

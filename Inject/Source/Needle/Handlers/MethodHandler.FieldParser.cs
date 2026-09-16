@@ -51,6 +51,10 @@ partial class MethodHandler
         var skipArrayInitCount = 0;
         var skipStaticFromCount = 0;
         TypeDefinition? declaringTypeFromPattern = null;
+        // The instance which the template reached the field through, which is the receiver of it where the field is not
+        // static: the sequence which builds the instance is dropped along with the name, so the argument it names has to
+        // be loaded in place of the name rather than the receiver of the member being woven.
+        Instruction? receiverIns = null;
 
         if (memberSymbol.HasFlag(MemberSymbols.Object) && currentIndex >= 1)
         {
@@ -69,6 +73,7 @@ partial class MethodHandler
                 {
                     skipArrayInitCount = 7;
                     var instanceIns = filter.Target[baseIdx + 4];
+                    receiverIns = instanceIns;
                     var argType = GetArgType(instanceIns, targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
                     // The instance type may stand for the type of another assembly, in which case the field is looked up on the real one.
                     declaringTypeFromPattern = argType.ResolveDefinition(Source.Module);
@@ -135,8 +140,8 @@ partial class MethodHandler
 
         if (!isStatic)
         {
-            // ldstr {field_name} -> ldarg.0
-            filter.Replace(currentIndex, Instruction.Create(OpCodes.Ldarg_0));
+            // ldstr {field_name} -> the argument which holds the instance the field is read off
+            filter.Replace(currentIndex, CreateReceiver(receiverIns, targetDef));
         }
         else
         {
