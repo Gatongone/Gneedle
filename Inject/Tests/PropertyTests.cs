@@ -190,7 +190,10 @@ public class PropertyTests
         var (_, host) = NewHost("PropertyTestAssembly");
         var property = NewProperty(host, "Value", withGetter: true, withSetter: false);
 
-        Assert.That(property.GetGetter(), Is.SameAs(property.GetGetter()));
+        var first = property.GetGetter();
+        var second = property.GetGetter();
+
+        Assert.That(second, Is.SameAs(first));
     }
 
     #endregion

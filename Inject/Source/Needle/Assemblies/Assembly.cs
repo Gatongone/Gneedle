@@ -105,7 +105,11 @@ public abstract class Assembly : IDisposable
     /// <param name="symbol">Assembly symbol file type.</param>
     public static Assembly Read(string path, AssemblySymbol symbol = AssemblySymbol.None)
     {
-        var cache = new FileCache(path, new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite));
+        // The file is read rather than written, which is what this read asks for: the handle is held for as long as the
+        // assembly is, and the write access which the caller of a read has no need of is what a file that was protected
+        // after it was written refuses. The file is still shared for writing, because the image which is woven from it
+        // is written back over it while the assembly is held.
+        var cache = new FileCache(path, new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
         return new StreamAssembly(cache, symbol)
         {
             m_AssemblyCache = cache
@@ -146,8 +150,11 @@ public abstract class Assembly : IDisposable
             _ => null
         };
 
-        // Reusing the same stream.
-        if (m_AssemblyCache is FileCache fileCache && fileCache.Path == path)
+        // Reusing the same stream, which is the one the assembly was read from when the file is the one it lies at and
+        // the read left it writable: the woven image is written over the file through the handle which is held on it
+        // already. A file which was opened for reading alone, which is what a read of it asks for, is written to
+        // through a handle of its own, which is opened for the write and closed with it.
+        if (m_AssemblyCache is FileCache fileCache && fileCache.Path == path && fileCache.Stream.CanWrite)
         {
             if (writeParameters == null)
             {

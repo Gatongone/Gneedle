@@ -240,8 +240,9 @@ public class SetBodyTests
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Add))!);
 
-        // The runtime loader can't load this net5.0-targeted image here, but Cecil
-        // re-reading the emitted bytes proves the produced image is well-formed.
+        // The image is read back rather than run, because what this test holds is the shape of what was emitted rather
+        // than what it does: the member which the body was written for is one which a reader of the image finds, and the
+        // body which it holds is the one which was copied.
         using var stream = new MemoryStream();
         assembly.SaveTo(stream);
         stream.Position = 0;
@@ -615,7 +616,7 @@ public class SetBodyTests
         var method = host.AddMethod("Method", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
         // No base type with Method -> should throw
-        Assert.Catch<ArgumentException>(() => method.SetBody(DefaultMethodBody.CallFromBase));
+        Assert.Throws<ArgumentException>(() => method.SetBody(DefaultMethodBody.CallFromBase));
     }
 
     #endregion

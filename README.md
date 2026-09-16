@@ -381,6 +381,25 @@ What the woven assembly is left holding is the same as under the build task: the
 
 The `Aspect` and `KeepWeaver` properties belong to the build task, that reads them out of a project file, and a Unity project has none. There is therefore nothing there to turn the weaving off with, and the attributes and the reference to the weaver are always taken back out.
 
+# Test
+
+The tests of the weaver and of the build task are run with `dotnet test`, from the root of the repository, and each project is built for every framework it names:
+
+```
+dotnet test Inject/Tests/Gneedle.Inject.Test.csproj    # the weaver, built for net5.0 and net472
+dotnet test Aspect/Tests/Gneedle.Aspect.Test.csproj    # the build task, built for net472
+```
+
+The tests of the weaver are run on `net5.0` by the runtime they were built for. A machine which carries a newer one rather than the 5.0 runtime starts their host only when it is told to move forward to the runtime it holds:
+
+```
+DOTNET_ROLL_FORWARD=LatestMajor dotnet test Inject/Tests/Gneedle.Inject.Test.csproj
+```
+
+What is tested of the post processor is beside it in the package of Unity rather than here, because the compilation pipeline which those tests are written against is one which only an editor has; they are run by the test runner of an editor, which [the readme of that package](Aspect/Unity/README.md#tests) describes.
+
+The whole tree is built with `dotnet build Gneedle.sln -c Release`.
+
 # License
 
 Gneedle is released under the [MIT](LICENSE.txt) Copyright (c) 2026, Gatongone.

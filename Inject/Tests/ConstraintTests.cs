@@ -42,7 +42,7 @@ public class ConstraintTests
 
     #endregion
 
-    #region FromType construction (currently broken — see Constraint.cs:46-52)
+    #region FromType construction
 
     [Test]
     public void FromType_NonGeneric_Type_Does_Not_Throw()

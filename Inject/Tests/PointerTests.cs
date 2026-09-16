@@ -292,7 +292,7 @@ public class PointerTests
         var host = NewHostWithField("Value", isStatic: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
-        Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadMissingField))));
+        Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadMissingField))));
     }
 
     #endregion
@@ -384,7 +384,7 @@ public class PointerTests
         var host = NewHostWithProperty("Prop", withGetter: false, withSetter: true, isVirtual: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
-        Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty))));
+        Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty))));
     }
 
     [Test]
@@ -393,7 +393,7 @@ public class PointerTests
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: false, isVirtual: false);
         var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty))));
+        Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty))));
     }
 
     #endregion
@@ -871,7 +871,7 @@ public class PointerTests
         var host = NewHostWithField("PublicField", isStatic: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnInstanceInALocal))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnInstanceInALocal))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
     }
@@ -1119,7 +1119,7 @@ public class PointerTests
         var host = NewHostWithField("StaticField", isStatic: true);
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Catch<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticField_OfATypeInALocal))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticField_OfATypeInALocal))));
 
         Assert.That(thrown!.Message, Does.Contain("StaticField"));
     }

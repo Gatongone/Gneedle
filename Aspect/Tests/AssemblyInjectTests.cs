@@ -11,9 +11,13 @@ namespace Gneedle.Aspect.Test;
 /// The injectors are read from the assembly by reflection, so the members which are injected have to be the members of
 /// a compiled assembly which carries them. Most of the tests take the assembly which holds them, copied to a file of
 /// its own, because the fixtures are compiled into it; each works on its own copy, since the task writes the assembly
-/// back to the file it read. The tests which need an assembly of a shape the compiler does not produce build one.
+/// back to the file it read. The tests which need an assembly of a shape the compiler does not produce build one.<para/>
+/// The injectors of the fixtures are told where to record the members they were asked to inject through a variable of
+/// the process, which each test sets for itself and clears afterwards: the tests of this fixture are therefore run one
+/// at a time rather than beside the other tests of the assembly, which would read the variable of another test.
 /// </summary>
 [TestFixture]
+[NonParallelizable]
 public class AssemblyInjectTests
 {
     /// <summary>

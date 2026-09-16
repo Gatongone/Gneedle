@@ -54,7 +54,7 @@ public class TypeInjectorTests
         var handler = CreateHandler();
         handler.AddStruct("Dup", Ns, StructFlags.Public).GetHandler();
 
-        Assert.Catch<ArgumentException>(() => handler.AddStruct("Dup", Ns, StructFlags.Public));
+        Assert.Throws<ArgumentException>(() => handler.AddStruct("Dup", Ns, StructFlags.Public));
     }
 
     [Test]
@@ -133,7 +133,7 @@ public class TypeInjectorTests
         var handler = CreateHandler();
         handler.AddClass("Dup", Ns, ClassFlags.Public).GetHandler();
 
-        Assert.Catch<ArgumentException>(() => handler.AddClass("Dup", Ns, ClassFlags.Public));
+        Assert.Throws<ArgumentException>(() => handler.AddClass("Dup", Ns, ClassFlags.Public));
     }
 
     #endregion
@@ -184,7 +184,7 @@ public class TypeInjectorTests
         var handler = CreateHandler();
         handler.AddEnum("Dup", Ns, EnumFlags.Public).GetHandler();
 
-        Assert.Catch<ArgumentException>(() => handler.AddEnum("Dup", Ns, EnumFlags.Public));
+        Assert.Throws<ArgumentException>(() => handler.AddEnum("Dup", Ns, EnumFlags.Public));
     }
 
     [Test]

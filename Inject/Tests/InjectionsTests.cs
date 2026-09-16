@@ -399,7 +399,10 @@ public class InjectionsTests
         Assert.That(result, Is.SameAs(image), "an image which was not changed is not the one which was given.");
     }
 
+    // The variable of the process is read by the injector of every type which is woven while it is set, so this test
+    // runs on its own rather than beside the others, which would be woven by the injector of this test.
     [Test]
+    [NonParallelizable]
     public void Apply_Which_Reported_A_Type_Answers_With_The_Image_It_Was_Given()
     {
         // One type of the assembly is woven and another one is not, which the run reports. What the assembly holds by

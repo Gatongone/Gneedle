@@ -1,4 +1,5 @@
 using System.Reflection;
+using Mono.Cecil;
 
 namespace Gneedle.Inject.Test;
 
@@ -125,6 +126,83 @@ public class AssemblyTests
 
         var thrown = Assert.Throws<TargetInvocationException>(() => ping.Invoke(null, null));
         Assert.That(thrown!.InnerException, Is.InstanceOf<NotSupportedException>());
+    }
+
+    #endregion
+
+    #region From a file
+
+    /// <summary>
+    /// Write the image of an assembly which holds a type to a file of its own, and hand back the path of it. The file
+    /// lies in a directory of its own, which the test that asked for it removes when it is done with it.
+    /// </summary>
+    private static string NewFile(string assemblyName)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"Gneedle.Inject.Test.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, $"{assemblyName}.dll");
+
+        var assembly = Assembly.Create(assemblyName);
+        NewHost(assembly);
+        using var image = File.Create(path);
+        assembly.SaveTo(image);
+        return path;
+    }
+
+    [Test]
+    public void Read_Of_A_Path_Reads_The_Assembly_Which_The_File_Holds()
+    {
+        // The reader reads the file rather than opening it for writing, so a file which was written once and protected
+        // afterwards is read like any other: a file which is opened for writing is one which the write access of the
+        // caller is asked for, which a file that is only read has no reason to grant.
+        var path = NewFile("FileReadAssembly");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        try
+        {
+            // The module is read rather than the image loaded, because an image which was loaded from a path holds the
+            // file until the process ends, and the file of this test is one which the test removes afterwards.
+            using var assembly = Assembly.Read(path);
+            var type = assembly.Source.MainModule.GetType($"{Ns}.Host");
+
+            Assert.That(assembly.Source.MainModule.Assembly.Name.Name, Is.EqualTo("FileReadAssembly"));
+            Assert.That(type, Is.Not.Null, "the type which the file holds is not in the assembly which was read from it.");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
+    }
+
+    [Test]
+    public void Read_Of_A_Path_Is_Written_Back_Over_The_File_It_Was_Read_From()
+    {
+        // An assembly which was read from a file is usually woven and written back over it, which is what the read of
+        // the library is for: the file is opened for reading, and the write is the one the caller asks for when it
+        // writes back, rather than the access the read takes for itself.
+        var path = NewFile("FileWriteAssembly");
+
+        try
+        {
+            using (var assembly = Assembly.Read(path))
+            {
+                ((AssemblyHandler) assembly.Handler).AddClass("Added", Ns, ClassFlags.Public).GetHandler();
+                assembly.SaveTo(path);
+            }
+
+            // The file is read back with Cecil rather than loaded, because an image which was loaded from a path holds
+            // the file until the process ends, and the file of this test is one which the test removes afterwards.
+            using var reread = AssemblyDefinition.ReadAssembly(path);
+            Assert.That(reread.MainModule.GetType($"{Ns}.Added"), Is.Not.Null,
+                "the type which was described is not in the file which the assembly was written back to.");
+            Assert.That(reread.MainModule.GetType($"{Ns}.Host"), Is.Not.Null,
+                "the type which the file held is not in it after the assembly was written back over it.");
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+        }
     }
 
     #endregion
