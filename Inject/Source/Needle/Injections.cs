@@ -56,36 +56,6 @@ public static class Injections
         private static readonly Type[] TypeInjectors = [typeof(ITypeInjector), typeof(IClassInjector), typeof(IStructInjector), typeof(IEnumInjector)];
 
         /// <summary>
-        /// The same interfaces as <see cref="TypeInjectors"/>, named as the metadata names them, which is what the
-        /// attributes of a member are read for before the member itself is read at all.
-        /// </summary>
-        private static readonly string[] TypeInjectorNames = [typeof(ITypeInjector).FullName!, typeof(IClassInjector).FullName!, typeof(IStructInjector).FullName!, typeof(IEnumInjector).FullName!];
-
-        /// <summary>
-        /// The interface which an attribute implements to be asked to inject into the assembly, named as the metadata
-        /// names it.
-        /// </summary>
-        private static readonly string[] AssemblyInjectorNames = [typeof(IAssemblyInjector).FullName!];
-
-        /// <summary>
-        /// The interface which an attribute implements to be asked to inject into a method, named as the metadata names
-        /// it.
-        /// </summary>
-        private static readonly string[] MethodInjectorNames = [typeof(IMethodInjector).FullName!];
-
-        /// <summary>
-        /// The interface which an attribute implements to be asked to inject into a field, named as the metadata names
-        /// it.
-        /// </summary>
-        private static readonly string[] FieldInjectorNames = [typeof(IFieldInjector).FullName!];
-
-        /// <summary>
-        /// The interface which an attribute implements to be asked to inject into a property, named as the metadata
-        /// names it.
-        /// </summary>
-        private static readonly string[] PropertyInjectorNames = [typeof(IPropertyInjector).FullName!];
-
-        /// <summary>
         /// Whether anything was reported of this run.<para/>
         /// A report is made of a member which could not be woven, and one which could not be woven leaves the assembly
         /// woven in part: the injectors which ran before it hold, and the ones which would have run after it do not.
@@ -159,7 +129,10 @@ public static class Injections
         /// carries an attribute of the editor of Unity is the case which this is here for.<para/>
         /// An attribute whose type cannot be resolved is answered as one which is not an injector, which is what leaves
         /// such a member alone rather than failing it. The type of an injector is declared by the assembly which the
-        /// weaving reads or beside it, so it resolves wherever the member is woven at all.
+        /// weaving reads or beside it, so it resolves wherever the member is woven at all.<para/>
+        /// The interface is looked for through the types which the module declares, which is the reading which the
+        /// weaving takes its own traces back out by: an injector which only one of the two read would be applied and left
+        /// in the assembly, or read and never applied.
         /// </remarks>
         /// <param name="attributes">The attributes which the member carries.</param>
         /// <param name="injectorInterfaces">Full names of the interfaces which an injector of the kind implements.</param>
@@ -180,7 +153,7 @@ public static class Injections
                     continue;
                 }
 
-                if (attributeType != null && attributeType.Interfaces.Any(implementation => injectorInterfaces.Contains(implementation.InterfaceType.FullName))) return true;
+                if (attributeType != null && InjectorInterfaces.IsAnInjector(attributeType, injectorInterfaces)) return true;
             }
 
             return false;
@@ -244,7 +217,7 @@ public static class Injections
         /// <returns>Whether the assembly declares an injector at all.</returns>
         private bool ProcessAssembleInjector(AssemblyHandler assemblyHandler)
         {
-            if (!HoldsInjector(assemblyHandler.Assembly.Source.CustomAttributes, AssemblyInjectorNames)) return false;
+            if (!HoldsInjector(assemblyHandler.Assembly.Source.CustomAttributes, InjectorInterfaces.AssemblyInjectorNames)) return false;
 
             var injectors = assembly.GetCustomAttributes(inherit: false)
                                     .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IAssemblyInjector)))
@@ -268,7 +241,7 @@ public static class Injections
         /// <returns>Whether an injector was applied.</returns>
         private bool ProcessTypeInjector(AssemblyHandler assemblyHandler, Type type)
         {
-            if (!HoldsInjector(assemblyHandler.GetCecilType(type).Definition.CustomAttributes, TypeInjectorNames)) return false;
+            if (!HoldsInjector(assemblyHandler.GetCecilType(type).Definition.CustomAttributes, InjectorInterfaces.TypeInjectorNames)) return false;
 
             var dirty = false;
             var typeAttributes = type.GetCustomAttributes(inherit: false)
@@ -352,7 +325,7 @@ public static class Injections
             // its reflection being read. A member which the assembly does not hold is left to the reflection, so that
             // the injector which was put on it is reported as naming a member which is not there rather than passed
             // over in silence.
-            if (methodHandler is MethodHandler {Source: { } methodDefinition} && !HoldsInjector(methodDefinition.CustomAttributes, MethodInjectorNames)) return false;
+            if (methodHandler is MethodHandler {Source: { } methodDefinition} && !HoldsInjector(methodDefinition.CustomAttributes, InjectorInterfaces.MethodInjectorNames)) return false;
 
             if (methodInfo.GetCustomAttributes(inherit: false)
                           .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IMethodInjector)))
@@ -388,7 +361,7 @@ public static class Injections
         private bool ProcessFieldInjector(IFieldContainer typeHandler, Type runtimeType, FieldInfo fieldInfo)
         {
             var fieldHandler = typeHandler.GetField(fieldInfo.Name);
-            if (fieldHandler is FieldHandler {Source: { } fieldDefinition} && !HoldsInjector(fieldDefinition.CustomAttributes, FieldInjectorNames)) return false;
+            if (fieldHandler is FieldHandler {Source: { } fieldDefinition} && !HoldsInjector(fieldDefinition.CustomAttributes, InjectorInterfaces.FieldInjectorNames)) return false;
 
             if (fieldInfo.GetCustomAttributes(inherit: false)
                          .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IFieldInjector)))
@@ -422,7 +395,7 @@ public static class Injections
         private bool ProcessPropertyInjector(IPropertyContainer typeHandler, Type runtimeType, PropertyInfo propertyInfo)
         {
             var propertyHandler = typeHandler.GetProperty(propertyInfo.Name);
-            if (propertyHandler is PropertyHandler {Source: { } propertyDefinition} && !HoldsInjector(propertyDefinition.CustomAttributes, PropertyInjectorNames)) return false;
+            if (propertyHandler is PropertyHandler {Source: { } propertyDefinition} && !HoldsInjector(propertyDefinition.CustomAttributes, InjectorInterfaces.PropertyInjectorNames)) return false;
 
             if (propertyInfo.GetCustomAttributes(inherit: false)
                             .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IPropertyInjector)))

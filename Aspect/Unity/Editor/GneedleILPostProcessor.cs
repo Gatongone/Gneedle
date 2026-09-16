@@ -22,16 +22,6 @@ namespace Gneedle.Aspect
     public sealed class GneedleILPostProcessor : ILPostProcessor
     {
         /// <summary>
-        /// The interfaces which a type implements to be one of the attributes which an injector is read from.
-        /// </summary>
-        private static readonly string[] InjectorInterfaces =
-        {
-            typeof(IAssemblyInjector).FullName!, typeof(ITypeInjector).FullName!, typeof(IClassInjector).FullName!,
-            typeof(IStructInjector).FullName!,   typeof(IEnumInjector).FullName!, typeof(IMethodInjector).FullName!,
-            typeof(IFieldInjector).FullName!,    typeof(IPropertyInjector).FullName!
-        };
-
-        /// <summary>
         /// The path which every assembly an assembly of the compilation refers to was named by, by its name alone.
         /// </summary>
         /// <remarks>
@@ -63,21 +53,19 @@ namespace Gneedle.Aspect
         /// an injector or not, and the reference alone would have every assembly of Unity and of a package woven as
         /// well.
         /// </summary>
+        /// <remarks>
+        /// An injector is read here the way the weaving reads one, through the types of the module rather than by
+        /// resolving what they refer to, so that this processor and the weaving agree on which assemblies have anything
+        /// to weave: a reading which found an injector the weaving does not would take an assembly through a compilation
+        /// which leaves it as it was.
+        /// </remarks>
         /// <param name="assembly">The assembly which was compiled.</param>
         public override bool WillProcess(ICompiledAssembly assembly)
         {
             using var stream = new MemoryStream(assembly.InMemoryAssembly.PeData);
             using var image = Mono.Cecil.AssemblyDefinition.ReadAssembly(stream);
-            return image.MainModule.Types.Any(DeclaresAnInjector);
+            return InjectorInterfaces.AllTypes(image.MainModule).Any(type => InjectorInterfaces.IsAnInjector(type, InjectorInterfaces.AllNames));
         }
-
-        /// <summary>
-        /// Whether the type declares an injector of its own, or inherits one, the nested types included.
-        /// </summary>
-        /// <param name="type">The type which is read.</param>
-        private static bool DeclaresAnInjector(Mono.Cecil.TypeDefinition type)
-            => type.Interfaces.Any(implementation => Array.IndexOf(InjectorInterfaces, implementation.InterfaceType.FullName) >= 0)
-            || type.NestedTypes.Any(DeclaresAnInjector);
 
         /// <inheritdoc/>
         public override ILPostProcessResult Process(ICompiledAssembly assembly)

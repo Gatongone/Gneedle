@@ -5,6 +5,7 @@ using Assembly = Gneedle.Inject.Assembly;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
+using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
@@ -13,17 +14,31 @@ namespace Gneedle.Inject.Test;
 /// woven.
 /// </summary>
 [AttributeUsage(AttributeTargets.All)]
-public sealed class MarkTypeAttribute : Attribute, ITypeInjector
+public class MarkTypeAttribute : Attribute, ITypeInjector
 {
     /// <inheritdoc/>
     public void Inject(Type type, ITypeHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "marked");
 }
 
 /// <summary>
+/// An attribute which marks the type it is put on, which is the attribute above: what makes it one of the attributes
+/// which an injector is read from is the interface which the attribute it derives from implements rather than one which
+/// it implements itself.
+/// </summary>
+[AttributeUsage(AttributeTargets.All)]
+public sealed class DerivedMarkAttribute : MarkTypeAttribute;
+
+/// <summary>
 /// The type which carries the marker above, whose injection is read out of the image which was woven.
 /// </summary>
 [MarkType]
 public class MarkedFixture;
+
+/// <summary>
+/// The type which carries the derived marker above, whose injection is read out of the image which was woven.
+/// </summary>
+[DerivedMark]
+public class DerivedMarkedFixture;
 
 /// <summary>
 /// An attribute which throws while the injector of the type it is put on runs, so that a run which wove the types around
@@ -153,6 +168,35 @@ public class OverloadedFixture
 }
 
 /// <summary>
+/// An interface which an attribute implements to be one which runs the body of the member it is put on, which reaches
+/// the weaver through the interface of the kind rather than declaring it itself.
+/// </summary>
+public interface IRunBodyInjector : IMethodInjector;
+
+/// <summary>
+/// An attribute which runs a body of the member it is put on, which is one of the attributes which an injector is read
+/// from through the interface above rather than through one of the weaver.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class RunBodyThroughAnInterfaceAttribute : Attribute, IRunBodyInjector
+{
+    /// <inheritdoc/>
+    public void Inject(MethodInfo method, IMethodHandler handler) => handler.SetBody(typeof(OverloadBodies).GetMethod(nameof(OverloadBodies.None))!);
+}
+
+/// <summary>
+/// The type whose member carries the injector above.
+/// </summary>
+public class ThroughAnInterfaceFixture
+{
+    /// <summary>
+    /// The member which the injector above is put on.
+    /// </summary>
+    [RunBodyThroughAnInterface]
+    public int Run() => -1;
+}
+
+/// <summary>
 /// Tests for <see cref="Injections"/>, which applies the injectors which an assembly declares to the image it was loaded
 /// from, and for the taking of the weaver back out which that runs.
 /// </summary>
@@ -170,6 +214,27 @@ public class InjectionsTests
     /// with it, so an assertion which named it would hold it in place and then fail on its own doing.
     /// </summary>
     private const string MarkerAttributeName = "Gneedle.Inject.Test.MarkTypeAttribute";
+
+    /// <summary>
+    /// The name of the attribute which derives from the one above, which is written out for the same reason as the name
+    /// above.
+    /// </summary>
+    private const string DerivedMarkerAttributeName = "Gneedle.Inject.Test.DerivedMarkAttribute";
+
+    /// <summary>
+    /// The name of the type which carries the derived marker above, which is written out for the same reason as the
+    /// names above.
+    /// </summary>
+    private const string DerivedMarkedType = "Gneedle.Inject.Test.DerivedMarkedFixture";
+
+    /// <summary>
+    /// The names of the interface which reaches the weaver and of the type whose member carries the attribute which
+    /// implements it, which are written out for the same reason as the names above.
+    /// </summary>
+    private const string InterfaceInjectorName = "Gneedle.Inject.Test.IRunBodyInjector";
+
+    /// <inheritdoc cref="InterfaceInjectorName"/>
+    private const string ThroughAnInterfaceType = "Gneedle.Inject.Test.ThroughAnInterfaceFixture";
 
     /// <summary>
     /// The name of the type whose injector throws, which is written out for the same reason as the name above.
@@ -227,6 +292,80 @@ public class InjectionsTests
                     "the woven assembly refers to itself.");
         Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == MarkerAttributeName), Is.False,
                     "the attribute which the injector was read from was left in the assembly.");
+    }
+
+    [Test]
+    public void Apply_Runs_The_Injector_Which_Is_Read_From_An_Attribute_Of_A_Type_That_Is_One()
+    {
+        // An attribute is one of the attributes which an injector is read from where the interface of the weaver is
+        // implemented by a type which the attribute derives from, which is settled by walking the base types of the
+        // module. Both of the two are gone from the image afterwards: the interface reaches for the weaver, and the
+        // attribute which derives from the type that declares it names that type.
+        var image = TestAssemblyImage();
+        var assembly = AssemblyLoader.LoadFromBytes(image);
+
+        var (changed, result) = Injections.Apply(assembly, image);
+
+        Assert.That(changed, Is.True);
+        using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
+        AssertMarked(read, DerivedMarkedType, "type");
+
+        Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == DerivedMarkerAttributeName), Is.False,
+                    "the attribute which the injector was read from was left in the assembly.");
+        Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == MarkerAttributeName), Is.False,
+                    "the attribute which the derived one derives from was left in the assembly.");
+    }
+
+    [Test]
+    public void Apply_Runs_The_Injector_Which_Is_Read_From_An_Attribute_Of_An_Interface_That_Is_One()
+    {
+        // The same, one interface further out: the interface which the attribute implements is not one of the weaver,
+        // and it is the interface of the weaver which that one implements.
+        var image = TestAssemblyImage();
+        var assembly = AssemblyLoader.LoadFromBytes(image);
+
+        var (changed, result) = Injections.Apply(assembly, image);
+
+        Assert.That(changed, Is.True);
+        using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
+        var run = read.MainModule.GetType(ThroughAnInterfaceType)!.Methods.Single(method => method.Name == "Run");
+
+        Assert.That(run.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] {OpCodes.Ldc_I4_1, OpCodes.Ret}),
+                    "the injector which an interface of the weaver was implemented for did not run.");
+        Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == InterfaceInjectorName), Is.False,
+                    "the interface which reaches the weaver was left in the assembly.");
+    }
+
+    [Test]
+    public void IsAnInjector_Does_Not_Follow_A_Type_Which_The_Module_Does_Not_Declare()
+    {
+        // The reading follows the base types and the interfaces of the types which the module declares, and it stops
+        // where the module ends: the weaving takes the traces of the injectors back out of the assembly it wove, and it
+        // can only take out what the module declares. A type which was read through one of another assembly would be an
+        // injector which is applied while its trace is left behind, which is an assembly that still names the weaver by
+        // an attribute which nobody reads any more.
+        var assembly = Assembly.Create("ForeignInjectorAssembly");
+        var module = assembly.Source.MainModule;
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+
+        // The names are those of a real injector of this assembly, and the references name them as types of another one:
+        // what is reached for is a name which the module does not hold, and the assembly which holds it is not asked.
+        var foreign = new AssemblyNameReference("Gneedle.Inject.Test", new Version(1, 0));
+        host.Source.BaseType = new TypeReference("Gneedle.Inject.Test", nameof(DerivedMarkAttribute), module, foreign);
+        host.Source.Interfaces.Add(new InterfaceImplementation(new TypeReference("Gneedle.Inject.Test", nameof(IRunBodyInjector), module, foreign)));
+
+        Assert.That(InjectorInterfaces.IsAnInjector(host.Source, InjectorInterfaces.AllNames), Is.False,
+                    "a base type or an interface of another assembly was followed.");
+
+        // The same name is read once the module declares it, which is what tells the answer above apart from a reading
+        // which follows no base type at all.
+        var declared = new TypeDefinition("Gneedle.Inject.Test", "ForeignInjector", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        declared.Interfaces.Add(new InterfaceImplementation(module.ImportReference(typeof(IMethodInjector))));
+        module.Types.Add(declared);
+        host.Source.BaseType = new TypeReference("Gneedle.Inject.Test", declared.Name, module, module);
+
+        Assert.That(InjectorInterfaces.IsAnInjector(host.Source, InjectorInterfaces.AllNames), Is.True,
+                    "the base type of a type which the module declares was not followed.");
     }
 
     [Test]
