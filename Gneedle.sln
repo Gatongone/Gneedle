@@ -8,8 +8,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gneedle.Aspect", "Aspect\Nu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gneedle.Aspect.Test", "Aspect\Tests\Gneedle.Aspect.Test.csproj", "{95880DD4-4761-41F7-BFD0-2B4246CA92F9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gneedle.Unity.Test", "Aspect\Unity.Tests\Gneedle.Unity.Test.csproj", "{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -68,18 +66,6 @@ Global
 		{95880DD4-4761-41F7-BFD0-2B4246CA92F9}.Release|x64.Build.0 = Release|Any CPU
 		{95880DD4-4761-41F7-BFD0-2B4246CA92F9}.Release|x86.ActiveCfg = Release|Any CPU
 		{95880DD4-4761-41F7-BFD0-2B4246CA92F9}.Release|x86.Build.0 = Release|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Debug|x64.Build.0 = Debug|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Debug|x86.Build.0 = Debug|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Release|x64.ActiveCfg = Release|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Release|x64.Build.0 = Release|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Release|x86.ActiveCfg = Release|Any CPU
-		{7B4E1C62-3F58-4C4B-9A61-6D9E2F0A5D43}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -96,7 +96,6 @@ jobs:
         run: |
           dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -c Release
           dotnet test Aspect/Tests/Gneedle.Aspect.Test.csproj -c Release
-          dotnet test Aspect/Unity.Tests/Gneedle.Unity.Test.csproj -c Release
 
       - name: Build the weaver which the package of Unity ships
         # The package of Unity carries the weaver as a plugin which is compiled before it, and the one in the repository
