@@ -150,7 +150,6 @@ partial class MethodHandler
             }
         }
 
-        // var methodDef = memberSymbol.HasFlag(MemberSymbols.Base) ? GetMethodInBase(memberName, parameters) : GetMethodInThis(memberName, parameters);
         // The index which is given is the one of the name, which is what the members reached through an instance of
         // Object or Static are read against: a symbol which carries no name is not one of those, so the call stands in
         // its place, where it is read by nothing.
@@ -279,7 +278,7 @@ partial class MethodHandler
 
         if (memberSymbol.HasFlag(MemberSymbols.This))
         {
-            return DeclaringTypeHandler.GetMethodInThis(methodName, parameters);
+            return DeclaringTypeHandler.GetMethodInThisOrABaseType(methodName, parameters);
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Proceed))

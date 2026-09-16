@@ -743,6 +743,34 @@ public class PointerTests
                                  && ((MethodReference) i.Operand).Name == "get_Prop"), Is.True);
     }
 
+    [Test]
+    public void Base_Member_Of_A_Type_Which_Derives_From_Nothing_Is_Refused()
+    {
+        // A type which derives from nothing holds no base type to look a member up on, so the member which the template
+        // names cannot be resolved, and what the caller is left with is the reason: the error names the member which was
+        // looked for rather than being one which the lookup of the base type itself failed over.
+        var asm = Assembly.Create("NoBasePointerAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) asm.Handler).AddClass("Derived", Ns, ClassFlags.Public).GetHandler();
+        // A class which is added derives from the object of the target framework unless the decorator is given another
+        // base type, so the one which derives from nothing is the root of a hierarchy which is written out here.
+        host.Source.BaseType = null;
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var field = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var property = host.AddMethod("ReadProp", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+
+        Assert.Multiple(() =>
+        {
+            var memberThrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod))));
+            Assert.That(memberThrown!.Message, Does.Contain("Calc"), "the message does not name the member which the template asked for.");
+
+            var fieldThrown = Assert.Throws<ArgumentException>(() => field.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseFieldGet))));
+            Assert.That(fieldThrown!.Message, Does.Contain("Value"), "the message does not name the field which the template asked for.");
+
+            var propertyThrown = Assert.Throws<ArgumentException>(() => property.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BasePropertyGet))));
+            Assert.That(propertyThrown!.Message, Does.Contain("Prop"), "the message does not name the property which the template asked for.");
+        });
+    }
+
     #endregion
 
     #region Object

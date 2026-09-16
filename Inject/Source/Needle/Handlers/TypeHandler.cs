@@ -234,54 +234,67 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     public override int GetHashCode() => Source.GetHashCode();
 
     /// <summary>
-    /// Get field from this type.
+    /// Get the field which a name names, from this type or from a base type of it.<para/>
+    /// A field which a base type declares is a field of the type as well, so the base types are walked for it, the
+    /// nearest one first: the field of the type itself is the one which is answered with when it declares one of that
+    /// name, and the one of the first base type which does otherwise.
     /// </summary>
     /// <param name="fieldName">Name of the field.</param>
-    /// <returns>The field from this type.</returns>
-    internal FieldReference? GetFieldInThis(string fieldName)
+    /// <returns>The field from this type or from a base type of it, or null when neither declares one of that name.</returns>
+    internal FieldReference? GetFieldInThisOrABaseType(string fieldName)
         => AssemblyHandler.GetFieldFromType(Source, fieldName);
 
     /// <summary>
-    /// Get field from base type.
+    /// Get the field which a name names, from the direct base type or from a base type of it.<para/>
+    /// The walk starts at the direct base type rather than at the type itself, which is what the fields of a base type
+    /// are reached through: a field which the type declares is not one which this query answers with.
     /// </summary>
     /// <param name="fieldName">Name of the field.</param>
-    /// <returns>The field from this type.</returns>
+    /// <returns>The field from a base type, or null when the type has no base type or none of them declares one of that name.</returns>
     internal FieldReference? GetFieldInBase(string fieldName)
-        => AssemblyHandler.GetFieldFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, fieldName);
+        => Source.BaseType == null ? null : AssemblyHandler.GetFieldFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, fieldName);
 
     /// <summary>
-    /// Get property from this type.
+    /// Get the property which a name names, from this type or from a base type of it.<para/>
+    /// A property which a base type declares is a property of the type as well, so the base types are walked for it, the
+    /// nearest one first.
     /// </summary>
     /// <param name="propertyName">Name of the property.</param>
-    /// <returns>The property from this type.</returns>
-    internal PropertyDefinition? GetPropertyInThis(string propertyName)
+    /// <returns>The property from this type or from a base type of it, or null when neither declares one of that name.</returns>
+    internal PropertyDefinition? GetPropertyInThisOrABaseType(string propertyName)
         => AssemblyHandler.GetPropertyFromType(Source, propertyName);
 
     /// <summary>
-    /// Get property from base type.
+    /// Get the property which a name names, from the direct base type or from a base type of it.<para/>
+    /// The walk starts at the direct base type rather than at the type itself, which is what the properties of a base
+    /// type are reached through: a property which the type declares is not one which this query answers with.
     /// </summary>
     /// <param name="propertyName">Name of the property.</param>
-    /// <returns>The property from the base type.</returns>
+    /// <returns>The property from a base type, or null when the type has no base type or none of them declares one of that name.</returns>
     internal PropertyDefinition? GetPropertyInBase(string propertyName)
-        => AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, propertyName);
+        => Source.BaseType == null ? null : AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, propertyName);
 
     /// <summary>
-    /// Get method from this type.
+    /// Get the method which a name and a signature name, from this type or from a base type of it.<para/>
+    /// A method which a base type declares is a method of the type as well, so the base types are walked for it, the
+    /// nearest one first.
     /// </summary>
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Types of the parameters of the method.</param>
-    /// <returns>The method from this type.</returns>
-    internal MethodDefinition? GetMethodInThis(string methodName, IReadOnlyList<TypeReference> parameters)
-        => AssemblyHandler.GetMethodFromType(Source, methodName, parameters);
+    /// <returns>The method from this type or from a base type of it, or null when neither declares one of that signature.</returns>
+    internal MethodDefinition? GetMethodInThisOrABaseType(string methodName, IReadOnlyList<TypeReference> parameters)
+        => AssemblyHandler.GetMethodFromType(Source, methodName, parameters, false);
 
     /// <summary>
-    /// Get method from base type.
+    /// Get the method which a name and a signature name, from the direct base type or from a base type of it.<para/>
+    /// The walk starts at the direct base type rather than at the type itself, which is what the methods of a base type
+    /// are reached through: a method which the type declares is not one which this query answers with.
     /// </summary>
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Types of the parameters of the method.</param>
-    /// <returns>The method from the base type.</returns>
+    /// <returns>The method from a base type, or null when the type has no base type or none of them declares one of that signature.</returns>
     internal MethodDefinition? GetMethodInBase(string methodName, IReadOnlyList<TypeReference> parameters)
-        => AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, methodName, parameters);
+        => Source.BaseType == null ? null : AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, methodName, parameters, false);
 
     /// <summary>
     /// Get the method which a signature names, which is the name of the method and the types of the parameters of it.<para/>

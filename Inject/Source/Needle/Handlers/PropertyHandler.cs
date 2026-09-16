@@ -126,7 +126,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         // The backing field will be automatically created by the injector with the name "<{property_name}>k__BackingField",
         // and it belongs to the type rather than to an instance of it exactly when the accessor does.
         var isStatic = m_Getter.Source.IsStatic;
-        var field = DeclaringTypeHandler.GetFieldInThis($"<{Name}>k__BackingField");
+        var field = DeclaringTypeHandler.GetFieldInThisOrABaseType($"<{Name}>k__BackingField");
         if (field == null)
         {
             field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private | (isStatic ? FieldAttributes.Static : 0), Source.PropertyType);
@@ -198,7 +198,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         // The backing field will be automatically created by the injector with the name "<{property_name}>k__BackingField",
         // and it belongs to the type rather than to an instance of it exactly when the accessor does.
         var isStatic = m_Setter.Source.IsStatic;
-        var field = DeclaringTypeHandler.GetFieldInThis($"<{Name}>k__BackingField");
+        var field = DeclaringTypeHandler.GetFieldInThisOrABaseType($"<{Name}>k__BackingField");
         if (field == null)
         {
             field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private | (isStatic ? FieldAttributes.Static : 0), Source.PropertyType);

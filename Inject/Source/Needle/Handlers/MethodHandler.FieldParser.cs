@@ -103,7 +103,7 @@ partial class MethodHandler
                 // recognize names none, so the name is refused rather than looked up on the member being woven, which
                 // holds a field of that name by coincidence at most.
                 ? DeclaringTypeHandler.AssemblyHandler.GetFieldFromType(declaringTypeFromPattern ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName)), memberName)
-                : DeclaringTypeHandler.GetFieldInThis(memberName);
+                : DeclaringTypeHandler.GetFieldInThisOrABaseType(memberName);
         if (field == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));

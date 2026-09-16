@@ -29,16 +29,6 @@ public interface IPropertyHandler : IAttributeContainer
     ITypeHandler DeclaringTypeHandler { get; }
 
     /// <summary>
-    /// Get the handler of the setter of the property, or null when it has none.<para/>
-    /// The handler stands for the accessor as the handler of any other method stands for its method, so the body of the
-    /// accessor is set through <see cref="IMethodHandler.SetBody(MethodInfo)"/> and woven around through
-    /// <see cref="IMethodHandler.AroundBody(MethodInfo)"/>. An accessor is created by the call which sets its body, so
-    /// a property which has no setter returns null here until one is set.
-    /// </summary>
-    /// <returns>The handler of the setter, or null.</returns>
-    IMethodHandler? GetSetter();
-
-    /// <summary>
     /// Get the handler of the getter of the property, or null when it has none.<para/>
     /// The handler stands for the accessor as the handler of any other method stands for its method, so the body of the
     /// accessor is set through <see cref="IMethodHandler.SetBody(MethodInfo)"/> and woven around through
@@ -49,11 +39,14 @@ public interface IPropertyHandler : IAttributeContainer
     IMethodHandler? GetGetter();
 
     /// <summary>
-    /// Set the body of the setter of the property from the method which holds the IL to copy.
+    /// Get the handler of the setter of the property, or null when it has none.<para/>
+    /// The handler stands for the accessor as the handler of any other method stands for its method, so the body of the
+    /// accessor is set through <see cref="IMethodHandler.SetBody(MethodInfo)"/> and woven around through
+    /// <see cref="IMethodHandler.AroundBody(MethodInfo)"/>. An accessor is created by the call which sets its body, so
+    /// a property which has no setter returns null here until one is set.
     /// </summary>
-    /// <param name="body">The method which holds the body of the setter.</param>
-    /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the property, which an indexer is read with.</exception>
-    void SetSetter(MethodInfo body);
+    /// <returns>The handler of the setter, or null.</returns>
+    IMethodHandler? GetSetter();
 
     /// <summary>
     /// Set the body of the getter of the property from the method which holds the IL to copy.
@@ -63,17 +56,24 @@ public interface IPropertyHandler : IAttributeContainer
     void SetGetter(MethodInfo body);
 
     /// <summary>
-    /// Set the body of the setter of the property to the default body behavior.
+    /// Set the body of the setter of the property from the method which holds the IL to copy.
     /// </summary>
-    /// <param name="body">The default body of the setter.</param>
-    /// <exception cref="ArgumentException">Thrown when the default body is the one with a field operation, which an indexer cannot be written with.</exception>
-    void SetSetter(DefaultPropertyBody body);
+    /// <param name="body">The method which holds the body of the setter.</param>
+    /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the property, which an indexer is read with.</exception>
+    void SetSetter(MethodInfo body);
 
     /// <summary>
     /// Set the body of the getter of the property to the default body behavior.
     /// </summary>
     /// <param name="body">The default body of the getter.</param>
     void SetGetter(DefaultPropertyBody body);
+
+    /// <summary>
+    /// Set the body of the setter of the property to the default body behavior.
+    /// </summary>
+    /// <param name="body">The default body of the setter.</param>
+    /// <exception cref="ArgumentException">Thrown when the default body is the one with a field operation, which an indexer cannot be written with.</exception>
+    void SetSetter(DefaultPropertyBody body);
 }
 
 /// <summary>

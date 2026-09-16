@@ -98,7 +98,7 @@ partial class MethodHandler
             ? DeclaringTypeHandler.GetPropertyInBase(memberName)
             : memberSymbol.HasFlag(MemberSymbols.Object) || memberSymbol.HasFlag(MemberSymbols.Static)
                 ? DeclaringTypeHandler.AssemblyHandler.GetPropertyFromType(declaringTypeFromPattern ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName)), memberName)
-                : DeclaringTypeHandler.GetPropertyInThis(memberName);
+                : DeclaringTypeHandler.GetPropertyInThisOrABaseType(memberName);
         if (propertyDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName));
