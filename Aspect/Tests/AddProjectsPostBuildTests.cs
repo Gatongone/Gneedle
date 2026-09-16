@@ -87,6 +87,23 @@ public class AddProjectsPostBuildTests
     }
 
     /// <summary>
+    /// Write a project of the content given into a directory of its own, and return the path of it.<para/>
+    /// The content is written as it stands rather than as a declaration which the project element wraps, because what a
+    /// project which cannot be read holds is not a declaration which parses.
+    /// </summary>
+    /// <param name="name">Name of the project, which is the name of its directory and of its file.</param>
+    /// <param name="content">What the file holds.</param>
+    private string WriteProjectAsWritten(string name, string content)
+    {
+        var directory = Path.Combine(m_WorkDirectory, name);
+        Directory.CreateDirectory(directory);
+
+        var path = Path.Combine(directory, $"{name}.csproj");
+        File.WriteAllText(path, content);
+        return path;
+    }
+
+    /// <summary>
     /// The target which a project declares under <paramref name="name"/>, or null when it declares none.
     /// </summary>
     /// <param name="project">The project which was read back from its file.</param>
@@ -393,6 +410,99 @@ public class AddProjectsPostBuildTests
         Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
         Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
                     "a project which refers to the weaver was not woven.");
+    }
+
+    #endregion
+
+    #region What the task reports
+
+    [Test]
+    public void A_Project_Which_Cannot_Be_Read_Is_Reported_And_The_Rest_Are_Woven()
+    {
+        // One project of a solution which cannot be read does not take the projects around it with it: what went wrong
+        // is reported, and the walk goes on, so that a solution which holds such a project is woven as far as it can be
+        // rather than not at all.
+        var broken = WriteProjectAsWritten("Broken", "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup></Project>");
+        var woven = WriteProject("App");
+        var solution = WriteSolution(withFolder: false, "Broken", "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.False, "a project which could not be read was passed over in silence.");
+        Assert.That(engine.Errors.Single(), Does.Contain("Broken"), string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(woven), Does.Contain("GneedleTarget"),
+                    "the projects of a solution which holds one which cannot be read were left without their weaving.");
+        Assert.That(File.ReadAllText(broken), Is.EqualTo("<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup></Project>"),
+                    "a project which cannot be read was written to.");
+    }
+
+    [Test]
+    public void A_Solution_Which_Cannot_Be_Read_Is_Reported()
+    {
+        var (result, engine) = Scan(Path.Combine(m_WorkDirectory, "Nowhere.sln"));
+
+        Assert.That(result, Is.False);
+        Assert.That(engine.Errors.Single(), Does.Contain("Nowhere.sln"), string.Join(Environment.NewLine, engine.Errors));
+    }
+
+    [Test]
+    public void A_Parameter_Which_No_Longer_Holds_What_The_Package_Writes_Is_Written_Back()
+    {
+        // A project which the package wrote once holds the target which weaves and the task which it runs, and the
+        // value of one of the parameters of that task is one which the package no longer writes, which is what a
+        // project written by an earlier version of it holds. The target and the task are found where they are and the
+        // project is written back for the parameter alone, because what the package writes is what the project is to
+        // hold.
+        var project = WriteProjectAsWritten("App", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net5.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="..\Gneedle.Aspect.csproj" />
+              </ItemGroup>
+              <Target Name="GneedleTarget" AfterTargets="PostBuildEvent">
+                <AssemblyInject TargetPath="$(Stale)" ProjectPath="$(ProjectPath)" KeepWeaver="$(KeepWeaver)" />
+              </Target>
+              <UsingTask TaskName="Gneedle.Aspect.AssemblyInject" AssemblyFile="C:\packages\Gneedle.Aspect\tools\netstandard2.1\Gneedle.Aspect.dll" />
+            </Project>
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        var written = File.ReadAllText(project);
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(written, Does.Contain("GneedleTarget"), "the target which the project held was taken out of it.");
+        Assert.That(written, Does.Not.Contain("$(Stale)"),
+                    "a parameter which no longer holds what the package writes was left as it was.");
+        Assert.That(written, Does.Contain("TargetPath=\"$(TargetPath)\""),
+                    "the parameter which the package writes was not written into the task.");
+    }
+
+    /// <summary>
+    /// The parameters which a build has to give the tasks of this package, which are the ones a task reads without
+    /// asking whether they were set.
+    /// </summary>
+    private static readonly (Type Task, string Parameter)[] RequiredParameters =
+    [
+        (typeof(AddProjectsPostBuild), nameof(AddProjectsPostBuild.ProjectName)),
+        (typeof(AddProjectsPostBuild), nameof(AddProjectsPostBuild.SolutionPath)),
+        (typeof(AddProjectsPostBuild), nameof(AddProjectsPostBuild.TargetPath)),
+        (typeof(AssemblyInject), nameof(AssemblyInject.ProjectPath)),
+        (typeof(AssemblyInject), nameof(AssemblyInject.TargetPath)),
+    ];
+
+    [Test]
+    public void Every_Parameter_Which_A_Build_Has_To_Give_Is_Marked_As_Required()
+    {
+        // The build refuses to run a task which was not given a parameter it declares to be required, which is what a
+        // project which names no solution is failed by, rather than by a task which was given nothing and read it.
+        foreach (var (task, parameter) in RequiredParameters)
+        {
+            Assert.That(task.GetProperty(parameter)!.GetCustomAttribute<Microsoft.Build.Framework.RequiredAttribute>(), Is.Not.Null,
+                        $"'{task.Name}.{parameter}' is not required, so a build which sets nothing is answered by a task which reads nothing.");
+        }
     }
 
     #endregion
