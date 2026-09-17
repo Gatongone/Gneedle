@@ -83,16 +83,12 @@ partial class AssemblyHandler
         if (type != null) return GetCecilType(type);
 
         // A type which the target assembly declares is not loadable by its name yet, so it is looked up by its full name.
-        // It has to be the full name and the nested types as well, just like GetType(string) looks it up.
+        // It has to be the full name and the nested types as well, just like GetType(string) looks it up, and a type
+        // which a nested type declares is named by every level of the nesting which names it.
         foreach (var module in Assembly.Source.Modules)
         {
-            foreach (var typeDefinition in module.Types)
-            {
-                if (typeDefinition.FullName == typeName) return GetCecilType(typeDefinition);
-
-                var nestedType = typeDefinition.NestedTypes.FirstOrDefault(nested => nested.FullName == typeName);
-                if (nestedType != null) return GetCecilType(nestedType);
-            }
+            var typeDefinition = InjectorInterfaces.AllTypes(module).FirstOrDefault(type => type.FullName == typeName);
+            if (typeDefinition != null) return GetCecilType(typeDefinition);
         }
 
         throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);

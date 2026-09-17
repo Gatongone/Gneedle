@@ -10,18 +10,11 @@ partial class AssemblyHandler
     /// <param name="filter">The filter to apply to the type definitions.</param>
     /// <returns>An array of type handlers that match the given filter.</returns>
     internal ITypeHandler[] GetTypes(Func<TypeDefinition, bool> filter)
-    {
-        var handlers = new List<ITypeHandler>();
-        foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
-        {
-            // Append type definition.
-            if (filter(type)) handlers.Add(GetType(type));
-            // Append nested type definition.
-            handlers.AddRange(type.NestedTypes.Where(filter).Select(GetType));
-        }
-
-        return handlers.ToArray<ITypeHandler>();
-    }
+        => Assembly.Source.Modules
+            .SelectMany(InjectorInterfaces.AllTypes)
+            .Where(filter)
+            .Select(GetType)
+            .ToArray<ITypeHandler>();
 
     /// <summary>
     /// Get the type handler for the given type definition.
@@ -39,35 +32,20 @@ partial class AssemblyHandler
     /// <inheritdoc/>
     public ITypeHandler? GetType(string typeFullName)
     {
-        foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
-        {
-            // Return type definition.
-            if (type.FullName.Equals(typeFullName)) return GetType(type);
-            // Return nested type definition.
-            var nestedType = type.NestedTypes.FirstOrDefault(nestedType => nestedType.FullName.Equals(typeFullName));
-            if (nestedType != null) return GetType(nestedType);
-        }
+        // A type which a nested type declares is a type which the assembly declares, and its name is as long as the
+        // nesting is deep, so the types of a module are read with the ones which the types themselves declare.
+        var typeDefinition = Assembly.Source.Modules
+            .SelectMany(InjectorInterfaces.AllTypes)
+            .FirstOrDefault(type => type.FullName.Equals(typeFullName));
 
-        return null;
+        return typeDefinition == null ? null : GetType(typeDefinition);
     }
 
     /// <summary>
     /// The handler of every type which the assembly declares, the nested ones included.
     /// </summary>
     /// <returns>The handlers of the types, in the order the metadata declares them.</returns>
-    public ITypeHandler[] GetTypes()
-    {
-        var handlers = new List<ITypeHandler>();
-        foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
-        {
-            // Append type definition.
-            handlers.Add(GetType(type));
-            // Append nested type definition.
-            handlers.AddRange(type.NestedTypes.Select(GetType));
-        }
-
-        return handlers.ToArray<ITypeHandler>();
-    }
+    public ITypeHandler[] GetTypes() => GetTypes(_ => true);
 
     /// <inheritdoc/>
     public ITypeHandler GetType(Type type)
