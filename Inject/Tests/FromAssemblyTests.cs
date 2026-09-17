@@ -458,7 +458,7 @@ namespace Gneedle.Inject.Test
             //
             // The case this does not cover is an assembly which was loaded from bytes: nothing hands the image of an
             // assembly over on .NET 5 and later, so such an assembly cannot be read back at all.
-            var path = Path.Combine(Path.GetTempPath(), $"gneedle-file-{Guid.NewGuid():N}.dll");
+            var path = TempFiles.NewPath("gneedle-file", ".dll");
             var dependency = Assembly.Create("FileDependencyAssembly");
             ((AssemblyHandler) dependency.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
             dependency.SaveTo(path);
@@ -474,8 +474,10 @@ namespace Gneedle.Inject.Test
             }
             finally
             {
-                // The loaded assembly holds its file for as long as it is loaded, so the file is left behind in the
-                // temporary directory when it cannot be removed.
+                // The image of the assembly is mapped for as long as the process which loaded it lives, and a system
+                // which mapped an image refuses to remove the file of it: what this run leaves is the one file of this
+                // kind which the next run sweeps. The removal is asked for all the same, a runtime which answers it
+                // being one which leaves nothing at all.
                 try
                 {
                     File.Delete(path);
@@ -491,7 +493,7 @@ namespace Gneedle.Inject.Test
         {
             // The dependency is loaded from its bytes and its file is removed, so nothing of it is reachable from the
             // file system: the resolver finds it through the image of the assembly which is loaded in the process.
-            var path = Path.Combine(Path.GetTempPath(), $"gneedle-bytes-{Guid.NewGuid():N}.dll");
+            var path = TempFiles.NewPath("gneedle-bytes", ".dll");
             var dependency = Assembly.Create("BytesDependencyAssembly");
             ((AssemblyHandler) dependency.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
             dependency.SaveTo(path);
@@ -509,7 +511,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void AssemblyLoader_Remembers_The_Bytes_It_Loaded()
         {
-            var path = Path.Combine(Path.GetTempPath(), $"gneedle-loader-{Guid.NewGuid():N}.dll");
+            var path = TempFiles.NewPath("gneedle-loader", ".dll");
             var produced = Assembly.Create("LoaderProbeAssembly");
             ((AssemblyHandler) produced.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
             produced.SaveTo(path);
@@ -527,7 +529,7 @@ namespace Gneedle.Inject.Test
         public void AssemblyLoader_Remembers_The_Bytes_Which_It_Was_Told_Of()
         {
             // The assembly is loaded by the test rather than by the loader, which is the case Remember is for.
-            var path = Path.Combine(Path.GetTempPath(), $"gneedle-remember-{Guid.NewGuid():N}.dll");
+            var path = TempFiles.NewPath("gneedle-remember", ".dll");
             var produced = Assembly.Create("RememberProbeAssembly");
             ((AssemblyHandler) produced.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
             produced.SaveTo(path);
@@ -550,7 +552,7 @@ namespace Gneedle.Inject.Test
             // Reading the memory which an image was mapped to is a Windows layout, so the bytes which the loader
             // remembered are the way this is covered on another runtime. The two paths cannot be told apart on Windows,
             // where both would find the image.
-            var path = Path.Combine(Path.GetTempPath(), $"gneedle-loader-{Guid.NewGuid():N}.dll");
+            var path = TempFiles.NewPath("gneedle-loader", ".dll");
             var dependency = Assembly.Create("LoaderDependencyAssembly");
             ((AssemblyHandler) dependency.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
             dependency.SaveTo(path);
