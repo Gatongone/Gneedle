@@ -65,6 +65,16 @@ public static class Injections
         private bool m_Reported;
 
         /// <summary>
+        /// Full names of the attribute types which the injectors of this run were read from, as the metadata names them.
+        /// <para/>
+        /// The traces of the injectors are taken back out by the names which were read here, because an injector may be
+        /// declared by another assembly and put on a member of this one: a project which declares the attributes for
+        /// another project to weave with is that case, and the type of such an attribute is not this assembly's to
+        /// remove, while the attribute which carries it is what this assembly applied and what it takes off.
+        /// </summary>
+        private readonly HashSet<string> m_InjectorAttributes = new(StringComparer.Ordinal);
+
+        /// <summary>
         /// Apply every injector of the assembly.
         /// </summary>
         public (bool Changed, byte[] Image) Run()
@@ -94,8 +104,10 @@ public static class Injections
 
             // The injectors are read from attributes which the assembly declares, and those attributes name the weaver,
             // so the weaver is removed from the assembly once they have been applied to it. An assembly which declares
-            // them for another one to weave with keeps them, and keeps the weaver which they name.
-            if (removesTheWeaver) changed |= handler.RemoveTheWeaver();
+            // them for another one to weave with keeps them, and keeps the weaver which they name. The attributes which
+            // were read are named to the removal, because an injector may be declared by another assembly: the trace of
+            // one of those is an attribute of this assembly all the same, and it is taken off the member which has it.
+            if (removesTheWeaver) changed |= handler.RemoveTheWeaver(m_InjectorAttributes);
 
             // The assembly is written back only when an injector changed it and nothing was reported of the run, which
             // is what keeps an assembly which is woven in part from being taken for one which was woven whole. The
@@ -119,7 +131,8 @@ public static class Injections
         }
 
         /// <summary>
-        /// Whether a member carries an attribute whose type implements one of the interfaces which are named.
+        /// Whether a member carries an attribute whose type implements one of the interfaces which are named, which is
+        /// recorded as it is read, because the attributes which were read are the ones which are taken back out.
         /// </summary>
         /// <remarks>
         /// The attributes of a member are read from the metadata of the assembly before they are read from the reflection
@@ -128,17 +141,20 @@ public static class Injections
         /// with the member, although the weaving has no use for an attribute which is not an injector: a method which
         /// carries an attribute of the editor of Unity is the case which this is here for.<para/>
         /// An attribute whose type cannot be resolved is answered as one which is not an injector, which is what leaves
-        /// such a member alone rather than failing it. The type of an injector is declared by the assembly which the
-        /// weaving reads or beside it, so it resolves wherever the member is woven at all.<para/>
-        /// The interface is looked for through the types which the module declares, which is the reading which the
-        /// weaving takes its own traces back out by: an injector which only one of the two read would be applied and left
-        /// in the assembly, or read and never applied.
+        /// such a member alone rather than failing it. Such an attribute is one which the weaving does not apply either,
+        /// which the reading here and the reading of the reflection agree on: the attribute of an injector is loaded by
+        /// the reflection of the member which carries it, so a type which the weaving cannot read is a type which it
+        /// could not apply.<para/>
+        /// Every attribute of the kind is read rather than the first of them, because the attributes which were read are
+        /// the ones which are taken back out, and one of them which was left behind would be read again by a weaving of
+        /// the assembly which was woven.
         /// </remarks>
         /// <param name="attributes">The attributes which the member carries.</param>
         /// <param name="injectorInterfaces">Full names of the interfaces which an injector of the kind implements.</param>
         /// <returns>Whether the member carries an attribute which one of the interfaces is implemented by.</returns>
-        private static bool HoldsInjector(IEnumerable<CustomAttribute> attributes, string[] injectorInterfaces)
+        private bool HoldsInjector(IEnumerable<CustomAttribute> attributes, string[] injectorInterfaces)
         {
+            var holds = false;
             foreach (var attribute in attributes)
             {
                 TypeDefinition? attributeType;
@@ -153,10 +169,16 @@ public static class Injections
                     continue;
                 }
 
-                if (attributeType != null && InjectorInterfaces.IsAnInjector(attributeType, injectorInterfaces)) return true;
+                if (attributeType == null || !InjectorInterfaces.IsAnInjector(attributeType, injectorInterfaces)) continue;
+
+                // The name is the one which the metadata holds rather than the one which the runtime reads, because the
+                // metadata is what the trace is taken out by: a nested type is named with a '+' by the one and with a
+                // '/' by the other, and a name of one of those would not be found in the other.
+                m_InjectorAttributes.Add(attribute.AttributeType.FullName);
+                holds = true;
             }
 
-            return false;
+            return holds;
         }
 
         /// <summary>

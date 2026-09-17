@@ -21,19 +21,25 @@ partial class AssemblyHandler
     /// and an image which names what it does not hold cannot be read. One which is still named keeps its place and gives
     /// up the interfaces it implements with the methods which implement them, which are the ones which reach for the
     /// weaver.<para/>
+    /// An injector which another assembly declares is one which this assembly does not hold a type of, while the
+    /// attribute which it was read from is a part of this assembly and is taken off the member which carries it: those
+    /// are named here rather than looked for among the types of the module.<para/>
     /// The reference is dropped only once nothing names the weaver, because an assembly which calls the weaver from its
     /// own code needs the reference, and an image which names a type of an assembly it does not refer to cannot be read.
     /// </remarks>
+    /// <param name="attributesRead">Full names of the attribute types which the injectors were read from, as the
+    /// metadata names them, or null when none was read.</param>
     /// <returns>Whether the assembly was changed.</returns>
-    internal bool RemoveTheWeaver()
+    internal bool RemoveTheWeaver(IEnumerable<string>? attributesRead = null)
     {
         var module = Assembly.Source.MainModule;
         var attributes = FindInjectorAttributes(module);
+        var read = attributesRead as IReadOnlyCollection<string> ?? attributesRead?.ToArray() ?? [];
         var changed = false;
 
-        if (attributes.Count > 0)
+        if (attributes.Count > 0 || read.Count > 0)
         {
-            RemoveUses(module, attributes);
+            changed |= RemoveUses(module, attributes, read);
 
             // A type which declares an injector is named by the types which declare one as well, and which of them is
             // read first is the order of the metadata rather than anything about them: a type which derives from an
@@ -56,7 +62,10 @@ partial class AssemblyHandler
             }
 
             foreach (var type in pending) StripInjector(module, type);
-            changed = true;
+
+            // A type which the module declares is one which is removed or stripped above, which is a change of the
+            // assembly however the attributes were taken off it.
+            changed |= attributes.Count > 0;
         }
 
         var weaver = module.AssemblyReferences.FirstOrDefault(reference => reference.Name == typeof(IAssemblyInjector).Assembly.GetName().Name);
@@ -97,8 +106,12 @@ partial class AssemblyHandler
     /// </summary>
     /// <param name="module">The module which is read.</param>
     /// <param name="attributes">The types which declare an injector, by full name.</param>
-    private static void RemoveUses(ModuleDefinition module, IReadOnlyDictionary<string, TypeDefinition> attributes)
+    /// <param name="read">Full names of the attribute types which the injectors were read from, which are the ones which
+    /// were applied. An injector which another assembly declares is one which only this names.</param>
+    /// <returns>Whether an attribute was removed.</returns>
+    private static bool RemoveUses(ModuleDefinition module, IReadOnlyDictionary<string, TypeDefinition> attributes, IReadOnlyCollection<string> read)
     {
+        var removed = false;
         Remove(module.Assembly.CustomAttributes);
         Remove(module.CustomAttributes);
 
@@ -120,7 +133,7 @@ partial class AssemblyHandler
             }
         }
 
-        return;
+        return removed;
 
         /// <summary>
         /// Take the attributes which the injectors were read from off a member.
@@ -131,7 +144,11 @@ partial class AssemblyHandler
         {
             for (var index = uses.Count - 1; index >= 0; index--)
             {
-                if (attributes.ContainsKey(uses[index].AttributeType.FullName)) uses.RemoveAt(index);
+                var name = uses[index].AttributeType.FullName;
+                if (!attributes.ContainsKey(name) && !read.Contains(name)) continue;
+
+                uses.RemoveAt(index);
+                removed = true;
             }
         }
     }

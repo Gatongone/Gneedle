@@ -10,10 +10,11 @@ namespace Gneedle.Inject;
 /// </summary>
 /// <remarks>
 /// The reading follows the base types and the interfaces of the types which the module declares, and stops where the
-/// module ends, rather than resolving whatever a type refers to. The weaving takes the traces of the injectors back out
-/// of the assembly it wove, and it can only take out what the module declares: an injector which is read through a type
-/// of another assembly would be applied and its trace left behind, which is an assembly that still names the weaver by an
-/// attribute nobody reads. What the reading finds and what the taking out removes are therefore the same types.
+/// module ends, rather than resolving whatever a type refers to. What it is read for is the types which declare an
+/// injector, which are the ones the weaving removes, or strips where the assembly still names them: an injector which
+/// another assembly declares is not a type of this one, and the weaving leaves it where it is. The attribute which such
+/// an injector was read from is a part of the assembly which carries it, which the weaving takes off the member which has
+/// it by the name it read, so that nothing of an injector is left behind either way.
 /// </remarks>
 internal static class InjectorInterfaces
 {
@@ -50,7 +51,7 @@ internal static class InjectorInterfaces
 
     /// <summary>
     /// Every interface an injector implements, whichever member it injects into, which is what the types an injector is
-    /// read from are read for and what their traces are taken out by.
+    /// read from are read for and what the types of them are taken out by.
     /// </summary>
     internal static readonly string[] AllNames =
     [

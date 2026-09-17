@@ -357,6 +357,36 @@ public class InjectionsTests
     }
 
     [Test]
+    public void Apply_Reads_An_Injector_Of_Another_Assembly_And_Takes_Its_Attribute_Out()
+    {
+        // A project which declares the attributes for another project to weave with is the case of an injector which is
+        // read from an attribute of one assembly and put on a member of another one. The injector is applied, and the
+        // attribute is taken off the member which carries it: the type of it is declared by the other assembly, which
+        // keeps it, so the attribute is the trace of a weaving which crossed the boundary of the assemblies.
+        var built = Assembly.Create("HostOfAnInjectorOfAnotherAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) built.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        run.AddAttribute(typeof(RunBodyAttribute).ToGneedleType());
+
+        using var written = new MemoryStream();
+        built.SaveTo(written);
+        var image = written.ToArray();
+
+        var (changed, result) = Injections.Apply(AssemblyLoader.LoadFromBytes(image), image);
+
+        Assert.That(changed, Is.True, "the injector which another assembly declares was not applied.");
+        using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
+        var woven = read.MainModule.GetType($"{Ns}.Host")!.Methods.Single(method => method.Name == "Run");
+
+        // The body which the injector names is declared by that assembly as well, so a member which was woven is one
+        // whose weaving read the injector and the body of its template both across the boundary of the assemblies.
+        Assert.That(woven.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] {OpCodes.Ldc_I4_1, OpCodes.Ret}),
+                    "the body which the injector of the other assembly names was not woven.");
+        Assert.That(woven.CustomAttributes.Any(attribute => attribute.AttributeType.Name == nameof(RunBodyAttribute)), Is.False,
+                    "the attribute which the injector was read from was left on the member.");
+    }
+
+    [Test]
     public void IsAnInjector_Does_Not_Follow_A_Type_Which_The_Module_Does_Not_Declare()
     {
         // The reading follows the base types and the interfaces of the types which the module declares, and it stops
