@@ -396,6 +396,14 @@ The tests of the weaver are run on `net5.0` by the runtime they were built for. 
 DOTNET_ROLL_FORWARD=LatestMajor dotnet test Inject/Tests/Gneedle.Inject.Test.csproj
 ```
 
+The tests read the templates back as the IL which the compiler wrote for them, and which IL that is depends on whether the build of the assembly of tests was optimized: a temporary which the optimizer folds into the use of it is no local of the body which stands before a call, and the read of it is not there to be counted. The shapes which the assertions name are the ones a build without the optimizer writes, which is what the project asks for whichever configuration the tests are built in; the shapes which a release build of a consumer holds are the ones the optimizer writes, which is what the same tests are run against a second time:
+
+```
+DOTNET_ROLL_FORWARD=LatestMajor dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -p:Optimize=true
+```
+
+Which of the two legs an assembly was built as is named in its metadata, and a test of the suite reads it back: a build which does not answer the flag, or one which was left behind by the other leg, is reported rather than passing as a shape which it does not hold.
+
 What is tested of the post processor is beside it in the package of Unity rather than here, because the compilation pipeline which those tests are written against is one which only an editor has; they are run by the test runner of an editor, which [the readme of that package](Aspect/Unity/README.md#tests) describes.
 
 The whole tree is built with `dotnet build Gneedle.sln -c Release`.
