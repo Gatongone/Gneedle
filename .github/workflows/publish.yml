@@ -95,6 +95,11 @@ jobs:
         shell: bash
         run: |
           dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -c Release
+          # The tests of the weaver read the templates back as the IL which the compiler wrote for them, and the shapes
+          # which they name are the ones a build without the optimizer writes, which is the run above. This one is the
+          # same suite against the shapes which the optimizer writes, which are the ones a release build of a consumer
+          # holds: without it the assertions would be read against shapes which no consumer ever has.
+          dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -c Release -p:Optimize=true
           dotnet test Aspect/Tests/Gneedle.Aspect.Test.csproj -c Release
 
       - name: Build the weaver which the package of Unity ships

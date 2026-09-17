@@ -11,9 +11,13 @@ namespace Gneedle.Aspect.Test;
 /// The injectors are read from the assembly by reflection, so the members which are injected have to be the members of
 /// a compiled assembly which carries them. Most of the tests take the assembly which holds them, copied to a file of
 /// its own, because the fixtures are compiled into it; each works on its own copy, since the task writes the assembly
-/// back to the file it read. The tests which need an assembly of a shape the compiler does not produce build one.
+/// back to the file it read. The tests which need an assembly of a shape the compiler does not produce build one.<para/>
+/// The injectors of the fixtures are told where to record the members they were asked to inject through a variable of
+/// the process, which each test sets for itself and clears afterwards: the tests of this fixture are therefore run one
+/// at a time rather than beside the other tests of the assembly, which would read the variable of another test.
 /// </summary>
 [TestFixture]
+[NonParallelizable]
 public class AssemblyInjectTests
 {
     /// <summary>
@@ -305,6 +309,22 @@ public class AssemblyInjectTests
         Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "Gneedle.Inject"), Is.True);
     }
 
+    [Test]
+    public void The_Symbols_Of_The_Assembly_Which_Was_Replaced_Are_Not_Left_Beside_It()
+    {
+        // What is written carries no debug directory, which is what a debugger reads to find the symbols of an
+        // assembly. The symbols of the assembly which was replaced therefore describe an assembly which is no longer
+        // there, and they are taken away with it rather than left to be paired with the image by the name of the file.
+        var assembly = CopyOfTheTestAssembly();
+        var symbols = Path.ChangeExtension(assembly, ".pdb");
+        File.Copy(Path.ChangeExtension(System.Reflection.Assembly.GetExecutingAssembly().Location, ".pdb"), symbols);
+
+        var (result, engine) = Inject(assembly, Project());
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.Exists(symbols), Is.False, "the symbols of the assembly which was replaced were left beside it.");
+    }
+
     #endregion
 
     #region What the task refuses
@@ -381,6 +401,62 @@ public class AssemblyInjectTests
         Assert.That(result, Is.False);
         Assert.That(engine.Errors.Single(), Does.Contain("is not a class"));
         Assert.That(File.ReadAllBytes(partlyWoven), Is.EqualTo(before), "the assembly which was woven in part was written");
+    }
+
+    #endregion
+
+    #region What the task reports
+
+    [Test]
+    public void A_Project_Which_Cannot_Be_Read_Is_Reported()
+    {
+        // The project is read to tell whether the aspect is disabled, and that cannot be told of one which is written
+        // wrongly: it is reported as what the task could not do rather than thrown at the build as a task which failed
+        // of its own accord.
+        var assembly = CopyOfTheTestAssembly();
+        var broken = Path.Combine(m_WorkDirectory, "Broken.csproj");
+        File.WriteAllText(broken, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup></Project>");
+
+        var (result, engine) = Inject(assembly, broken);
+
+        Assert.That(result, Is.False);
+        Assert.That(engine.Errors.Single(), Does.Contain("Broken.csproj"), string.Join(Environment.NewLine, engine.Errors));
+    }
+
+    [Test]
+    public void An_Assembly_Which_Cannot_Be_Woven_Is_Reported()
+    {
+        var notAnAssembly = Path.Combine(m_WorkDirectory, "NotAnAssembly.dll");
+        File.WriteAllBytes(notAnAssembly, [1, 2, 3, 4]);
+
+        var (result, engine) = Inject(notAnAssembly, Project());
+
+        Assert.That(result, Is.False);
+        Assert.That(engine.Errors.Single(), Does.Contain("NotAnAssembly.dll"), string.Join(Environment.NewLine, engine.Errors));
+    }
+
+    [Test]
+    public void An_Assembly_Which_Cannot_Be_Written_Is_Reported_And_Left_As_It_Was()
+    {
+        // The file which was read is held by whoever holds it, and a write which cannot be made is reported rather than
+        // thrown: the assembly stays the one which was built, and nothing which the write wrote is left beside it.
+        var assembly = CopyOfTheTestAssembly();
+        var before = File.ReadAllBytes(assembly);
+
+        using (var held = new FileStream(assembly, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var (result, engine) = Inject(assembly, Project());
+
+            Assert.That(result, Is.False);
+            Assert.That(engine.Errors.Single(), Does.Contain(Path.GetFileName(assembly)), string.Join(Environment.NewLine, engine.Errors));
+        }
+
+        Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was not left as the build wrote it.");
+
+        // The image is written under a name of its own before it is put in place of the assembly, so a write which
+        // could not be made is one of those and nothing else.
+        Assert.That(Directory.GetFiles(m_WorkDirectory, "*.gneedle"), Is.Empty,
+                    "what the write wrote was left beside the assembly.");
     }
 
     #endregion

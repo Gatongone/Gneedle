@@ -27,6 +27,13 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
     private bool m_WithFlagsAttribute;
 
     /// <summary>
+    /// The handler of the enum which the chain built, or null while the enum is still being described: the chain
+    /// answers with it from the point where it ends, which is what makes a chain which is asked for the handler of the
+    /// enum twice append one enum to the module rather than two of the same name.
+    /// </summary>
+    private IEnumHandler? m_Handler;
+
+    /// <summary>
     /// Create a decorator which describes an enum before it is appended to the module.
     /// </summary>
     /// <param name="assemblyHandler">Handler of the assembly which the enum is appended to.</param>
@@ -42,6 +49,8 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
     /// <inheritdoc/>
     public IEnumTypeDecorator WithUnderlyingType(IType underlyingType)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         m_UnderlyingType = underlyingType switch
         {
             NongenericType nongeneric => m_AssemblyHandler.GetCecilType(nongeneric.Type).Reference,
@@ -53,6 +62,8 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
     /// <inheritdoc/>
     public IEnumTypeDecorator WithUnderlyingType(Type underlyingType)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         m_UnderlyingType = m_AssemblyHandler.GetCecilType(underlyingType).Reference;
         return this;
     }
@@ -60,6 +71,8 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
     /// <inheritdoc/>
     public ITypeDecorator WithFlagsAttribute()
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         m_WithFlagsAttribute = true;
         return this;
     }
@@ -67,6 +80,11 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
     /// <inheritdoc/>
     public IEnumHandler GetHandler()
     {
+        // The enum is appended to the module once, and the chain answers with the handler of it from then on: a chain
+        // which is asked for the handler of the enum twice appends one enum rather than two of the same name, each with
+        // its own value__ field and its own copy of the attribute.
+        if (m_Handler is { } built) return built;
+
         // Set base type to System.Enum. Its reference is owned by the target module already, so it is appended as it is.
         m_TypeDefinition.BaseType = m_AssemblyHandler.GetCecilType(typeof(Enum)).Reference;
 
@@ -85,23 +103,32 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
         // Add type to module.
         m_AssemblyHandler.Assembly.Source.MainModule.Types.Add(m_TypeDefinition);
 
-        return new EnumHandler(m_AssemblyHandler, m_TypeDefinition, m_UnderlyingType);
+        m_Handler = new EnumHandler(m_AssemblyHandler, m_TypeDefinition, m_UnderlyingType);
+        return m_Handler;
     }
 
     /// <summary>
-    /// Decorator for create type definition to current module.
+    /// Decorator which completes the enum. It is the end of the chain, which asks for the handler of the enum which the
+    /// chain built and for nothing else.
     /// </summary>
     public interface ITypeDecorator
     {
         /// <summary>
-        /// Build enum definition to module.
+        /// Build the enum into the module and answer with the handler of the enum which was built.<para/>
+        /// The enum is appended once: the chain answers with the handler of it from then on, and a part which is
+        /// described after that point is refused.
         /// </summary>
         /// <returns>Handler for enum.</returns>
         IEnumHandler GetHandler();
     }
 
     /// <summary>
-    /// Decorator for describing enum modifiers.
+    /// Decorator for describing enum modifiers. It is the entry of the chain, which asks for the handler of the enum
+    /// which it builds as well, because the underlying type and the attribute are the parts it makes the enum up
+    /// with.<para/>
+    /// The chain describes the enum until the enum is appended to the module, which is where it ends: a part which is
+    /// described after that is refused, because what the chain holds is read where the enum is built and nothing reads
+    /// it afterwards.
     /// </summary>
     public interface IEnumTypeDecorator : ITypeDecorator
     {
@@ -109,6 +136,7 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
         /// Append <see cref="FlagsAttribute"/> to the enum.
         /// </summary>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the enum was already built.</exception>
         ITypeDecorator WithFlagsAttribute();
 
         /// <summary>
@@ -116,6 +144,7 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
         /// </summary>
         /// <param name="underlyingType">Underlying type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the enum was already built.</exception>
         IEnumTypeDecorator WithUnderlyingType(IType underlyingType);
 
         /// <summary>
@@ -123,6 +152,7 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
         /// </summary>
         /// <param name="underlyingType">Underlying type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the enum was already built.</exception>
         IEnumTypeDecorator WithUnderlyingType(Type underlyingType);
     }
 }

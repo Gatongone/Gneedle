@@ -1,7 +1,7 @@
 namespace Gneedle.Inject;
 
 /// <summary>
-/// Cache of the raw data of an assembly, which the assembly is read from and written back to.
+/// Cache of the raw data of an assembly, which the assembly is read from.
 /// </summary>
 internal interface IAssemblyCache : IDisposable
 {
@@ -15,7 +15,7 @@ internal interface IAssemblyCache : IDisposable
 /// Cache which holds the raw data of an assembly which a file of the file system backs.
 /// </summary>
 /// <param name="path">Path of the file which backs the assembly.</param>
-/// <param name="stream">Stream of that file.</param>
+/// <param name="stream">Stream which holds the data which was read out of that file.</param>
 internal class FileCache(string path, Stream stream) : IAssemblyCache
 {
     /// <summary>

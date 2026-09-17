@@ -10,18 +10,11 @@ partial class AssemblyHandler
     /// <param name="filter">The filter to apply to the type definitions.</param>
     /// <returns>An array of type handlers that match the given filter.</returns>
     internal ITypeHandler[] GetTypes(Func<TypeDefinition, bool> filter)
-    {
-        var handlers = new List<ITypeHandler>();
-        foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
-        {
-            // Append type definition.
-            if (filter(type)) handlers.Add(GetType(type));
-            // Append nested type definition.
-            handlers.AddRange(type.NestedTypes.Where(filter).Select(GetType));
-        }
-
-        return handlers.ToArray<ITypeHandler>();
-    }
+        => Assembly.Source.Modules
+            .SelectMany(InjectorInterfaces.AllTypes)
+            .Where(filter)
+            .Select(GetType)
+            .ToArray<ITypeHandler>();
 
     /// <summary>
     /// Get the type handler for the given type definition.
@@ -31,43 +24,41 @@ partial class AssemblyHandler
     internal ITypeHandler GetType(TypeDefinition typeDefinition) => typeDefinition switch
     {
         {IsValueType: true, IsEnum: false} => new StructHandler(this, typeDefinition),
-        {IsEnum     : true}                => new EnumHandler(this, typeDefinition, typeDefinition.Fields.First(f => f.Name == "value__").FieldType),
+        {IsEnum     : true}                => new EnumHandler(this, typeDefinition, ValueFieldTypeOf(typeDefinition)),
         {IsClass    : true}                => new ClassHandler(this, typeDefinition),
         _                                  => new TypeHandler(this, typeDefinition)
     };
 
+    /// <summary>
+    /// The type which the values of an enum are read as, which is the type of the field which holds one of them.<para/>
+    /// An enum which declares no such field is not an enum which anything can be read out of, and the refusal names it:
+    /// the lookup of the field on its own answers with a sequence which holds nothing, which says nothing of the type
+    /// which was asked about.
+    /// </summary>
+    /// <param name="typeDefinition">The enum which is read.</param>
+    /// <returns>The type which the values of the enum are read as.</returns>
+    /// <exception cref="ArgumentException">Thrown when the enum declares no field which holds the value of a member.</exception>
+    private static TypeReference ValueFieldTypeOf(TypeDefinition typeDefinition)
+        => typeDefinition.Fields.FirstOrDefault(field => field.Name == "value__")?.FieldType
+           ?? throw new ArgumentException(string.Format(ErrorMessages.ENUM_DECLARES_NO_VALUE_FIELD, typeDefinition.FullName));
+
     /// <inheritdoc/>
     public ITypeHandler? GetType(string typeFullName)
     {
-        foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
-        {
-            // Return type definition.
-            if (type.FullName.Equals(typeFullName)) return GetType(type);
-            // Return nested type definition.
-            var nestedType = type.NestedTypes.FirstOrDefault(nestedType => nestedType.FullName.Equals(typeFullName));
-            if (nestedType != null) return GetType(nestedType);
-        }
+        // A type which a nested type declares is a type which the assembly declares, and its name is as long as the
+        // nesting is deep, so the types of a module are read with the ones which the types themselves declare.
+        var typeDefinition = Assembly.Source.Modules
+            .SelectMany(InjectorInterfaces.AllTypes)
+            .FirstOrDefault(type => type.FullName.Equals(typeFullName));
 
-        return null;
+        return typeDefinition == null ? null : GetType(typeDefinition);
     }
 
     /// <summary>
     /// The handler of every type which the assembly declares, the nested ones included.
     /// </summary>
     /// <returns>The handlers of the types, in the order the metadata declares them.</returns>
-    public ITypeHandler[] GetTypes()
-    {
-        var handlers = new List<ITypeHandler>();
-        foreach (var type in Assembly.Source.Modules.SelectMany(module => module.Types))
-        {
-            // Append type definition.
-            handlers.Add(GetType(type));
-            // Append nested type definition.
-            handlers.AddRange(type.NestedTypes.Select(GetType));
-        }
-
-        return handlers.ToArray<ITypeHandler>();
-    }
+    public ITypeHandler[] GetTypes() => GetTypes(_ => true);
 
     /// <inheritdoc/>
     public ITypeHandler GetType(Type type)

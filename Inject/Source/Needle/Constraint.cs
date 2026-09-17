@@ -115,7 +115,7 @@ public struct Constraint
     /// When used together with other constraints, the new() constraint must be specified last.<para/>
     /// The new() constraint can't be combined with the struct and unmanaged constraints.<para/>
     /// </summary>
-    public static Constraint New = new("'new()'", GenericParameterAttributes.DefaultConstructorConstraint);
+    public static readonly Constraint New = new("'new()'", GenericParameterAttributes.DefaultConstructorConstraint);
 
     /// <summary>
     /// The type argument must be a non-nullable value type.<para/>
@@ -123,38 +123,38 @@ public struct Constraint
     /// Because all value types have an accessible parameterless constructor, the struct constraint implies the new() constraint and can't be combined with the new() constraint.<para/>
     /// You can't combine the struct constraint with the unmanaged constraint.
     /// </summary>
-    public static Constraint Struct = new("'struct'", new NongenericType(typeof(ValueType)), GenericParameterAttributes.NotNullableValueTypeConstraint | GenericParameterAttributes.DefaultConstructorConstraint);
+    public static readonly Constraint Struct = new("'struct'", new NongenericType(typeof(ValueType)), GenericParameterAttributes.NotNullableValueTypeConstraint | GenericParameterAttributes.DefaultConstructorConstraint);
 
     /// <summary>
     /// The type argument must be a reference type.<para/>
     /// This constraint applies also to any class, interface, delegate, or array type.<para/>
     /// In a nullable context, T must be a non-nullable reference type.
     /// </summary>
-    public static Constraint Class = new("'class'", GenericParameterAttributes.ReferenceTypeConstraint);
+    public static readonly Constraint Class = new("'class'", GenericParameterAttributes.ReferenceTypeConstraint);
 
     /// <summary>
     /// The type argument must be a non-nullable unmanaged type.<para/>
     /// The unmanaged constraint implies the struct constraint and can't be combined with either the struct or new() constraints.
     /// </summary>
-    public static Constraint Unmanaged = new("'unmanaged'", GenericParameterAttributes.NotNullableValueTypeConstraint | GenericParameterAttributes.DefaultConstructorConstraint);
+    public static readonly Constraint Unmanaged = new("'unmanaged'", GenericParameterAttributes.NotNullableValueTypeConstraint | GenericParameterAttributes.DefaultConstructorConstraint);
 
     /// <summary>
     /// The type argument must be a non-nullable type.<para/>
     /// The argument can be a non-nullable reference type or a non-nullable value type.
     /// </summary>
-    public static Constraint NotNull = new("'notnull'", GenericParameterAttributes.None);
+    public static readonly Constraint NotNull = new("'notnull'", GenericParameterAttributes.None);
 
     /// <summary>
     /// The generic type parameter is contravariant.<para/>
     /// A contravariant type parameter can appear as a parameter type in method signatures.
     /// </summary>
-    public static Constraint In = new("'in'", GenericParameterAttributes.Contravariant);
+    public static readonly Constraint In = new("'in'", GenericParameterAttributes.Contravariant);
 
     /// <summary>
     /// The generic type parameter is covariant.<para/>
     /// A covariant type parameter can appear as the result type of method, the type of read-only field, a declared base type, or an implemented interface.
     /// </summary>
-    public static Constraint Out = new("'out'", GenericParameterAttributes.Covariant);
+    public static readonly Constraint Out = new("'out'", GenericParameterAttributes.Covariant);
 }
 
 /// <summary>

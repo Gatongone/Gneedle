@@ -90,6 +90,64 @@ public class AssemblyHandlerTests
         Assert.That(results.Length, Is.EqualTo(2)); // Outer + Inner
     }
 
+    /// <summary>
+    /// An assembly which declares a type which declares a type which declares a type, which is a nesting of two levels
+    /// that a lookup of a type has to walk to the end.
+    /// </summary>
+    private static AssemblyHandler NewTwiceNestedHost(string assemblyName)
+    {
+        var asm = Assembly.Create(assemblyName);
+        var handler = (AssemblyHandler) asm.Handler;
+        var module = asm.Source.MainModule;
+
+        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
+        var innermost = new TypeDefinition(Ns, "Innermost", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = inner };
+        inner.NestedTypes.Add(innermost);
+        outer.NestedTypes.Add(inner);
+        module.Types.Add(outer);
+
+        return handler;
+    }
+
+    [Test]
+    public void A_Type_Which_Is_Nested_In_A_Nested_Type_Is_Answered_By_Every_Lookup()
+    {
+        // A type which a nested type declares is declared by the assembly as well, and the name of it is as long as the
+        // nesting is deep: the lookups walk the nesting to the end of it rather than reading the first level of it only,
+        // which is what leaves a type which is nested twice behind, both by its name and among the types of the assembly.
+        var handler = NewTwiceNestedHost("TwiceNestedAssembly");
+        var fullName = $"{Ns}.Outer/{Ns}.Inner/{Ns}.Innermost";
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.GetType(fullName), Is.Not.Null, "the lookup by name did not answer with a type which is nested twice.");
+            Assert.That(handler.GetTypes().Select(type => type.Name), Does.Contain("Innermost"),
+                        "the query of every type of the assembly left a type which is nested twice out.");
+            Assert.That(handler.GetTypes(type => type.Namespace == Ns).Select(type => type.Name), Does.Contain("Innermost"),
+                        "the query of every type which matches a filter left a type which is nested twice out.");
+            Assert.That(handler.GetCecilType(fullName).Definition.FullName, Is.EqualTo(fullName),
+                        "the lookup of the definition by name did not answer with a type which is nested twice.");
+        });
+    }
+
+    [Test]
+    public void An_Enum_Which_Declares_No_Field_Of_Its_Value_Is_Refused_By_Name()
+    {
+        // The type which the values of an enum are read as is the type of the field which holds one of them, and an enum
+        // which declares no such field has no type to be read as: the refusal names the enum rather than coming out of
+        // the lookup of the field as a sequence which holds nothing, which is a reason the caller cannot act on.
+        var asm = Assembly.Create("EnumWithoutAValueAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var module = asm.Source.MainModule;
+        var enumType = new TypeDefinition(Ns, "Broken", TypeAttributes.Public, module.ImportReference(typeof(Enum)));
+        module.Types.Add(enumType);
+
+        var thrown = Assert.Throws<ArgumentException>(() => handler.GetType(enumType));
+
+        Assert.That(thrown!.Message, Does.Contain($"{Ns}.Broken"), "the refusal does not name the enum which is not one.");
+    }
+
     #region GetCecilType
 
     [Test]
@@ -152,6 +210,22 @@ public class AssemblyHandlerTests
         var handler = (AssemblyHandler) target.Handler;
 
         Assert.Throws<ArgumentException>(() => handler.GetCecilType(typeof(TestBaseClass)));
+    }
+
+    [Test]
+    public void GetCecilType_Of_A_Type_Which_The_Assembly_Does_Not_Hold_Is_Refused()
+    {
+        // The definition is what the members of a type are read from, and a reference which names a type that the
+        // assembly it is asked of does not hold has none: the handler which is built on it holds nothing, so every query
+        // of it throws from somewhere the caller cannot see the reason of. It is refused where it is read, by name.
+        var asm = Assembly.Create("CecilLoaderAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var module = asm.Source.MainModule;
+        var missing = new TypeReference("Nope", "Missing", module.TypeSystem.Object.Module, module.TypeSystem.CoreLibrary);
+
+        var thrown = Assert.Throws<ArgumentException>(() => handler.GetCecilType(missing));
+
+        Assert.That(thrown!.Message, Does.Contain("Nope.Missing"));
     }
 
     #endregion

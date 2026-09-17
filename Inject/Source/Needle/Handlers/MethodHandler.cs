@@ -204,6 +204,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="handler">The handler of the method.</param>
     /// <param name="template">The delegate which the template was made into.</param>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// this library builds, which holds nothing to write the value into.</exception>
     public static void SetBody(IMethodHandler handler, Delegate template)
         => SetBody(handler, template.Method, template.Target);
 
@@ -214,10 +216,20 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="handler">The handler of the method.</param>
     /// <param name="method">The template which holds the body to copy.</param>
     /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// this library builds, which holds nothing to write the value into.</exception>
     public static void SetBody(IMethodHandler handler, MethodInfo method, object? closure)
     {
-        if (closure != null && handler is MethodHandler concrete)
+        if (closure != null)
         {
+            // The value which the template captured is written into the method where the body is woven, which only the
+            // handler this library builds does: another implementation holds nothing for it, so the template is refused
+            // rather than read for the method alone, which would weave a body without the value which the template read.
+            if (handler is not MethodHandler concrete)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.HANDLER_HOLDS_NO_CAPTURE, handler.GetType().FullName));
+            }
+
             concrete.SetBody(method, closure);
             return;
         }
@@ -230,6 +242,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="handler">The handler of the method.</param>
     /// <param name="template">The delegate which the template was made into.</param>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// this library builds, which holds nothing to write the value into.</exception>
     public static void AroundBody(IMethodHandler handler, Delegate template)
         => AroundBody(handler, template.Method, template.Target);
 
@@ -240,10 +254,20 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="handler">The handler of the method.</param>
     /// <param name="method">The template which holds the body to weave around.</param>
     /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
+    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// this library builds, which holds nothing to write the value into.</exception>
     public static void AroundBody(IMethodHandler handler, MethodInfo method, object? closure)
     {
-        if (closure != null && handler is MethodHandler concrete)
+        if (closure != null)
         {
+            // The value which the template captured is written into the method where the body is woven, which only the
+            // handler this library builds does: another implementation holds nothing for it, so the template is refused
+            // rather than read for the method alone, which would weave a body without the value which the template read.
+            if (handler is not MethodHandler concrete)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.HANDLER_HOLDS_NO_CAPTURE, handler.GetType().FullName));
+            }
+
             concrete.AroundBody(method, closure);
             return;
         }
@@ -718,6 +742,27 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
+    /// The instruction which loads the receiver of a member which a template reached through an instance of its own.
+    /// </summary>
+    /// <remarks>
+    /// A template which names an instance of <c>Instance</c> holds that instance in an argument of its own, and the member
+    /// being woven holds the same argument at a slot which is the one the template names shifted by the receivers of the
+    /// two. Writing the receiver of the member being woven instead is right only where the instance the template named
+    /// is that receiver, which nothing makes it: the argument is what the template reached the member through, so it is
+    /// what the member has to be reached through in the body it is woven into.<para/>
+    /// A template which named no instance of its own reaches the member of the member being woven, whose receiver is the
+    /// load of <c>this</c> which the symbols that name a member of this type are written with.
+    /// </remarks>
+    /// <param name="instanceIns">The instruction of the template which loads the instance, or null when the template
+    /// named none of its own.</param>
+    /// <param name="templateDef">The template which the instance is read out of.</param>
+    /// <returns>The instruction which loads the receiver.</returns>
+    private Instruction CreateReceiver(Instruction? instanceIns, MethodDefinition templateDef)
+        => instanceIns is { } ins && ins.TryGetLdargIndex(!templateDef.IsStatic, out var slot)
+               ? CreateLdarg(slot, templateDef)
+               : Instruction.Create(OpCodes.Ldarg_0);
+
+    /// <summary>
     /// The slot which the argument at <paramref name="slot"/> of the template holds in the member being woven.
     /// </summary>
     /// <param name="slot">The slot which the template names.</param>
@@ -798,7 +843,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             DeclaringType:
             {
-                Name     : nameof(This) or nameof(Base) or nameof(Object) or nameof(Static),
+                Name     : nameof(This) or nameof(Base) or nameof(Instance) or nameof(Static),
                 Namespace: nameof(Gneedle) + "." + nameof(Inject)
             }
         } callingMethod)
@@ -911,7 +956,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     {
         // Only the members which a template names with a string are read this way: the instance which is pushed and the
         // type which another member is looked up on are reached through the instructions around the call.
-        if (member.DeclaringType.FullName is not (This.TYPE_NAME or Base.TYPE_NAME or Object.TYPE_NAME or Static.TYPE_NAME)) return;
+        if (member.DeclaringType.FullName is not (This.TYPE_NAME or Base.TYPE_NAME or Instance.TYPE_NAME or Static.TYPE_NAME)) return;
         if (member.Name is not (nameof(This.Field) or nameof(This.Property) or nameof(This.Method))) return;
 
         // The name is what the call follows, and it is read for a name which no load stands ahead of.
@@ -970,11 +1015,11 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         // A call which names no member kind is one of two things: the half of a pair which the member named beside it
-        // is read with, which is the instance an Object symbol is made of or the type which a Static symbol is written
+        // is read with, which is the instance an Instance symbol is made of or the type which a Static symbol is written
         // from, or a call which names nothing the weaving reads at all. Leaving the second one where it is leaves a call
         // of a placeholder in the body, where nothing stands for a member of the type which is woven, so it throws for
         // the call at run time rather than for the template at the weaving.
-        else if (!memberSymbol.HasFlag(MemberSymbols.Static) && !memberSymbol.HasFlag(MemberSymbols.Object))
+        else if (!memberSymbol.HasFlag(MemberSymbols.Static) && !memberSymbol.HasFlag(MemberSymbols.Instance))
         {
             throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
@@ -1015,7 +1060,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             This.TYPE_NAME   => MemberSymbols.This,
             Base.TYPE_NAME   => MemberSymbols.Base,
-            Object.TYPE_NAME => MemberSymbols.Object,
+            Instance.TYPE_NAME => MemberSymbols.Instance,
             Static.TYPE_NAME => MemberSymbols.Static,
 
             // The only member which the pointer holds is the method which the advice proceeds through, so the kind of

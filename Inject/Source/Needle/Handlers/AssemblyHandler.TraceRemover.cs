@@ -3,16 +3,6 @@ namespace Gneedle.Inject;
 partial class AssemblyHandler
 {
     /// <summary>
-    /// The interfaces which a type implements to be one of the attributes which an injector is read from.
-    /// </summary>
-    private static readonly string[] s_InjectorInterfaces =
-    [
-        typeof(IAssemblyInjector).FullName!, typeof(ITypeInjector).FullName!, typeof(IClassInjector).FullName!,
-        typeof(IStructInjector).FullName!,   typeof(IEnumInjector).FullName!, typeof(IMethodInjector).FullName!,
-        typeof(IFieldInjector).FullName!,    typeof(IPropertyInjector).FullName!
-    ];
-
-    /// <summary>
     /// The name of the method which every injector interface declares, which the type which implements one writes.
     /// </summary>
     private const string INJECT_METHOD = nameof(IMethodInjector.Inject);
@@ -31,26 +21,51 @@ partial class AssemblyHandler
     /// and an image which names what it does not hold cannot be read. One which is still named keeps its place and gives
     /// up the interfaces it implements with the methods which implement them, which are the ones which reach for the
     /// weaver.<para/>
+    /// An injector which another assembly declares is one which this assembly does not hold a type of, while the
+    /// attribute which it was read from is a part of this assembly and is taken off the member which carries it: those
+    /// are named here rather than looked for among the types of the module.<para/>
     /// The reference is dropped only once nothing names the weaver, because an assembly which calls the weaver from its
     /// own code needs the reference, and an image which names a type of an assembly it does not refer to cannot be read.
     /// </remarks>
+    /// <param name="attributesRead">Full names of the attribute types which the injectors were read from, as the
+    /// metadata names them, or null when none was read.</param>
     /// <returns>Whether the assembly was changed.</returns>
-    internal bool RemoveTheWeaver()
+    internal bool RemoveTheWeaver(IEnumerable<string>? attributesRead = null)
     {
         var module = Assembly.Source.MainModule;
         var attributes = FindInjectorAttributes(module);
+        var read = attributesRead as IReadOnlyCollection<string> ?? attributesRead?.ToArray() ?? [];
         var changed = false;
 
-        if (attributes.Count > 0)
+        if (attributes.Count > 0 || read.Count > 0)
         {
-            RemoveUses(module, attributes);
-            foreach (var type in attributes.Values)
+            changed |= RemoveUses(module, attributes, read);
+
+            // A type which declares an injector is named by the types which declare one as well, and which of them is
+            // read first is the order of the metadata rather than anything about them: a type which derives from an
+            // injector names it by its base type, and an attribute which implements one names it by its interface. The
+            // ones which nothing names are taken out, which may leave the ones they named unnamed in their turn, and the
+            // passes are repeated until they settle. What is still named by then is named by something which stays, and
+            // that is the part which is kept and stripped.
+            var pending = new List<TypeDefinition>(attributes.Values);
+            for (var removed = true; removed;)
             {
-                if (NamesTheType(module, type)) StripInjector(module, type);
-                else Remove(module, type);
+                removed = false;
+                for (var index = pending.Count - 1; index >= 0; index--)
+                {
+                    if (NamesTheType(module, pending[index])) continue;
+
+                    Remove(module, pending[index]);
+                    pending.RemoveAt(index);
+                    removed = true;
+                }
             }
 
-            changed = true;
+            foreach (var type in pending) StripInjector(module, type);
+
+            // A type which the module declares is one which is removed or stripped above, which is a change of the
+            // assembly however the attributes were taken off it.
+            changed |= attributes.Count > 0;
         }
 
         var weaver = module.AssemblyReferences.FirstOrDefault(reference => reference.Name == typeof(IAssemblyInjector).Assembly.GetName().Name);
@@ -64,35 +79,20 @@ partial class AssemblyHandler
     }
 
     /// <summary>
-    /// The types of the module which declare an injector, by full name.
+    /// The types of the module which declare an injector, by full name.<para/>
+    /// A type which implements one of the interfaces of the weaver is one, whichever way it reaches them: an injector
+    /// which derives from another one and an interface which extends one of the interfaces are read as injectors of the
+    /// kind they reach, and the types are asked of the whole of themselves rather than of what they declare directly, so
+    /// that a type which is declared after the one which derives from it is found all the same.
     /// </summary>
     /// <param name="module">The module which is read.</param>
     private static Dictionary<string, TypeDefinition> FindInjectorAttributes(ModuleDefinition module)
     {
         var attributes = new Dictionary<string, TypeDefinition>(StringComparer.Ordinal);
 
-        foreach (var type in AllTypes(module))
+        foreach (var type in InjectorInterfaces.AllTypes(module))
         {
-            if (type.Interfaces.Any(implementation => Array.IndexOf(s_InjectorInterfaces, implementation.InterfaceType.FullName) >= 0))
-            {
-                attributes[type.FullName] = type;
-            }
-        }
-
-        // A type which inherits from a type which declares an injector is one as well, which is settled afterwards
-        // because the base type may be declared after the type which inherits from it. The walk is repeated until it
-        // settles, so that a chain of any length is followed.
-        for (var found = true; found;)
-        {
-            found = false;
-            foreach (var type in AllTypes(module))
-            {
-                if (!attributes.ContainsKey(type.FullName) && type.BaseType != null && attributes.ContainsKey(type.BaseType.FullName))
-                {
-                    attributes[type.FullName] = type;
-                    found                   = true;
-                }
-            }
+            if (InjectorInterfaces.IsAnInjector(type, InjectorInterfaces.AllNames)) attributes[type.FullName] = type;
         }
 
         return attributes;
@@ -106,12 +106,16 @@ partial class AssemblyHandler
     /// </summary>
     /// <param name="module">The module which is read.</param>
     /// <param name="attributes">The types which declare an injector, by full name.</param>
-    private static void RemoveUses(ModuleDefinition module, IReadOnlyDictionary<string, TypeDefinition> attributes)
+    /// <param name="read">Full names of the attribute types which the injectors were read from, which are the ones which
+    /// were applied. An injector which another assembly declares is one which only this names.</param>
+    /// <returns>Whether an attribute was removed.</returns>
+    private static bool RemoveUses(ModuleDefinition module, IReadOnlyDictionary<string, TypeDefinition> attributes, IReadOnlyCollection<string> read)
     {
+        var removed = false;
         Remove(module.Assembly.CustomAttributes);
         Remove(module.CustomAttributes);
 
-        foreach (var type in AllTypes(module))
+        foreach (var type in InjectorInterfaces.AllTypes(module))
         {
             Remove(type.CustomAttributes);
             foreach (var genericParameter in type.GenericParameters) Remove(genericParameter.CustomAttributes);
@@ -129,7 +133,7 @@ partial class AssemblyHandler
             }
         }
 
-        return;
+        return removed;
 
         /// <summary>
         /// Take the attributes which the injectors were read from off a member.
@@ -140,7 +144,11 @@ partial class AssemblyHandler
         {
             for (var index = uses.Count - 1; index >= 0; index--)
             {
-                if (attributes.ContainsKey(uses[index].AttributeType.FullName)) uses.RemoveAt(index);
+                var name = uses[index].AttributeType.FullName;
+                if (!attributes.ContainsKey(name) && !read.Contains(name)) continue;
+
+                uses.RemoveAt(index);
+                removed = true;
             }
         }
     }
@@ -172,7 +180,7 @@ partial class AssemblyHandler
     {
         for (var index = type.Interfaces.Count - 1; index >= 0; index--)
         {
-            if (Array.IndexOf(s_InjectorInterfaces, type.Interfaces[index].InterfaceType.FullName) >= 0) type.Interfaces.RemoveAt(index);
+            if (Array.IndexOf(InjectorInterfaces.AllNames, type.Interfaces[index].InterfaceType.FullName) >= 0) type.Interfaces.RemoveAt(index);
         }
 
         for (var index = type.Methods.Count - 1; index >= 0; index--)
@@ -227,7 +235,7 @@ partial class AssemblyHandler
     {
         var visited = new HashSet<MemberReference>();
 
-        foreach (var type in AllTypes(module))
+        foreach (var type in InjectorInterfaces.AllTypes(module))
         {
             if (IsWithin(type, skipped)) continue;
 
@@ -307,31 +315,4 @@ partial class AssemblyHandler
         return false;
     }
 
-    /// <summary>
-    /// The types which the module declares, the nested ones included.
-    /// </summary>
-    /// <param name="module">The module which is read.</param>
-    private static IEnumerable<TypeDefinition> AllTypes(ModuleDefinition module)
-    {
-        foreach (var type in module.Types)
-        {
-            foreach (var declared in AllTypes(type)) yield return declared;
-        }
-
-        yield break;
-
-        /// <summary>
-        /// The type and the types which it declares, the nested ones included, depth first.
-        /// </summary>
-        /// <param name="type">The type which is read.</param>
-        /// <returns>The type and the types which it declares.</returns>
-        static IEnumerable<TypeDefinition> AllTypes(TypeDefinition type)
-        {
-            yield return type;
-            foreach (var nested in type.NestedTypes)
-            {
-                foreach (var declared in AllTypes(nested)) yield return declared;
-            }
-        }
-    }
 }

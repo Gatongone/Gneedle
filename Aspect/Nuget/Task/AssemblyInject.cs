@@ -11,6 +11,18 @@ namespace Gneedle.Aspect;
 public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
 {
     /// <summary>
+    /// What the file which the woven image is written to before it is put in place of the assembly is named by, which
+    /// is beside that assembly and is taken away again with the write.
+    /// </summary>
+    private const string WrittenSuffix = ".gneedle";
+
+    /// <summary>
+    /// The extensions which the symbols of an assembly lie beside it under, which are the formats which the weaver
+    /// reads and writes.
+    /// </summary>
+    private static readonly string[] SymbolExtensions = {".pdb", ".mdb"};
+
+    /// <summary>
     /// Path of the project which was built, which is read to tell whether that project turns the aspect off. The
     /// project is not written to.
     /// </summary>
@@ -36,23 +48,44 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     /// The assembly is written back only when an injector changed it, so a project which declares none, and one which
     /// turns the aspect off, are answered with the assembly they built. A member which an injector names and the
     /// assembly does not hold is reported as an error, and the task fails on it rather than reporting a build which
-    /// carried on with an assembly which was woven only in part.
+    /// carried on with an assembly which was woven only in part. What the task cannot do at all, which is to read the
+    /// project or to read or write the assembly, is reported rather than thrown at the build: a task which throws
+    /// fails the build with a message of its own, which says nothing of the project or of the assembly it was run on.
     /// </remarks>
     public override bool Execute()
     {
-        var project = ProjectRootElement.Open(ProjectPath);
-        if (project == null) return false;
+        ProjectRootElement project;
+        try
+        {
+            project = ProjectRootElement.Open(ProjectPath);
+        }
+        catch (Exception exception)
+        {
+            // Nothing can be woven without telling whether the project turns the aspect off, which is what the project
+            // is read for.
+            Log.LogError(string.Format(TaskMessages.PROJECT_NOT_READ, ProjectPath, exception.Message));
+            return false;
+        }
 
         if (project.VerifyAspectDisable()) return true;
 
         Log.LogMessageFromText(string.Format(TaskMessages.WEAVING_ASSEMBLY, TargetPath), MessageImportance.High);
-        if (InjectAssemblies(TargetPath, KeepsTheWeaver()))
+        try
         {
-            Log.LogMessageFromText(string.Format(TaskMessages.ASSEMBLY_WOVEN, TargetPath), MessageImportance.High);
+            if (InjectAssemblies(TargetPath, KeepsTheWeaver()))
+            {
+                Log.LogMessageFromText(string.Format(TaskMessages.ASSEMBLY_WOVEN, TargetPath), MessageImportance.High);
+            }
+            else
+            {
+                Log.LogMessageFromText(string.Format(TaskMessages.ASSEMBLY_LEFT_AS_IT_WAS, TargetPath), MessageImportance.High);
+            }
         }
-        else
+        catch (Exception exception)
         {
-            Log.LogMessageFromText(string.Format(TaskMessages.ASSEMBLY_LEFT_AS_IT_WAS, TargetPath), MessageImportance.High);
+            // The image is put in place of the file it was read from as one step, so an assembly which could not be
+            // woven is the one which the build wrote rather than one which was written in part.
+            Log.LogError(string.Format(TaskMessages.ASSEMBLY_NOT_WOVEN, TargetPath, exception.Message));
         }
 
         // The project is only read, to tell whether the aspect is disabled, so it is not saved back. A member which an
@@ -76,13 +109,76 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     {
         // The image is read into bytes and the assembly is loaded from those bytes, which keeps the file to the caller:
         // a reader which holds the file leaves the write which follows nowhere to go. The weaving itself, which any
-        // driver of the library does the same way, is asked of the library.
+        // driver of the library does the same way, is asked of the library. The folder which the assembly lies in is
+        // handed over with it, because that is where the build put the assemblies it refers to, and the process which
+        // runs the task is a node of the build which knows nothing of the project which was built: an attribute, and the
+        // template which it names, may both be of an assembly of another project which declares them for this one.
         var image = File.ReadAllBytes(assemblyPath);
         var runtimeAssembly = AssemblyLoader.LoadFromBytes(image);
 
-        var (changed, result) = Injections.Apply(runtimeAssembly, image, !keepsTheWeaver, message => Log.LogError(message));
-        if (changed) File.WriteAllBytes(assemblyPath, result);
+        var (changed, result) = Injections.Apply(runtimeAssembly, image, !keepsTheWeaver, message => Log.LogError(message),
+                                                 searchDirectory: Path.GetDirectoryName(assemblyPath));
+        if (!changed) return false;
 
-        return changed;
+        Write(assemblyPath, result);
+        RemoveSymbols(assemblyPath);
+        return true;
+    }
+
+    /// <summary>
+    /// Put the image which was woven in the place of the assembly which was read, as one step.<para/>
+    /// The image is written beside the assembly and is then put in its place, so that a build which is stopped while
+    /// the write is going on, or which cannot make it, finds the assembly it built rather than one which was written
+    /// only in part.
+    /// </summary>
+    /// <param name="assemblyPath">Path of the assembly which is written over.</param>
+    /// <param name="image">The bytes of the image which was woven.</param>
+    private static void Write(string assemblyPath, byte[] image)
+    {
+        var written = assemblyPath + WrittenSuffix;
+        // The write lies within the step which takes the image away as well, because an image which the write could not
+        // make in full is one which is beside the assembly without being in its place, which is what nothing of it is
+        // to be left as: a file which was written only in part is taken away by the same step which takes away one
+        // which could not be put in place at all.
+        try
+        {
+            File.WriteAllBytes(written, image);
+            File.Replace(written, assemblyPath, destinationBackupFileName: null);
+        }
+        finally
+        {
+            // An image which was written and could not be put in place is taken away, so that nothing of it is left
+            // beside the assembly which the build wrote.
+            if (File.Exists(written)) File.Delete(written);
+        }
+    }
+
+    /// <summary>
+    /// Take away the symbols which lie beside an assembly whose image was just written over.<para/>
+    /// The image which the weaver writes holds no debug directory, because it writes the image alone and the symbols
+    /// which were compiled with it are not woven: a reader goes by that directory to find the symbols of an assembly,
+    /// so the symbols which were compiled for the assembly which was replaced describe an image which is no longer
+    /// there. They are taken away rather than left, because a reader which goes by the name of the file alone would be
+    /// given them for an image which they do not describe.
+    /// </summary>
+    /// <param name="assemblyPath">Path of the assembly whose symbols are taken away.</param>
+    private void RemoveSymbols(string assemblyPath)
+    {
+        foreach (var extension in SymbolExtensions)
+        {
+            var symbols = Path.ChangeExtension(assemblyPath, extension);
+            if (!File.Exists(symbols)) continue;
+
+            try
+            {
+                File.Delete(symbols);
+            }
+            catch (Exception exception)
+            {
+                // The assembly was woven and is in place, which is what the build asked for: symbols which stay beside
+                // it are worth telling about and are not a failure of the weaving.
+                Log.LogWarning(string.Format(TaskMessages.SYMBOLS_LEFT, symbols, exception.Message));
+            }
+        }
     }
 }

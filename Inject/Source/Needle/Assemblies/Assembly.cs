@@ -51,8 +51,8 @@ public abstract class Assembly : IDisposable
     public IAssemblyHandler Handler => m_Handler.Value;
 
     /// <summary>
-    /// The cache of the stream which the assembly was read from, which the assembly is written back through when it is
-    /// saved to the path it was read from, and which is released with it.
+    /// The cache of the stream which the assembly was read from, which an assembly which was read from a file also
+    /// keeps the path of, and which is released with it.
     /// </summary>
     private          IAssemblyCache?        m_AssemblyCache;
 
@@ -84,9 +84,9 @@ public abstract class Assembly : IDisposable
     /// Create assembly.
     /// </summary>
     /// <inheritdoc cref="MemoryAssembly(string, byte[], byte[], byte[], string, ModuleKind)"/>
-    public static Assembly Create(string assemblyName, byte[]? publicKey = null, byte[]? pubicKeyToken = null, byte[]? hash = null, string? culture = null, ModuleKind moduleKind = ModuleKind.Dll)
+    public static Assembly Create(string assemblyName, byte[]? publicKey = null, byte[]? publicKeyToken = null, byte[]? hash = null, string? culture = null, ModuleKind moduleKind = ModuleKind.Dll)
     {
-        return new MemoryAssembly(assemblyName, publicKey, pubicKeyToken, hash, culture, moduleKind);
+        return new MemoryAssembly(assemblyName, publicKey, publicKeyToken, hash, culture, moduleKind);
     }
 
     /// <summary>
@@ -105,7 +105,15 @@ public abstract class Assembly : IDisposable
     /// <param name="symbol">Assembly symbol file type.</param>
     public static Assembly Read(string path, AssemblySymbol symbol = AssemblySymbol.None)
     {
-        var cache = new FileCache(path, new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite));
+        // The file is read into bytes and the assembly is read out of those bytes rather than out of the file, so that
+        // the read neither holds the file nor goes back to it: the body of a method is read out of the stream as it is
+        // asked for, and the write which a read of a file is usually followed by - the woven image, written back over
+        // the file it was read from - opens that file for writing and takes it to nothing, which a body read out of it
+        // afterwards would find in place of the body. A file which is read alone is also one which a file that was
+        // protected after it was written is, where the write access which the caller of a read has no need of is what
+        // the file refuses. The path is kept with the stream, because an assembly of a file is one which is loaded from
+        // that file.
+        var cache = new FileCache(path, new MemoryStream(File.ReadAllBytes(path)));
         return new StreamAssembly(cache, symbol)
         {
             m_AssemblyCache = cache
@@ -115,10 +123,15 @@ public abstract class Assembly : IDisposable
     /// <summary>
     /// Read assembly to memory.
     /// </summary>
-    public static Assembly Read(Stream stream, AssemblySymbol symbol = AssemblySymbol.None)
+    /// <param name="stream">Stream that is a COFF-based image containing a managed assembly.</param>
+    /// <param name="symbol">Assembly symbol file type.</param>
+    /// <param name="searchDirectory">Directory which the assemblies the image refers to lie in, or null when the caller
+    /// knows of none. It is the folder of the assembly which is woven where a build weaves the assembly it produced,
+    /// whose references the build copied beside it.</param>
+    public static Assembly Read(Stream stream, AssemblySymbol symbol = AssemblySymbol.None, string? searchDirectory = null)
     {
         var cache = new SimpleCache(stream);
-        return new StreamAssembly(cache, symbol)
+        return new StreamAssembly(cache, symbol, searchDirectory)
         {
             m_AssemblyCache = cache
         };
@@ -146,21 +159,9 @@ public abstract class Assembly : IDisposable
             _ => null
         };
 
-        // Reusing the same stream.
-        if (m_AssemblyCache is FileCache fileCache && fileCache.Path == path)
-        {
-            if (writeParameters == null)
-            {
-                Source.Write(fileCache.Stream);
-            }
-            else
-            {
-                Source.Write(fileCache.Stream, writeParameters);
-            }
-
-            return;
-        }
-
+        // The image is written through the writer of the assembly, which opens the file for itself: the assembly holds
+        // no handle of the file it was read from, because the file lies in the memory which the assembly was read into
+        // rather than behind a stream which the file was held open by.
         if (writeParameters == null)
         {
             Source.Write(path);
@@ -248,8 +249,7 @@ public abstract class Assembly : IDisposable
 
     /// <summary>
     /// Release the stream which the assembly was read from, and the metadata which was read from it.<para/>
-    /// The assembly is written back through the very stream it was read from, so it has to be saved before it is
-    /// disposed of.
+    /// The stream is the one the assembly lies in, so the assembly has to be saved before it is disposed of.
     /// </summary>
     public void Dispose()
     {

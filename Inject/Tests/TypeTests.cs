@@ -39,7 +39,7 @@ public class TypeTests
     [Test]
     public void CreateGenericType_With_NonGenericType()
     {
-        Assert.Catch(() => _ = new GenericType(typeof(NonGenericTestClass), new GenericParameterType("Test")));
+        Assert.Throws<ArgumentException>(() => _ = new GenericType(typeof(NonGenericTestClass), new GenericParameterType("Test")));
     }
 
     [Test]
@@ -65,10 +65,39 @@ public class TypeTests
     }
 
     [Test]
+    public void CreateGenericType_With_The_Type_Alone()
+    {
+        // The call which names no argument is the type with the arguments which the type itself carries, which is what
+        // ToGneedleType builds out of the same type: the two spellings answer with the same argument, so a caller which
+        // holds a type has a way of saying so rather than one which has to be told what the arguments of it are. It is
+        // also the call which nothing answered before, because both of the overloads which take a list of arguments can
+        // be called with an empty one, and a call which the compiler can read through either of two of them is one which
+        // it refuses to read at all.
+        var openType = new GenericType(typeof(GenericTestClass<>));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(openType.Type, Is.EqualTo(typeof(GenericTestClass<>)));
+            Assert.That(openType.GenericArguments.Length, Is.EqualTo(1));
+            Assert.That((openType.GenericArguments[0] as GenericParameterType)?.TypeName, Is.EqualTo("T"));
+        });
+
+        // The type which is closed over its arguments carries them as well.
+        var closedType = new GenericType(typeof(GenericTestClass<int>));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(closedType.Type, Is.EqualTo(typeof(GenericTestClass<>)));
+            Assert.That((closedType.GenericArguments[0] as NongenericType)?.Type, Is.EqualTo(typeof(int)));
+            Assert.That(closedType.GetTypeName(), Is.EqualTo(typeof(GenericTestClass<int>).ToGneedleType().GetTypeName()));
+        });
+    }
+
+    [Test]
     public void CreateNonGenericType_With_GenericType()
     {
-        Assert.Catch(() => { new NongenericType(typeof(GenericTestClass<>)); });
-        Assert.Catch(() => { new NongenericType(typeof(GenericTestClass<string>)); });
+        Assert.Throws<ArgumentException>(() => { new NongenericType(typeof(GenericTestClass<>)); });
+        Assert.Throws<ArgumentException>(() => { new NongenericType(typeof(GenericTestClass<string>)); });
     }
 
     [Test]

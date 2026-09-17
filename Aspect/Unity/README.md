@@ -55,6 +55,24 @@ version of it, and that version is read out of a registry rather than along the 
 injector is, which member each of the interfaces is read for, and what is left in the assembly once they have been
 applied.
 
+## Tests
+
+The tests of the weaver lie beside it, in `Test`, and are run by the test runner of the editor. What they are written
+against is the compilation pipeline which the editor compiles an assembly of its own against, so the assembly of the
+tests is named `Unity.Gneedle.CodeGen.Tests`: the name and not the folder is what the pipeline reads such an assembly
+by, and Unity grants it the types of the compiler by that name.
+
+The tests of a package which is not in the `Packages` folder of a project are compiled only where the project names
+the package as one to test, which is written in its manifest:
+
+```json
+{
+  "testables": ["com.gatongone.gneedle.aspect"]
+}
+```
+
+The tests are then listed with the tests of the project, under EditMode, in the Test Runner window.
+
 ## Licence
 
 MIT. Copyright (c) 2026, Gatongone.

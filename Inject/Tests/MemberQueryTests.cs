@@ -4,10 +4,11 @@ using Mono.Cecil;
 namespace Gneedle.Inject.Test;
 
 /// <summary>
-/// The queries which a type handler answers with the members of a type. A member is asked for by its name, which answers
-/// with one of them, or by the flags which it carries, which answers with every one of them: the members which a type
-/// declares, in the order in which it declares them, which is what the queries of a type hold, while a member of a base
-/// type is reached by its name alone.
+/// The queries which a type handler answers with the members of a type and with its base type. A member is asked for by
+/// its name, which answers with one of them, or by the flags which it carries, which answers with every one of them: the
+/// members which a type declares, in the order in which it declares them, which is what the queries of a type hold, while
+/// a member of a base type is reached by its name alone. The base type itself is asked for as well, and a class which
+/// derives from nothing is answered with null rather than with a base type of its own.
 /// </summary>
 [TestFixture]
 public class MemberQueryTests
@@ -182,6 +183,40 @@ public class MemberQueryTests
     }
 
     [Test]
+    public void The_Base_Type_Of_A_Class_Is_Answered_With_A_Handler_Of_It()
+    {
+        var (handler, _, module) = NewHost("MemberQueryBaseTypeAssembly");
+        var baseType = new TypeDefinition(Ns, "Base", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var derived = new TypeDefinition(Ns, "Derived", TypeAttributes.Public | TypeAttributes.Class, baseType);
+        module.Types.Add(baseType);
+        module.Types.Add(derived);
+
+        var host = (IClassHandler) handler.GetType(derived);
+
+        Assert.That(host.BaseType, Is.Not.Null);
+        Assert.That(host.BaseType!.Name, Is.EqualTo("Base"), "the handler is not one of the type which the class derives from.");
+    }
+
+    [Test]
+    public void The_Base_Type_Of_A_Class_Which_Has_None_Is_Answered_With_Null()
+    {
+        // A class which derives from nothing is a hierarchy of its own rather than a mistake, so the query answers with
+        // null for it: the type which a module declares without a base type is one, and so is the type which the runtime
+        // declares as the root of every hierarchy.
+        var (handler, _, module) = NewHost("MemberQueryNoBaseTypeAssembly");
+        var root = new TypeDefinition(Ns, "Root", TypeAttributes.Public | TypeAttributes.Class);
+        module.Types.Add(root);
+
+        var host = (IClassHandler) handler.GetType(root);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(host.BaseType, Is.Null, "a class of the module which derives from nothing is not answered with null.");
+            Assert.That(((IClassHandler) handler.GetType(typeof(object))).BaseType, Is.Null, "the root of every hierarchy is not answered with null.");
+        });
+    }
+
+    [Test]
     public void The_Plural_Queries_Are_Of_The_Type_Handler_And_Of_The_Container_Of_The_Member()
     {
         // The same query is declared by the type handler and by the container of the kind of member which it names, so a
@@ -201,6 +236,33 @@ public class MemberQueryTests
             Assert.That(((IMethodContainer) host).GetMethods().Select(method => method.Name), Is.EqualTo(new[] {"Run", "get_Count"}));
             Assert.That(typeHandler.GetProperties().Select(property => property.Name), Is.EqualTo(new[] {"Count"}));
             Assert.That(((IPropertyContainer) host).GetProperties().Select(property => property.Name), Is.EqualTo(new[] {"Count"}));
+        });
+    }
+
+    [Test]
+    public void The_Queries_Are_Answered_To_A_Caller_Which_Holds_The_Shape_Of_The_Type()
+    {
+        // The shape of a class is the type handler and the container of every kind of member at once, so a caller which
+        // holds that shape asks the type for the members of every kind without naming the kind first. The queries of the
+        // two shapes are one declaration which both paths reach rather than a declaration of each of them, because a
+        // member which is declared twice is a call which cannot be bound to either, and the shape of the handler which a
+        // caller holds is not something a query of a type should depend on.
+        var (handler, host, module) = NewHost("MemberQueryHandlerShapeAssembly");
+        host.Source.Fields.Add(NewField(module, "First", FieldAttributes.Private));
+        host.Source.Methods.Add(NewMethod(module, "Run", MethodAttributes.Public));
+        NewProperty(host, module, "Count", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
+
+        var classHandler = (IClassHandler) handler.GetType(host.Source);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(classHandler.GetFields().Select(field => field.Name), Is.EqualTo(new[] {"First"}));
+            Assert.That(classHandler.GetField("First"), Is.Not.Null);
+            Assert.That(classHandler.GetMethods().Select(method => method.Name), Is.EqualTo(new[] {"Run", "get_Count"}));
+            Assert.That(classHandler.GetMethod("Run"), Is.Not.Null);
+            Assert.That(classHandler.GetProperties().Select(property => property.Name), Is.EqualTo(new[] {"Count"}));
+            Assert.That(classHandler.GetProperty("Count"), Is.Not.Null);
+            Assert.That(classHandler.ContainsInterface(typeof(IDisposable).ToGneedleType()), Is.False);
         });
     }
 }

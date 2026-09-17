@@ -46,16 +46,20 @@ partial class MethodHandler
             throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
 
-        // Detect Object/Static patterns to determine skip count and declaring type.
+        // Detect Instance/Static patterns to determine skip count and declaring type.
         var skipArrayInitCount = 0;
         var skipStaticFromCount = 0;
         TypeDefinition? declaringTypeFromPattern = null;
+        // The instance which the template reached the property through, which is the receiver of its call where the
+        // accessor which is called takes one: the sequence which builds the instance is dropped along with the name, so
+        // the argument it names has to be loaded in place of the name.
+        Instruction? receiverIns = null;
 
-        if (memberSymbol.HasFlag(MemberSymbols.Object) && currentIndex >= 1)
+        if (memberSymbol.HasFlag(MemberSymbols.Instance) && currentIndex >= 1)
         {
             var prevIns = filter.Target[currentIndex - 1];
             if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference {Name: ".ctor", DeclaringType: var declType}
-                && declType.FullName == Object.TYPE_NAME)
+                && declType.FullName == Instance.TYPE_NAME)
             {
                 var baseIdx = currentIndex - 7;
                 if (baseIdx >= 0
@@ -68,6 +72,7 @@ partial class MethodHandler
                 {
                     skipArrayInitCount = 7;
                     var instanceIns = filter.Target[baseIdx + 4];
+                    receiverIns = instanceIns;
                     var argType = GetArgType(instanceIns, targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName));
                     // The instance type may stand for the type of another assembly, in which case the property is looked up on the real one.
                     declaringTypeFromPattern = argType.ResolveDefinition(Source.Module);
@@ -91,15 +96,15 @@ partial class MethodHandler
 
         var propertyDef = memberSymbol.HasFlag(MemberSymbols.Base)
             ? DeclaringTypeHandler.GetPropertyInBase(memberName)
-            : memberSymbol.HasFlag(MemberSymbols.Object) || memberSymbol.HasFlag(MemberSymbols.Static)
+            : memberSymbol.HasFlag(MemberSymbols.Instance) || memberSymbol.HasFlag(MemberSymbols.Static)
                 ? DeclaringTypeHandler.AssemblyHandler.GetPropertyFromType(declaringTypeFromPattern ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName)), memberName)
-                : DeclaringTypeHandler.GetPropertyInThis(memberName);
+                : DeclaringTypeHandler.GetPropertyInThisOrABaseType(memberName);
         if (propertyDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName));
         }
 
-        // Skip the array init sequence if this is Object.Property with new Object(param).
+        // Skip the array init sequence if this is Instance.Property with new Instance(param).
         if (skipArrayInitCount > 0)
         {
             for (var i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
@@ -125,8 +130,8 @@ partial class MethodHandler
         var calledAccessor = isGet ? propertyDef.GetMethod : propertyDef.SetMethod;
         if (calledAccessor is not {IsStatic: true})
         {
-            // ldstr {property_name} -> ldarg.0
-            filter.Replace(currentIndex, Instruction.Create(OpCodes.Ldarg_0));
+            // ldstr {property_name} -> the argument which holds the instance the property is read off
+            filter.Replace(currentIndex, CreateReceiver(receiverIns, targetDef));
         }
         else
         {

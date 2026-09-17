@@ -43,7 +43,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         Source          = source;
     }
 
-    /// <inheritdoc cref="IInterfaceContainer.ContainsInterface" />
+    /// <inheritdoc cref="IInterfaceQuery.ContainsInterface" />
     public bool ContainsInterface(IType interfaceType) => Source.Interfaces.Any(implementation => TypeName.HasSameName(implementation.InterfaceType, interfaceType));
 
     /// <inheritdoc/>
@@ -66,7 +66,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         Source.CustomAttributes.Add(attribute);
     }
 
-    /// <inheritdoc cref="IMethodContainer.GetMethod(string, IType[])" />
+    /// <inheritdoc cref="IMethodQuery.GetMethod(string, IType[])" />
     public IMethodHandler? GetMethod(string methodName, params IType[] parameterTypes)
     {
         var curType = Source;
@@ -88,10 +88,10 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         return methodDef == null ? null : new MethodHandler(methodDef, this);
     }
 
-    /// <inheritdoc cref="IMethodContainer.GetMethods()"/>
+    /// <inheritdoc cref="IMethodQuery.GetMethods()"/>
     public IMethodHandler[] GetMethods() => GetMethods(0);
 
-    /// <inheritdoc cref="IMethodContainer.GetMethods(MethodFlags)"/>
+    /// <inheritdoc cref="IMethodQuery.GetMethods(MethodFlags)"/>
     public IMethodHandler[] GetMethods(MethodFlags methodFlags)
         => Source.Methods
             .Where(method => method.ToMethodFlags().HasFlag(methodFlags))
@@ -109,34 +109,34 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     public PropertyDecorator.IPropertyTypeDecorator AddProperty(string propertyName, PropertyFlags propertyFlags)
         => new PropertyDecorator(this, propertyName, propertyFlags);
 
-    /// <inheritdoc cref="IFieldContainer.GetField" />
+    /// <inheritdoc cref="IFieldQuery.GetField" />
     public IFieldHandler? GetField(string fieldName)
     {
         var fieldRef = AssemblyHandler.GetFieldFromType(Source, fieldName);
         return fieldRef == null ? null : new FieldHandler((FieldDefinition) fieldRef, this);
     }
 
-    /// <inheritdoc cref="IFieldContainer.GetFields()" />
+    /// <inheritdoc cref="IFieldQuery.GetFields()" />
     public IFieldHandler[] GetFields() => GetFields(0);
 
-    /// <inheritdoc cref="IFieldContainer.GetFields(FieldFlags)" />
+    /// <inheritdoc cref="IFieldQuery.GetFields(FieldFlags)" />
     public IFieldHandler[] GetFields(FieldFlags fieldFlags)
         => Source.Fields
             .Where(field => field.ToFieldFlags().HasFlag(fieldFlags))
             .Select(IFieldHandler (field) => new FieldHandler(field, this))
             .ToArray();
 
-    /// <inheritdoc cref="IPropertyContainer.GetProperty" />
+    /// <inheritdoc cref="IPropertyQuery.GetProperty" />
     public IPropertyHandler? GetProperty(string propertyName)
     {
         var propDef = AssemblyHandler.GetPropertyFromType(Source, propertyName);
         return propDef == null ? null : new PropertyHandler(propDef, this);
     }
 
-    /// <inheritdoc cref="IPropertyContainer.GetProperties()"/>
+    /// <inheritdoc cref="IPropertyQuery.GetProperties()"/>
     public IPropertyHandler[] GetProperties() => GetProperties(0);
 
-    /// <inheritdoc cref="IPropertyContainer.GetProperties(PropertyFlags)"/>
+    /// <inheritdoc cref="IPropertyQuery.GetProperties(PropertyFlags)"/>
     public IPropertyHandler[] GetProperties(PropertyFlags propertyFlags)
         => Source.Properties
             .Where(property => property.ToPropertyFlags().HasFlag(propertyFlags))
@@ -234,54 +234,80 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     public override int GetHashCode() => Source.GetHashCode();
 
     /// <summary>
-    /// Get field from this type.
+    /// Get the field which a name names, from this type or from a base type of it.<para/>
+    /// A field which a base type declares is a field of the type as well, so the base types are walked for it, the
+    /// nearest one first: the field of the type itself is the one which is answered with when it declares one of that
+    /// name, and the one of the first base type which does otherwise.
     /// </summary>
     /// <param name="fieldName">Name of the field.</param>
-    /// <returns>The field from this type.</returns>
-    internal FieldReference? GetFieldInThis(string fieldName)
+    /// <returns>The field from this type or from a base type of it, or null when neither declares one of that name.</returns>
+    internal FieldReference? GetFieldInThisOrABaseType(string fieldName)
         => AssemblyHandler.GetFieldFromType(Source, fieldName);
 
     /// <summary>
-    /// Get field from base type.
+    /// Get the field which a name names, from this type alone.<para/>
+    /// A field which a base type declares is one which a member of this type reaches only where the base type declared
+    /// it for that to happen, and a field which a base type declares as its own private one is not reached by a member
+    /// of this type at all: the field which a member which this type holds is written against has to be one which this
+    /// type declares, where the walk of <see cref="GetFieldInThisOrABaseType"/> answers with the field of a base type
+    /// which happens to carry the same name.
     /// </summary>
     /// <param name="fieldName">Name of the field.</param>
-    /// <returns>The field from this type.</returns>
-    internal FieldReference? GetFieldInBase(string fieldName)
-        => AssemblyHandler.GetFieldFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, fieldName);
+    /// <returns>The field which this type declares under that name, or null when it declares none.</returns>
+    internal FieldDefinition? GetFieldInThisType(string fieldName)
+        => Source.Fields.FirstOrDefault(field => field.Name.Equals(fieldName));
 
     /// <summary>
-    /// Get property from this type.
+    /// Get the field which a name names, from the direct base type or from a base type of it.<para/>
+    /// The walk starts at the direct base type rather than at the type itself, which is what the fields of a base type
+    /// are reached through: a field which the type declares is not one which this query answers with.
+    /// </summary>
+    /// <param name="fieldName">Name of the field.</param>
+    /// <returns>The field from a base type, or null when the type has no base type or none of them declares one of that name.</returns>
+    internal FieldReference? GetFieldInBase(string fieldName)
+        => Source.BaseType == null ? null : AssemblyHandler.GetFieldFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, fieldName);
+
+    /// <summary>
+    /// Get the property which a name names, from this type or from a base type of it.<para/>
+    /// A property which a base type declares is a property of the type as well, so the base types are walked for it, the
+    /// nearest one first.
     /// </summary>
     /// <param name="propertyName">Name of the property.</param>
-    /// <returns>The property from this type.</returns>
-    internal PropertyDefinition? GetPropertyInThis(string propertyName)
+    /// <returns>The property from this type or from a base type of it, or null when neither declares one of that name.</returns>
+    internal PropertyDefinition? GetPropertyInThisOrABaseType(string propertyName)
         => AssemblyHandler.GetPropertyFromType(Source, propertyName);
 
     /// <summary>
-    /// Get property from base type.
+    /// Get the property which a name names, from the direct base type or from a base type of it.<para/>
+    /// The walk starts at the direct base type rather than at the type itself, which is what the properties of a base
+    /// type are reached through: a property which the type declares is not one which this query answers with.
     /// </summary>
     /// <param name="propertyName">Name of the property.</param>
-    /// <returns>The property from the base type.</returns>
+    /// <returns>The property from a base type, or null when the type has no base type or none of them declares one of that name.</returns>
     internal PropertyDefinition? GetPropertyInBase(string propertyName)
-        => AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, propertyName);
+        => Source.BaseType == null ? null : AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, propertyName);
 
     /// <summary>
-    /// Get method from this type.
+    /// Get the method which a name and a signature name, from this type or from a base type of it.<para/>
+    /// A method which a base type declares is a method of the type as well, so the base types are walked for it, the
+    /// nearest one first.
     /// </summary>
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Types of the parameters of the method.</param>
-    /// <returns>The method from this type.</returns>
-    internal MethodDefinition? GetMethodInThis(string methodName, IReadOnlyList<TypeReference> parameters)
-        => AssemblyHandler.GetMethodFromType(Source, methodName, parameters);
+    /// <returns>The method from this type or from a base type of it, or null when neither declares one of that signature.</returns>
+    internal MethodDefinition? GetMethodInThisOrABaseType(string methodName, IReadOnlyList<TypeReference> parameters)
+        => AssemblyHandler.GetMethodFromType(Source, methodName, parameters, false);
 
     /// <summary>
-    /// Get method from base type.
+    /// Get the method which a name and a signature name, from the direct base type or from a base type of it.<para/>
+    /// The walk starts at the direct base type rather than at the type itself, which is what the methods of a base type
+    /// are reached through: a method which the type declares is not one which this query answers with.
     /// </summary>
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Types of the parameters of the method.</param>
-    /// <returns>The method from the base type.</returns>
+    /// <returns>The method from a base type, or null when the type has no base type or none of them declares one of that signature.</returns>
     internal MethodDefinition? GetMethodInBase(string methodName, IReadOnlyList<TypeReference> parameters)
-        => AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, methodName, parameters);
+        => Source.BaseType == null ? null : AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, methodName, parameters, false);
 
     /// <summary>
     /// Get the method which a signature names, which is the name of the method and the types of the parameters of it.<para/>

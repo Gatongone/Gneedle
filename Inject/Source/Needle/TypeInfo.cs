@@ -101,6 +101,23 @@ public sealed class GenericType : IType
     public readonly IType[] GenericArguments;
 
     /// <summary>
+    /// Create generic type with the arguments which the type itself carries, which is what
+    /// <see cref="TypeInfoExtensions.ToGneedleType(Type)"/> reads out of the same type.
+    /// <example>
+    /// If you ganna make <c>MyClass&lt;T1, T2&gt;</c>, you can use:
+    /// <code>new GenericType(typeof(MyClass&lt;,&gt;));</code>
+    /// </example>
+    /// </summary>
+    /// <remarks>
+    /// A call which names no argument is one which the two overloads below can each be read as, and the compiler refuses
+    /// to read a call through either of two of them: this is the one it reads, because it is the one which is called
+    /// without a list of arguments rather than with an empty one.
+    /// </remarks>
+    /// <param name="type">Generic type definition, or a generic type which holds the arguments of it.</param>
+    /// <exception cref="ArgumentException">Thrown when the <c>type</c> is not generic type.</exception>
+    public GenericType(Type type) : this(type, type.GetGenericArguments().Select(argument => argument.ToGneedleType()).ToArray()) { }
+
+    /// <summary>
     /// Create generic type with generic parameter type arguments.
     /// <example>
     /// If you ganna make <c>MyClass&lt;T1, T2&gt;</c>, you can use:

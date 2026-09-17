@@ -15,7 +15,7 @@ Where an assembly is built decides that form of it is used, and the two are the 
 
 # Principle
 
-A template is an ordinary method. It reaches the members of the type it will be woven into through placeholders, that are calls into `Gneedle.Inject` — `This`, `Base`, `Object`, `Static`, `Proceed` — and it names a generic parameter of the target through the tokens `T_0`–`T_20` and `M_0`–`M_20`. Every placeholder throws when it runs, because a template is never meant to run as it is written; the weaver replaces each of them with the member it names.
+A template is an ordinary method. It reaches the members of the type it will be woven into through placeholders, that are calls into `Gneedle.Inject` — `This`, `Base`, `Instance`, `Static`, `Proceed` — and it names a generic parameter of the target through the tokens `T_0`–`T_20` and `M_0`–`M_20`. Every placeholder throws when it runs, because a template is never meant to run as it is written; the weaver replaces each of them with the member it names.
 
 Weaving is therefore a rewrite rather than a compilation. The body of the template is copied instruction by instruction, and each operand is pointed at the member of the target that the placeholder named: a field read becomes `ldfld` of that field, a call on `This` becomes a call on the type being woven, a token becomes a generic parameter of the method or of the type that declares it. A local variable or a branch of the template is remapped to its counterpart in the body that is being woven.
 
@@ -221,10 +221,12 @@ A default body is asked for the same way, when no template is needed: `WithBody(
 | `This.Field<T>("name")`, `This.Property<T>("name")`                                          | a field or a property of the type being woven, read and written through `Get` and `Set` |
 | `This.Method<TDelegate>("name")`                                                             | a method of the type being woven, called through the delegate that gives its signature  |
 | `Base.Field`, `Base.Property`, `Base.Method`                                                 | the same, on the type that the target derives from                                      |
-| `new Object(instance).Field`, `new Object(instance).Property`, `new Object(instance).Method` | the same, on an instance the template pushed                                            |
+| `new Instance(instance).Field`, `new Instance(instance).Property`, `new Instance(instance).Method` | the same, on an instance the template pushed                                       |
 | `Static.From("Full.Type.Name").Method`                                                       | the same, on a type named by a string                                                   |
 | `T_0`–`T_20`, `M_0`–`M_20`                                                                 | the first to the twenty-first generic parameter of the declaring type, or of the method |
 | `ValuableMember<T>`                                                                          | the value of a field or a property of a value type, which `ValuableMember` would box    |
+
+Each placeholder is named after what it reaches, and none of them is named after a type of the framework: a placeholder which was called `Object` would be the type which a template reads wherever it writes `Object` among the usings of this library, so that a field, a parameter or a return type which names the type of the framework would name the placeholder instead. The keyword `object` is not affected by it, and neither is a template which writes `System.Object` in full.
 
 The name which a placeholder is given is read out of the template itself, and the one instruction which the call follows is what holds it: a name is therefore one which the compiler writes there — a literal, a `nameof`, or a constant of the template — rather than one which the template computes while it runs.
 
@@ -364,7 +366,7 @@ Two properties change what is done with a project, and they answer different que
 
 `Aspect` is for a project that has nothing to weave: one that only declares the attributes for other projects to read, or one whose assembly is woven by something other than this build. A project that declares attributes that another project weaves with wants `KeepWeaver`, because removing them would leave that other project with nothing to name.
 
-`Aspect` is read out of the project file itself, because the scan of a solution reads the projects that it walks without building them, and a property that comes from an imported file is not in a project's own file. The value it is read for is `disable` alone, as the letters are written: any other value, down to another case of the same word, is a project which is woven. `KeepWeaver` is matched without regard to case, and it is passed to the task by the build, so it is an ordinary property: it
+`Aspect` is read out of the project file itself, because the scan of a solution reads the projects that it walks without building them, and a property that comes from an imported file is not in a project's own file. A group of properties that the build reads under a condition is read for the same reason whatever the condition says, so a project that sets `disable` under a condition is a project which is left out of the weaving in every configuration it is built in. The value it is read for is `disable` alone, as the letters are written: any other value, down to another case of the same word, is a project which is woven. `KeepWeaver` is matched without regard to case, and it is passed to the task by the build, so it is an ordinary property: it
 is set on the command line as well as in the project file.
 
 Neither property is read by the IL post processor which a Unity project is given, so neither is set there; what a Unity project is woven by is under [Unity Editor](#unity-editor).
@@ -378,6 +380,33 @@ Every assembly of the project is compiled that way, Unity's own among them, so t
 What the woven assembly is left holding is the same as under the build task: the attributes are removed with the types that declare them, and the reference to the weaver goes with them when nothing of the assembly names it anymore.
 
 The `Aspect` and `KeepWeaver` properties belong to the build task, that reads them out of a project file, and a Unity project has none. There is therefore nothing there to turn the weaving off with, and the attributes and the reference to the weaver are always taken back out.
+
+# Test
+
+The tests of the weaver and of the build task are run with `dotnet test`, from the root of the repository, and each project is built for every framework it names:
+
+```
+dotnet test Inject/Tests/Gneedle.Inject.Test.csproj    # the weaver, built for net5.0 and net472
+dotnet test Aspect/Tests/Gneedle.Aspect.Test.csproj    # the build task, built for net472
+```
+
+The tests of the weaver are run on `net5.0` by the runtime they were built for. A machine which carries a newer one rather than the 5.0 runtime starts their host only when it is told to move forward to the runtime it holds:
+
+```
+DOTNET_ROLL_FORWARD=LatestMajor dotnet test Inject/Tests/Gneedle.Inject.Test.csproj
+```
+
+The tests read the templates back as the IL which the compiler wrote for them, and which IL that is depends on whether the build of the assembly of tests was optimized: a temporary which the optimizer folds into the use of it is no local of the body which stands before a call, and the read of it is not there to be counted. The shapes which the assertions name are the ones a build without the optimizer writes, which is what the project asks for whichever configuration the tests are built in; the shapes which a release build of a consumer holds are the ones the optimizer writes, which is what the same tests are run against a second time:
+
+```
+DOTNET_ROLL_FORWARD=LatestMajor dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -p:Optimize=true
+```
+
+Which of the two legs an assembly was built as is named in its metadata, and a test of the suite reads it back: a build which does not answer the flag, or one which was left behind by the other leg, is reported rather than passing as a shape which it does not hold.
+
+What is tested of the post processor is beside it in the package of Unity rather than here, because the compilation pipeline which those tests are written against is one which only an editor has; they are run by the test runner of an editor, which [the readme of that package](Aspect/Unity/README.md#tests) describes.
+
+The whole tree is built with `dotnet build Gneedle.sln -c Release`.
 
 # License
 

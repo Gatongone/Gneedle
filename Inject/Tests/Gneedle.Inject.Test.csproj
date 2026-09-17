@@ -13,17 +13,24 @@
              The library is built for netstandard2.1 whether or not this is, which is what a Unity project reaches the
              weaver through, and a build of it which does not compile is a build which fails. -->
         <TargetFrameworks>net5.0;net472</TargetFrameworks>
+        <!-- Ignore .net5.0 EOL -->
+        <CheckEolTargetFramework>false</CheckEolTargetFramework>
+
         <OutputType>Library</OutputType>
         <LangVersion>preview</LangVersion>
         <RootNamespace>Gneedle.Inject.Test</RootNamespace>
 
         <!-- The templates which the tests weave are the IL which the compiler wrote for them, and the tests read that
              IL back: a local variable of a template, the instructions which stand before it, and the shape of a body
-             are all asserted on. A build which optimizes this assembly takes them out of it - a local which is only
-             ever null and read once is not a local at all under optimization, so the template compiles to the value
-             which was folded into the call - and the tests which read it fail for what the compiler did rather than
-             for what the weaver did. The assembly which holds the templates is therefore never optimized, whichever
-             configuration the tests are built in. -->
+             are all asserted on. The shapes which those assertions name are the ones which a build without the
+             optimizer writes - a temporary which the optimizer folds into the use of it is no local of the body which
+             stands before a call, and the read of it is not there to be counted - so this assembly is built without
+             the optimizer by default, whichever configuration the tests are built in. What the optimizer writes is
+             what the assembly of a consumer holds, which is a shape the suite covers as well: the same tests are run
+             a second time against a build of this assembly which is optimized, which is what `-p:Optimize=true` asks
+             for. The property is a global one, so it reaches the weaver through the reference below on its own, and it
+             is taken out of that reference: the run which is about the shape of the templates varies that and nothing
+             else. -->
         <Optimize>false</Optimize>
     </PropertyGroup>
 
@@ -35,8 +42,16 @@
         <PackageReference Include="coverlet.collector" Version="6.0.0" />
     </ItemGroup>
 
+    <ItemGroup Condition="'$(Optimize)' == 'true'">
+        <!-- What asks for the leg above is a flag rather than a file, and a build is up to date against files: this names
+             the leg in the assembly which is built, which is a source file of that build, so that a run of one leg is
+             never answered by the build of the other. It is read back out of the metadata of the assembly by the tests,
+             which is what tells a run of one leg from a run of the other. -->
+        <AssemblyMetadata Include="OptimizedTemplates" Value="true" />
+    </ItemGroup>
+
     <ItemGroup>
-      <ProjectReference Include="..\Source\Gneedle.Inject.csproj" />
+      <ProjectReference Include="..\Source\Gneedle.Inject.csproj" GlobalPropertiesToRemove="Optimize" />
     </ItemGroup>
 
 </Project>

@@ -22,6 +22,13 @@ internal static class ErrorMessages
     /// </summary>
     internal const string INVALID_IL = "The instructions which the template compiles the member into are not the shape which the weaving reads. Member: {0}.";
 
+    /// <summary>
+    /// The chain which describes a member was asked for a part of it after the member was built, which that member
+    /// holds nothing of: the chain is read where it builds the member, and what is described after that point reaches
+    /// nothing. The placeholder is the member.
+    /// </summary>
+    internal const string MEMBER_IS_ALREADY_BUILT = "The member which the decorator describes was built, so a part which is described after that is described to nothing. Member: {0}.";
+
     // Not supported exceptions:
 
     /// <summary>
@@ -62,9 +69,29 @@ internal static class ErrorMessages
     internal const string INVALID_TYPE_NAME = "The name does not name a type which the assembly holds.";
 
     /// <summary>
-    /// No constructor of an attribute takes the arguments which were given for it.
+    /// A reference names a type which the assembly it was asked of does not hold, so no definition of that type can be
+    /// read. The placeholder is the type which the reference names.
     /// </summary>
-    internal const string INVALID_PARAMETERS = "No constructor of the attribute takes the arguments which were given.";
+    internal const string TYPE_CANNOT_BE_READ = "The type is not one which the assembly it was asked of holds, so nothing of the type can be read. Type: {0}.";
+
+    /// <summary>
+    /// An enum declares no field which holds the value of one of its members, so there is no type which its values are
+    /// read as. The placeholder is the enum.
+    /// </summary>
+    internal const string ENUM_DECLARES_NO_VALUE_FIELD = "The enum declares no field which holds the value of a member of it, so the type which its values are read as cannot be told. Type: {0}.";
+
+    /// <summary>
+    /// No constructor of an attribute takes the arguments which were given for it. The placeholder is the attribute
+    /// which the arguments were given for.
+    /// </summary>
+    internal const string INVALID_PARAMETERS = "No constructor of the attribute takes the arguments which were given. Attribute: {0}.";
+
+    /// <summary>
+    /// A null was given as one of the arguments of an attribute, which names no constructor: the type of an argument is
+    /// what a constructor is looked up by. The placeholders are the attribute which the arguments were given for and the
+    /// position of the null among them.
+    /// </summary>
+    internal const string NULL_ATTRIBUTE_ARGUMENT = "A null names no constructor, because the type of an argument is what one is looked up by. Attribute: {0}, Position: {1}.";
 
     /// <summary>
     /// The field which a template names cannot be resolved. The placeholder is that name.
@@ -197,6 +224,20 @@ internal static class ErrorMessages
     /// interface declares does. The placeholder is the template.
     /// </summary>
     internal const string TEMPLATE_HAS_NO_BODY = "The template holds no body, which a member which is abstract, a pinvoke, or a method which an interface declares is: there are no instructions of it to weave with. Template: {0}.";
+
+    /// <summary>
+    /// A body which a delegate describes was given to a decorator which this library does not build, which holds
+    /// nothing to write what the template captured into: the delegate is given rather than the method alone because the
+    /// value of a capture is read out of it, and a body which is described without that value is not the body which the
+    /// template says. The placeholder is the decorator.
+    /// </summary>
+    internal const string DECORATOR_HOLDS_NO_CAPTURE = "The decorator is not one which this library builds, so the delegate cannot be read for what the template captured. Decorator: {0}.";
+
+    /// <summary>
+    /// A template which a delegate holds was given to a handler which this library does not build, which holds nothing
+    /// to write what the template captured into. The placeholder is the handler.
+    /// </summary>
+    internal const string HANDLER_HOLDS_NO_CAPTURE = "The handler is not one which this library builds, so the delegate cannot be read for what the template captured. Handler: {0}.";
 
     /// <summary>
     /// The template reads a variable which it captured, and a value of that type cannot be written into the member

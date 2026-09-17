@@ -11,10 +11,13 @@ internal class ClassHandler(AssemblyHandler assemblyHandler, TypeDefinition sour
     public ClassFlags Flags => Source.ToClassFlags();
 
     /// <inheritdoc/>
-    public IClassHandler BaseType
+    public IClassHandler? BaseType
     {
         get
         {
+            // A class which derives from nothing holds no base type to read, which is the root of a hierarchy rather
+            // than a mistake, so none is what the query is answered with.
+            if (Source.BaseType == null) return null;
             var baseDefinition = AssemblyHandler.GetCecilType(Source.BaseType).Definition;
             return (IClassHandler) AssemblyHandler.GetType(baseDefinition);
         }

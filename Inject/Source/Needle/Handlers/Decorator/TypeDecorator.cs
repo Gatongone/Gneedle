@@ -26,6 +26,13 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     private TypeReference? m_BaseType;
 
     /// <summary>
+    /// The handler of the class which the chain built, or null while the class is still being described: the chain
+    /// answers with it from the point where it ends, which is what makes a chain which is asked for the handler of the
+    /// class twice append one class to the module rather than two of the same name.
+    /// </summary>
+    private IClassHandler? m_Handler;
+
+    /// <summary>
     /// Create a decorator which describes a class before it is appended to the module.
     /// </summary>
     /// <param name="assemblyHandler">Handler of the assembly which the class is appended to.</param>
@@ -43,6 +50,8 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IGenericParametersDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         var genericParameterType = new GenericParameterType(genericParameterName, constraints);
         var genericParameter = new GenericParameter(genericParameterName, m_TypeDefinition)
         {
@@ -63,6 +72,8 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IInterfaceDecorator WithBaseType(Type type)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         switch (type)
         {
             case null:                              throw new NullReferenceException(nameof(type));
@@ -80,6 +91,8 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IInterfaceDecorator WithBaseType(IType type)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         // Resolve and append to base type.
         m_BaseType = m_AssemblyHandler.ResolveParameterType(m_TypeDefinition, type);
         return this;
@@ -88,6 +101,8 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IInterfaceDecorator WithInterface(IType type)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         // Resolve and append to collections.
         var implementation = new InterfaceImplementation(m_AssemblyHandler.ResolveParameterType(m_TypeDefinition, type));
         m_TypeDefinition.Interfaces.Add(implementation);
@@ -97,6 +112,8 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IInterfaceDecorator WithInterface(Type type)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         switch (type)
         {
             case null:                               throw new NullReferenceException(nameof(type));
@@ -113,6 +130,10 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IClassHandler GetHandler()
     {
+        // The class is appended to the module once, and the chain answers with the handler of it from then on: a chain
+        // which is asked for the handler of the class twice appends one class rather than two of the same name.
+        if (m_Handler is { } built) return built;
+
         // Default from object inheritance.
         if (m_BaseType == null)
         {
@@ -120,23 +141,28 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         }
 
         // Build and append to module.
-        return m_BuildCallback.Invoke(m_TypeDefinition, m_BaseType);
+        m_Handler = m_BuildCallback.Invoke(m_TypeDefinition, m_BaseType);
+        return m_Handler;
     }
 
     /// <summary>
-    /// Decorator for create type definition to current module.
+    /// Decorator which completes the class. It is the end of the chain, which asks for the handler of the class which
+    /// the chain built and for nothing else.
     /// </summary>
     public interface ITypeDecorator
     {
         /// <summary>
-        /// Build type definition to module
+        /// Build the class into the module and answer with the handler of the class which was built.<para/>
+        /// The class is appended once: the chain answers with the handler of it from then on, and a part which is
+        /// described after that point is refused.
         /// </summary>
         /// <returns>Handler for class.</returns>
         IClassHandler GetHandler();
     }
 
     /// <summary>
-    /// Decorator for describing class interface.
+    /// Decorator for describing class interface. It is the level of the interfaces, which are the parts the base type
+    /// is made up with, so either of them may be described before the other and either may be left out.
     /// </summary>
     public interface IInterfaceDecorator : ITypeDecorator
     {
@@ -145,6 +171,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         /// </summary>
         /// <param name="type">Interface type of type</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the class was already built.</exception>
         IInterfaceDecorator WithInterface(Type type);
 
         /// <summary>
@@ -152,11 +179,13 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         /// </summary>
         /// <param name="type">Interface type of type</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the class was already built.</exception>
         IInterfaceDecorator WithInterface(IType type);
     }
 
     /// <summary>
-    /// Decorator for describing class base type.
+    /// Decorator for describing class base type. It is the level of the base type, which asks for the interfaces as
+    /// well, because they are the parts which come after it.
     /// </summary>
     public interface IBaseTypeDecorator : IInterfaceDecorator
     {
@@ -165,6 +194,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         /// </summary>
         /// <param name="type">Base type of type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the class was already built.</exception>
         IInterfaceDecorator WithBaseType(Type type);
 
         /// <summary>
@@ -172,11 +202,18 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         /// </summary>
         /// <param name="type">Base type of type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the class was already built.</exception>
         IInterfaceDecorator WithBaseType(IType type);
     }
 
     /// <summary>
-    /// Decorator for describing class generic parameters.
+    /// Decorator for describing class generic parameters. It is the entry of the chain, which holds a level for each
+    /// part of a class in the order the parts depend on each other: the generic parameters, the base type and the
+    /// interfaces. A level asks for the parts of itself and of the levels after it, so a part which the class does not
+    /// hold is passed by rather than described, and a level which was passed by is not asked for again.<para/>
+    /// The chain describes the class until the class is appended to the module, which is where it ends: a part which is
+    /// described after that is refused, because what the chain holds is read where the class is built and nothing reads
+    /// it afterwards.
     /// </summary>
     public interface IGenericParametersDecorator : IBaseTypeDecorator
     {
@@ -186,6 +223,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         /// <param name="genericParameterName">Generic parameter name.</param>
         /// <param name="constraints">Generic parameter constrains.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the class was already built.</exception>
         IGenericParametersDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
     }
 }
@@ -216,6 +254,13 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     private TypeReference? m_BaseType;
 
     /// <summary>
+    /// The handler of the struct which the chain built, or null while the struct is still being described: the chain
+    /// answers with it from the point where it ends, which is what makes a chain which is asked for the handler of the
+    /// struct twice append one struct to the module rather than two of the same name.
+    /// </summary>
+    private IStructHandler? m_Handler;
+
+    /// <summary>
     /// Create a decorator which describes a struct before it is appended to the module.
     /// </summary>
     /// <param name="assemblyHandler">Handler of the assembly which the struct is appended to.</param>
@@ -233,6 +278,8 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IGenericParametersDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         var genericParameterType = new GenericParameterType(genericParameterName, constraints);
         var genericParameter = new GenericParameter(genericParameterName, m_TypeDefinition)
         {
@@ -253,6 +300,8 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IInterfaceDecorator WithInterface(IType type)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         // Resolve and append to collections.
         var implementation = new InterfaceImplementation(m_AssemblyHandler.ResolveParameterType(m_TypeDefinition, type));
         m_TypeDefinition.Interfaces.Add(implementation);
@@ -262,6 +311,8 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IInterfaceDecorator WithInterface(Type type)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_TypeDefinition.Name);
+
         switch (type)
         {
             case null:                               throw new NullReferenceException(nameof(type));
@@ -278,31 +329,39 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
     /// <inheritdoc/>
     public IStructHandler GetHandler()
     {
-        // Default from object inheritance.
+        // The struct is appended to the module once, and the chain answers with the handler of it from then on: a chain
+        // which is asked for the handler of the struct twice appends one struct rather than two of the same name.
+        if (m_Handler is { } built) return built;
+
+        // Default from value type inheritance.
         if (m_BaseType == null || m_BaseType.FullName == typeof(ValueType).FullName)
         {
-            // CecilType.Reference is owned by the target module already, so it can be appended as it is.
+            // CecilType.Reference is owned by the target module already, so it is appended as it is.
             m_BaseType = m_AssemblyHandler.GetCecilType(typeof(ValueType)).Reference;
         }
 
         // Build and append to module.
-        return m_BuildCallback.Invoke(m_TypeDefinition, m_BaseType);
+        m_Handler = m_BuildCallback.Invoke(m_TypeDefinition, m_BaseType);
+        return m_Handler;
     }
 
     /// <summary>
-    /// Decorator for create type definition to current module.
+    /// Decorator which completes the struct. It is the end of the chain, which asks for the handler of the struct which
+    /// the chain built and for nothing else.
     /// </summary>
     public interface ITypeDecorator
     {
         /// <summary>
-        /// Build struct definition to module.
+        /// Build the struct into the module and answer with the handler of the struct which was built.<para/>
+        /// The struct is appended once: the chain answers with the handler of it from then on, and a part which is
+        /// described after that point is refused.
         /// </summary>
         /// <returns>Handler for struct.</returns>
         IStructHandler GetHandler();
     }
 
     /// <summary>
-    /// Decorator for describing class interface.
+    /// Decorator for describing struct interface.
     /// </summary>
     public interface IInterfaceDecorator : ITypeDecorator
     {
@@ -311,6 +370,7 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
         /// </summary>
         /// <param name="type">Interface type of type</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the struct was already built.</exception>
         IInterfaceDecorator WithInterface(Type type);
 
         /// <summary>
@@ -318,11 +378,18 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
         /// </summary>
         /// <param name="type">Interface type of type</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the struct was already built.</exception>
         IInterfaceDecorator WithInterface(IType type);
     }
 
     /// <summary>
-    /// Decorator for describing class generic parameters.
+    /// Decorator for describing struct generic parameters. It is the entry of the chain, which holds a level for each
+    /// part of a struct in the order the parts depend on each other: the generic parameters, and the interfaces. A
+    /// level asks for the parts of itself and of the level after it, so a part which the struct does not hold is passed
+    /// by rather than described, and a level which was passed by is not asked for again.<para/>
+    /// The chain describes the struct until the struct is appended to the module, which is where it ends: a part which
+    /// is described after that is refused, because what the chain holds is read where the struct is built and nothing
+    /// reads it afterwards.
     /// </summary>
     public interface IGenericParametersDecorator : IInterfaceDecorator
     {
@@ -332,6 +399,7 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
         /// <param name="genericParameterName">Generic parameter name.</param>
         /// <param name="constraints">Generic parameter constrains.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the struct was already built.</exception>
         IGenericParametersDecorator WithGenericParameter(string genericParameterName, params Constraint[] constraints);
     }
 }

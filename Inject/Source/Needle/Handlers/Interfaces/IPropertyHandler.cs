@@ -29,16 +29,6 @@ public interface IPropertyHandler : IAttributeContainer
     ITypeHandler DeclaringTypeHandler { get; }
 
     /// <summary>
-    /// Get the handler of the setter of the property, or null when it has none.<para/>
-    /// The handler stands for the accessor as the handler of any other method stands for its method, so the body of the
-    /// accessor is set through <see cref="IMethodHandler.SetBody(MethodInfo)"/> and woven around through
-    /// <see cref="IMethodHandler.AroundBody(MethodInfo)"/>. An accessor is created by the call which sets its body, so
-    /// a property which has no setter returns null here until one is set.
-    /// </summary>
-    /// <returns>The handler of the setter, or null.</returns>
-    IMethodHandler? GetSetter();
-
-    /// <summary>
     /// Get the handler of the getter of the property, or null when it has none.<para/>
     /// The handler stands for the accessor as the handler of any other method stands for its method, so the body of the
     /// accessor is set through <see cref="IMethodHandler.SetBody(MethodInfo)"/> and woven around through
@@ -49,11 +39,14 @@ public interface IPropertyHandler : IAttributeContainer
     IMethodHandler? GetGetter();
 
     /// <summary>
-    /// Set the body of the setter of the property from the method which holds the IL to copy.
+    /// Get the handler of the setter of the property, or null when it has none.<para/>
+    /// The handler stands for the accessor as the handler of any other method stands for its method, so the body of the
+    /// accessor is set through <see cref="IMethodHandler.SetBody(MethodInfo)"/> and woven around through
+    /// <see cref="IMethodHandler.AroundBody(MethodInfo)"/>. An accessor is created by the call which sets its body, so
+    /// a property which has no setter returns null here until one is set.
     /// </summary>
-    /// <param name="body">The method which holds the body of the setter.</param>
-    /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the property, which an indexer is read with.</exception>
-    void SetSetter(MethodInfo body);
+    /// <returns>The handler of the setter, or null.</returns>
+    IMethodHandler? GetSetter();
 
     /// <summary>
     /// Set the body of the getter of the property from the method which holds the IL to copy.
@@ -63,17 +56,24 @@ public interface IPropertyHandler : IAttributeContainer
     void SetGetter(MethodInfo body);
 
     /// <summary>
-    /// Set the body of the setter of the property to the default body behavior.
+    /// Set the body of the setter of the property from the method which holds the IL to copy.
     /// </summary>
-    /// <param name="body">The default body of the setter.</param>
-    /// <exception cref="ArgumentException">Thrown when the default body is the one with a field operation, which an indexer cannot be written with.</exception>
-    void SetSetter(DefaultPropertyBody body);
+    /// <param name="body">The method which holds the body of the setter.</param>
+    /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the property, which an indexer is read with.</exception>
+    void SetSetter(MethodInfo body);
 
     /// <summary>
     /// Set the body of the getter of the property to the default body behavior.
     /// </summary>
     /// <param name="body">The default body of the getter.</param>
     void SetGetter(DefaultPropertyBody body);
+
+    /// <summary>
+    /// Set the body of the setter of the property to the default body behavior.
+    /// </summary>
+    /// <param name="body">The default body of the setter.</param>
+    /// <exception cref="ArgumentException">Thrown when the default body is the one with a field operation, which an indexer cannot be written with.</exception>
+    void SetSetter(DefaultPropertyBody body);
 }
 
 /// <summary>
@@ -90,15 +90,42 @@ public static class PropertyExtensions
     /// <param name="decorator">The decorator which describes the property.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
+    /// <exception cref="ArgumentException">Thrown when the decorator is not the one which this library builds, which
+    /// holds nothing to write what the template captured into.</exception>
     public static PropertyDecorator.IAccessorDecorator WithGetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
-        => decorator is PropertyDecorator propertyDecorator ? propertyDecorator.WithGetter(delegation) : decorator.WithGetter(delegation.Method);
+    {
+        // The value of a capture is read out of the delegate where the body is woven, which only the decorator this
+        // library builds does: another implementation holds nothing for it, so the delegate is refused rather than read
+        // for the method alone, which would weave a body without the value which the template read.
+        if (decorator is not PropertyDecorator propertyDecorator)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
+        }
+
+        return propertyDecorator.WithGetter(delegation);
+    }
 
     /// <summary>
-    /// Set the body of the setter from the delegate which holds the IL to copy.
+    /// Set the body of the setter from the delegate which holds the IL to copy.<para/>
+    /// A template may capture the variables which it is written among, and the delegate is what holds the values of
+    /// them: it is given to the weaving rather than the method alone, so that what the template captured is written
+    /// into the accessor being woven.
     /// </summary>
     /// <param name="decorator">The decorator which describes the property.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
+    /// <exception cref="ArgumentException">Thrown when the decorator is not the one which this library builds, which
+    /// holds nothing to write what the template captured into.</exception>
     public static PropertyDecorator.IAccessorDecorator WithSetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
-        => decorator is PropertyDecorator propertyDecorator ? propertyDecorator.WithSetter(delegation) : decorator.WithSetter(delegation.Method);
+    {
+        // The value of a capture is read out of the delegate where the body is woven, which only the decorator this
+        // library builds does: another implementation holds nothing for it, so the delegate is refused rather than read
+        // for the method alone, which would weave a body without the value which the template read.
+        if (decorator is not PropertyDecorator propertyDecorator)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
+        }
+
+        return propertyDecorator.WithSetter(delegation);
+    }
 }

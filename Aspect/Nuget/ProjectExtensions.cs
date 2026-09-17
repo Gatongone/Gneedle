@@ -4,8 +4,12 @@ namespace Gneedle.Aspect;
 /// Extensions for reading and writing the project files which the tasks of this package go over.<para/>
 /// An element is asked of the project by name, and is added to it when it does not hold one, so that the target and the
 /// task which the package writes into a project are written once however often the build that reads them runs. Every
-/// member which adds an element tells the caller that it did, because the project is written back to its file only when
-/// something about it changed.
+/// member which writes an element tells the caller that it did, because the project is written back to its file only
+/// when something about it changed.<para/>
+/// What is read is read the way the build of that project reads it, because the two have to agree on what the project
+/// says: the names of properties, of items, and of targets, and the name which a package is referred to by, are read
+/// without regard to the case of the letters in them, and a property holds the value which the last group that sets it
+/// gives.
 /// </summary>
 internal static class ProjectExtensions
 {
@@ -27,7 +31,7 @@ internal static class ProjectExtensions
     public static ProjectTaskElement RequireTask(this ProjectTargetElement target, string name, out bool isAdd)
     {
         isAdd = false;
-        var result = target.Tasks.FirstOrDefault(task => task.Name.Equals(name));
+        var result = target.Tasks.FirstOrDefault(task => task.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (result != null) return result;
         isAdd = true;
         return target.AddTask(name);
@@ -36,29 +40,31 @@ internal static class ProjectExtensions
     /// <summary>
     /// Whether the project refers to another project or to a package by <paramref name="name"/>.<para/>
     /// A project is referred to by the path of its file, so the name which a <c>ProjectReference</c> carries is compared
-    /// as the name of a file, while a package is referred to by its name alone.
+    /// as the name of a file, while a package is referred to by its name alone. Both are read the way the build reads
+    /// them: the name of an item is the one it is written under whatever the case of the letters in it, and neither the
+    /// name of a file nor the id of a package tells two of them apart by case alone.
     /// </summary>
     /// <param name="root">The project which is read.</param>
     /// <param name="name">Name of the project or of the package which is asked for.</param>
     /// <returns>Whether the project refers to it.</returns>
     public static bool ContainsReference(this ProjectRootElement root, string name)
     {
-        foreach (var element in root.ItemGroups.SelectMany(properties => properties.Items))
+        foreach (var element in root.ItemGroups.SelectMany(group => group.Items))
         {
-            switch (element.ElementName)
-            {
-                case "ProjectReference" when Path.GetFileNameWithoutExtension(element.Include).Equals(name):
-                case "PackageReference" when element.Include.Equals(name):
-                    return true;
-            }
+            if (IsItem(element, "ProjectReference") && Path.GetFileNameWithoutExtension(element.Include).Equals(name, StringComparison.OrdinalIgnoreCase)) return true;
+            if (IsItem(element, "PackageReference") && element.Include.Equals(name, StringComparison.OrdinalIgnoreCase)) return true;
         }
 
         return false;
     }
 
     /// <summary>
-    /// The property which the project sets under <paramref name="name"/>, which is the one the first of the groups of
-    /// properties that sets it holds.
+    /// The property which the project sets under <paramref name="name"/>, which is the one the last of the groups of
+    /// properties that sets it holds.<para/>
+    /// The name of a property is read the way the build reads it, without regard to the case of the letters in it, and
+    /// the value the build holds is the one the last group which sets it gives. A group of properties which the build
+    /// reads under a condition is read here whatever the condition says, because the project is what is read rather
+    /// than a build of it.
     /// </summary>
     /// <param name="root">The project which is read.</param>
     /// <param name="name">Name of the property which is asked for.</param>
@@ -67,72 +73,61 @@ internal static class ProjectExtensions
     public static bool TryGetProperty(this ProjectRootElement root, string name, out ProjectPropertyElement? property)
     {
         property = null;
-        foreach (var element in root.PropertyGroups.SelectMany(properties => properties.Properties))
+        foreach (var element in root.PropertyGroups.SelectMany(group => group.Properties))
         {
-            if (!element.ElementName.Equals(name)) continue;
-            property = element;
-            return true;
+            if (element.ElementName.Equals(name, StringComparison.OrdinalIgnoreCase)) property = element;
         }
 
-        return false;
+        return property != null;
     }
 
     /// <summary>
-    /// The target which runs before or after the build, which is added to the project when it runs none there.<para/>
-    /// Which event a target runs on is told by its <c>BeforeTargets</c> and its <c>AfterTargets</c> rather than by its
-    /// name, which any name a project likes may carry, so the target which already runs on the event is answered rather
-    /// than a second one which runs it a second time.
+    /// The target which runs after the build, which is added to the project when it holds none of the name given.<para/>
+    /// The target is found by the name which this package writes it under rather than by the event it runs on: a target
+    /// which a project declares under another name is one which the package did not write, and which it cannot take
+    /// back out again as a whole, so the target of the package is added beside it rather than a task of the package
+    /// being written into it. That name is read the way the build reads it, without regard to the case of the letters in
+    /// it: a build reads two targets of one name as one target, so a second one written beside the first is a target
+    /// which the build passes over.
     /// </summary>
     /// <param name="root">The project which is read.</param>
-    /// <param name="type">The event of the build which the target runs on.</param>
-    /// <param name="name">Name of the target which is asked for, which is the name the event goes by when it is empty.</param>
-    /// <param name="isAdd">Whether a target was added to the project, which is false when one was found.</param>
-    /// <returns>The target which runs on the event.</returns>
-    public static ProjectTargetElement RequireBuildEvent(this ProjectRootElement root, BuildEventType type, string name, out bool isAdd)
+    /// <param name="name">Name of the target which is asked for.</param>
+    /// <param name="isChanged">Whether the project was changed, and so is to be written back to its file.</param>
+    /// <returns>The target which runs after the build.</returns>
+    public static ProjectTargetElement RequirePostBuildTarget(this ProjectRootElement root, string name, out bool isChanged)
     {
-        const string keyPreBuild = "PreBuild";
-        const string keyPostBuild = "PostBuild";
-        const string keyPreBuildEvent = "PreBuildEvent";
-        const string keyPostBuildEvent = "PostBuildEvent";
-        isAdd = false;
+        const string postBuildEvent = "PostBuildEvent";
 
-        if (string.IsNullOrEmpty(name))
+        var target = root.Targets.FirstOrDefault(target => target.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        isChanged = target == null;
+        target ??= root.AddTarget(name);
+
+        // A target of this name which runs on another event, or on none, is one which was written elsewhere and left:
+        // the event is set on it rather than a second target of the same name being added, which is what a project
+        // cannot hold.
+        if (!RunsOn(target.AfterTargets, postBuildEvent))
         {
-            name = type == BuildEventType.PreBuild ? keyPreBuild : keyPostBuild;
+            target.AfterTargets = postBuildEvent;
+            isChanged = true;
         }
 
-        var eventKey = type == BuildEventType.PreBuild ? keyPreBuildEvent : keyPostBuildEvent;
-
-        var postBuild = root.Targets
-                            .Where(target => !target.ElementName.Equals(name))
-                            .FirstOrDefault(target => (type != BuildEventType.PreBuild || target.BeforeTargets.Equals(keyPreBuildEvent))
-                                && (type != BuildEventType.PostBuild || target.AfterTargets.Equals(keyPostBuildEvent)));
-
-        if (postBuild != null) return postBuild;
-
-        postBuild = root.AddTarget(name);
-        if (type == BuildEventType.PreBuild)
-            postBuild.BeforeTargets = eventKey;
-        else
-            postBuild.AfterTargets = eventKey;
-
-        isAdd = true;
-        return postBuild;
+        return target;
     }
-}
-
-/// <summary>
-/// The event of a build which a target of a project runs on.
-/// </summary>
-public enum BuildEventType
-{
-    /// <summary>
-    /// The target runs after the build.
-    /// </summary>
-    PostBuild,
 
     /// <summary>
-    /// The target runs before the build.
+    /// Whether a target runs on the event named, which the attribute of the target holds as the list of the targets it
+    /// runs after, separated by semicolons.
     /// </summary>
-    PreBuild
+    /// <param name="targets">What the attribute of the target holds, or null when it holds none.</param>
+    /// <param name="name">Name of the event which is asked for.</param>
+    private static bool RunsOn(string? targets, string name)
+        => targets != null && targets.Split(';').Any(target => target.Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Whether an element is the item which <paramref name="name"/> names, which the build reads without regard to the
+    /// case of the letters in it.
+    /// </summary>
+    /// <param name="element">The element which is read.</param>
+    /// <param name="name">Name of the item which is asked for.</param>
+    private static bool IsItem(ProjectItemElement element, string name) => element.ElementName.Equals(name, StringComparison.OrdinalIgnoreCase);
 }

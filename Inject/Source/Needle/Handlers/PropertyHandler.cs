@@ -83,8 +83,9 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// Give the getter of the property a body of a kind which can be written from the property alone, which the getter
     /// is added to the type for first when the property holds none.<para/>
     /// <see cref="DefaultPropertyBody.WithFieldOperation"/> writes the getter against the backing field
-    /// <c>&lt;{Name}&gt;k__BackingField</c>, which is added to the type when it does not hold one, and is static
-    /// exactly when the getter is.
+    /// <c>&lt;{Name}&gt;k__BackingField</c>, which is added to the type when it does not declare one, and is static
+    /// exactly when the getter is. A field which a base type declares under that name is not one which the accessor is
+    /// written against, because the accessor is not a member which that field belongs to.
     /// </summary>
     /// <param name="body">The kind of body which the getter is given.</param>
     /// <exception cref="ArgumentException">Thrown when the getter which the property holds is one which a body cannot be written for, or when the body has no getter form.</exception>
@@ -125,8 +126,11 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         // and the setter will set the value of the backing field.
         // The backing field will be automatically created by the injector with the name "<{property_name}>k__BackingField",
         // and it belongs to the type rather than to an instance of it exactly when the accessor does.
+        // The field is looked for in the declaring type alone, because a field of that name which a base type declares
+        // is the one which backs a property of that type rather than this one, and a private field of a base type is not
+        // one which a member of this type reaches.
         var isStatic = m_Getter.Source.IsStatic;
-        var field = DeclaringTypeHandler.GetFieldInThis($"<{Name}>k__BackingField");
+        var field = DeclaringTypeHandler.GetFieldInThisType($"<{Name}>k__BackingField");
         if (field == null)
         {
             field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private | (isStatic ? FieldAttributes.Static : 0), Source.PropertyType);
@@ -152,8 +156,9 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// Give the setter of the property a body of a kind which can be written from the property alone, which the setter
     /// is added to the type for first when the property holds none.<para/>
     /// <see cref="DefaultPropertyBody.WithFieldOperation"/> writes the setter against the backing field
-    /// <c>&lt;{Name}&gt;k__BackingField</c>, which is added to the type when it does not hold one, and is static
-    /// exactly when the setter is.
+    /// <c>&lt;{Name}&gt;k__BackingField</c>, which is added to the type when it does not declare one, and is static
+    /// exactly when the setter is. A field which a base type declares under that name is not one which the accessor is
+    /// written against, because the accessor is not a member which that field belongs to.
     /// </summary>
     /// <param name="body">The kind of body which the setter is given.</param>
     /// <exception cref="ArgumentException">Thrown when the setter which the property holds is one which a body cannot be written for, or when a body which operates on a field is asked for on an indexer.</exception>
@@ -197,8 +202,11 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         // and the getter will get the value from the backing field.
         // The backing field will be automatically created by the injector with the name "<{property_name}>k__BackingField",
         // and it belongs to the type rather than to an instance of it exactly when the accessor does.
+        // The field is looked for in the declaring type alone, because a field of that name which a base type declares
+        // is the one which backs a property of that type rather than this one, and a private field of a base type is not
+        // one which a member of this type reaches.
         var isStatic = m_Setter.Source.IsStatic;
-        var field = DeclaringTypeHandler.GetFieldInThis($"<{Name}>k__BackingField");
+        var field = DeclaringTypeHandler.GetFieldInThisType($"<{Name}>k__BackingField");
         if (field == null)
         {
             field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private | (isStatic ? FieldAttributes.Static : 0), Source.PropertyType);

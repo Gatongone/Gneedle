@@ -69,12 +69,16 @@ public static class MethodExtensions
         /// into the member being woven.
         /// </summary>
         /// <param name="delegation">The delegate which holds the body.</param>
+        /// <exception cref="ArgumentException">Thrown when the delegate captured a value and the handler is not one
+        /// which this library builds, which holds nothing to write the value into.</exception>
         public void SetBody(Delegate delegation) => MethodHandler.SetBody(methodHandler, delegation);
 
         /// <summary>
         /// Set the body of the method to run around the body which it holds, from the delegate which holds the template.
         /// </summary>
         /// <param name="delegation">The delegate which holds the body to weave around.</param>
+        /// <exception cref="ArgumentException">Thrown when the delegate captured a value and the handler is not one
+        /// which this library builds, which holds nothing to write the value into.</exception>
         public void AroundBody(Delegate delegation) => MethodHandler.AroundBody(methodHandler, delegation);
 
         /// <summary>

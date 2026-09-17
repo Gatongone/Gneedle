@@ -111,15 +111,15 @@ public class GenericTokenTests
             return true;
         }
 
-        // The Object.Method templates whose receiver is typed by the token. The receiver is wrapped by
-        // `new Object(instance)`, which is the only way to place it before the `ldstr {method_name}`.
+        // The Instance.Method templates whose receiver is typed by the token. The receiver is wrapped by
+        // `new Instance(instance)`, which is the only way to place it before the `ldstr {method_name}`.
         public delegate string NameGetter();
 
-        public static string ObjectMethod_TokenReceiver(T_0 instance)
-            => new Object(instance).Method<NameGetter>("Name")();
+        public static string InstanceMethod_TokenReceiver(T_0 instance)
+            => new Instance(instance).Method<NameGetter>("Name")();
 
-        public static string ObjectMethod_SecondTokenReceiver(T_1 instance)
-            => new Object(instance).Method<NameGetter>("Name")();
+        public static string InstanceMethod_SecondTokenReceiver(T_1 instance)
+            => new Instance(instance).Method<NameGetter>("Name")();
     }
 
     private static TypeHandler NewHost(params string[] genericParameterNames)
@@ -184,7 +184,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_10));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
     }
 
     [Test]
@@ -205,7 +205,9 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_1));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        var thrown = Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        Assert.That(thrown.Message, Does.Contain("T_1"), "the message does not name the token which was read.");
+        Assert.That(thrown.Message, Does.Contain(host.Source.FullName), "the message does not name the type which holds the parameters the token was counted on.");
     }
 
     [Test]
@@ -216,7 +218,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_20));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
     }
 
     #endregion
@@ -251,7 +253,9 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_0));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        var thrown = Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        Assert.That(thrown.Message, Does.Contain("M_0"), "the message does not name the token which was read.");
+        Assert.That(thrown.Message, Does.Contain(method.Source.FullName), "the message does not name the member which holds the parameters the token was counted on.");
     }
 
     [Test]
@@ -274,7 +278,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_10));
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.ParseReturnType(token));
+        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
     }
 
     #endregion
@@ -301,7 +305,7 @@ public class GenericTokenTests
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
 
-        Assert.Throws<IndexOutOfRangeException>(() => method.SetBody(Template(nameof(Templates.ReturnSecondTypeGeneric))));
+        Assert.Throws<ArgumentException>(() => method.SetBody(Template(nameof(Templates.ReturnSecondTypeGeneric))));
     }
 
     #endregion
@@ -536,14 +540,14 @@ public class GenericTokenTests
 
     #endregion
 
-    #region Tokens on the Object.Method path
+    #region Tokens on the Instance.Method path
 
     // The host is constrained so that the generic parameters have members to look up, which is the only way a member
     // call on a generic parameter typed instance could be produced as valid IL. The two constraints hold the same
     // method, so that the looked up one tells which generic parameter the token was mapped to.
     private static TypeHandler NewConstrainedHost()
     {
-        var handler = (AssemblyHandler) Assembly.Create("ObjectTokenAssembly").Handler;
+        var handler = (AssemblyHandler) Assembly.Create("InstanceTokenAssembly").Handler;
         return (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
                                        .WithGenericParameter("T0", Constraint.FromType<NamedHelperBase>())
                                        .WithGenericParameter("T1", Constraint.FromType<NamedSecondHelperBase>())
@@ -551,12 +555,12 @@ public class GenericTokenTests
     }
 
     [Test]
-    public void ObjectMethod_With_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_First_Generic_Parameter()
+    public void InstanceMethod_With_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_First_Generic_Parameter()
     {
         var host = NewConstrainedHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
 
-        method.SetBody(Template(nameof(Templates.ObjectMethod_TokenReceiver)));
+        method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiver)));
 
         var instructions = method.Source.Body.Instructions;
         // T_0 is the first generic parameter of the declaring type, so the method has to come from the first constraint.
@@ -564,17 +568,17 @@ public class GenericTokenTests
                                .FirstOrDefault(reference => reference.Name == nameof(NamedHelperBase.Name));
         Assert.That(call, Is.Not.Null);
         Assert.That(call!.DeclaringType.Name, Is.EqualTo(nameof(NamedHelperBase)));
-        Assert.That(instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.DeclaringType.FullName == Object.TYPE_NAME), Is.False);
+        Assert.That(instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
         foreach (var instruction in instructions) AssertNoTokenType(instruction);
     }
 
     [Test]
-    public void ObjectMethod_With_Second_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_Second_Generic_Parameter()
+    public void InstanceMethod_With_Second_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_Second_Generic_Parameter()
     {
         var host = NewConstrainedHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T1"))], MethodFlags.Public);
 
-        method.SetBody(Template(nameof(Templates.ObjectMethod_SecondTokenReceiver)));
+        method.SetBody(Template(nameof(Templates.InstanceMethod_SecondTokenReceiver)));
 
         // The very same method name is held by both constraints, so the declaring type tells which one was used.
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
@@ -629,7 +633,7 @@ public class GenericTokenTests
     {
         var host = NewHost("T0");
 
-        Assert.Throws<IndexOutOfRangeException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
+        Assert.Throws<ArgumentException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
                                                                     MethodFlags.Public));
     }
 
@@ -648,6 +652,46 @@ public class GenericTokenTests
         // the weaver at runtime even though the token itself is replaced.
         Assert.That(host.Source.Module.AssemblyReferences.Any(reference => reference.Name.StartsWith(nameof(Gneedle))), Is.False);
         Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
+    }
+
+    #endregion
+
+    #region The tokens which are declared
+
+    /// <summary>
+    /// The numbers of the tokens which the library declares of one kind, read off the classes of it which are named
+    /// <c>Gneedle.Inject.{token}_</c> and the number of them.
+    /// </summary>
+    /// <param name="token">The letter which tells the token of the type from the token of the method.</param>
+    /// <returns>The numbers of the tokens, in the order of the numbers which they hold.</returns>
+    private static int[] DeclaredTokenIndexes(string token)
+    {
+        var prefix = $"{nameof(Gneedle)}.{nameof(Inject)}.{token}_";
+        return typeof(T_0).Assembly
+                          .GetTypes()
+                          .Select(type => type.FullName)
+                          .OfType<string>()
+                          .Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
+                          .Select(name => int.Parse(name.Substring(prefix.Length)))
+                          .OrderBy(index => index)
+                          .ToArray();
+    }
+
+    [Test]
+    public void The_Tokens_Which_Are_Declared_Are_The_Ones_Which_The_Weaving_Reads()
+    {
+        // A token is declared one class at a time and read by a pattern which is made from the bound of them, so the two
+        // are kept in step by the pattern rather than by hand: a token which is declared beyond the bound is a type which
+        // a template compiles against and the weaving reads as an ordinary type of the library, which is a body that is
+        // written and does not stand for what it says. This test is what holds the two together, because a class which
+        // is added to the file without the bound being moved is a mistake which nothing else reports.
+        var bound = Enumerable.Range(0, GenericTokens.HighestIndex + 1).ToArray();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(DeclaredTokenIndexes("T"), Is.EqualTo(bound), "the tokens of the type which are declared are not the ones which the pattern reads.");
+            Assert.That(DeclaredTokenIndexes("M"), Is.EqualTo(bound), "the tokens of the method which are declared are not the ones which the pattern reads.");
+        });
     }
 
     #endregion

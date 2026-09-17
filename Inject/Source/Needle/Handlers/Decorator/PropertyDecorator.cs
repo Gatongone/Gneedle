@@ -68,6 +68,13 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     private object? m_SetterClosure;
 
     /// <summary>
+    /// The handler of the property which the chain built, or null while the property is still being described: the
+    /// chain answers with it from the point where it ends, which is what makes a chain which is asked for the handler
+    /// of the property twice build one property rather than two of the same name.
+    /// </summary>
+    private IPropertyHandler? m_Handler;
+
+    /// <summary>
     /// Create a decorator which describes a property before it is appended to the module.
     /// </summary>
     /// <param name="typeHandler">Handler of the type which the property is appended to.</param>
@@ -83,6 +90,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// <inheritdoc/>
     public IAccessorDecorator WithType(IType propertyType)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_PropertyName);
         m_PropertyType = propertyType;
         return this;
     }
@@ -90,6 +98,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// <inheritdoc/>
     public IAccessorDecorator WithType(Type propertyType)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_PropertyName);
         m_PropertyType = propertyType.ToGneedleType();
         return this;
     }
@@ -97,6 +106,8 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// <inheritdoc/>
     public IAccessorDecorator WithGetter(DefaultPropertyBody body)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_PropertyName);
+
         // The two ways of describing a body replace each other, so that the one which was asked for last is the one which
         // is applied. They are held for one accessor alone, because a getter and a setter do not depend on each other.
         m_GetterBody       = body;
@@ -108,6 +119,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// <inheritdoc/>
     public IAccessorDecorator WithGetter(MethodInfo method)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_PropertyName);
         m_GetterBodyMethod = method;
         m_GetterBody       = null;
         m_GetterClosure    = null;
@@ -126,6 +138,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// <inheritdoc/>
     public IAccessorDecorator WithSetter(DefaultPropertyBody body)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_PropertyName);
         m_SetterBody       = body;
         m_SetterBodyMethod = null;
         m_SetterClosure    = null;
@@ -135,6 +148,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// <inheritdoc/>
     public IAccessorDecorator WithSetter(MethodInfo method)
     {
+        DecoratorChain.RefuseDescription(m_Handler, m_PropertyName);
         m_SetterBodyMethod = method;
         m_SetterBody       = null;
         m_SetterClosure    = null;
@@ -153,6 +167,10 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// <inheritdoc/>
     public IPropertyHandler GetHandler()
     {
+        // The property is appended to the type once, and the chain answers with the handler of it from then on: a chain
+        // which is asked for the handler of the property twice builds one property rather than two of the same name.
+        if (m_Handler is { } built) return built;
+
         var propertyType = m_TypeHandler.AssemblyHandler.ResolveParameterType(m_TypeHandler.Source, m_PropertyType);
         var propertyDef = new PropertyDefinition(m_PropertyName, PropertyAttributes.None, propertyType);
         m_TypeHandler.Source.Properties.Add(propertyDef);
@@ -184,16 +202,20 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
             handler.SetSetter(defaultSetterBody);
         }
 
+        m_Handler = handler;
         return handler;
     }
 
     /// <summary>
-    /// Decorator which completes the property. It is the end of the chain.
+    /// Decorator which completes the property. It is the end of the chain, which asks for the handler of the property
+    /// which the chain built and for nothing else.
     /// </summary>
     public interface ITypeDecorator
     {
         /// <summary>
-        /// Build property definition to module.
+        /// Build the property into the module and answer with the handler of the property which was built.<para/>
+        /// The property is built once: the chain answers with the handler of it from then on, and a part which is
+        /// described after that point is refused.
         /// </summary>
         /// <returns>Handler for property.</returns>
         IPropertyHandler GetHandler();
@@ -210,6 +232,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// </summary>
         /// <param name="body">The default body of the getter.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the property was already built.</exception>
         IAccessorDecorator WithGetter(DefaultPropertyBody body);
 
         /// <summary>
@@ -218,6 +241,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// <param name="method">The method which holds the body of the getter.</param>
         /// <returns>Result for chains calling.</returns>
         /// <exception cref="ArgumentException">Thrown when the parameters or the return type of the method do not match the getter.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the property was already built.</exception>
         IAccessorDecorator WithGetter(MethodInfo method);
 
         /// <summary>
@@ -225,6 +249,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// </summary>
         /// <param name="body">The default body of the setter.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the property was already built.</exception>
         IAccessorDecorator WithSetter(DefaultPropertyBody body);
 
         /// <summary>
@@ -235,13 +260,18 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// <param name="method">The method which holds the body of the setter.</param>
         /// <returns>Result for chains calling.</returns>
         /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the setter.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the property was already built.</exception>
         IAccessorDecorator WithSetter(MethodInfo method);
     }
 
     /// <summary>
-    /// Decorator for describing property type. It is the entry of the chain, which follows the order in which the
-    /// parts of a property depend on each other: the type, then the accessors. The flags are given to
-    /// <c>ITypeHandler.AddProperty(name, flags)</c>.
+    /// Decorator for describing property type. It is the entry of the chain, which holds a level for each part of a
+    /// property in the order the parts depend on each other: the type, then the accessors. The level of the type asks
+    /// for the accessors as well, because they are the parts which come after it, and the accessors themselves are
+    /// independent of each other, so either of them may be described first and either may be left out.<para/>
+    /// The chain describes the property until the property is built, which is where it ends: a part which is described
+    /// after that is refused, because what the chain holds is read where the property is built and nothing reads it
+    /// afterwards. The flags are given to <c>ITypeHandler.AddProperty(name, flags)</c>.
     /// </summary>
     public interface IPropertyTypeDecorator : IAccessorDecorator
     {
@@ -250,6 +280,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// </summary>
         /// <param name="propertyType">Property type of type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the property was already built.</exception>
         IAccessorDecorator WithType(IType propertyType);
 
         /// <summary>
@@ -257,6 +288,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// </summary>
         /// <param name="propertyType">Property type of type.</param>
         /// <returns>Result for chains calling.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the property was already built.</exception>
         IAccessorDecorator WithType(Type propertyType);
     }
 }

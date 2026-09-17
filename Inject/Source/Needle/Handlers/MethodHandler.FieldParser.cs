@@ -47,16 +47,20 @@ partial class MethodHandler
             throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
 
-        // Detect Object/Static patterns to determine skip count and declaring type.
+        // Detect Instance/Static patterns to determine skip count and declaring type.
         var skipArrayInitCount = 0;
         var skipStaticFromCount = 0;
         TypeDefinition? declaringTypeFromPattern = null;
+        // The instance which the template reached the field through, which is the receiver of it where the field is not
+        // static: the sequence which builds the instance is dropped along with the name, so the argument it names has to
+        // be loaded in place of the name rather than the receiver of the member being woven.
+        Instruction? receiverIns = null;
 
-        if (memberSymbol.HasFlag(MemberSymbols.Object) && currentIndex >= 1)
+        if (memberSymbol.HasFlag(MemberSymbols.Instance) && currentIndex >= 1)
         {
             var prevIns = filter.Target[currentIndex - 1];
             if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
-                && declType.FullName == Object.TYPE_NAME)
+                && declType.FullName == Instance.TYPE_NAME)
             {
                 var baseIdx = currentIndex - 7;
                 if (baseIdx >= 0
@@ -69,6 +73,7 @@ partial class MethodHandler
                 {
                     skipArrayInitCount = 7;
                     var instanceIns = filter.Target[baseIdx + 4];
+                    receiverIns = instanceIns;
                     var argType = GetArgType(instanceIns, targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
                     // The instance type may stand for the type of another assembly, in which case the field is looked up on the real one.
                     declaringTypeFromPattern = argType.ResolveDefinition(Source.Module);
@@ -92,20 +97,20 @@ partial class MethodHandler
 
         var field = memberSymbol.HasFlag(MemberSymbols.Base)
             ? DeclaringTypeHandler.GetFieldInBase(memberName)
-            : memberSymbol.HasFlag(MemberSymbols.Object) || memberSymbol.HasFlag(MemberSymbols.Static)
-                // The field of an Object or a Static symbol is one of another type than the member being woven, and the
+            : memberSymbol.HasFlag(MemberSymbols.Instance) || memberSymbol.HasFlag(MemberSymbols.Static)
+                // The field of an Instance or a Static symbol is one of another type than the member being woven, and the
                 // sequence which leads to the name of it is what names that type: a sequence which the weaving does not
                 // recognize names none, so the name is refused rather than looked up on the member being woven, which
                 // holds a field of that name by coincidence at most.
                 ? DeclaringTypeHandler.AssemblyHandler.GetFieldFromType(declaringTypeFromPattern ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName)), memberName)
-                : DeclaringTypeHandler.GetFieldInThis(memberName);
+                : DeclaringTypeHandler.GetFieldInThisOrABaseType(memberName);
         if (field == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
         }
 
         // The field is reached through the type which the sequence named, which is the member being woven for the
-        // symbols which carry no such sequence: the branch above refuses an Object or a Static which named none.
+        // symbols which carry no such sequence: the branch above refuses an Instance or a Static which named none.
         var declaringType = declaringTypeFromPattern ?? DeclaringTypeHandler.Source;
         var fieldRef = field.ContainsGenericParameter
             // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
@@ -115,7 +120,7 @@ partial class MethodHandler
             : Source.Module.ImportReference(field);
         var isStatic = field.Resolve().IsStatic;
 
-        // Skip the array init sequence if this is Object.Field with new Object(param).
+        // Skip the array init sequence if this is Instance.Field with new Instance(param).
         if (skipArrayInitCount > 0)
         {
             for (var i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
@@ -135,8 +140,8 @@ partial class MethodHandler
 
         if (!isStatic)
         {
-            // ldstr {field_name} -> ldarg.0
-            filter.Replace(currentIndex, Instruction.Create(OpCodes.Ldarg_0));
+            // ldstr {field_name} -> the argument which holds the instance the field is read off
+            filter.Replace(currentIndex, CreateReceiver(receiverIns, targetDef));
         }
         else
         {

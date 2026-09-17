@@ -14,7 +14,7 @@ internal sealed class MemoryAssembly : Assembly
     /// A text string specifying the assembly's name.
     /// </param>
     /// <param name="publicKey"></param>
-    /// <param name="pubicKeyToken"></param>
+    /// <param name="publicKeyToken"></param>
     /// <param name="hash"></param>
     /// <param name="culture">
     /// Information on the culture or language the assembly supports.
@@ -22,8 +22,8 @@ internal sealed class MemoryAssembly : Assembly
     /// (An assembly with culture information is automatically assumed to be a satellite assembly.)
     /// </param>
     /// <param name="moduleKind">.Net module kind.</param>
-    internal MemoryAssembly(string assemblyName, byte[]? publicKey = null, byte[]? pubicKeyToken = null, byte[]? hash = null, string? culture = null, ModuleKind moduleKind = ModuleKind.Dll)
-        : this(assemblyName, new Version(DEFAULT_ASSEMBLY_VERSION), publicKey, pubicKeyToken, hash, culture, moduleKind) { }
+    internal MemoryAssembly(string assemblyName, byte[]? publicKey = null, byte[]? publicKeyToken = null, byte[]? hash = null, string? culture = null, ModuleKind moduleKind = ModuleKind.Dll)
+        : this(assemblyName, new Version(DEFAULT_ASSEMBLY_VERSION), publicKey, publicKeyToken, hash, culture, moduleKind) { }
 
     /// <param name="assemblyName">
     /// A text string specifying the assembly's name.
@@ -71,6 +71,7 @@ internal sealed class MemoryAssembly : Assembly
             Architecture               = SystemInfo.Architecture,
             Kind                       = moduleKind,
             ReflectionImporterProvider = SPCLReflectionImporterProvider.Instance,
+            MetadataImporterProvider   = SPCLMetadataImporterProvider.Instance,
             // The resolver holds the assemblies which are read into the module, so that one which only exists in memory
             // is resolvable. It is given here because the resolver of a module cannot be replaced once it was created.
             AssemblyResolver = new CachedAssemblyResolver(new DefaultAssemblyResolver())
