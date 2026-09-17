@@ -538,8 +538,14 @@ partial class MethodHandler
         }
         else if (ins.TryGetLdlocIndex(out var ldIndex))
         {
-            paramStack.Push(ins, localStack[ldIndex]);
-            localStack[ldIndex] = null!;
+            // A local keeps its value until it is stored over, which is what makes it a local: the read leaves the
+            // local where it is, so a body which reads the same local twice hands the same type to both reads. A local
+            // whose type nothing has recorded yet leaves the stack as it is, as every other instruction whose result
+            // the walk cannot tell does, rather than putting a value of no type on the stack for a comparison to read.
+            if (localStack[ldIndex] is { } localType)
+            {
+                paramStack.Push(ins, localType);
+            }
         }
     }
 

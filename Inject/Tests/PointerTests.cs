@@ -83,6 +83,14 @@ public class PointerTests
         // Immediately invokes the returned delegate -> branch that rewrites to a direct call.
         public static int InvokeInstanceMethod(int a, int b) => This.Method<IntBinaryOp>("Add")(a, b);
 
+        // The same local is handed to the call twice, which is what a local is for: `ldloc` reads the value of the
+        // local rather than taking it away, so the second read is of the type which the first one read.
+        public static int InvokeWithALocalReadTwice(int a, int b)
+        {
+            var sum = a + b;
+            return This.Method<IntBinaryOp>("Add")(sum, sum);
+        }
+
         /// <summary>
         /// Name the method through a value which the template computes, which is a name the weaving has nowhere to read.
         /// </summary>
@@ -607,6 +615,30 @@ public class PointerTests
         // construction (ldftn/newobj) should remain.
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
                                  && ((MethodReference) i.Operand).Name == "Add"), Is.True);
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Local_Which_Is_Read_Twice_Is_Rewritten()
+    {
+        // A local which is read twice is read once by the walk of the stack and once more by the body, and the walk
+        // used to take the type of the local away at the first read: the second read put a value with no type on the
+        // stack, and the arguments were compared against it with nothing to compare. The read leaves the local where
+        // it is, so both reads are of the type which the store of the local recorded.
+        var host = NewHostWithAdd(isVirtual: false);
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithALocalReadTwice)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                                 && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+                    "the delegate was not rewritten to a direct call to Add.");
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
     }
