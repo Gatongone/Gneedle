@@ -120,6 +120,12 @@ public class PointerTests
         // Generic delegate (Func<>) currently trips ParseMethod: see MethodParser.cs:40-50.
         public static int InvokeViaGenericDelegate(int a, int b) => This.Method<Func<int, int, int>>("Add")(a, b);
 
+        // The member takes a wider value than the one which the template computes for it, so the call is written with a
+        // conversion of it, and the value which the call is made with is the one the conversion leaves.
+        public delegate long LongOp(long value);
+
+        public static long InvokeWithAConvertedArgument(int a) => This.Method<LongOp>("Widen")(a + a);
+
         // char literal 'A' compiles to `ldc.i4.s 65` — same IL as int 65.
         public static char InvokeCharLiteral() => This.Method<CharOp>("Echo")('A');
 
@@ -650,6 +656,52 @@ public class PointerTests
                                  && ((MethodReference) i.Operand).Name == "Add"), Is.True);
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+    }
+
+    /// <summary>
+    /// Create a host which declares a real static method <c>long Widen(long)</c>, which is <c>value + 1</c>, so that a
+    /// template which hands an argument of another type to it has one to be rewritten to and a body which runs.
+    /// </summary>
+    private static TypeHandler NewHostWithWiden()
+    {
+        var handler = (AssemblyHandler) Assembly.Create("MethodInjectionConversionAssembly").Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var module = host.Source.Module;
+        var widen = new MethodDefinition("Widen", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, module.TypeSystem.Int64)
+        {
+            DeclaringType = host.Source,
+        };
+        widen.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int64));
+        var il = widen.Body.GetILProcessor();
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Conv_I8); il.Emit(OpCodes.Add); il.Emit(OpCodes.Ret);
+        host.Source.Methods.Add(widen);
+        return host;
+    }
+
+    [Test]
+    public void InvokeWithAConvertedArgument_Rewrites_To_Direct_Call()
+    {
+        // The argument is computed as an int and the member takes a long, so the call is written with the conversion of
+        // it: the walk of the stack used to leave the value which was converted where the conversion had left another,
+        // so the argument was compared as the type it was before the call and the call was left as a call of the
+        // delegate, which reaches the placeholder rather than the member when the woven body runs.
+        var host = NewHostWithWiden();
+        var method = host.AddMethod(
+            "Run",
+            typeof(long).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAConvertedArgument)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Widen"), Is.True,
+                    "the delegate was not rewritten to a direct call to Widen.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, [3]), Is.EqualTo(7L));
     }
 
     [Test]

@@ -462,7 +462,7 @@ partial class MethodHandler
                 // The token of a generic method is parsed here as well, so that the parameter of the delegate is compared
                 // as the generic parameter of the method which it stands for rather than as a type of Gneedle.Inject.
                 var expected = ResolveDelegateParameterType(invokeParameters[i].ParameterType, invokeGenericArguments).ParseGenericTokens(Source, Source.Module);
-                if (!StackTypeMatches(expected, paramStack.Types[offset + i])) return false;
+                if (!StackTypeMatches(expected, paramStack.Types[offset + i], paramStack.Ins[offset + i])) return false;
             }
 
             return true;
@@ -474,7 +474,40 @@ partial class MethodHandler
     /// Integer-family types (bool/char/[s]byte/[u]short/int) are all loaded via <c>ldc.i4.*</c>
     /// and therefore indistinguishable on the stack, so they are treated as compatible.
     /// </summary>
-    private static bool StackTypeMatches(TypeReference expected, TypeReference actual) => TypeName.HasSameName(expected, actual) || (IsI4Compatible(expected) && IsI4Compatible(actual));
+    /// <param name="expected">The type which the call expects the value to be.</param>
+    /// <param name="actual">The type of the value which the evalutation stack holds.</param>
+    /// <param name="pushedBy">The instruction which pushed the value.</param>
+    private bool StackTypeMatches(TypeReference expected, TypeReference actual, Instruction pushedBy)
+        => TypeName.HasSameName(expected, actual)
+           || (IsI4Compatible(expected) && IsI4Compatible(actual))
+           // An enumeration is carried as the value under it, which is what a template which computes one out of an
+           // integer leaves on the stack: there is no instruction which names the enumeration.
+           || (IsI4Compatible(actual) && HasAnI4UnderlyingType(expected))
+           // A value which was boxed is carried as the type it was boxed from, and it is the value which a call of a
+           // parameter of `object` is made with rather than a reference of a type which names `object`.
+           || (pushedBy.OpCode.Code == Code.Box && expected.MetadataType == MetadataType.Object);
+
+    /// <summary>
+    /// Whether the values of a type are carried by the stack as 4-byte integers, which is what an enumeration of an
+    /// integer under it is, while a structure of the same width is carried as a value of its own type.
+    /// </summary>
+    /// <param name="type">The type which is read.</param>
+    /// <returns>Whether the type is an enumeration which the stack carries as a 4-byte integer.</returns>
+    private bool HasAnI4UnderlyingType(TypeReference type)
+    {
+        try
+        {
+            return type.ResolveDefinition(Source.Module) is { IsEnum: true } definition
+                   && definition.Fields.FirstOrDefault(field => field.Name == "value__") is { } value
+                   && IsI4Compatible(value.FieldType);
+        }
+        catch (AssemblyResolutionException)
+        {
+            // A type of an assembly which is not there is not one which the value on the stack can be told to be, and
+            // the arguments are left to be compared by name, which the walk refuses rather than guesses.
+            return false;
+        }
+    }
 
     /// <summary>
     /// Whether the type is represented as a 4-byte integer on the CLR evaluation stack,
@@ -511,6 +544,12 @@ partial class MethodHandler
                 : callMethod.Parameters.Count + 1);
         }
 
+        // An instruction which is handed a value and leaves another in its place takes the value it was handed off the
+        // stack: what a conversion converts, what a cast casts and what a read reads out of is not left under the value
+        // which is left, and the arguments of a call are the values which were pushed last, so a value left under them
+        // would be read in their place.
+        if (LeavesAValueInPlaceOfTheOneItIsHanded(ins) && paramStack.Types.Count > 0) paramStack.Pop(1);
+
         // When the instruction push any variable to the method stack, it should be appended to the parameters stack.
         if (TryGetStackType(ins, targetDef, out var type))
         {
@@ -540,6 +579,22 @@ partial class MethodHandler
             }
         }
     }
+
+    /// <summary>
+    /// Whether an instruction leaves a value of a type which is not the type of the value it is handed, which is what
+    /// the conversions, the casts, the boxes and the reads do.
+    /// </summary>
+    /// <param name="ins">The instruction which is read.</param>
+    /// <returns>Whether the instruction leaves another value in place of the one it is handed.</returns>
+    private static bool LeavesAValueInPlaceOfTheOneItIsHanded(Instruction ins) => ins.OpCode.Code is
+        Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_I8 or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4
+        or Code.Conv_U8 or Code.Conv_I or Code.Conv_U or Code.Conv_R4 or Code.Conv_R8 or Code.Conv_R_Un
+        or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_I8 or Code.Conv_Ovf_U1
+        or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_U8 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un
+        or Code.Box or Code.Unbox or Code.Unbox_Any or Code.Castclass or Code.Isinst
+        or Code.Ldfld or Code.Ldflda or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8
+        or Code.Ldind_I or Code.Ldind_R4 or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2
+        or Code.Ldind_U4;
 
     /// <summary>
     /// The type of the value which an instruction leaves on the stack, which is read off the instruction itself where
@@ -572,6 +627,22 @@ partial class MethodHandler
             Code.Ldstr                                                                             => typeSystem.String,                  // String
             Code.Ldc_R4                                                                            => typeSystem.Single,                  // Single
             Code.Ldc_R8                                                                            => typeSystem.Double,                  // Double
+            Code.Ldnull                                                                            => typeSystem.Object,                  // Null
+            // The conversions which an argument of a type other than the one which was computed is handed over
+            // through: the value is left of the type which was converted to, and the narrow ones are all carried as
+            // 4-byte integers whichever of them they are.
+            Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4
+                or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_U1
+                or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un      => typeSystem.Int32,    // Conv, narrow
+            Code.Conv_I8 or Code.Conv_Ovf_I8                                                             => typeSystem.Int64,    // Conv, Int64
+            Code.Conv_U8 or Code.Conv_Ovf_U8                                                             => typeSystem.UInt64,   // Conv, UInt64
+            Code.Conv_I                                                                                  => typeSystem.IntPtr,   // Conv, native
+            Code.Conv_U                                                                                  => typeSystem.UIntPtr,  // Conv, native
+            Code.Conv_R4                                                                                 => typeSystem.Single,   // Conv, Single
+            Code.Conv_R8 or Code.Conv_R_Un                                                               => typeSystem.Double,   // Conv, Double
+            // The instructions which leave the type they name, which is the type of the value they leave: what is
+            // looked for when the argument is the value which a call hands over.
+            Code.Box or Code.Unbox_Any or Code.Castclass or Code.Isinst when ins.Operand is TypeReference cast => cast, // Cast
             Code.Ldfld or Code.Ldsfld when ins.Operand is FieldReference field                     => field.FieldType,                    // Field
             Code.Newobj when ins.Operand is MethodReference ctor                                   => ctor.DeclaringType,                 // Newobj
             Code.Call or Code.Callvirt or Code.Ldftn when ins.Operand is MethodReference methodRef => ResolveMethodReturnType(methodRef), // Call
