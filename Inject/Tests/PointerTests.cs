@@ -44,6 +44,21 @@ public class PointerTests
         public int PublicProperty => 42;
     }
 
+    /// <summary>
+    /// The type which declares a parameter of its own and holds the member of the body which is reached through an
+    /// instance of another type entirely.
+    /// </summary>
+    public class GenericBaseOfAnInstance<T>
+    {
+        public int Calc(int a) => a * 3;
+    }
+
+    /// <summary>
+    /// The type which derives from an instantiation of the type above: the member belongs to the definition of that
+    /// base, and the type which the template named an instance of is this one rather than that base.
+    /// </summary>
+    public class DerivedOfAGenericBase : GenericBaseOfAnInstance<int>;
+
     // The templates live in the test assembly, so that Cecil resolves them from disk, and each names a member of the
     // type being woven through one placeholder. The type argument of a placeholder tells the member type.
 
@@ -389,6 +404,13 @@ public class PointerTests
         /// read rather than the parameter of the type, which is what the reference to it used to be built from.
         /// </summary>
         public static int InstanceField_OfAGenericType(GenericHelper<int> helper) => new Instance(helper).Field<int>("PublicField").Get();
+
+        /// <summary>
+        /// The member belongs to a base type of the type which the instance is one of, and that base declares a parameter
+        /// of its own: the call names the instantiation which the base was handed where the type was declared rather
+        /// than the definition of the base.
+        /// </summary>
+        public static int InstanceMethod_OfABaseOfAGenericType(DerivedOfAGenericBase derived, int a) => new Instance(derived).Method<IntOp>("Calc")(a);
     }
 
     private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
@@ -1973,6 +1995,27 @@ public class PointerTests
         var helper = new GenericHelper<int> { PublicField = 42 };
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(42),
+                    "the woven assembly does not run.");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Base_Of_A_Generic_Type_Runs_The_Member()
+    {
+        // The type which the template named the instance through derives from an instantiation of the type which
+        // declares the member: the member belongs to the definition of that base, and the call names the instantiation
+        // which the type was handed where it was declared, which is the type of the value the member is reached through
+        // rather than a type of the body which is woven.
+        var (assembly, _, method) = NewInstanceHost("InstanceGenericBaseAssembly", [typeof(DerivedOfAGenericBase), typeof(int)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfABaseOfAGenericType)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().FirstOrDefault(reference => reference.Name == "Calc");
+        Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
+        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the call names the definition of the base rather than the instantiation which the type was handed.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAGenericBase(), 14]), Is.EqualTo(42),
                     "the woven assembly does not run.");
     }
 

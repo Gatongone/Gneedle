@@ -391,6 +391,40 @@ partial class MethodHandler
             return baseInstance;
         }
 
+        // The type which the template named the instance through derives from the declaring type: the member belongs to
+        // the definition of a base as well, and the instantiation which a base of that type names is the one the body
+        // can write where the definition of it cannot be.
+        return namedInstance is null ? null : InstantiationOfABase(declaringType, namedInstance);
+    }
+
+    /// <summary>
+    /// The instantiation of the type which declares a member, which a base of the type the template named the instance
+    /// through stands for.<para/>
+    /// The base of a type is written where that type is declared, so the arguments of it stand in the body already
+    /// where they name no parameter at all: a base which receives the parameters of the declaration it is written in,
+    /// or a type of its own, is one which the body names nothing of, and the definition of it is what the body held
+    /// before the base was walked.
+    /// </summary>
+    /// <param name="declaringType">The type which declares the member which is reached.</param>
+    /// <param name="namedInstance">The type of the instance which the template reached the member through.</param>
+    /// <returns>The instantiation of the declaring type, or null when no base of the named type names one.</returns>
+    private TypeReference? InstantiationOfABase(TypeReference declaringType, TypeReference namedInstance)
+    {
+        // A type of an assembly which the weaver cannot reach has no base to read, and the walk ends there as it does
+        // where the chain ends: the reference is the one the body held before the base was walked.
+        try
+        {
+            for (var baseType = namedInstance.Resolve()?.BaseType; baseType != null; baseType = baseType.Resolve()?.BaseType)
+            {
+                if (baseType is GenericInstanceType { ContainsGenericParameter: false } instance
+                    && instance.ElementType.FullName == declaringType.FullName)
+                {
+                    return instance.ParseGenericTokens(Source, Source.Module);
+                }
+            }
+        }
+        catch (AssemblyResolutionException) { }
+
         return null;
     }
 
