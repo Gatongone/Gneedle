@@ -107,31 +107,17 @@ partial class MethodHandler
                                     .ToArray();
 
         // Detect Instance.Method with new Instance(param) syntax: need to skip the array init sequence.
-        var skipArrayInitCount = 0;
         // The instance which the template reached the method through, which is the receiver of the call where the method
-        // is not static: the sequence which builds the instance is dropped along with the name, so the argument it names
-        // has to be loaded in place of the name.
+        // is not static: the sequence which builds the instance is dropped, so the value it holds has to stand where the
+        // member takes a receiver.
         Instruction? receiverIns = null;
-        if (memberSymbol.HasFlag(MemberSymbols.Instance) && nameIndex is { } name && name >= 1)
+        InstanceValue? instance = null;
+        var instanceName = -1;
+        if (memberSymbol.HasFlag(MemberSymbols.Instance) && nameIndex is { } name && TryGetInstanceValue(filter, name, targetDef, out var value))
         {
-            var prevIns = filter.Target[name - 1];
-            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
-                && declType.FullName == Instance.TYPE_NAME)
-            {
-                // Verify the full array init pattern exists.
-                var baseIdx = name - 7;
-                if (baseIdx >= 0
-                    && filter.Target[baseIdx].OpCode.Code == Code.Ldc_I4_1
-                    && filter.Target[baseIdx + 1].OpCode == OpCodes.Newarr
-                    && filter.Target[baseIdx + 2].OpCode == OpCodes.Dup
-                    && filter.Target[baseIdx + 3].OpCode.Code == Code.Ldc_I4_0
-                    && (filter.Target[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S)
-                    && filter.Target[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
-                {
-                    skipArrayInitCount = 7; // ldc.i4.1 through newobj
-                    receiverIns = filter.Target[baseIdx + 4];
-                }
-            }
+            instance     = value;
+            instanceName = name;
+            receiverIns  = value.Load;
         }
 
         // Detect Static.Method with Static.From("typename"): need to skip ldstr+call Static::From.
@@ -153,7 +139,7 @@ partial class MethodHandler
         // The index which is given is the one of the name, which is what the members reached through an instance of
         // Instance or Static are read against: a symbol which carries no name is not one of those, so the call stands in
         // its place, where it is read by nothing.
-        var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter.Target, parameters, targetDef);
+        var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter, parameters, targetDef);
         if (methodDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
@@ -163,11 +149,26 @@ partial class MethodHandler
         // this is Static.Method. The two are dropped whichever way the method is reached afterwards, which is the whole
         // of the sequence: a symbol which is handed back as a delegate reaches its member no less than one which invokes
         // it, and the sequence which built the instance of `Instance` is balanced by nothing but the name which ends it.
-        if (skipArrayInitCount > 0 && nameIndex is { } arrayName)
+        // The value which the instance was built around goes with it where the method takes no receiver, or where the load
+        // of it is written where the name stands instead: a value which is read for nothing is not left on the stack.
+        if (instance is { } heldValue)
         {
-            for (var i = arrayName - skipArrayInitCount; i < arrayName; i++)
+            for (var i = heldValue.First - 4; i < heldValue.First; i++)
             {
                 filter.Skip(i);
+            }
+
+            for (var i = heldValue.Last + 1; i < instanceName; i++)
+            {
+                filter.Skip(i);
+            }
+
+            if (heldValue.Load != null || methodDef.IsStatic)
+            {
+                for (var i = heldValue.First; i <= heldValue.Last; i++)
+                {
+                    filter.Skip(i);
+                }
             }
         }
 
@@ -181,9 +182,15 @@ partial class MethodHandler
 
         // A delegate which the template holds in a local is invoked by that local rather than where the symbol stands, so
         // what the symbol stands for there is the store of the delegate: the store and the call are dropped together, and
-        // every read of the local which invokes the delegate is written as the call of the member instead.
+        // every read of the local which invokes the delegate is written as the call of the member instead. A read of the
+        // local stands where it stands and is written as the receiver of the member, which is the load of the argument
+        // the instance was named by: a value which the template computed is one value in one place, so the local holds the
+        // delegate where that is so, as it does for a local which stands for more than the invocation of it.
+        var instanceIsComputed = instance is { Load: null };
         var held            = HeldLocal(filter.Target, callIndex);
-        var heldInvocations = held is { } stored ? InvocationsOfTheHeldDelegate(filter.Target, stored.Local, delegateRef, targetDef) : null;
+        var heldInvocations = held is { } stored && !instanceIsComputed
+            ? InvocationsOfTheHeldDelegate(filter.Target, stored.Local, delegateRef, targetDef)
+            : null;
 
         if (held is { } heldStore && heldInvocations != null)
         {
@@ -223,7 +230,9 @@ partial class MethodHandler
                 filter.Skip(loadedName);
             }
 
-            if (!methodDef.IsStatic)
+            // The receiver of the member stands ahead of the call which the delegate is invoked through, which is where
+            // the value which the template named it stands: only the load of an argument has to be written there.
+            if (!methodDef.IsStatic && !instanceIsComputed)
             {
                 filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef));
             }
@@ -264,7 +273,13 @@ partial class MethodHandler
 
             if (!methodDef.IsStatic)
             {
-                filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef));
+                // The target of the delegate is the value which the member is reached through, which stands where the
+                // template named it or computed it: only the load of an argument has to be written where the pointer of
+                // the member is taken.
+                if (!instanceIsComputed)
+                {
+                    filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef));
+                }
             }
             else
             {
@@ -318,12 +333,12 @@ partial class MethodHandler
     /// <param name="memberSymbol">The symbol which the template reached the member through.</param>
     /// <param name="methodName">Name of the member.</param>
     /// <param name="currentIndex">Index of the instruction which loads the name of the member.</param>
-    /// <param name="instructions">The instructions of the body which is parsed.</param>
+    /// <param name="filter">The filter which the body is written through.</param>
     /// <param name="parameters">The types of the arguments which the member is called with, which the member that is found has to be described by.</param>
     /// <param name="targetDef">The template which the instructions are read out of.</param>
     /// <returns>The method which the symbol stands for, or null when the symbol is not one which names a method.</returns>
     /// <exception cref="ArgumentException">Thrown when the member cannot be resolved, or when the template proceeds without a body being woven around.</exception>
-    private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, IReadOnlyList<Instruction> instructions, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef)
+    private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, InstructionFilter filter, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef)
     {
         if (memberSymbol.HasFlag(MemberSymbols.Base))
         {
@@ -354,37 +369,25 @@ partial class MethodHandler
 
         if (memberSymbol.HasFlag(MemberSymbols.Instance))
         {
-            // The instruction before ldstr memberName may be:
-            // 1. ldarg (direct parameter use) or
-            // 2. newobj Instance::.ctor(object[]) — from new Instance(instance) syntax.
-            //    Pattern: ldc.i4.1, newarr Instance, dup, ldc.i4.0, ldarg.X, stelem.ref, newobj
-            var prevIns = instructions[currentIndex - 1];
-            Instruction? instanceIns = null;
-
-            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
-                && declType.FullName == Instance.TYPE_NAME)
+            // The type of the instance which the member is looked up on: the name is preceded by the construction of the
+            // instance of `Instance` which holds the value, or by a load of the value itself where the template named it
+            // without building an instance around it. A value whose type the walk cannot tell names no type to look the
+            // member up on, which is refused rather than looked up on the member being woven, which holds a member of
+            // that name by coincidence at most.
+            TypeReference? argType = null;
+            if (TryGetInstanceValue(filter, currentIndex, targetDef, out var instance))
             {
-                // Backtrack to find the ldarg in the array initializer sequence.
-                // Expected: [currentIndex-7] ldc.i4.1, [-6] newarr, [-5] dup, [-4] ldc.i4.0, [-3] ldarg.X, [-2] stelem.ref, [-1] newobj
-                var baseIdx = currentIndex - 7;
-                if (baseIdx >= 0
-                    && instructions[baseIdx].OpCode.Code == Code.Ldc_I4_1
-                    && instructions[baseIdx + 1].OpCode == OpCodes.Newarr
-                    && instructions[baseIdx + 2].OpCode == OpCodes.Dup
-                    && instructions[baseIdx + 3].OpCode.Code == Code.Ldc_I4_0
-                    && instructions[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S
-                    && instructions[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
-                {
-                    instanceIns = instructions[baseIdx + 4]; // The ldarg
-                }
+                argType = instance.Load is { } load ? GetArgType(load, targetDef) : GetValueType(filter, instance.Last, targetDef);
             }
-            else if (prevIns.OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S)
+            else if (currentIndex >= 1)
             {
-                instanceIns = prevIns;
+                argType = GetArgType(filter.Target[currentIndex - 1], targetDef);
             }
 
-            var argType = (instanceIns != null ? GetArgType(instanceIns, targetDef) : null)
-                          ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+            if (argType == null)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+            }
 
             // A token as the instance type is just another spelling of the generic parameter of the injected method or of
             // its declaring type, so it is resolved exactly like a real generic parameter: the method is looked up on the
@@ -398,7 +401,7 @@ partial class MethodHandler
             }
 
             // The instance type may stand for the type of another assembly, in which case the method is looked up on the real one.
-            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.ResolveDefinition(Source.Module), (string) instructions[currentIndex].Operand, parameters);
+            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.ResolveDefinition(Source.Module), (string) filter.Target[currentIndex].Operand, parameters);
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Static))
@@ -408,7 +411,7 @@ partial class MethodHandler
             // [currentIndex-1]: call Static::From
             // [currentIndex]:   ldstr "methodName"
             if (currentIndex < 2) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
-            var typeNameIns = instructions[currentIndex - 2];
+            var typeNameIns = filter.Target[currentIndex - 2];
             if (typeNameIns.OpCode != OpCodes.Ldstr || typeNameIns.Operand is not string fullTypeName)
             {
                 throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
@@ -416,7 +419,7 @@ partial class MethodHandler
 
             // Resolve the type using GetCecilType (checks cache + Type.GetType reflection + current assembly).
             var staticType = DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition;
-            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(staticType, (string) instructions[currentIndex].Operand, parameters);
+            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(staticType, (string) filter.Target[currentIndex].Operand, parameters);
         }
 
         return null;

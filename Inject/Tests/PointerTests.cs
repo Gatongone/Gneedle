@@ -263,14 +263,42 @@ public class PointerTests
 
         /// <summary>
         /// The instance of <c>Instance</c> is held in a local of the template rather than read off a parameter where the
-        /// name of the field is written, so the sequence which names the type of the instance is not the one which the
-        /// weaving reads a type off.
+        /// name of the field is written, so the value which the member is reached through stands where the template
+        /// stored it rather than where the name stands.
         /// </summary>
         public static int InstanceField_OfAnInstanceInALocal(HelperClass h)
         {
             var instance = h;
             return new Instance(instance).Field<int>("PublicField").Get();
         }
+
+        /// <summary>
+        /// The instance of <c>Instance</c> is the value which another placeholder handed back, so what the member is
+        /// reached through is a sequence of instructions rather than one load.
+        /// </summary>
+        public static int InstanceField_OfAValueWhichAMemberHandedBack() => new Instance(This.Field<HelperClass>("Helper").Get()).Field<int>("PublicField").Get();
+
+        /// <summary>
+        /// The same, of a field which belongs to the type of the instance alone: the member takes no receiver at all, so
+        /// the value which the template computed stands for nothing and goes with the array which carried it.
+        /// </summary>
+        public static int InstanceStaticField_OfAValueWhichAMemberHandedBack() => new Instance(This.Field<HelperClass>("Helper").Get()).Field<int>("StaticField").Get();
+
+        public static int InstanceProperty_OfAValueWhichAMemberHandedBack() => new Instance(This.Field<HelperClass>("Helper").Get()).Property<int>("PublicProperty").Get();
+
+        public static int InstanceMethod_OfAValueWhichAMemberHandedBack(int a) => new Instance(This.Field<HelperClass>("Helper").Get()).Method<IntOp>("Calc")(a);
+
+        /// <summary>
+        /// The delegate of <c>Instance.Method</c> is handed back rather than invoked, and the instance is a value which
+        /// another placeholder handed back: the pointer of the member is taken out of the value where it stands.
+        /// </summary>
+        public static IntOp InstanceMethod_OfAValueWhichAMemberHandedBackAsADelegate() => new Instance(This.Field<HelperClass>("Helper").Get()).Method<IntOp>("Calc");
+
+        /// <summary>
+        /// The instance of <c>Instance</c> is an element of an array, which names the type of what it reads nowhere, so
+        /// the member which the name stands for cannot be looked up.
+        /// </summary>
+        public static int InstanceField_OfAnElementOfAnArray(HelperClass[] helpers) => new Instance(helpers[0]).Field<int>("PublicField").Get();
 
         // Instance.Property get/set
         public static int InstanceProperty_Get(HelperClass h) => new Instance(h).Property<int>("PublicProperty").Get();
@@ -1282,19 +1310,141 @@ public class PointerTests
     }
 
     [Test]
-    public void InstanceField_Of_An_Instance_Which_Is_Held_In_A_Local_Throws()
+    public void InstanceField_Of_An_Instance_Which_Is_Held_In_A_Local_Reads_That_Local()
+    {
+        // The instance which the template holds in a local stands where the template stored it, which is not where the
+        // name of the field stands: the load of the local is what the field is read off, and the sequence which built the
+        // array around the instance goes with the name.
+        var (assembly, host, method) = NewInstanceHost("InstanceFieldInALocalAssembly", [typeof(HelperClass)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnInstanceInALocal)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(instruction => instruction.Operand is MemberReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False,
+                    "the array which built the instance of `Instance` was left in the body.");
+
+        var receiver = ReceiverOf(ins, "PublicField");
+        Assert.That(receiver.TryGetLdlocIndex(out _), Is.True,
+                    "the field is read off `this` rather than off the local which holds the instance.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var helper = new HelperClass { PublicField = 21 };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(21));
+    }
+
+    [Test]
+    public void InstanceField_Of_An_Instance_Whose_Type_Is_Not_Named_Where_It_Is_Read_Throws()
     {
         // The type which the field is looked up on is named by the sequence which leads to the name of the field, and a
-        // sequence which the weaving does not recognize names no type at all. The name is not looked up on the member
-        // being woven instead, which holds a field of that name of its own here: the field of the template is one of the
-        // instance the template holds, and a name which is woven into another member than the one it names is worse
-        // than a name which is refused.
+        // sequence which names no type names none at all. The name is not looked up on the member being woven instead,
+        // which holds a field of that name of its own here: the field of the template is one of the instance the
+        // template holds, and a name which is woven into another member than the one it names is worse than a name which
+        // is refused.
         var host = NewHostWithField("PublicField", isStatic: false);
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnInstanceInALocal))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnElementOfAnArray))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
+    }
+
+    [Test]
+    public void InstanceField_Of_A_Value_Which_The_Template_Computed_Reads_That_Value()
+    {
+        // The instance which the placeholder was built around is the value which another placeholder handed back, which
+        // is a sequence of instructions rather than one load: the member is written off the value where the template left
+        // it, and the array which carried it is dropped.
+        var (assembly, host, method) = NewInstanceHost("InstanceComputedValueAssembly", []);
+        AddHelperField(host);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAValueWhichAMemberHandedBack)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(instruction => instruction.Operand is MemberReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False,
+                    "the array which built the instance of `Instance` was left in the body.");
+        Assert.That(ReceiverOf(ins, "PublicField"), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference { Name: "Helper" })),
+                    "the field is read off `this` rather than off the value which the template computed.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetField("Helper")!.SetValue(instance, new HelperClass { PublicField = 21 });
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, null), Is.EqualTo(21));
+    }
+
+    [Test]
+    public void InstanceStaticField_Of_A_Value_Which_The_Template_Computed_Is_Reached_Through_No_Receiver()
+    {
+        // The field which the instance of `Instance` names belongs to the type alone, so the value which the template
+        // computed is read for nothing: it goes with the array which carried it, which is what leaves the body without a
+        // value on the stack where the member takes none.
+        var (assembly, host, method) = NewInstanceHost("InstanceComputedStaticValueAssembly", []);
+        AddHelperField(host);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceStaticField_OfAValueWhichAMemberHandedBack)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && field.Name == "StaticField"), Is.True,
+                    "the static field was not read through the type which the template named.");
+        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
+                    "a receiver was written where the member being woven holds none.");
+
+        HelperClass.StaticField = 7;
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), null), Is.EqualTo(7));
+    }
+
+    [Test]
+    public void InstanceProperty_Of_A_Value_Which_The_Template_Computed_Calls_The_Accessor()
+    {
+        var (assembly, host, method) = NewInstanceHost("InstanceComputedPropertyAssembly", []);
+        AddHelperField(host);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_OfAValueWhichAMemberHandedBack)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ins.Count(instruction => instruction.Operand is MethodReference { Name: "get_PublicProperty" }), Is.EqualTo(1), "the getter was not called exactly once.");
+        Assert.That(ReceiverOf(ins, "get_PublicProperty"), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference { Name: "Helper" })),
+                    "the property is read off `this` rather than off the value which the template computed.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetField("Helper")!.SetValue(instance, new HelperClass { PublicProperty = 5 });
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, null), Is.EqualTo(5));
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Value_Which_The_Template_Computed_Calls_The_Method()
+    {
+        var (assembly, host, method) = NewInstanceHost("InstanceComputedMethodAssembly", [typeof(int)]);
+        AddHelperField(host);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAValueWhichAMemberHandedBack)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ReceiverOf(ins, "Calc", arguments: 1), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference { Name: "Helper" })),
+                    "the method is called on `this` rather than on the value which the template computed.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetField("Helper")!.SetValue(instance, new HelperClass());
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [21]), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Value_Which_The_Template_Computed_Is_Handed_Back_As_A_Delegate()
+    {
+        // The pointer of the member is taken out of the value which the template computed where the value stands, so no
+        // receiver is written where the delegate is built.
+        var (assembly, host, method) = NewInstanceHost("InstanceComputedDelegateAssembly", []);
+        AddHelperField(host);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAValueWhichAMemberHandedBackAsADelegate)));
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type)!;
+        type.GetField("Helper")!.SetValue(instance, new HelperClass());
+        var calc = (InstanceStaticTemplates.IntOp) type.GetMethod("Run")!.Invoke(instance, null)!;
+
+        Assert.That(calc(21), Is.EqualTo(42));
     }
 
     /// <summary>
@@ -1324,6 +1474,17 @@ public class PointerTests
         host.Source.Methods.Add(constructor);
 
         return (assembly, host, method);
+    }
+
+    /// <summary>
+    /// Give a host a field which holds a <see cref="HelperClass"/>, which is what a template of <c>Instance</c> which
+    /// computes its instance reaches one through.
+    /// </summary>
+    /// <param name="host">The host which the field is declared on.</param>
+    private static void AddHelperField(TypeHandler host)
+    {
+        var fieldType = host.Source.Module.ImportReference(typeof(HelperClass));
+        host.Source.Fields.Add(new FieldDefinition("Helper", FieldAttributes.Public, fieldType));
     }
 
     /// <summary>
