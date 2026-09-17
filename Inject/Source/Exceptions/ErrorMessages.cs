@@ -109,6 +109,13 @@ internal static class ErrorMessages
     internal const string INVALID_METHOD = "The method cannot be resolved in the assembly which is woven. Method: {0}.";
 
     /// <summary>
+    /// The handle of a field or a property was held in a local and read for something other than the member which the
+    /// handle stands for, which is a value which the weaving has no way to write. The placeholder is the name of the
+    /// member.
+    /// </summary>
+    internal const string INVALID_HELD_HANDLE = "The value member which the template holds in a local is read for something other than the member itself, which the weaving has no way to write. Member: {0}.";
+
+    /// <summary>
     /// A template reads the parameter at a position which the member being woven does not hold. The placeholders are
     /// the position and the member which was being woven.
     /// </summary>

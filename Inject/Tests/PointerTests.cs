@@ -51,6 +51,50 @@ public class PointerTests
         // placeholder of the write and the accessor which the write is written to.
         public static void AddOneToInstanceField() => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + 1);
 
+        // The handle which the placeholder handed back is held in a local, and the member is read and written through
+        // that local rather than where the name stands: the accessors belong to the local, whose value is the handle.
+        public static int BumpAHeldHandle(int by)
+        {
+            var count = This.Field<int>("Value");
+            count.Set(count.Get() + by);
+            return count.Get();
+        }
+
+        // The same, when the field is also named where it is read, so that what the template holds and what it names
+        // are woven into one body.
+        public static int BumpAHeldHandleAndTheFieldItself(int by)
+        {
+            var count = This.Field<int>("Value");
+            count.Set(count.Get() + by);
+            return count.Get() + This.Field<int>("Value").Get();
+        }
+
+        // The same, of a field which belongs to no instance, which every read through the handle is written without a
+        // receiver for.
+        public static int BumpAHeldHandleOfAStaticField(int by)
+        {
+            var count = This.Field<int>("Value");
+            count.Set(count.Get() + by);
+            return count.Get();
+        }
+
+        // The same, of a property, which is read and written through the accessors which the handle calls stand for.
+        public static int BumpAHeldHandleOfAProperty(int by)
+        {
+            var prop = This.Property<int>("Prop");
+            prop.Set(prop.Get() + by);
+            return prop.Get();
+        }
+
+        // The handle is read for something other than the member which it stands for, which is a value which the
+        // weaving has no way to write.
+        public static int ReadAHeldHandleAsAValue()
+        {
+            var count = This.Field<int>("Value");
+            var copy  = count;
+            return copy.Get();
+        }
+
         public static int ReadInstanceProperty() => This.Property<int>("Prop").Get();
         public static void WriteInstanceProperty(int v) => This.Property<int>("Prop").Set(v);
 
@@ -259,6 +303,19 @@ public class PointerTests
 
     private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
 
+    /// <summary>
+    /// Assert that the assembly which was woven names nothing of the weaver: the weaving writes what the template asked
+    /// for rather than a value of its own, so the assembly stands alone at runtime.
+    /// </summary>
+    /// <param name="host">The host which the template was woven into.</param>
+    private static void DoesNotReferToTheWeaver(TypeHandler host)
+    {
+        var weaver = typeof(This).Assembly.GetName().Name;
+
+        Assert.That(host.Source.Module.AssemblyReferences.Any(reference => reference.Name == weaver), Is.False,
+                    $"the assembly which was woven refers to {weaver}.");
+    }
+
     #region This: a field
 
     /// <summary>
@@ -272,6 +329,25 @@ public class PointerTests
         var attrs = FieldAttributes.Public | (isStatic ? FieldAttributes.Static : 0);
         host.Source.Fields.Add(new FieldDefinition(fieldName, attrs, host.Source.Module.TypeSystem.Int32));
         return host;
+    }
+
+    /// <summary>
+    /// Give a host the constructor which a type needs for an instance of it to be made, and load the assembly which
+    /// declares it, so that a weave of the member can be run rather than read.
+    /// </summary>
+    /// <param name="assembly">The assembly which declares the host, which the loader loads by its name.</param>
+    /// <param name="host">The host which the member was woven into.</param>
+    /// <returns>The type of the host, as the runtime read it.</returns>
+    private static Type LoadHostOf(Assembly assembly, TypeHandler host)
+    {
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        return assembly.Load().GetType($"{Ns}.Host")!;
     }
 
     /// <summary>
@@ -332,6 +408,79 @@ public class PointerTests
         type.GetMethod("Bump")!.Invoke(instance, null);
 
         Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void A_Template_Which_Holds_A_Handle_Reads_And_Writes_The_Field_It_Names()
+    {
+        // The name stands where the handle is built rather than where the member is read or written, so the accessors
+        // which the template wrote belong to the local: the local has to be read as the member which the name found.
+        var host = NewHostWithField("Value", isStatic: false, "FieldHeldHandleAssembly");
+        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandle), MethodFlags.Public);
+
+        // The two reads are the one which the write is given and the one which the member hands back.
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(2), "the field was not read exactly twice.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
+        Assert.That(ins.Any(i => i.Operand is MemberReference { DeclaringType.Namespace: "Gneedle.Inject" }), Is.False,
+                    "the handle which the template holds was left in the body.");
+
+        // The local which holds the handle is emptied by the weaving, and a local which is declared with a type of the
+        // weaver is what would leave the reference behind after the handle itself was written away.
+        DoesNotReferToTheWeaver(host);
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var instance = Activator.CreateInstance(type);
+        type.GetField("Value")!.SetValue(instance, 41);
+
+        Assert.That(type.GetMethod("Bump")!.Invoke(instance, [3]), Is.EqualTo(44));
+        Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(44));
+    }
+
+    [Test]
+    public void A_Template_Which_Holds_A_Handle_And_Names_The_Field_Itself_Reads_The_Field()
+    {
+        // What the template holds and what it names stand in one body, and each of them is woven where it stands.
+        var host = NewHostWithField("Value", isStatic: false, "FieldHeldHandleAndNameAssembly");
+        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleAndTheFieldItself), MethodFlags.Public);
+
+        // The three reads are the ones of the write, of the member which is handed back and of the name which is read.
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(3), "the field was not read exactly three times.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var instance = Activator.CreateInstance(type);
+        type.GetField("Value")!.SetValue(instance, 41);
+
+        Assert.That(type.GetMethod("Bump")!.Invoke(instance, [3]), Is.EqualTo(88));
+        Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(44));
+    }
+
+    [Test]
+    public void A_Template_Which_Holds_A_Handle_Of_A_Static_Field_Reads_And_Writes_It()
+    {
+        // A field which belongs to no instance takes no receiver, so the read of the local is written as nothing.
+        var host = NewHostWithField("Value", isStatic: true, "StaticFieldHeldHandleAssembly");
+        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleOfAStaticField), MethodFlags.Public | MethodFlags.Static);
+
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldsfld), Is.EqualTo(2), "the field was not read exactly twice.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stsfld), Is.EqualTo(1), "the field was not written exactly once.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld || i.OpCode == OpCodes.Stfld), Is.False,
+                    "a field which belongs to no instance was read through a receiver.");
+        DoesNotReferToTheWeaver(host);
+    }
+
+    [Test]
+    public void A_Template_Which_Reads_A_Held_Handle_For_Something_Else_Throws()
+    {
+        // The handle of a value member is a value which only the weaving writes, so a local which holds one has no
+        // value where it is read for anything but the member.
+        var host = NewHostWithField("Value", isStatic: false);
+        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadAHeldHandleAsAValue))));
+
+        Assert.That(thrown!.Message, Does.Contain("Value"));
+        Assert.That(thrown.Message, Does.Contain("no way to write"));
     }
 
     [Test]
@@ -436,6 +585,22 @@ public class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "set_Prop"), Is.True);
+    }
+
+    [Test]
+    public void A_Template_Which_Holds_A_Handle_Of_A_Property_Calls_Its_Accessors()
+    {
+        // A property is read and written through the accessors rather than the field, and the handle which the template
+        // holds names the property rather than one of them: each accessor which a read of the local calls is written as
+        // the accessor which the value member of that read stands for.
+        var host = NewHostWithProperty("Prop", withGetter: true, withSetter: true, isVirtual: false);
+        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleOfAProperty), MethodFlags.Public);
+
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "get_Prop"), Is.EqualTo(2), "the getter was not called exactly twice.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "set_Prop"), Is.EqualTo(1), "the setter was not called exactly once.");
+        Assert.That(ins.Any(i => i.Operand is MemberReference { DeclaringType.Namespace: "Gneedle.Inject" }), Is.False,
+                    "the handle which the template holds was left in the body.");
+        DoesNotReferToTheWeaver(host);
     }
 
     [Test]

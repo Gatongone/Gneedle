@@ -525,12 +525,12 @@ partial class MethodHandler
 
     /// <summary>
     /// The local which the value of a symbol is stored into, and the instruction which stores it, which is what a template
-    /// which holds the delegate of the symbol writes where it would otherwise invoke it.
+    /// which holds the delegate or the handle of the symbol writes where it would otherwise use it.
     /// </summary>
     /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
     /// <param name="callIndex">Index of the instruction of the call which the symbol stands for.</param>
     /// <returns>Index of the store and of the local which it writes, or null when the value is not stored into one.</returns>
-    private static (int Store, int Local)? HeldLocal(IReadOnlyList<Instruction> bodyInstructions, int callIndex)
+    private static (int Store, int Local)? HeldLocal(IList<Instruction> bodyInstructions, int callIndex)
     {
         for (var i = callIndex + 1; i < bodyInstructions.Count; i++)
         {

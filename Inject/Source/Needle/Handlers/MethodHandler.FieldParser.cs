@@ -111,6 +111,16 @@ partial class MethodHandler
 
         // The field is reached through the type which the sequence named, which is the member being woven for the
         // symbols which carry no such sequence: the branch above refuses an Instance or a Static which named none.
+        // A handle which the template holds in a local is read and written through that local rather than where the
+        // name stands, so what the name stands for is the handle itself: nothing of it is written, and every accessor
+        // which a read of the local is the receiver of is written as the field instead.
+        var held          = HeldLocal(filter.Target, currentIndex + 1);
+        var heldAccessors = held is { } handle ? AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
+        if (held != null && heldAccessors == null)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
+        }
+
         var declaringType = declaringTypeFromPattern ?? DeclaringTypeHandler.Source;
         var fieldRef = field.ContainsGenericParameter
             // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
@@ -138,6 +148,46 @@ partial class MethodHandler
             }
         }
 
+        Instruction AccessorOf(bool isGet)
+            => Instruction.Create(isGet
+                // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> ldfld/ldsfld class {field_type} {declaring_type}::{field_name}
+                ? isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld
+                // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> stfld/stsfld class {field_type} {declaring_type}::{field_name}
+                : isStatic ? OpCodes.Stsfld : OpCodes.Stfld,
+                fieldRef);
+
+        if (heldAccessors is { } accessors)
+        {
+            // ldstr {field_name} -> nop, because the name is not what the field is reached through: every read of the
+            // local is, and each of them stands where it stood.
+            filter.Skip(currentIndex);
+
+            // Skip `call class [Gneedle.Inject]Gneedle.Inject.ValuableMember [Gneedle.Inject]Gneedle.Inject.This::Field(string)`
+            filter.Skip(currentIndex + 1);
+
+            // Skip the store of the handle which the placeholder handed back. The local which it would have written is
+            // the one which the weaving empties, so nothing of the handle is left in the body.
+            filter.Skip(held!.Value.Store);
+
+            foreach (var (read, accessor, accessorIsGet) in accessors)
+            {
+                // The read of the local is the receiver of the accessor, and it is written as the receiver of the
+                // field, which a field of no instance takes none of.
+                if (isStatic)
+                {
+                    filter.Skip(read);
+                }
+                else
+                {
+                    filter.Replace(read, CreateReceiver(receiverIns, targetDef));
+                }
+
+                filter.Replace(accessor, AccessorOf(accessorIsGet));
+            }
+
+            return;
+        }
+
         if (!isStatic)
         {
             // ldstr {field_name} -> the argument which holds the instance the field is read off
@@ -152,10 +202,6 @@ partial class MethodHandler
         // Skip `call class [Gneedle.Inject]Gneedle.Inject.ValuableMember [Gneedle.Inject]Gneedle.Inject.This::Field(string)`
         filter.Skip(currentIndex + 1);
 
-        filter.Replace(callvirtIndex, isGet
-            // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> ldfld/ldsfld class {field_type} {declaring_type}::{field_name}
-            ? Instruction.Create(isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, fieldRef)
-            // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> stfld/stsfld class {field_type} {declaring_type}::{field_name}
-            : Instruction.Create(isStatic ? OpCodes.Stsfld : OpCodes.Stfld, fieldRef));
+        filter.Replace(callvirtIndex, AccessorOf(isGet));
     }
 }

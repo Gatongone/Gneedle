@@ -122,6 +122,50 @@ partial class MethodHandler
             }
         }
 
+        // A handle which the template holds in a local is read and written through that local rather than where the
+        // name stands, so what the name stands for is the handle itself: nothing of it is written, and every accessor
+        // which a read of the local is the receiver of is written as the accessor of the property instead.
+        var held          = HeldLocal(filter.Target, currentIndex + 1);
+        var heldAccessors = held is { } handle ? AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
+        if (held != null && heldAccessors == null)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
+        }
+
+        if (heldAccessors is { } accessors)
+        {
+            // ldstr {property_name} -> nop, because the name is not what the property is reached through: every read of
+            // the local is, and each of them stands where it stood.
+            filter.Skip(currentIndex);
+
+            // Skip `call class [Gneedle.Inject]Gneedle.Inject.ValuableMember [Gneedle.Inject]Gneedle.Inject.This::Property(string)`
+            filter.Skip(currentIndex + 1);
+
+            // Skip the store of the handle which the placeholder handed back. The local which it would have written is
+            // the one which the weaving empties, so nothing of the handle is left in the body.
+            filter.Skip(held!.Value.Store);
+
+            foreach (var (read, accessor, accessorIsGet) in accessors)
+            {
+                var accessorDef = AccessorOf(propertyDef, accessorIsGet);
+
+                // The read of the local is the receiver of the accessor, and it is written as the receiver of the
+                // property, which an accessor of no instance takes none of.
+                if (accessorDef.IsStatic)
+                {
+                    filter.Skip(read);
+                }
+                else
+                {
+                    filter.Replace(read, CreateReceiver(receiverIns, targetDef));
+                }
+
+                filter.Replace(accessor, Instruction.Create(accessorDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, Source.Module.ImportReference(accessorDef)));
+            }
+
+            return;
+        }
+
         // The accessor which is called is the one which tells whether a receiver is written, because it is the one which
         // the call below reaches: a static accessor takes no receiver, and an instance one takes the member as its own.
         // The accessor which is not called says nothing about it, and a property which holds only the one being called
@@ -161,4 +205,16 @@ partial class MethodHandler
             filter.Replace(callvirtIndex, Instruction.Create(propertyDef.SetMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, setMethod));
         }
     }
+
+    /// <summary>
+    /// The accessor which the value member of a property stands for.
+    /// </summary>
+    /// <param name="propertyDef">The property which is read or written.</param>
+    /// <param name="isGet">Whether the value member reads the property rather than writing it.</param>
+    /// <returns>The accessor of the property.</returns>
+    /// <exception cref="ArgumentException">Thrown when the property holds no accessor of that kind.</exception>
+    private static MethodDefinition AccessorOf(PropertyDefinition propertyDef, bool isGet)
+        => isGet
+            ? propertyDef.GetMethod ?? throw new ArgumentException(string.Format(ErrorMessages.NON_GET_METHOD, propertyDef.Name))
+            : propertyDef.SetMethod ?? throw new ArgumentException(string.Format(ErrorMessages.NON_SET_METHOD, propertyDef.Name));
 }

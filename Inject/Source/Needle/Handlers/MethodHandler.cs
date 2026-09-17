@@ -413,7 +413,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         try
         {
             // Copy target method variables to source.
-            CopyVariables(templateDef, Source);
+            CopyVariables(templateDef, Source, HandleLocals(instructions));
 
             m_TemplateClosure = closure;
             ParseBody(instructions, templateDef);
@@ -1046,7 +1046,8 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="from">The source method definition to copy variables from.</param>
     /// <param name="to">The target method definition to copy variables to.</param>
-    private static void CopyVariables(MethodDefinition from, MethodDefinition to)
+    /// <param name="emptied">Index of the locals which the weaving empties, which are the ones which <see cref="HandleLocals"/> names.</param>
+    private static void CopyVariables(MethodDefinition from, MethodDefinition to, ISet<int> emptied)
     {
         var srcVariables = from.Body.Variables;
         if (srcVariables == null) return;
@@ -1056,11 +1057,43 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         for (var i = 0; i < srcVariables.Count; i++)
         {
+            // A local which the weaving empties is one which names nothing of the body which is woven, while the type it
+            // is declared with is one of the weaver: copying that type would leave the assembly being woven referring to
+            // the weaver for a type which nothing of it names, so the local is copied as a type which every assembly
+            // holds instead.
             // If the variable type holds a generic parameter token which could be parsed from Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20],
             // then get the actual generic parameter type.
-            var typeRef = srcVariables[i].VariableType.ParseGenericTokens(to, to.Module);
+            var typeRef = emptied.Contains(i)
+                ? to.Module.TypeSystem.Object
+                : srcVariables[i].VariableType.ParseGenericTokens(to, to.Module);
             desVariables.Add(new VariableDefinition(typeRef));
         }
+    }
+
+    /// <summary>
+    /// The locals which the handle of a value member is stored into, which are the ones which the weaving empties: every
+    /// read of such a local is written as the member itself, and nothing else may reach it.<para/>
+    /// Which local those are is the question which the parser of the member asks of the instruction which the handle is
+    /// built at, and it is asked here of the same instruction, because the type of a local has to be settled where the
+    /// locals are copied, which is before the body is parsed.
+    /// </summary>
+    /// <param name="bodyInstructions">The instructions of the template.</param>
+    /// <returns>Index of every local which the handle of a value member is stored into.</returns>
+    private static HashSet<int> HandleLocals(IList<Instruction> bodyInstructions)
+    {
+        var locals = new HashSet<int>();
+
+        for (var index = 0; index < bodyInstructions.Count; index++)
+        {
+            if (bodyInstructions[index].Operand is not MethodReference member) continue;
+
+            var memberFlag = GetInstanceMemberFlag(member);
+            if (!memberFlag.HasFlag(MemberSymbols.Field) && !memberFlag.HasFlag(MemberSymbols.Property)) continue;
+
+            if (HeldLocal(bodyInstructions, index) is { } handle) locals.Add(handle.Local);
+        }
+
+        return locals;
     }
 
     /// <summary>
@@ -1112,6 +1145,27 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <returns>True if the `call` instruction of `ValuableMember.Get` or `ValuableMember.Set` is found; otherwise, false.</returns>
     private static bool TryGetNextGetOrSet(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index)
     {
+        if (TryWalkToTheAccessor(bodyInstructions, startIndex, out isGet, out index)) return true;
+
+        return TryGetFirstGetOrSet(bodyInstructions, startIndex, out isGet, out index);
+    }
+
+    /// <summary>
+    /// Try to get the accessor which the value pushed ahead of the start index is the receiver of, which is the call of
+    /// `ValuableMember.Get` or `ValuableMember.Set` that the value stands under.<para/>
+    /// The accessor of another value may stand between the two, and it is the one which its own value is the receiver
+    /// of: the values which the instructions between push and take off the stack are counted, and the accessor which is
+    /// looked for is the one which is reached with exactly as many values above the value which is looked for as it
+    /// takes arguments. An instruction whose count the walk cannot tell, or one which takes the value itself off the
+    /// stack, ends it and nothing is answered.
+    /// </summary>
+    /// <param name="bodyInstructions">The instruction collection to search.</param>
+    /// <param name="startIndex">The index of the instruction which follows the one which pushed the value.</param>
+    /// <param name="isGet">Output whether the accessor is `get` or `set`.</param>
+    /// <param name="index">Output the index of the `call` instruction if found.</param>
+    /// <returns>True if the `call` instruction of `ValuableMember.Get` or `ValuableMember.Set` is found; otherwise, false.</returns>
+    private static bool TryWalkToTheAccessor(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index)
+    {
         // How many values stand on the stack above the one which the placeholder pushed. Every push counts up and every
         // take counts down, and a count below zero is one which took the placeholder's value itself off the stack.
         var above = 0;
@@ -1136,7 +1190,52 @@ internal sealed partial class MethodHandler : IMethodHandler
             above += delta;
         }
 
-        return TryGetFirstGetOrSet(bodyInstructions, startIndex, out isGet, out index);
+        isGet = false;
+        index = 0;
+        return false;
+    }
+
+    /// <summary>
+    /// Every accessor of the value member which a local holds the handle of, which is each read of the local together
+    /// with the accessor which that read is the receiver of.<para/>
+    /// The handle which a placeholder stands for is a value which only the weaving can write, so a local which holds one
+    /// stands for the member wherever it is read and for nothing else: a read which is something other than the receiver
+    /// of an accessor, or a second write to the local, is a use which nothing can be written for, and nothing is
+    /// answered for it.
+    /// </summary>
+    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="local">Index of the local which holds the handle.</param>
+    /// <returns>Index of every read of the local, of the accessor which it is the receiver of and of whether that
+    /// accessor reads the member or writes it, or null when the local stands for more than the member.</returns>
+    private static List<(int Read, int Accessor, bool IsGet)>? AccessorsOfAHeldHandle(IReadOnlyList<Instruction> bodyInstructions, int local)
+    {
+        var accessors = new List<(int Read, int Accessor, bool IsGet)>();
+        var stores    = 0;
+
+        for (var i = 0; i < bodyInstructions.Count; i++)
+        {
+            var ins = bodyInstructions[i];
+            if (ins.TryGetStlocIndex(out var written) && written == local)
+            {
+                stores++;
+                continue;
+            }
+
+            if (!ins.TryGetLdlocIndex(out var read) || read != local)
+            {
+                // A form which names the local without loading it, such as the address which `ldloca` takes, is a use
+                // which the accessors which are read here say nothing about.
+                if (ins.Operand is VariableReference variable && variable.Index == local) return null;
+
+                continue;
+            }
+
+            if (!TryWalkToTheAccessor(bodyInstructions, i + 1, out var isGet, out var accessor)) return null;
+
+            accessors.Add((i, accessor, isGet));
+        }
+
+        return stores == 1 ? accessors : null;
     }
 
     /// <summary>
