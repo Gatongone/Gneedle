@@ -131,6 +131,23 @@ public class AssemblyHandlerTests
         });
     }
 
+    [Test]
+    public void An_Enum_Which_Declares_No_Field_Of_Its_Value_Is_Refused_By_Name()
+    {
+        // The type which the values of an enum are read as is the type of the field which holds one of them, and an enum
+        // which declares no such field has no type to be read as: the refusal names the enum rather than coming out of
+        // the lookup of the field as a sequence which holds nothing, which is a reason the caller cannot act on.
+        var asm = Assembly.Create("EnumWithoutAValueAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var module = asm.Source.MainModule;
+        var enumType = new TypeDefinition(Ns, "Broken", TypeAttributes.Public, module.ImportReference(typeof(Enum)));
+        module.Types.Add(enumType);
+
+        var thrown = Assert.Throws<ArgumentException>(() => handler.GetType(enumType));
+
+        Assert.That(thrown!.Message, Does.Contain($"{Ns}.Broken"), "the refusal does not name the enum which is not one.");
+    }
+
     #region GetCecilType
 
     [Test]

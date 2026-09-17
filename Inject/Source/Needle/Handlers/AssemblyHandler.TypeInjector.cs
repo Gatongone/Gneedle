@@ -24,10 +24,23 @@ partial class AssemblyHandler
     internal ITypeHandler GetType(TypeDefinition typeDefinition) => typeDefinition switch
     {
         {IsValueType: true, IsEnum: false} => new StructHandler(this, typeDefinition),
-        {IsEnum     : true}                => new EnumHandler(this, typeDefinition, typeDefinition.Fields.First(f => f.Name == "value__").FieldType),
+        {IsEnum     : true}                => new EnumHandler(this, typeDefinition, ValueFieldTypeOf(typeDefinition)),
         {IsClass    : true}                => new ClassHandler(this, typeDefinition),
         _                                  => new TypeHandler(this, typeDefinition)
     };
+
+    /// <summary>
+    /// The type which the values of an enum are read as, which is the type of the field which holds one of them.<para/>
+    /// An enum which declares no such field is not an enum which anything can be read out of, and the refusal names it:
+    /// the lookup of the field on its own answers with a sequence which holds nothing, which says nothing of the type
+    /// which was asked about.
+    /// </summary>
+    /// <param name="typeDefinition">The enum which is read.</param>
+    /// <returns>The type which the values of the enum are read as.</returns>
+    /// <exception cref="ArgumentException">Thrown when the enum declares no field which holds the value of a member.</exception>
+    private static TypeReference ValueFieldTypeOf(TypeDefinition typeDefinition)
+        => typeDefinition.Fields.FirstOrDefault(field => field.Name == "value__")?.FieldType
+           ?? throw new ArgumentException(string.Format(ErrorMessages.ENUM_DECLARES_NO_VALUE_FIELD, typeDefinition.FullName));
 
     /// <inheritdoc/>
     public ITypeHandler? GetType(string typeFullName)

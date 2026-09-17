@@ -75,6 +75,12 @@ internal static class ErrorMessages
     internal const string TYPE_CANNOT_BE_READ = "The type is not one which the assembly it was asked of holds, so nothing of the type can be read. Type: {0}.";
 
     /// <summary>
+    /// An enum declares no field which holds the value of one of its members, so there is no type which its values are
+    /// read as. The placeholder is the enum.
+    /// </summary>
+    internal const string ENUM_DECLARES_NO_VALUE_FIELD = "The enum declares no field which holds the value of a member of it, so the type which its values are read as cannot be told. Type: {0}.";
+
+    /// <summary>
     /// No constructor of an attribute takes the arguments which were given for it. The placeholder is the attribute
     /// which the arguments were given for.
     /// </summary>
