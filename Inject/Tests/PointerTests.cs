@@ -383,6 +383,12 @@ public class PointerTests
 
         /// <inheritdoc cref="InstanceMethod_OfAGenericType"/>
         public static int InstanceProperty_OfAGenericType(GenericHelper<int> helper) => new Instance(helper).Property<int>("PublicProperty").Get();
+
+        /// <summary>
+        /// The same, of a field which belongs to the definition of the type: the type of the field is the value which is
+        /// read rather than the parameter of the type, which is what the reference to it used to be built from.
+        /// </summary>
+        public static int InstanceField_OfAGenericType(GenericHelper<int> helper) => new Instance(helper).Field<int>("PublicField").Get();
     }
 
     private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
@@ -1947,6 +1953,27 @@ public class PointerTests
         var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new GenericHelper<int>()]), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void InstanceField_Of_A_Generic_Type_Runs_The_Read()
+    {
+        // The field belongs to the definition of a type which declares a parameter of its own, and the type of the field
+        // is the value which is read rather than that parameter: the read names the instantiation which the template
+        // declared, which is the type of the value the field is reached through rather than a type of the body woven.
+        var (assembly, _, method) = NewInstanceHost("InstanceGenericFieldAssembly", [typeof(GenericHelper<int>)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAGenericType)));
+
+        var ldfld = method.Source.Body.Instructions.FirstOrDefault(instruction => instruction.OpCode == OpCodes.Ldfld);
+        Assert.That(ldfld, Is.Not.Null, "the field was not read.");
+        Assert.That(((FieldReference) ldfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the field was read off the definition of the type rather than off the instantiation which was named.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var helper = new GenericHelper<int> { PublicField = 42 };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(42),
+                    "the woven assembly does not run.");
     }
 
     #endregion

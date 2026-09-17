@@ -50,6 +50,10 @@ partial class MethodHandler
         // Detect Instance/Static patterns to determine skip count and declaring type.
         var skipStaticFromCount = 0;
         TypeDefinition? declaringTypeFromPattern = null;
+        // The type which the template named the instance through, which stands for the type of the value it holds: the
+        // reference to the field names the instantiation of the type which that value is one of, when it declares
+        // parameters, rather than the definition of it.
+        TypeReference? namedInstance = null;
         // The instance which the template reached the field through, which is the receiver of it where the field is not
         // static: the sequence which builds the instance is dropped, so the value it holds has to stand where the member
         // takes a receiver.
@@ -67,6 +71,7 @@ partial class MethodHandler
             if (instanceType != null)
             {
                 declaringTypeFromPattern = instanceType.ResolveDefinition(Source.Module);
+                namedInstance            = instanceType;
             }
         }
         else if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
@@ -116,12 +121,20 @@ partial class MethodHandler
         }
 
         var declaringType = declaringTypeFromPattern ?? DeclaringTypeHandler.Source;
-        var fieldRef = field.ContainsGenericParameter
-            // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
-            // Related to issue: https://github.com/jbevain/cecil/issues/954
-            ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
-            // Otherwise we can directly import the field definition as reference.
-            : Source.Module.ImportReference(field);
+        // The field belongs to the definition of the type which the template named an instance of, and that type declares
+        // a parameter of its own: the reference names the instantiation which was named rather than that definition,
+        // which is what the reference to a member of such a type is written as wherever one is reached.
+        var namedInstantiation = namedInstance is not null && field.DeclaringType.HasGenericParameters
+            ? InstantiationOf(field.DeclaringType, namedInstance)
+            : null;
+        var fieldRef = namedInstantiation is { } instantiation
+            ? new FieldReference(field.Name, field.FieldType, instantiation)
+            : field.ContainsGenericParameter
+                // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
+                // Related to issue: https://github.com/jbevain/cecil/issues/954
+                ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
+                // Otherwise we can directly import the field definition as reference.
+                : Source.Module.ImportReference(field);
         var isStatic = field.Resolve().IsStatic;
 
         // A read of the local stands where it stands and is written as the receiver of the field, which is the load of the
