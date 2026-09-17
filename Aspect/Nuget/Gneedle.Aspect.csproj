@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <!-- The metadata which both packages are published with, which the repository keeps in one file. It is imported
-         rather than found by walking up from here, because the file is not a Directory.Build.props and the two projects
-         which are packed are the only ones which need it. -->
+    <!-- The metadata which both packages are published with, kept in one file because the two projects which are packed
+         are the only ones which need it. -->
     <Import Project="..\..\Build\Package.props"/>
 
     <PropertyGroup>
@@ -21,15 +20,10 @@
         <Title>Gneedle.Aspect</Title>
 
         <!-- The task is not a reference of the project which installs the package, it is what the build of that project
-             loads and runs, so nothing of it goes to lib. What it needs is packed under tools instead, beside the
-             assemblies which it loads at run time, which is where the build looks for them. -->
+             loads and runs: nothing of it goes to lib, and what it loads is packed beside it under tools. -->
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackTools</TargetsForTfmSpecificContentInPackage>
 
-        <!-- The build loads the task from the folder of the package which holds it and resolves the assemblies it is
-             compiled against from that same folder, so they are packed beside it and have to be in the output of every
-             framework which is packed. A project reference is copied there by itself, while the assemblies which come
-             from a package are not copied out of one which is not an application. -->
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     </PropertyGroup>
 
@@ -40,10 +34,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- The assemblies of MSBuild are given to a task by the build which loads it, so they are referenced to compile
-             against and are neither copied out nor named as dependencies of the package. Copying them out pulls the
-             frameworks they were built for into the output of every project which references this one, where they do
-             not resolve, and a package which names them asks of its consumers what the build already provides. -->
         <PackageReference Include="Microsoft.Build" Version="17.6.3" PrivateAssets="all" ExcludeAssets="runtime"/>
         <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.6.3" PrivateAssets="all" ExcludeAssets="runtime"/>
     </ItemGroup>
@@ -53,14 +43,13 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- What the project which installs the package reads: the props which point the build at the task, and the
-             target which runs it. Both are taken from the folder of the package which the build imports by itself. -->
+        <!-- What a project which installs the package reads: the props which point the build at the task, and the target
+             which runs it. -->
         <None Include="$(MSBuildProjectName).props" Pack="true" PackagePath="build\"/>
         <None Include="$(MSBuildProjectName).targets" Pack="true" PackagePath="build\"/>
     </ItemGroup>
 
-    <!-- The task and the assemblies which it loads at run time, packed for each framework which the build loads one of.
-         A framework which the build never loads the task of needs none of them: the props picks between the two. -->
+    <!-- The task and the assemblies which it loads, packed for the two frameworks which the props picks between. -->
     <Target Name="PackTools">
         <ItemGroup Condition="'$(TargetFramework)' == 'net472' Or '$(TargetFramework)' == 'netstandard2.1'">
             <TfmSpecificPackageFile Include="$(TargetDir)$(MSBuildProjectName).dll" PackagePath="tools\$(TargetFramework)\"/>

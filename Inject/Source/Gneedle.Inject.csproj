@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <!-- The metadata which both packages are published with, which the repository keeps in one file. It is imported
-         rather than found by walking up from here, because the file is not a Directory.Build.props and the two projects
-         which are packed are the only ones which need it. -->
+    <!-- The metadata which both packages are published with, kept in one file because the two projects which are packed
+         are the only ones which need it. -->
     <Import Project="..\..\Build\Package.props"/>
 
     <PropertyGroup>
@@ -22,10 +21,6 @@
         <Description>Gneedle.Inject is the weaver. It builds and rewrites the IL of .NET assemblies through Mono.Cecil, and weaves a body from a template, which is an ordinary C# method: the template reaches the members of the type it is woven into through the placeholders This, Base, Instance, Static and Proceed, and names a generic parameter of that type through the tokens T_0 to T_20 and M_0 to M_20. A template which is written as a lambda may capture what it is written among, and what it captured is written into the assembly which is woven as the value itself. Around advice keeps the body which the method already held and lets the template proceed into it, either with a signature which the template names or with the arguments which the template itself was given. It is driven the same way from a code generator, from a tool of your own, or from the build task in Gneedle.Aspect.</Description>
         <PackageTags>Inject</PackageTags>
         <Title>Gneedle.Inject</Title>
-
-        <!-- The library is a reference of what it is packed into, so its assemblies go to lib for each framework, which
-             is what the pack carries by itself, and Mono.Cecil is named as a dependency of the package from the
-             reference which the project holds. -->
     </PropertyGroup>
 
     <ItemGroup>
@@ -58,8 +53,7 @@
         </ItemGroup>
 
         <!-- Only the assembly and its symbols are written over, so the .meta files of Unity, which are what the editor
-             identifies a plugin by, are left where they are. The target is skipped whole while the plugin is newer than
-             what was built, which is what tells that the two are in step without writing either of them. -->
+             identifies a plugin by, are left where they are. -->
         <Copy SourceFiles="@(UnityPluginAssembly)" DestinationFolder="$(UnityPluginDirectory)" SkipUnchangedFiles="true"/>
         <!-- Which configuration was built is reported with it, because the copy is not kept to the release one: a build
              of either puts the plugin which Unity loads in step with the sources, and which of them is there is what the

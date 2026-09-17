@@ -6,8 +6,7 @@
 
         <IsPackable>false</IsPackable>
         <IsTestProject>true</IsTestProject>
-        <!-- The framework which MSBuild runs a task in on Windows, which is the one the task is loaded by here. The
-             assemblies of MSBuild are given to it by the build, and this project takes them for itself below. -->
+        <!-- The framework which MSBuild runs a task in on Windows, which is the one the task is loaded by here. -->
         <TargetFramework>net472</TargetFramework>
         <OutputType>Library</OutputType>
         <LangVersion>12</LangVersion>
