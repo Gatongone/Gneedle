@@ -1702,6 +1702,16 @@ internal sealed partial class MethodHandler : IMethodHandler
                 source.Add(pointer);
                 m_Written[index] ??= pointer;
             }
+            // The table of a switch is the operand which the weaving writes again rather than the instruction, and the
+            // instruction which carries it is the one of the template: a template which is woven a second time reads the
+            // table which the first weave carried, which names the instructions of the body of that one. The body is
+            // given a switch of its own, over a table of its own, so that the template keeps what it wrote.
+            else if (ins.Operand is Instruction[] table)
+            {
+                var pointer = Instruction.Create(ins.OpCode, (Instruction[]) table.Clone());
+                source.Add(pointer);
+                m_Written[index] ??= pointer;
+            }
             else
             {
                 source.Add(ins);
