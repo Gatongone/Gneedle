@@ -1607,7 +1607,8 @@ internal sealed partial class MethodHandler : IMethodHandler
         /// <summary>
         /// Point every branch which names an instruction of the template at the instruction which stands where that one
         /// stood, for the ones which were written as nothing: a branch to an instruction which the body does not hold
-        /// would be a branch to nothing.
+        /// would be a branch to nothing. The table of a switch is a branch of many entries, and each of its entries is
+        /// pointed at what stands where it stood as well.
         /// </summary>
         /// <param name="source">The source collection which the instructions were applied to.</param>
         /// <exception cref="InvalidILException">Thrown when an instruction which a branch names stands for nothing in the
@@ -1618,18 +1619,33 @@ internal sealed partial class MethodHandler : IMethodHandler
 
             foreach (var instruction in source)
             {
+                // The entries of a table are named by the switch which stands in front of them rather than by a branch,
+                // and each of them is carried the same way. The table which is written is one of the body's own rather
+                // than the table of the template, which another weave of the same template reads again.
+                if (instruction.Operand is Instruction[] table)
+                {
+                    instruction.Operand = table.Select(entry => written.Contains(entry) ? entry : Standing(entry)).ToArray();
+                    continue;
+                }
+
                 // An instruction which the body holds stands where it stood, and one of another body, which a moved
                 // body carries, is not read against the instructions of this one.
                 if (instruction.Operand is not Instruction ins || written.Contains(ins)) continue;
 
-                // What the branch was written to reach is what stands where the instruction it names stood, and an
-                // instruction which nothing stands for leaves the branch where it was: a branch which reaches an
-                // instruction of the template is one which reaches out of the body it is written in, which is not IL
-                // the runtime accepts.
-                var standing = Emitted(ins) ?? throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, "$" + Array.IndexOf(Target, ins)));
-                instruction.Operand = standing;
+                instruction.Operand = Standing(ins);
             }
         }
+
+        /// <summary>
+        /// The instruction of the body which stands where the given instruction of the template stood, which is where a
+        /// branch or an entry of a table which names it is pointed: an instruction which nothing stands for leaves what
+        /// names it reaching out of the body it is written in, which is not IL the runtime accepts.
+        /// </summary>
+        /// <param name="ins">The instruction of the template which is named.</param>
+        /// <returns>The instruction of the body which stands where it stood.</returns>
+        /// <exception cref="InvalidILException">Thrown when nothing stands for the instruction.</exception>
+        private Instruction Standing(Instruction ins)
+            => Emitted(ins) ?? throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, "$" + Array.IndexOf(Target, ins)));
 
         /// <summary>
         /// If there are instructions to insert before current index, add them to source in the order they were

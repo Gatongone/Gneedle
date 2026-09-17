@@ -62,6 +62,21 @@ public class PointerTests
         // placeholder of the write and the accessor which the write is written to.
         public static void AddOneToInstanceField() => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + 1);
 
+        // Two of the cases begin where the name of a member stands rather than where a value is loaded, and the
+        // compiler writes the switch as a table of the instructions the cases begin at.
+        public static int ReadAFieldPerCase(int value)
+        {
+            switch (value)
+            {
+                case 0: return This.Field<int>("Value").Get();
+                case 1: return This.Field<int>("Other").Get();
+                case 2: return 20;
+                case 3: return 30;
+                case 4: return 40;
+                default: return -1;
+            }
+        }
+
         // The handle which the placeholder handed back is held in a local, and the member is read and written through
         // that local rather than where the name stands: the accessors belong to the local, whose value is the handle.
         public static int BumpAHeldHandle(int by)
@@ -582,6 +597,37 @@ public class PointerTests
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
         Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadMissingField))));
+    }
+
+    [Test]
+    public void A_Switch_Of_A_Template_Reaches_The_Body_Of_Each_Case_It_Was_Woven_With()
+    {
+        // The table of a switch names the instruction each case begins at, and a case which begins with the name of a
+        // member begins at an instruction which the weaving replaces: the entry is carried to what stood where that
+        // instruction stood, as the branch of an `if` is, or the case reaches into the template rather than into the
+        // body it was woven into.
+        var host = NewHostWithField("Value", isStatic: false, "FieldSwitchAssembly");
+        host.Source.Fields.Add(new FieldDefinition("Other", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
+        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadAFieldPerCase)));
+
+        var body = ((MethodHandler) method).Source.Body;
+        var table = body.Instructions.SelectMany(instruction => instruction.Operand as Instruction[] ?? []).ToArray();
+
+        Assert.That(table, Is.Not.Empty, "the switch of the template was not carried as a table.");
+        Assert.That(table.All(entry => body.Instructions.Contains(entry)), Is.True,
+                    "an entry of the table named an instruction which the body does not hold.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var instance = Activator.CreateInstance(type);
+        type.GetField("Value")!.SetValue(instance, 7);
+        type.GetField("Other")!.SetValue(instance, 9);
+        var read = type.GetMethod("Read")!;
+
+        Assert.That(read.Invoke(instance, [0]), Is.EqualTo(7), "the case which names the first field reached another case.");
+        Assert.That(read.Invoke(instance, [1]), Is.EqualTo(9), "the case which names the second field reached another case.");
+        Assert.That(read.Invoke(instance, [4]), Is.EqualTo(40), "the case which holds a value of its own reached another case.");
+        Assert.That(read.Invoke(instance, [9]), Is.EqualTo(-1), "the default of the table reached another case.");
     }
 
     #endregion
