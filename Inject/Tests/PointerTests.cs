@@ -121,6 +121,10 @@ public class PointerTests
         // which the constructor of a delegate takes is written for it.
         public static LongOp GetStaticMethodDelegate() => This.Method<LongOp>("Widen");
 
+        // The same, of a generic delegate of the framework, which the template names as an instantiation: the
+        // constructor of the definition which it is an instantiation of is one of a type which no assembly declares.
+        public static Func<long, long> GetGenericMethodDelegate() => This.Method<Func<long, long>>("Widen");
+
         // Generic delegate (Func<>) currently trips ParseMethod: see MethodParser.cs:40-50.
         public static int InvokeViaGenericDelegate(int a, int b) => This.Method<Func<int, int, int>>("Add")(a, b);
 
@@ -732,6 +736,33 @@ public class PointerTests
 
         var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
         var widen = (ThisMethodTemplates.LongOp) type.GetMethod("Run")!.Invoke(null, null)!;
+
+        Assert.That(widen(3), Is.EqualTo(4L));
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Generic_Delegate_Which_Is_Handed_Back_Is_Built_Of_The_Type_It_Names()
+    {
+        // The delegate which is handed back is one of the framework's generic ones, which the template names as an
+        // instantiation: the constructor was taken from the definition which that one is an instantiation of, and the
+        // open type of a generic delegate is a type which no assembly declares, so the woven body could not be loaded.
+        var host = NewHostWithWiden("MethodInjectionGenericDelegateAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(Func<long, long>).ToGneedleType(),
+            [],
+            [],
+            MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.GetGenericMethodDelegate)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        var construction = ins.FirstOrDefault(i => i.OpCode == OpCodes.Newobj);
+        Assert.That(construction, Is.Not.Null, "the delegate was not built at all.");
+        Assert.That(((MethodReference) construction!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the constructor of the delegate was written on the definition rather than on the type which was named.");
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        var widen = (Func<long, long>) type.GetMethod("Run")!.Invoke(null, null)!;
 
         Assert.That(widen(3), Is.EqualTo(4L));
     }

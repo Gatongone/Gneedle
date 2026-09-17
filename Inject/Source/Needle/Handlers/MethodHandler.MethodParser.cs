@@ -206,7 +206,21 @@ partial class MethodHandler
         {
             var importedMethod = GetCallableReference(methodDef);
 
-            var delegateCtor = Source.Module.ImportReference(delegateDef.GetConstructors().FirstOrDefault());
+            // The delegate which is built is the one which the template named rather than the definition which that one
+            // is an instantiation of: the constructor of the definition takes the arguments of the open type, and a body
+            // which named the definition of a generic delegate could not be loaded at all.
+            var delegateType = Source.Module.ImportReference(delegateRef);
+            var constructor  = delegateDef.GetConstructors().First();
+            var delegateCtor = new MethodReference(constructor.Name, Source.Module.TypeSystem.Void, delegateType)
+            {
+                HasThis           = constructor.HasThis,
+                ExplicitThis      = constructor.ExplicitThis,
+                CallingConvention = constructor.CallingConvention,
+            };
+            foreach (var parameter in constructor.Parameters)
+            {
+                delegateCtor.Parameters.Add(new ParameterDefinition(Source.Module.ImportReference(parameter.ParameterType)));
+            }
 
             // The name of the symbol is dropped, and the receiver of a member of an instance is loaded in its place: a
             // symbol which carries no name has no such instruction, so the load is inserted ahead of the call instead.
