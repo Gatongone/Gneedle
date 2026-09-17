@@ -132,7 +132,13 @@ partial class AssemblyHandler
 
         // Import type ref into the current assembly definition, and add to type cache. A reference which belongs to
         // another module cannot be written to the produced assembly, so Reference must be owned by the current one.
-        cecilType                                     = new CecilType(typeRef.Resolve(), Assembly.Source.MainModule.ImportReference(typeRef));
+        // The definition is what the members of the type are read from, and a reference which names a type that the
+        // assembly it was asked of does not hold has none: the type is refused where it is read rather than being
+        // carried about as a type of nothing, whose every query would throw from somewhere the caller cannot see the
+        // reason of.
+        var definition = typeRef.Resolve()
+                         ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, typeRef.FullName));
+        cecilType                                     = new CecilType(definition, Assembly.Source.MainModule.ImportReference(typeRef));
         m_TypeCache[new TypeName(typeRef).ToString()] = cecilType;
         return cecilType;
     }
@@ -184,9 +190,11 @@ partial class AssemblyHandler
         // the reflection importer maps the corlib to another assembly.
         var targetTypeRef = Assembly.Source.MainModule.ImportReference(type);
 
-        // The definition is the one for looking the members up. An assembly which only exists in memory cannot be read
-        // back, so it is not available for a type of such an assembly.
-        cecilType                                  = new CecilType(targetTypeRef.Resolve(), targetTypeRef);
+        // The definition is the one for looking the members up, and a type which the assembly it was asked of does not
+        // hold has none: the type is refused here rather than being carried about as a type of nothing.
+        var definition = targetTypeRef.Resolve()
+                         ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, type.FullName));
+        cecilType                                  = new CecilType(definition, targetTypeRef);
         m_TypeCache[new TypeName(type).ToString()] = cecilType;
         return cecilType;
     }

@@ -310,12 +310,10 @@ public static class Injections
         private bool ProcessType(AssemblyHandler handler, Type type)
         {
             var changed = false;
+            // A type which the assembly does not hold is refused where the handler of it is read, which the caller of
+            // this reads as a type which could not be woven: a type is never answered with a handler of nothing, so
+            // there is no such handler to check for.
             var typeHandler = handler.GetType(type);
-            if (typeHandler == null!)
-            {
-                Report($"Type '{type.FullName}' not found in assembly '{assembly.FullName}'.");
-                return false;
-            }
 
             changed |= ProcessTypeInjector(handler, type);
             if (!type.IsClass && type is not {IsValueType: true, IsEnum: false}) return changed;

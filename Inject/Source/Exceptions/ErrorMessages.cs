@@ -69,6 +69,12 @@ internal static class ErrorMessages
     internal const string INVALID_TYPE_NAME = "The name does not name a type which the assembly holds.";
 
     /// <summary>
+    /// A reference names a type which the assembly it was asked of does not hold, so no definition of that type can be
+    /// read. The placeholder is the type which the reference names.
+    /// </summary>
+    internal const string TYPE_CANNOT_BE_READ = "The type is not one which the assembly it was asked of holds, so nothing of the type can be read. Type: {0}.";
+
+    /// <summary>
     /// No constructor of an attribute takes the arguments which were given for it. The placeholder is the attribute
     /// which the arguments were given for.
     /// </summary>

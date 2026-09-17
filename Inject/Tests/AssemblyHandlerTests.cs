@@ -195,6 +195,22 @@ public class AssemblyHandlerTests
         Assert.Throws<ArgumentException>(() => handler.GetCecilType(typeof(TestBaseClass)));
     }
 
+    [Test]
+    public void GetCecilType_Of_A_Type_Which_The_Assembly_Does_Not_Hold_Is_Refused()
+    {
+        // The definition is what the members of a type are read from, and a reference which names a type that the
+        // assembly it is asked of does not hold has none: the handler which is built on it holds nothing, so every query
+        // of it throws from somewhere the caller cannot see the reason of. It is refused where it is read, by name.
+        var asm = Assembly.Create("CecilLoaderAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+        var module = asm.Source.MainModule;
+        var missing = new TypeReference("Nope", "Missing", module.TypeSystem.Object.Module, module.TypeSystem.CoreLibrary);
+
+        var thrown = Assert.Throws<ArgumentException>(() => handler.GetCecilType(missing));
+
+        Assert.That(thrown!.Message, Does.Contain("Nope.Missing"));
+    }
+
     #endregion
 
     #region GetMethodFromType
