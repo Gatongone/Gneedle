@@ -77,13 +77,43 @@ public static class AssemblyLoader
         // The assembly is marked as one of the targets, which is what the resolution below answers to. It is marked
         // before it is handed over, because the request for an assembly of the weaver is made as soon as a type of it is
         // read, which the caller does with what is returned here.
+        MarkAsTarget(assembly);
+        return assembly;
+    }
+
+    /// <summary>
+    /// Load the assembly of an image which another assembly which is being woven refers to, and remember those bytes.
+    /// </summary>
+    /// <remarks>
+    /// The image is loaded the way the process loads one it was handed the bytes of, and not into a context of its own
+    /// as <see cref="LoadFromBytes"/> does: the assembly is read for a weaving of the target, which the runtime holds in
+    /// a context of its own, and the runtime refuses an assembly of a context of its own which is handed to that one.
+    /// The assembly is a target all the same, because it is read by the weaving through the types of the weaver, which
+    /// are answered to the targets of this loader.
+    /// </remarks>
+    /// <param name="rawBytes">Bytes that is a COFF-based image containing a managed assembly.</param>
+    /// <returns>The loaded assembly.</returns>
+    internal static System.Reflection.Assembly LoadReference(byte[] rawBytes)
+    {
+        RegisterWeaverAssemblies();
+
+        var assembly = System.Reflection.Assembly.Load(rawBytes);
+        Remember(assembly, rawBytes);
+        MarkAsTarget(assembly);
+        return assembly;
+    }
+
+    /// <summary>
+    /// Mark <paramref name="assembly"/> as one of the targets which the assemblies of the weaver are answered to.
+    /// </summary>
+    /// <param name="assembly">The assembly which is a target from here on.</param>
+    private static void MarkAsTarget(System.Reflection.Assembly assembly)
+    {
         lock (s_ImagesGuard)
         {
             s_Targets.Remove(assembly);
             s_Targets.Add(assembly, s_TargetMark);
         }
-
-        return assembly;
     }
 
     /// <summary>

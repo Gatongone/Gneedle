@@ -602,6 +602,50 @@ public class InjectionsTests
                     "the body of a method of an assembly which is loaded in the process was not read.");
     }
 
+    [Test]
+    public void The_Assemblies_Which_An_Image_Refers_To_Are_Read_From_The_Directory_Which_It_Lies_In()
+    {
+        // A build weaves the assembly which it has just produced, and the process which runs it knows nothing of the
+        // folders of that project: the assemblies which the image refers to are the ones which the build copied beside
+        // it, and that folder is what is handed to the weaving as the place to read them from. Without it a project
+        // which declares its attributes for another project to weave with is woven by nothing, because the attribute
+        // which says what to weave with, and the body which that attribute names, are both of the other assembly.
+        var directory = Path.Combine(Path.GetTempPath(), $"Gneedle.Inject.Test.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var beside = Assembly.Create("BesideOfTheImage");
+            ((AssemblyHandler) beside.Handler).AddClass("Marker", Ns, ClassFlags.Public).GetHandler();
+            using (var file = File.Create(Path.Combine(directory, "BesideOfTheImage.dll"))) beside.SaveTo(file);
+
+            var name = new AssemblyNameReference("BesideOfTheImage", new Version(1, 0));
+
+            // The resolver which finds nothing stands for the process of a build, which holds neither a folder of the
+            // project which was built nor an assembly of it: what is read here is read from the folder which is given.
+            Assert.Throws<AssemblyResolutionException>(() => new CachedAssemblyResolver(new ResolverWhichFindsNothing()).Resolve(name),
+                                                       "an assembly which lies nowhere was resolved.");
+
+            // The image names the assembly of the other project, which is what the project that carries the attributes
+            // of another one is: the weaving reads them through that name.
+            var woven = Assembly.Create("WovenImage");
+            woven.Source.MainModule.AssemblyReferences.Add(new AssemblyNameReference(name.Name, name.Version));
+            using var stream = new MemoryStream();
+            woven.SaveTo(stream);
+            stream.Position = 0;
+
+            using var assembly = Assembly.Read(stream, AssemblySymbol.None, directory);
+            var resolved = assembly.Source.MainModule.AssemblyResolver.Resolve(name);
+
+            Assert.That(resolved.MainModule.GetType($"{Ns}.Marker"), Is.Not.Null,
+                        "the assembly which the image refers to was not read from the directory which the image lies in.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     /// <summary>
     /// A resolver which finds nothing, which is what the file system answers with for an assembly which none of the
     /// search directories of a resolver holds. It stands for the resolver of a module which was read from bytes, which

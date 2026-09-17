@@ -109,11 +109,15 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     {
         // The image is read into bytes and the assembly is loaded from those bytes, which keeps the file to the caller:
         // a reader which holds the file leaves the write which follows nowhere to go. The weaving itself, which any
-        // driver of the library does the same way, is asked of the library.
+        // driver of the library does the same way, is asked of the library. The folder which the assembly lies in is
+        // handed over with it, because that is where the build put the assemblies it refers to, and the process which
+        // runs the task is a node of the build which knows nothing of the project which was built: an attribute, and the
+        // template which it names, may both be of an assembly of another project which declares them for this one.
         var image = File.ReadAllBytes(assemblyPath);
         var runtimeAssembly = AssemblyLoader.LoadFromBytes(image);
 
-        var (changed, result) = Injections.Apply(runtimeAssembly, image, !keepsTheWeaver, message => Log.LogError(message));
+        var (changed, result) = Injections.Apply(runtimeAssembly, image, !keepsTheWeaver, message => Log.LogError(message),
+                                                 searchDirectory: Path.GetDirectoryName(assemblyPath));
         if (!changed) return false;
 
         Write(assemblyPath, result);

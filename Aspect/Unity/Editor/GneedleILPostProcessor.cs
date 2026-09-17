@@ -41,7 +41,12 @@ namespace Gneedle.Aspect
         /// An injector is read here the way the weaving reads one, through the types of the module rather than by
         /// resolving what they refer to, so that this processor and the weaving agree on which assemblies have anything
         /// to weave: a reading which found an injector the weaving does not would take an assembly through a compilation
-        /// which leaves it as it was.
+        /// which leaves it as it was.<para/>
+        /// The types of the module are the ones which are read of it, which is every injector a weaving here can read:
+        /// the attributes are always taken back out of an assembly of a compilation, so a type which was woven gives up
+        /// what makes it an injector, and an attribute which another assembly of the compilation declares is none by the
+        /// time the assembly which carries it is woven. The attributes of a project which keeps them for another project
+        /// to weave with are read by the build task, which reads the assemblies beside the image which it weaves.
         /// </remarks>
         /// <param name="assembly">The assembly which was compiled.</param>
         public override bool WillProcess(ICompiledAssembly assembly)

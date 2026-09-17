@@ -1,14 +1,23 @@
 namespace Gneedle.Inject;
 
 /// <summary>
-/// Resolver which finds the assemblies which were read into a module, and defers to another resolver for the rest.<para/>
+/// Resolver which finds the assemblies which were read into a module, the ones which lie in the directory of the image
+/// which refers to them, and defers to another resolver for the rest.<para/>
 /// The resolver of a module searches the file system alone, so an assembly which only exists in memory, or which was read
 /// from a stream which is not backed by a file, would not be found by it. One which is loaded in the process is read back
 /// here instead, from the file it was loaded from, or from the memory which the runtime mapped it to.
 /// </summary>
 /// <param name="fallback">Resolver which finds the assemblies which were not read into the module.</param>
-internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAssemblyResolver
+/// <param name="searchDirectory">Directory which the assemblies an image refers to lie in, or null when the caller knows
+/// of none.</param>
+internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string? searchDirectory = null) : IAssemblyResolver
 {
+    /// <summary>
+    /// The extensions which the file of an assembly which lies beside an image is named by, which are the ones a managed
+    /// image is written to.
+    /// </summary>
+    private static readonly string[] s_AssemblyExtensions = {".dll", ".exe"};
+
 #if NETFRAMEWORK
     /// <summary>
     /// Cache of the non public <c>Assembly.GetRawBytes</c> method, which hands the bytes of the image over. The other
@@ -35,6 +44,12 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAsse
         var byName = Assemblies.Values.FirstOrDefault(assembly => assembly.Name.Name == name.Name);
         if (byName != null) return byName;
 
+        // The directory of the image is read before the resolver of the process is asked, because that resolver knows
+        // nothing of the folders of the project which was built: an assembly which a build copied beside the image is the
+        // one the image refers to, whether the process holds one of that name or not.
+        var beside = ReadBeside(name);
+        if (beside != null) return Assemblies[name.FullName] = beside;
+
         try
         {
             return fallback.Resolve(name, parameters);
@@ -56,15 +71,42 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAsse
     public void Dispose() => fallback.Dispose();
 
     /// <summary>
+    /// Read the assembly of <paramref name="name"/> which lies in the directory of the image which refers to it.
+    /// </summary>
+    /// <remarks>
+    /// The file is read into bytes and the assembly is read out of those bytes rather than out of the file, so that the
+    /// file system is left alone by a resolution which a build holds on to for as long as it runs: a build which wove an
+    /// assembly holds every assembly which was read for it until the node which ran it ends, and a file which is held
+    /// that long is a file which the build after it cannot write over.
+    /// </remarks>
+    /// <param name="name">Name of the assembly.</param>
+    /// <returns>The assembly definition, or null when no file of that name is there, or it holds another assembly.</returns>
+    private AssemblyDefinition? ReadBeside(AssemblyNameReference name)
+    {
+        if (string.IsNullOrEmpty(searchDirectory)) return null;
+
+        foreach (var extension in s_AssemblyExtensions)
+        {
+            var path = Path.Combine(searchDirectory, name.Name + extension);
+            if (!File.Exists(path)) continue;
+
+            var definition = ReadFromBytes(File.ReadAllBytes(path));
+
+            // A file of that name which holds another assembly is not the one which was named, and an image which is
+            // answered with it would be answered with types of an assembly it does not refer to.
+            if (definition.Name.Name == name.Name) return definition;
+            definition.Dispose();
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Read the assembly of <paramref name="name"/> which is loaded in the process from the bytes of its image.
     /// </summary>
     /// <remarks>
     /// The bytes are read from the file which the assembly was loaded from where it has one, and from the memory which
-    /// the runtime mapped it to otherwise, which is the case for an assembly which was loaded from bytes.<para/>
-    /// The stream of the image is handed over to the assembly rather than closed with the read: the module is read
-    /// deferred, so the body of a method is read out of that stream as it is asked for, and a stream which was closed
-    /// with the read is a body which can no longer be read. A template which an injector names and which another
-    /// assembly declares is read that way, which is why the two belong together.
+    /// the runtime mapped it to otherwise, which is the case for an assembly which was loaded from bytes.
     /// </remarks>
     /// <param name="name">Name of the assembly.</param>
     /// <returns>The assembly definition, or null when no assembly of that name is loaded, or its image can't be read.</returns>
@@ -74,9 +116,25 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAsse
         if (assembly == null || !TryGetAssemblyRawBytes(assembly, out var rawBytes)) return null;
 
         // The bytes are read whenever it returns true, which the out parameter of a nullable type cannot tell.
+        return ReadFromBytes(rawBytes!);
+    }
+
+    /// <summary>
+    /// Read an assembly out of the bytes of its image.
+    /// </summary>
+    /// <remarks>
+    /// The stream of the image is handed over to the assembly rather than closed with the read: the module is read
+    /// deferred, so the body of a method is read out of that stream as it is asked for, and a stream which was closed
+    /// with the read is a body which can no longer be read. A template which an injector names and which another
+    /// assembly declares is read that way, which is why the two belong together.
+    /// </remarks>
+    /// <param name="bytes">The bytes of the image.</param>
+    /// <returns>The assembly definition.</returns>
+    private AssemblyDefinition ReadFromBytes(byte[] bytes)
+    {
         // The stream holds the memory of the image alone, so nothing but the module which reads it keeps it, and no
         // handle of the file system is left open by a read which a build holds on to for as long as it runs.
-        var memoryStream = new MemoryStream(rawBytes!);
+        var memoryStream = new MemoryStream(bytes);
         return AssemblyDefinition.ReadAssembly(memoryStream, new ReaderParameters
         {
             InMemory         = true,

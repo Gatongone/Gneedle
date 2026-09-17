@@ -22,10 +22,16 @@ public static class Injections
     /// <param name="image">The bytes of the image which the assembly was loaded from.</param>
     /// <param name="removesTheWeaver">Whether the attributes and the reference to this library are taken back out. They are removed by default, which leaves the woven assembly standing alone.</param>
     /// <param name="reportError">Where a member which an injector names and the assembly does not hold is reported, or null when nothing reports it.</param>
+    /// <param name="searchDirectory">Directory which the assemblies the image refers to lie in, or null when the caller
+    /// knows of none. An injector which another assembly declares is read through the assembly which declares it, and
+    /// the templates which its attributes name are read the same way, so a weaver which is driven by a build hands over
+    /// the folder of the assembly which it was asked to weave, which is where the build put the assemblies it refers to.
+    /// </param>
     /// <returns>Whether the assembly was changed, and the image which holds the result. A run which reported anything hands back the image it was given rather than the one it wove, because a report leaves an assembly which is woven in part, which no caller could tell from one which was woven whole.</returns>
     public static (bool Changed, byte[] Image) Apply(System.Reflection.Assembly assembly, byte[] image,
-                                                     bool removesTheWeaver = true, Action<string>? reportError = null)
-        => new Injection(assembly, image, removesTheWeaver, reportError).Run();
+                                                     bool removesTheWeaver = true, Action<string>? reportError = null,
+                                                     string? searchDirectory = null)
+        => new Injection(assembly, image, removesTheWeaver, reportError, searchDirectory).Run();
 
     /// <summary>
     /// One run of the injectors of one assembly.
@@ -34,7 +40,9 @@ public static class Injections
     /// <param name="image">The bytes of the image which the assembly was loaded from.</param>
     /// <param name="removesTheWeaver">Whether the attributes and the reference to this library are taken back out.</param>
     /// <param name="reportError">Where a member which an injector names and the assembly does not hold is reported.</param>
-    private sealed class Injection(System.Reflection.Assembly assembly, byte[] image, bool removesTheWeaver, Action<string>? reportError)
+    /// <param name="searchDirectory">Directory which the assemblies the image refers to lie in, or null when the caller
+    /// knows of none.</param>
+    private sealed class Injection(System.Reflection.Assembly assembly, byte[] image, bool removesTheWeaver, Action<string>? reportError, string? searchDirectory)
     {
         /// <summary>
         /// The members which the injectors of a type are looked for on: every member which the type declares, whichever
@@ -44,7 +52,7 @@ public static class Injections
         /// well when the base type is one of its own, and a member of a base type which another assembly declares cannot
         /// be written to from here at all.
         /// </summary>
-        private const BindingFlags InjectedMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+        private const BindingFlags INJECTED_MEMBERS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
                                                    | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
         /// <summary>
@@ -53,7 +61,7 @@ public static class Injections
         /// leaves the attributes of the other three on a type, where they are passed over without a word because nothing
         /// asked for them.
         /// </summary>
-        private static readonly Type[] TypeInjectors = [typeof(ITypeInjector), typeof(IClassInjector), typeof(IStructInjector), typeof(IEnumInjector)];
+        private static readonly Type[] s_TypeInjectors = [typeof(ITypeInjector), typeof(IClassInjector), typeof(IStructInjector), typeof(IEnumInjector)];
 
         /// <summary>
         /// Whether anything was reported of this run.<para/>
@@ -80,9 +88,16 @@ public static class Injections
         public (bool Changed, byte[] Image) Run()
         {
             // The assembly is read as an image of bytes and written back as one, so that the caller keeps the file to
-            // itself: a reader which holds the file leaves the write which follows nowhere to go.
+            // itself: a reader which holds the file leaves the write which follows nowhere to go. The folder which the
+            // assemblies it refers to lie in is handed over with it, because the resolution of the module holds no
+            // folder of its own: the image came from bytes, and nothing beside a stream names where its references are.
             using var stream = new MemoryStream(image);
-            using var target = Assembly.Read(stream);
+            using var target = Assembly.Read(stream, AssemblySymbol.None, searchDirectory);
+
+            // The same folder answers the runtime as well, because an injector is an attribute which the runtime makes
+            // out of the type the image names: the metadata is read through the folder of the module, and the type of
+            // the attribute, and the body which it names, are read through the folder of the process.
+            using var referenced = searchDirectory == null ? null : new ReferencedAssemblies(assembly, searchDirectory);
 
             var handler = new AssemblyHandler(target);
             var changed = ProcessAssembleInjector(handler);
@@ -128,6 +143,111 @@ public static class Injections
         {
             m_Reported = true;
             reportError?.Invoke(message);
+        }
+
+        /// <summary>
+        /// The assemblies which the image of one run refers to, read into the process for as long as that run lasts.
+        /// <para/>
+        /// An injector is an attribute, which the runtime makes out of the type which the image names, so the assembly
+        /// which declares one has to be one the process can read: the weaving reads the type of the attribute, and the
+        /// template which it names, out of the assembly which declares them, and the process reads them through the
+        /// same folder. A build weaves the assembly it has just written inside a node of itself, which knows nothing of
+        /// the folders of the project which was built, so the assemblies which the image refers to are answered from
+        /// the folder of the image, which is where that build put them.
+        /// </summary>
+        /// <remarks>
+        /// A request is answered for the assemblies which this reading read as well as for the one which is woven,
+        /// because an assembly which was read that way reaches for the ones it refers to itself, and none of them lie
+        /// where the process looks. The reading is taken back out where the run ends, because the process outlives it:
+        /// a node of a build weaves every assembly which the build asks it to.
+        /// </remarks>
+        private sealed class ReferencedAssemblies : IDisposable
+        {
+            /// <summary>
+            /// The assemblies which the requests are answered for, which the one which is woven opens.
+            /// </summary>
+            private readonly List<System.Reflection.Assembly> m_Answered = new();
+
+            /// <summary>
+            /// Guard of <see cref="m_Answered"/>, which the requests of a weaving arrive on threads which are not this
+            /// one, and which the assemblies of one project are woven on at the same time as each other.
+            /// </summary>
+            private readonly object m_Guard = new();
+
+            /// <summary>
+            /// Directory which the assemblies the image refers to lie in.
+            /// </summary>
+            private readonly string m_SearchDirectory;
+
+            /// <summary>
+            /// Answer the requests of <paramref name="woven"/> from <paramref name="searchDirectory"/> until this is
+            /// disposed.
+            /// </summary>
+            /// <param name="woven">The assembly which is woven, which is the one whose requests are answered.</param>
+            /// <param name="searchDirectory">Directory which the assemblies it refers to lie in.</param>
+            public ReferencedAssemblies(System.Reflection.Assembly woven, string searchDirectory)
+            {
+                m_SearchDirectory = searchDirectory;
+                m_Answered.Add(woven);
+                AppDomain.CurrentDomain.AssemblyResolve += Resolve;
+            }
+
+            /// <inheritdoc/>
+            public void Dispose() => AppDomain.CurrentDomain.AssemblyResolve -= Resolve;
+
+            /// <summary>
+            /// Read the assembly of one request out of the folder of the image, or null when the request is not one of
+            /// this run.
+            /// </summary>
+            /// <param name="sender">Whoever raised the request, which is not read.</param>
+            /// <param name="args">The request of an assembly which could not be resolved.</param>
+            /// <returns>The assembly which was asked for, or null when this run does not read it.</returns>
+            private System.Reflection.Assembly? Resolve(object? sender, ResolveEventArgs args)
+            {
+                // Only the requests of the assemblies of this run are answered, because the handler is held by the
+                // process, which outlives the run and holds assemblies of its own: a request of any other assembly is
+                // left to the resolution which the runtime does by itself.
+                if (args.RequestingAssembly is not { } requesting) return null;
+                lock (m_Guard)
+                {
+                    if (!m_Answered.Contains(requesting)) return null;
+                }
+
+                if (new System.Reflection.AssemblyName(args.Name).Name is not { } name) return null;
+
+                // An image which lies in the folder under the name which was asked for is the one which is read, which
+                // is the one the request is made of: a version is not compared, because the assembly beside an image is
+                // the one which the build which made that image wrote there.
+                var path = Path.Combine(m_SearchDirectory, name + ".dll");
+                if (!File.Exists(path)) return null;
+
+                // An assembly which the process already holds is answered with the one it holds rather than with a
+                // second copy of its image, because a type of the two would be one type in name alone: an image which
+                // was read beside a weaving and one which the process read are the same assembly of the same project.
+                var held = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(candidate => candidate.GetName().Name == name);
+                if (held != null) return held;
+
+                try
+                {
+                    // The image is read into bytes rather than opened where it lies, so that the file is left to the
+                    // build which writes it: an assembly which is read for the weaving of one of the assemblies beside
+                    // it is one which the project of that assembly may build again while the node of this build runs.
+                    var read = AssemblyLoader.LoadReference(File.ReadAllBytes(path));
+                    lock (m_Guard)
+                    {
+                        m_Answered.Add(read);
+                    }
+
+                    return read;
+                }
+                catch (Exception)
+                {
+                    // An image which cannot be read is one which this cannot answer with, which leaves the request to
+                    // the resolution of the runtime: what the caller is told of it is the failure of that resolution,
+                    // which names the assembly which could not be read and the reason it could not be.
+                    return null;
+                }
+            }
         }
 
         /// <summary>
@@ -206,7 +326,7 @@ public static class Injections
             // answers with for a type of its image being one of these.
             if (typeHandler is TypeHandler members)
             {
-                foreach (var method in type.GetMethods(InjectedMembers))
+                foreach (var method in type.GetMethods(INJECTED_MEMBERS))
                 {
                     changed |= ProcessMethodInjector(members, type, method);
                 }
@@ -214,7 +334,7 @@ public static class Injections
 
             if (typeHandler is IFieldContainer fieldContainer)
             {
-                foreach (var field in type.GetFields(InjectedMembers))
+                foreach (var field in type.GetFields(INJECTED_MEMBERS))
                 {
                     changed |= ProcessFieldInjector(fieldContainer, type, field);
                 }
@@ -222,7 +342,7 @@ public static class Injections
 
             if (typeHandler is IPropertyContainer propertyContainer)
             {
-                foreach (var property in type.GetProperties(InjectedMembers))
+                foreach (var property in type.GetProperties(INJECTED_MEMBERS))
                 {
                     changed |= ProcessPropertyInjector(propertyContainer, type, property);
                 }
@@ -267,7 +387,7 @@ public static class Injections
 
             var dirty = false;
             var typeAttributes = type.GetCustomAttributes(inherit: false)
-                                     .Where(static item => item is Attribute attr && TypeInjectors.Any(injector => injector.IsInstanceOfType(attr)))
+                                     .Where(static item => item is Attribute attr && s_TypeInjectors.Any(injector => injector.IsInstanceOfType(attr)))
                                      .Cast<Attribute>()
                                      .ToArray();
 
