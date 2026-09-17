@@ -91,6 +91,17 @@ public static class ConstructTemplates
     }
 
     /// <summary>
+    /// A local function written inside the template, which the compiler writes as a method of the type which holds the
+    /// template itself when it captures nothing, so that no type of the compiler's own is named by it.
+    /// </summary>
+    public static int LocalFunction(int value)
+    {
+        return Twice(value);
+
+        static int Twice(int number) => number * 2;
+    }
+
+    /// <summary>
     /// A body which the compiler writes as a state machine of its own.
     /// </summary>
     public static async Task<int> Async(int value)
@@ -433,6 +444,22 @@ public class SetBodyTests
 
         Assert.Throws<ArgumentException>(
             () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LambdaWhichCaptured))!));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Holds_A_Local_Function_Throws()
+    {
+        // A local function which captures nothing is written as a method of the type which holds the template, so the
+        // member which names it is a member of a type which the template's own assembly declares rather than one which
+        // the compiler wrote: it is refused by the name of the member rather than by the name of the type which holds it.
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunction))!));
+
+        Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
     }
 
     [Test]

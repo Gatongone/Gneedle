@@ -909,6 +909,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             case MethodReference methodRef:
                 RefuseANameWhichIsNotWritten(methodRef, currentIndex, filter);
                 RefuseTheCompilersOwnType(methodRef.DeclaringType, methodRef.FullName);
+                RefuseTheCompilersOwnMember(methodRef);
                 var importedMethod = Source.Module.ImportReference(methodRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
                 break;
@@ -984,6 +985,21 @@ internal sealed partial class MethodHandler : IMethodHandler
 
             throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, reference, Source.FullName));
         }
+    }
+
+    /// <summary>
+    /// Refuse a member which the compiler wrote for a body of the template's own.<para/>
+    /// A local function is not a type of its own the way a lambda is: it is a method of the type which declares the
+    /// template, named with the bracket which no identifier of C# holds. Its body is a body of the template's, so
+    /// carrying the call to it carries a call into a member which the weaving has no instructions of.
+    /// </summary>
+    /// <param name="member">The member which the reference names.</param>
+    /// <exception cref="ArgumentException">Thrown when the member is one which the compiler wrote.</exception>
+    private void RefuseTheCompilersOwnMember(MemberReference member)
+    {
+        if (!member.Name.StartsWith("<", StringComparison.Ordinal)) return;
+
+        throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, member.FullName, Source.FullName));
     }
 
     /// <summary>
