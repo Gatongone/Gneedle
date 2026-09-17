@@ -295,6 +295,26 @@ public class InjectionsTests
     }
 
     [Test]
+    public void Apply_Does_Not_Name_The_Corlib_Of_The_Runtime_In_The_Image_It_Produces()
+    {
+        // The weaving runs on the runtime of whoever drives it, whose corlib is not the one the assembly being woven was
+        // compiled against: a build which runs on .NET writes the attributes it applies out of the corlib of .NET, while
+        // the assembly which is woven names the corlib of its own framework. A loader which is handed both of them reads
+        // the assembly as one which cannot be resolved - the editor of Unity answers "Unable to resolve reference
+        // 'System.Private.CoreLib'" and refuses the whole of it - so an assembly which was woven is one which is not
+        // loaded at all, and the injectors of a project never run there.
+        var image = TestAssemblyImage();
+        var assembly = AssemblyLoader.LoadFromBytes(image);
+
+        var (changed, result) = Injections.Apply(assembly, image);
+
+        Assert.That(changed, Is.True);
+        using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
+        Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "System.Private.CoreLib"), Is.False,
+                    "the image names the corlib of the runtime which wove it.");
+    }
+
+    [Test]
     public void Apply_Runs_The_Injector_Which_Is_Read_From_An_Attribute_Of_A_Type_That_Is_One()
     {
         // An attribute is one of the attributes which an injector is read from where the interface of the weaver is

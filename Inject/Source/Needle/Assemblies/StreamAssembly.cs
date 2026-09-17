@@ -63,8 +63,10 @@ internal sealed class StreamAssembly(IAssemblyCache cache, AssemblySymbol symbol
         // The type of the framework which is woven into an assembly is imported from the framework of whoever weaves,
         // which is not the framework of the assembly that is read: a build which runs on .NET hands the assembly it
         // writes a reference to the System.Private.CoreLib of that build, which neither .NET Framework nor Mono can
-        // load. The importer which names the standard instead is the one the assemblies which are created are given.
+        // load. The importers which name the standard instead are the ones the assemblies which are created are given,
+        // one for the types of the runtime and one for the members which are read out of it.
         parameters.ReflectionImporterProvider = SPCLReflectionImporterProvider.Instance;
+        parameters.MetadataImporterProvider   = SPCLMetadataImporterProvider.Instance;
         return parameters;
     }
 }
