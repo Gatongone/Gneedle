@@ -8,10 +8,13 @@
         <IsTestProject>true</IsTestProject>
         <!-- The framework which MSBuild runs a task in on Windows, which is the one the task is loaded by here. The
              assemblies of MSBuild are given to it by the build, and this project takes them for itself below. -->
-        <TargetFrameworks>net472</TargetFrameworks>
+        <TargetFramework>net472</TargetFramework>
         <OutputType>Library</OutputType>
         <LangVersion>12</LangVersion>
         <RootNamespace>Gneedle.Aspect.Test</RootNamespace>
+
+        <!-- Ignore .net5.0 EOL -->
+        <CheckEolTargetFramework>false</CheckEolTargetFramework>
 
         <!-- The scan of the solution adds the injection target to every project which references this one, and this
              project calls the task itself rather than being injected into. It is also the toggle which the tests

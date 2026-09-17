@@ -11,6 +11,8 @@
         <RootNamespace>Gneedle.Inject</RootNamespace>
         <LangVersion>preview</LangVersion>
         <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
+        <!-- Ignore .net5.0 EOL -->
+        <CheckEolTargetFramework>false</CheckEolTargetFramework>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
         <!-- A package is made by `dotnet pack`, which builds the frameworks which it packs. The property which makes a
