@@ -139,7 +139,7 @@ partial class MethodHandler
         // The index which is given is the one of the name, which is what the members reached through an instance of
         // Instance or Static are read against: a symbol which carries no name is not one of those, so the call stands in
         // its place, where it is read by nothing.
-        var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter, parameters, targetDef);
+        var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter, parameters, targetDef, out var namedInstance);
         if (methodDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
@@ -215,7 +215,7 @@ partial class MethodHandler
                     filter.Replace(read, CreateReceiver(receiverIns, targetDef));
                 }
 
-                filter.Replace(invocation, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef)));
+                filter.Replace(invocation, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef, namedInstance)));
             }
         }
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
@@ -240,12 +240,12 @@ partial class MethodHandler
             // Skip `call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types})`
             filter.Skip(callIndex);
             // callvirt instance class {delegate_type}::Invoke({parameter_types}) -> callvirt/call instance class {declaring_type}::{method_name}({parameter_types})
-            filter.Replace(callvirtIndex, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef)));
+            filter.Replace(callvirtIndex, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef, namedInstance)));
         }
         // Or create delegate by method pointer and call it right now.
         else
         {
-            var importedMethod = GetCallableReference(methodDef);
+            var importedMethod = GetCallableReference(methodDef, namedInstance);
 
             // The delegate which is built is the one which the template named rather than the definition which that one
             // is an instantiation of: the constructor of the definition takes the arguments of the open type, and a body
@@ -308,10 +308,11 @@ partial class MethodHandler
     /// a method of the generic parameters of its own caller.
     /// </remarks>
     /// <param name="methodDef">The method which the body calls.</param>
+    /// <param name="namedInstance">The type of the instance which the template reached the member through, or null where the template reached none.</param>
     /// <returns>The reference which the call instruction holds.</returns>
-    private MethodReference GetCallableReference(MethodDefinition methodDef)
+    private MethodReference GetCallableReference(MethodDefinition methodDef, TypeReference? namedInstance = null)
     {
-        var importedMethod = Source.Module.ImportReference(methodDef);
+        var importedMethod = GetMethodReference(methodDef, namedInstance);
 
         // A method which holds fewer or more generic parameters than the method being woven cannot be instantiated from
         // the template, so it is left as the plain reference it was, which is what the call held before.
@@ -320,6 +321,77 @@ partial class MethodHandler
         var genericInstance = new GenericInstanceMethod(importedMethod);
         foreach (var genericParameter in Source.GenericParameters) genericInstance.GenericArguments.Add(genericParameter);
         return genericInstance;
+    }
+
+    /// <summary>
+    /// Get the reference which the module holds to call <paramref name="methodDef"/>, which names the instantiation of
+    /// the type which declares it rather than the definition of that type when that type declares parameters.<para/>
+    /// A member which such a type declares belongs to the definition, and the call of a method of a type which stands
+    /// open is one which the runtime refuses to run: the declaring type is written as the instantiation which the body
+    /// being woven stands in for that reason, which is the shape a compiler emits for a call to a member of the
+    /// parameters of its caller. A type whose parameters the body cannot name is left as the imported definition, which
+    /// is what the call held before.
+    /// </summary>
+    /// <param name="methodDef">The method which the body calls.</param>
+    /// <param name="namedInstance">The type of the instance which the template reached the member through, or null where the template reached none.</param>
+    /// <returns>The reference which the call instruction holds.</returns>
+    private MethodReference GetMethodReference(MethodDefinition methodDef, TypeReference? namedInstance = null)
+    {
+        if (methodDef.DeclaringType is not { HasGenericParameters: true } declaringType) return Source.Module.ImportReference(methodDef);
+
+        if (InstantiationOf(declaringType, namedInstance) is not { } declaringInstance) return Source.Module.ImportReference(methodDef);
+
+        var reference = new MethodReference(methodDef.Name, methodDef.ReturnType, declaringInstance)
+        {
+            HasThis           = methodDef.HasThis,
+            ExplicitThis      = methodDef.ExplicitThis,
+            CallingConvention = methodDef.CallingConvention,
+        };
+
+        foreach (var parameter in methodDef.Parameters)
+        {
+            reference.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType));
+        }
+
+        return reference;
+    }
+
+    /// <summary>
+    /// The instantiation of <paramref name="declaringType"/> which the body being woven names, which is the type itself
+    /// or the base type which it hands its own parameters down to, or null when the body can name no instantiation of
+    /// it.<para/>
+    /// The body is a member of the type which is woven, so the parameters which it can name are the ones that type
+    /// declares: the argument of the instantiation is the parameter of the body at the same position, which is what a
+    /// type which passes its parameters on to its base hands over.
+    /// </summary>
+    /// <param name="declaringType">The type which declares the member which is called.</param>
+    /// <param name="namedInstance">The type of the instance which the template reached the member through, or null where the template reached none.</param>
+    /// <returns>The instantiation of the declaring type, or null when the body names none of it.</returns>
+    private TypeReference? InstantiationOf(TypeReference declaringType, TypeReference? namedInstance)
+    {
+        // The type which the template named the instance through is written where the member belongs to that type
+        // itself: the value which the instance holds is one of that type rather than of a base type of it, and the
+        // parameters of it, which the body being woven cannot name, are the ones which the template declared.
+        if (namedInstance is GenericInstanceType named && named.ElementType.FullName == declaringType.FullName)
+        {
+            return named.ParseGenericTokens(Source, Source.Module);
+        }
+
+        var woven = Source.DeclaringType;
+
+        if (woven.FullName == declaringType.FullName)
+        {
+            return woven.MakeGenericInstanceType(woven.GenericParameters.Select(static parameter => (TypeReference) parameter).ToArray());
+        }
+
+        // The base type of the woven type is written out where the type is declared, so the arguments of it stand in
+        // the body already: a base which hands a parameter of its own down names the parameter of the body with it.
+        if (woven.BaseType is GenericInstanceType baseInstance && baseInstance.ElementType.FullName == declaringType.FullName)
+        {
+            return baseInstance;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -336,10 +408,16 @@ partial class MethodHandler
     /// <param name="filter">The filter which the body is written through.</param>
     /// <param name="parameters">The types of the arguments which the member is called with, which the member that is found has to be described by.</param>
     /// <param name="targetDef">The template which the instructions are read out of.</param>
+    /// <param name="namedInstance">
+    /// The type of the instance which the member is reached through where the template names one, or null for the
+    /// symbols which stand for a member of the type being woven rather than for one of a value the template holds.
+    /// </param>
     /// <returns>The method which the symbol stands for, or null when the symbol is not one which names a method.</returns>
     /// <exception cref="ArgumentException">Thrown when the member cannot be resolved, or when the template proceeds without a body being woven around.</exception>
-    private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, InstructionFilter filter, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef)
+    private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, InstructionFilter filter, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef, out TypeReference? namedInstance)
     {
+        namedInstance = null;
+
         if (memberSymbol.HasFlag(MemberSymbols.Base))
         {
             return DeclaringTypeHandler.GetMethodInBase(methodName, parameters);
@@ -399,6 +477,11 @@ partial class MethodHandler
             {
                 return GetMethodFromConstraint(parameter, methodName, parameters);
             }
+
+            // The type which the template named the instance through is written out where the member is called where
+            // the member belongs to that type itself: the value which the instance holds is one of the type as the
+            // template declared it, which is an instantiation of the type which the lookup below answers with.
+            namedInstance = instanceType;
 
             // The instance type may stand for the type of another assembly, in which case the method is looked up on the real one.
             return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.ResolveDefinition(Source.Module), (string) filter.Target[currentIndex].Operand, parameters);

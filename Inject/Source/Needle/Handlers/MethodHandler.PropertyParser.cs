@@ -49,6 +49,9 @@ partial class MethodHandler
         // Detect Instance/Static patterns to determine skip count and declaring type.
         var skipStaticFromCount = 0;
         TypeDefinition? declaringTypeFromPattern = null;
+        // The type which the template named the instance through, which the accessor is written on where it belongs to
+        // that type itself rather than to a base type of it.
+        TypeReference? namedInstance = null;
         // The instance which the template reached the property through, which is the receiver of its call where the
         // accessor which is called takes one: the sequence which builds the instance is dropped, so the value it holds has
         // to stand where the accessor takes a receiver.
@@ -66,6 +69,10 @@ partial class MethodHandler
             if (instanceType != null)
             {
                 declaringTypeFromPattern = instanceType.ResolveDefinition(Source.Module);
+                // The type which the template named the instance through is written out where the accessor belongs to
+                // that type itself: the value which the instance holds is one of the type as the template declared it,
+                // which is an instantiation of the type which the lookup below answers with.
+                namedInstance = instanceType;
             }
         }
         else if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
@@ -186,7 +193,7 @@ partial class MethodHandler
                     filter.Replace(read, CreateReceiver(receiverIns, targetDef));
                 }
 
-                filter.Replace(accessor, Instruction.Create(accessorDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, Source.Module.ImportReference(accessorDef)));
+                filter.Replace(accessor, Instruction.Create(accessorDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetMethodReference(accessorDef, namedInstance)));
             }
 
             return;
@@ -213,7 +220,7 @@ partial class MethodHandler
             if (propertyDef.GetMethod == null) throw new ArgumentException(string.Format(ErrorMessages.NON_GET_METHOD, propertyDef.Name));
 
             // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> call instance class {property_type} {declaring_type}::get_{property_name}()
-            var getMethod = Source.Module.ImportReference(propertyDef.GetMethod);
+            var getMethod = GetMethodReference(propertyDef.GetMethod, namedInstance);
             filter.Replace(callvirtIndex, Instruction.Create(propertyDef.GetMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, getMethod));
         }
         // Process property value setting.
@@ -222,7 +229,7 @@ partial class MethodHandler
             if (propertyDef.SetMethod == null) throw new ArgumentException(string.Format(ErrorMessages.NON_SET_METHOD, propertyDef.Name));
 
             // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> call instance class void {declaring_type}::set_{property_name}({property_type})
-            var setMethod = Source.Module.ImportReference(propertyDef.SetMethod);
+            var setMethod = GetMethodReference(propertyDef.SetMethod, namedInstance);
             filter.Replace(callvirtIndex, Instruction.Create(propertyDef.SetMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, setMethod));
         }
     }

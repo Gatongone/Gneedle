@@ -244,6 +244,36 @@ public class AroundBodyTests
         return (assembly, host, identity);
     }
 
+    /// <summary>
+    /// Create a host which declares a parameter of its own and which holds <c>public int Add(int left, int right)</c>,
+    /// so that the call which a template makes through <c>Proceed</c> stands on a member of a generic type.
+    /// </summary>
+    private static (Assembly Assembly, TypeHandler Host, MethodDefinition Add) NewGenericTypeHost(string assemblyName)
+    {
+        var assembly = Assembly.Create(assemblyName);
+        var module = assembly.Source.MainModule;
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public)
+                                                                    .WithGenericParameter("T")
+                                                                    .GetHandler();
+
+        var add = new MethodDefinition("Add", MethodAttributes.Public, module.TypeSystem.Int32);
+        add.Parameters.Add(new ParameterDefinition("left", ParameterAttributes.None, module.TypeSystem.Int32));
+        add.Parameters.Add(new ParameterDefinition("right", ParameterAttributes.None, module.TypeSystem.Int32));
+        add.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
+        add.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_2));
+        add.Body.Instructions.Add(Instruction.Create(OpCodes.Add));
+        add.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(add);
+
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        return (assembly, host, add);
+    }
+
     private static MethodHandler HandlerOf(TypeHandler host, string name) => (MethodHandler) host.GetMethod(name)!;
 
     private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
@@ -358,6 +388,20 @@ public class AroundBodyTests
         var identity = assembly.Load().GetType($"{Ns}.Host")!.GetMethod("Identity")!.MakeGenericMethod(typeof(string));
 
         Assert.That(identity.Invoke(null, ["hello"]), Is.EqualTo("hello"));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Member_Of_A_Generic_Type_Proceeds_Into_The_Member()
+    {
+        // The call of the body which was taken over stands in a body whose type declares a parameter of its own, and a
+        // call of a method of a type which stands open is one which the runtime refuses to run: the call names the
+        // instantiation which the body is a member of instead.
+        var (assembly, host, _) = NewGenericTypeHost("AroundBodyOfAGenericTypeAssembly");
+        HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.DoubleThenProceedThenAddOne)));
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!.MakeGenericType(typeof(int));
+
+        Assert.That(type.GetMethod("Add")!.Invoke(Activator.CreateInstance(type), [3, 4]), Is.EqualTo(15));
     }
 
     [Test]

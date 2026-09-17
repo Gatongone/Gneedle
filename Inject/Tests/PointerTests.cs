@@ -33,6 +33,17 @@ public class PointerTests
         public int PublicProperty { get; set; }
     }
 
+    /// <summary>
+    /// The same, of a type which declares a parameter of its own: every member which a template reaches through an
+    /// instance of it belongs to the definition of the type, which is what the body which is woven cannot name.
+    /// </summary>
+    public class GenericHelper<T>
+    {
+        public int Calc(int a) => a * 2;
+        public int PublicField;
+        public int PublicProperty => 42;
+    }
+
     // The templates live in the test assembly, so that Cecil resolves them from disk, and each names a member of the
     // type being woven through one placeholder. The type argument of a placeholder tells the member type.
 
@@ -327,6 +338,16 @@ public class PointerTests
         // Static.Property get/set
         public static int StaticProperty_Get() => Static.From("Gneedle.Test.Generated.LocalStatic").Property<int>("StaticProperty").Get();
         public static void StaticProperty_Set(int v) => Static.From("Gneedle.Test.Generated.LocalStatic").Property<int>("StaticProperty").Set(v);
+
+        /// <summary>
+        /// The instance of <c>Instance</c> is one of a type which declares a parameter of its own, which the template
+        /// names as an instantiation of it: the member belongs to the definition of the type, and the call holds what
+        /// the template declared rather than that definition.
+        /// </summary>
+        public static int InstanceMethod_OfAGenericType(GenericHelper<int> helper, int a) => new Instance(helper).Method<IntOp>("Calc")(a);
+
+        /// <inheritdoc cref="InstanceMethod_OfAGenericType"/>
+        public static int InstanceProperty_OfAGenericType(GenericHelper<int> helper) => new Instance(helper).Property<int>("PublicProperty").Get();
     }
 
     private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
@@ -774,6 +795,132 @@ public class PointerTests
         // The setter's parameter type should be the generic parameter T.
         var param = ((MethodReference) call!.Operand).Parameters[0];
         Assert.That(param.ParameterType, Is.InstanceOf<GenericParameter>());
+    }
+
+    #endregion
+
+    #region This: a member of a generic type which is run
+
+    /// <summary>
+    /// Create a host which is generic in one parameter, which declares <c>int Add(int a, int b)</c> and a property whose
+    /// accessors read and write a field, so that a member of a generic type has one of every shape which a template
+    /// reaches to be called and run.<para/>
+    /// The members belong to the definition of the type, and the runtime refuses to run a call of a method of a type
+    /// which stands open, which is what a test which loads the assembly sees and an assertion on the instructions alone
+    /// does not.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly, which a test which runs its host gives one of its own.</param>
+    private static TypeHandler NewRunnableGenericHost(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
+                                        .WithGenericParameter("T")
+                                        .GetHandler();
+        var module = host.Source.Module;
+
+        var add = new MethodDefinition("Add", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Int32) { DeclaringType = host.Source };
+        add.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, module.TypeSystem.Int32));
+        add.Parameters.Add(new ParameterDefinition("b", ParameterAttributes.None, module.TypeSystem.Int32));
+        var addIl = add.Body.GetILProcessor();
+        addIl.Emit(OpCodes.Ldarg_1); addIl.Emit(OpCodes.Ldarg_2); addIl.Emit(OpCodes.Add); addIl.Emit(OpCodes.Ret);
+        host.Source.Methods.Add(add);
+
+        var value = new FieldDefinition("m_Value", FieldAttributes.Private, module.TypeSystem.Int32);
+        host.Source.Fields.Add(value);
+
+        var accessorAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+        var getter = new MethodDefinition("get_Prop", accessorAttributes, module.TypeSystem.Int32) { DeclaringType = host.Source };
+        var getterIl = getter.Body.GetILProcessor();
+        getterIl.Emit(OpCodes.Ldarg_0); getterIl.Emit(OpCodes.Ldfld, value); getterIl.Emit(OpCodes.Ret);
+
+        var setter = new MethodDefinition("set_Prop", accessorAttributes, module.TypeSystem.Void) { DeclaringType = host.Source };
+        setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int32));
+        var setterIl = setter.Body.GetILProcessor();
+        setterIl.Emit(OpCodes.Ldarg_0); setterIl.Emit(OpCodes.Ldarg_1); setterIl.Emit(OpCodes.Stfld, value); setterIl.Emit(OpCodes.Ret);
+
+        host.Source.Methods.Add(getter);
+        host.Source.Methods.Add(setter);
+        host.Source.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, module.TypeSystem.Int32) { GetMethod = getter, SetMethod = setter });
+        return host;
+    }
+
+    [Test]
+    public void A_Call_Of_A_Member_Of_A_Generic_Type_Runs_The_Member()
+    {
+        var host = NewRunnableGenericHost("GenericMemberCallAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
+                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeInstanceMethod)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4]), Is.EqualTo(7));
+    }
+
+    [Test]
+    public void A_Delegate_Of_A_Member_Of_A_Generic_Type_Runs_The_Member()
+    {
+        var host = NewRunnableGenericHost("GenericMemberDelegateAssembly");
+        var method = host.AddMethod("Run", typeof(ThisMethodTemplates.IntBinaryOp).ToGneedleType(), [], [], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.GetInstanceMethodDelegate)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+        var built = (Delegate) type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), null)!;
+
+        Assert.That(built.DynamicInvoke(3, 4), Is.EqualTo(7));
+    }
+
+    [Test]
+    public void A_Property_Of_A_Generic_Type_Reads_And_Writes_It()
+    {
+        var host = NewRunnableGenericHost("GenericMemberPropertyAssembly");
+        var read = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        read.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty)));
+
+        var call = ((MethodHandler) read).Source.Body.Instructions.First(instruction => instruction.Operand is MethodReference { Name: "get_Prop" });
+        Assert.That(((MethodReference) call.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the accessor is called on the definition of the generic type rather than on the instantiation of it.");
+
+        var write = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        write.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+        var instance = Activator.CreateInstance(type);
+        type.GetMethod("Write")!.Invoke(instance, [41]);
+
+        Assert.That(type.GetMethod("Read")!.Invoke(instance, null), Is.EqualTo(41));
+    }
+
+    [Test]
+    public void A_Member_Of_A_Generic_Base_Type_Runs_On_The_Type_Which_Derives_From_It()
+    {
+        var asm = Assembly.Create("GenericBaseMemberAssembly");
+        var mod = asm.Source.MainModule;
+        var baseDef = new TypeDefinition(Ns, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
+        baseDef.GenericParameters.Add(new GenericParameter("T", baseDef));
+        var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+        calc.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, mod.TypeSystem.Int32));
+        var calcIl = calc.Body.GetILProcessor();
+        calcIl.Emit(OpCodes.Ldarg_1); calcIl.Emit(OpCodes.Ret);
+        baseDef.Methods.Add(calc);
+        mod.Types.Add(baseDef);
+
+        var host = (TypeHandler) ((AssemblyHandler) asm.Handler).AddClass("Host", Ns, ClassFlags.Public)
+                                                                .WithGenericParameter("T")
+                                                                .GetHandler();
+        // The host hands the parameter which it declares itself down to its base, which is what the body of a member of
+        // it names where it reaches the base: the parameter of the base stands for the parameter of the host.
+        var baseInstance = new GenericInstanceType(baseDef);
+        baseInstance.GenericArguments.Add(host.Source.GenericParameters[0]);
+        host.Source.BaseType = baseInstance;
+
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod)));
+
+        var type = LoadHostOf(asm, host).MakeGenericType(typeof(int));
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
     }
 
     #endregion
@@ -1624,6 +1771,31 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper, 16]), Is.EqualTo(42),
                     "the body which held the locals was not woven into the member which runs.");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Generic_Type_Runs_The_Member()
+    {
+        // The instance is one of a type which declares a parameter of its own, and its member belongs to the definition
+        // of that type: the call names the instantiation which the template declared, which is the type of the value
+        // the member is reached through rather than a type of the body which is woven.
+        var (_, host, method) = NewInstanceHost("InstanceGenericTypeAssembly", [typeof(GenericHelper<int>), typeof(int)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAGenericType)));
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new GenericHelper<int>(), 21]), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void InstanceProperty_Of_A_Generic_Type_Runs_The_Accessor()
+    {
+        var (_, host, method) = NewInstanceHost("InstanceGenericPropertyAssembly", [typeof(GenericHelper<int>)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_OfAGenericType)));
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new GenericHelper<int>()]), Is.EqualTo(42));
     }
 
     #endregion
