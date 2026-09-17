@@ -859,6 +859,10 @@ partial class MethodHandler
             // looked for when the argument is the value which a call hands over.
             Code.Box or Code.Unbox_Any or Code.Castclass or Code.Isinst when ins.Operand is TypeReference cast => cast, // Cast
             Code.Ldfld or Code.Ldsfld when ins.Operand is FieldReference field                     => field.FieldType,                    // Field
+            // The instructions which load the address of an argument or of a local rather than the value it holds, which
+            // is what a template writes where it hands one to a member by `ref` or `out`: what stands on the stack is an
+            // address of that type rather than a value of it, which is the type the delegate declares the argument as.
+            Code.Ldarga or Code.Ldarga_S or Code.Ldloca or Code.Ldloca_S                           => GetAddressType(ins, targetDef),     // Address
             Code.Newobj when ins.Operand is MethodReference ctor                                   => ctor.DeclaringType,                 // Newobj
             Code.Call or Code.Callvirt or Code.Ldftn when ins.Operand is MethodReference methodRef => ResolveMethodReturnType(methodRef), // Call
             _                                                                                      => GetArgType(ins, targetDef)          // Args
@@ -880,14 +884,46 @@ partial class MethodHandler
         if (!instruction.TryGetLdargIndex(!isStatic, out var slot)) return null;
         if (!isStatic && slot == 0) return targetDef.DeclaringType;
 
-        // The load may name a slot which the template holds no parameter for, which is a body the weaving refuses with a
-        // message of its own rather than a type to compare against.
-        var position = slot - (isStatic ? 0 : 1);
-        if (position < 0 || position >= targetDef.Parameters.Count) return null;
-
         // The parameter of a template is a token when it stands for a generic parameter of the method being woven, just
         // as the parameter of a delegate is, so it is parsed to that parameter before the type is compared with anything.
-        return targetDef.Parameters[position].ParameterType.ParseGenericTokens(Source, Source.Module);
+        // The load may name a slot which the template holds no parameter for, which is a body the weaving refuses with a
+        // message of its own rather than a type to compare against.
+        return ArgumentAt(slot, targetDef)?.ParseGenericTokens(Source, Source.Module);
+    }
+
+    /// <summary>
+    /// The type of the address which an instruction which reads the address of a value leaves on the stack, which is the
+    /// type of the value that the address is of, by reference.
+    /// </summary>
+    /// <param name="ins">The instruction which reads the address.</param>
+    /// <param name="targetDef">The template which the instruction belongs to, whose arguments and locals the operand names.</param>
+    /// <returns>The type of the address, or null when the operand names no argument and no local.</returns>
+    private TypeReference? GetAddressType(Instruction ins, MethodDefinition targetDef)
+    {
+        var readsAnArgument = ins.OpCode.Code is Code.Ldarga or Code.Ldarga_S;
+        var addressed = ins.Operand switch
+        {
+            VariableReference local     => local.VariableType,
+            ParameterReference argument => argument.ParameterType,
+            int slot when readsAnArgument => ArgumentAt(slot, targetDef),
+            int slot when slot >= 0 && slot < targetDef.Body.Variables.Count => targetDef.Body.Variables[slot].VariableType,
+            _ => null
+        };
+
+        return addressed is { } type ? new ByReferenceType(type.ParseGenericTokens(Source, Source.Module)) : null;
+    }
+
+    /// <summary>
+    /// The type of the argument which a slot names, the receiver being the slot which is taken first where the template
+    /// belongs to an instance.
+    /// </summary>
+    /// <param name="slot">Slot of the argument.</param>
+    /// <param name="targetDef">The template whose arguments the slot is read against.</param>
+    /// <returns>The type of the argument, or null when the slot names none of them.</returns>
+    private static TypeReference? ArgumentAt(int slot, MethodDefinition targetDef)
+    {
+        var position = slot - (targetDef.IsStatic ? 0 : 1);
+        return position >= 0 && position < targetDef.Parameters.Count ? targetDef.Parameters[position].ParameterType : null;
     }
 
     /// <summary>

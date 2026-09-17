@@ -210,6 +210,26 @@ public class PointerTests
 
         // bool literal true compiles to `ldc.i4.1` — same IL as int 1.
         public static bool InvokeBoolLiteral() => This.Method<BoolOp>("Echo")(true);
+
+        // The member takes an argument by address rather than by value, which the template writes by handing it a local
+        // with the `out` modifier: what stands on the stack where the delegate is called is the address of the local.
+        public delegate bool TryOp(int value, out int half);
+
+        public static int InvokeWithAnOutArgument(int value)
+        {
+            This.Method<TryOp>("TryHalf")(value, out var half);
+            return half;
+        }
+
+        public delegate void RefOp(ref int value);
+
+        // The same, of an argument which the member writes back into: the address which is handed over is the address of
+        // the argument of the template itself rather than of a local which it holds.
+        public static int InvokeWithARefArgument(int value)
+        {
+            This.Method<RefOp>("BumpByRef")(ref value);
+            return value;
+        }
     }
 
     /// <summary>
@@ -1020,6 +1040,91 @@ public class PointerTests
                                  && ((MethodReference) i.Operand).Name == "Add"), Is.True);
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+    }
+
+    /// <summary>
+    /// Create a host which declares a real instance method <c>bool TryHalf(int, out int)</c>, which hands back half of
+    /// the value it is given, and a real instance method <c>void BumpByRef(ref int)</c>, so that a template which hands
+    /// an argument of its own to one of them by address has a member to be rewritten to.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAnArgumentTakenByAddress(string assemblyName = "MethodInjectionByRefAssembly")
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var module = host.Source.Module;
+        var tryHalf = new MethodDefinition("TryHalf", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Boolean)
+        {
+            DeclaringType = host.Source,
+        };
+        tryHalf.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int32));
+        tryHalf.Parameters.Add(new ParameterDefinition("half", ParameterAttributes.Out, new ByReferenceType(module.TypeSystem.Int32)));
+        var il = tryHalf.Body.GetILProcessor();
+        il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4_2); il.Emit(OpCodes.Div);
+        il.Emit(OpCodes.Stind_I4); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Ret);
+        host.Source.Methods.Add(tryHalf);
+
+        var bump = new MethodDefinition("BumpByRef", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
+        {
+            DeclaringType = host.Source,
+        };
+        bump.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, new ByReferenceType(module.TypeSystem.Int32)));
+        var bumpIl = bump.Body.GetILProcessor();
+        bumpIl.Emit(OpCodes.Ldarg_1); bumpIl.Emit(OpCodes.Ldarg_1); bumpIl.Emit(OpCodes.Ldind_I4); bumpIl.Emit(OpCodes.Ldc_I4_1);
+        bumpIl.Emit(OpCodes.Add); bumpIl.Emit(OpCodes.Stind_I4); bumpIl.Emit(OpCodes.Ret);
+        host.Source.Methods.Add(bump);
+        return host;
+    }
+
+    [Test]
+    public void InvokeWithAnArgumentWhichIsHandedByAddress_Rewrites_To_Direct_Call()
+    {
+        // A template which hands an argument of its own to a member by `ref` or `out` writes the address of the local
+        // which holds it rather than the value itself, and the walk of the stack modelled neither of the instructions
+        // which take an address: the call of the delegate popped as many arguments as the delegate declares where the
+        // walk had left the stack holding fewer, and the weaving threw out of the walk rather than rewriting the call.
+        var host = NewHostWithAnArgumentTakenByAddress();
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAnOutArgument)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "TryHalf"), Is.True,
+                    "the delegate was not rewritten to a direct call to TryHalf.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [9]), Is.EqualTo(4));
+    }
+
+    [Test]
+    public void InvokeWithTheAddressOfAnArgumentOfItsOwn_Rewrites_To_Direct_Call()
+    {
+        // The address which the template hands over is of an argument of its own here rather than of a local it holds,
+        // which is another of the two instructions which take an address and another operand to read the type off.
+        var host = NewHostWithAnArgumentTakenByAddress("MethodInjectionByRefArgumentAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "BumpByRef"), Is.True,
+                    "the delegate was not rewritten to a direct call to BumpByRef.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, [41]), Is.EqualTo(42));
     }
 
     /// <summary>
