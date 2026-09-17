@@ -60,13 +60,18 @@ public static class AssemblyLoader
     /// <summary>
     /// Load the assembly of <paramref name="rawBytes"/> and remember those bytes.
     /// </summary>
+    /// <remarks>
+    /// The image is loaded into a context of its own where the runtime holds one, which is what reads the assemblies of
+    /// the weaver where the weaving which reads them lies, and into the one the runtime makes for it where it does not:
+    /// see <see cref="WeavingContext"/> for what that answers.
+    /// </remarks>
     /// <param name="rawBytes">Bytes that is a COFF-based image containing a managed assembly.</param>
     /// <returns>The loaded assembly.</returns>
     public static System.Reflection.Assembly LoadFromBytes(byte[] rawBytes)
     {
         RegisterWeaverAssemblies();
 
-        var assembly = System.Reflection.Assembly.Load(rawBytes);
+        var assembly = WeavingContext.Load(rawBytes) ?? System.Reflection.Assembly.Load(rawBytes);
         Remember(assembly, rawBytes);
 
         // The assembly is marked as one of the targets, which is what the resolution below answers to. It is marked
@@ -92,7 +97,10 @@ public static class AssemblyLoader
     /// The assemblies are answered with the ones which are loaded rather than read again from the folder they lie in,
     /// because a type of the target which implements an interface of the weaver has to implement the very interface
     /// which the weaver holds: a second copy of the assembly would hold a second interface, and a type of it would
-    /// implement that one.
+    /// implement that one.<para/>
+    /// The resolution of the process cannot answer a copy of the weaver which lies in a collectible context, which the
+    /// runtime refuses an assembly of: a host which loads the weaver that way - the post processor of Unity - is answered
+    /// by the context which the image was loaded into instead, which is where the weaving reads the assembly from.
     /// </remarks>
     private static void RegisterWeaverAssemblies()
     {
