@@ -205,5 +205,66 @@ public class AssemblyTests
         }
     }
 
+    [Test]
+    public void Written_Back_Over_The_File_It_Was_Read_From_An_Assembly_Keeps_The_Bodies_Of_Its_Methods()
+    {
+        // The reader reads the body of a method out of the file as it is asked for rather than holding it, and the
+        // write goes over the very file the assembly was read from: an image which is opened for writing is taken to
+        // nothing where it is opened, so a body which is read afterwards is read out of the image which is being
+        // written in place of the one which was woven, and what is written in its place is that.
+        var directory = Path.Combine(Path.GetTempPath(), $"Gneedle.Inject.Test.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "WovenInPlace.dll");
+
+        try
+        {
+            // The assembly of the tests is written as the file, because it is an assembly of methods which no test
+            // wrote by hand, which is what tells a body which was read out of the file from one which was not.
+            File.Copy(typeof(AssemblyTests).Assembly.Location, path);
+            var before = Bodies(path);
+            Assert.That(before, Is.Not.Empty, "the assembly which is written over holds no body for the read to lose.");
+
+            using (var assembly = Assembly.Read(path))
+            {
+                ((AssemblyHandler) assembly.Handler).AddClass("Added", Ns, ClassFlags.Public).GetHandler();
+                assembly.SaveTo(path);
+            }
+
+            using var reread = AssemblyDefinition.ReadAssembly(path, new ReaderParameters {ReadSymbols = false});
+            Assert.That(reread.MainModule.GetType($"{Ns}.Added"), Is.Not.Null,
+                        "the type which was described is not in the file which the assembly was written back to.");
+
+            var after = Bodies(path);
+            var changed = before.Where(body => !after.TryGetValue(body.Key, out var written) || written != body.Value).Select(body => body.Key).ToArray();
+            Assert.That(changed, Is.Empty,
+                        "the bodies of the methods which were not woven were read out of the file after the write took it to nothing.");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The body of every method of the assembly which a file holds, by the name of the method, as the instructions
+    /// which it is written as.
+    /// </summary>
+    /// <param name="path">Path of the file which holds the assembly.</param>
+    /// <returns>The bodies of the methods of the assembly.</returns>
+    private static Dictionary<string, string> Bodies(string path)
+    {
+        var bodies = new Dictionary<string, string>();
+        using var assembly = AssemblyDefinition.ReadAssembly(path, new ReaderParameters {ReadSymbols = false});
+        foreach (var type in assembly.MainModule.GetTypes())
+        {
+            foreach (var method in type.Methods.Where(method => method.HasBody))
+            {
+                bodies[$"{type.FullName}.{method.Name}"] = string.Join(" ", method.Body.Instructions.Select(instruction => $"{instruction.OpCode}{instruction.Operand}"));
+            }
+        }
+
+        return bodies;
+    }
+
     #endregion
 }
