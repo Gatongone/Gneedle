@@ -7,8 +7,9 @@ namespace Gneedle.Aspect;
 /// member which writes an element tells the caller that it did, because the project is written back to its file only
 /// when something about it changed.<para/>
 /// What is read is read the way the build of that project reads it, because the two have to agree on what the project
-/// says: the names of properties and of items, and the name which a package is referred to by, are read without regard
-/// to the case of the letters in them, and a property holds the value which the last group that sets it gives.
+/// says: the names of properties, of items, and of targets, and the name which a package is referred to by, are read
+/// without regard to the case of the letters in them, and a property holds the value which the last group that sets it
+/// gives.
 /// </summary>
 internal static class ProjectExtensions
 {
@@ -85,7 +86,9 @@ internal static class ProjectExtensions
     /// The target is found by the name which this package writes it under rather than by the event it runs on: a target
     /// which a project declares under another name is one which the package did not write, and which it cannot take
     /// back out again as a whole, so the target of the package is added beside it rather than a task of the package
-    /// being written into it.
+    /// being written into it. That name is read the way the build reads it, without regard to the case of the letters in
+    /// it: a build reads two targets of one name as one target, so a second one written beside the first is a target
+    /// which the build passes over.
     /// </summary>
     /// <param name="root">The project which is read.</param>
     /// <param name="name">Name of the target which is asked for.</param>
@@ -95,7 +98,7 @@ internal static class ProjectExtensions
     {
         const string postBuildEvent = "PostBuildEvent";
 
-        var target = root.Targets.FirstOrDefault(target => target.Name.Equals(name, StringComparison.Ordinal));
+        var target = root.Targets.FirstOrDefault(target => target.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         isChanged = target == null;
         target ??= root.AddTarget(name);
 

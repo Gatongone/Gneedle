@@ -412,6 +412,68 @@ public class AddProjectsPostBuildTests
                     "a project which refers to the weaver was not woven.");
     }
 
+    [Test]
+    public void A_Target_Which_Is_Spelled_In_Another_Case_Is_Written_Where_It_Is()
+    {
+        // A target is named the way the build names it, without regard to the case of the letters in it: the target
+        // which the package wrote once is found where a project spells it another way, and is written where it stands
+        // rather than a second target of the name being added beside it. A build reads the two as one target, the last
+        // of them, so the one it passes over is left dead in the file while the project is read as holding both.
+        var project = WriteProjectAsWritten("App", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net5.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="..\Gneedle.Aspect.csproj" />
+              </ItemGroup>
+              <Target Name="gneedletarget">
+                <AssemblyInject TargetPath="$(Stale)" ProjectPath="$(ProjectPath)" KeepWeaver="$(KeepWeaver)" />
+              </Target>
+              <UsingTask TaskName="Gneedle.Aspect.AssemblyInject" AssemblyFile="C:\packages\Gneedle.Aspect\tools\netstandard2.1\Gneedle.Aspect.dll" />
+            </Project>
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        var written = XDocument.Load(project);
+        Assert.That(written.Descendants().Count(element => element.Name.LocalName == "Target"), Is.EqualTo(1),
+                    "a second target was added to a project which already held the target of the package.");
+        var woven = Target(written, "gneedletarget");
+        Assert.That(woven, Is.Not.Null, "the target which the project held was taken out of it.");
+        Assert.That((string?) woven!.Attribute("AfterTargets"), Is.EqualTo("PostBuildEvent"),
+                    "the target which was found was not given the event which the package runs it on.");
+        Assert.That(Runs(woven, "AssemblyInject"), Is.True, "the target which weaves runs no task which weaves.");
+        Assert.That(File.ReadAllText(project), Does.Not.Contain("$(Stale)"),
+                    "a parameter which no longer holds what the package writes was left as it was.");
+    }
+
+    [Test]
+    public void A_Target_Which_Is_Spelled_In_Another_Case_Is_Taken_Out_Again()
+    {
+        // The target is taken back out of a project which stopped referring to the weaver, and it is found by its name
+        // the way the build reads that name, whatever case the letters of it are written in.
+        var project = WriteProjectDeclaring("App", """
+            <PropertyGroup>
+              <TargetFramework>net5.0</TargetFramework>
+            </PropertyGroup>
+            <Target Name="gneedletarget" AfterTargets="PostBuildEvent">
+              <AssemblyInject TargetPath="$(TargetPath)" ProjectPath="$(ProjectPath)" KeepWeaver="$(KeepWeaver)" />
+            </Target>
+            <UsingTask TaskName="Gneedle.Aspect.AssemblyInject" AssemblyFile="C:\packages\Gneedle.Aspect\tools\netstandard2.1\Gneedle.Aspect.dll" />
+
+            """);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(project), Does.Not.Contain("gneedletarget"),
+                    "the target which the package wrote was left in a project which no longer refers to the weaver.");
+    }
+
     #endregion
 
     #region What the task reports

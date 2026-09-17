@@ -167,7 +167,10 @@ public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
     private bool CleanElements(ProjectRootElement project)
     {
         var removed = false;
-        var target = project.Targets.FirstOrDefault(target => target.Name.Equals(TaskConstants.TARGET));
+
+        // The target is found by its name the way the build reads that name, whatever case the project spells it in: a
+        // target which the package wrote once is the one which is taken back out, however it was written.
+        var target = project.Targets.FirstOrDefault(target => target.Name.Equals(TaskConstants.TARGET, StringComparison.OrdinalIgnoreCase));
         if (target != null)
         {
             removed = true;
