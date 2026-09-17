@@ -47,6 +47,10 @@ public class PointerTests
         public static void WriteStaticField(int v) => This.Field<int>("Value").Set(v);
         public static int ReadMissingField() => This.Field<int>("Missing").Get();
 
+        // The field is read and written in one expression, so that the accessor of the read stands between the
+        // placeholder of the write and the accessor which the write is written to.
+        public static void AddOneToInstanceField() => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + 1);
+
         public static int ReadInstanceProperty() => This.Property<int>("Prop").Get();
         public static void WriteInstanceProperty(int v) => This.Property<int>("Prop").Set(v);
 
@@ -230,9 +234,10 @@ public class PointerTests
     /// <summary>
     /// Create a host which declares a field of the given name, which is static when it is asked for.
     /// </summary>
-    private static TypeHandler NewHostWithField(string fieldName, bool isStatic)
+    /// <param name="assemblyName">Name of the assembly to build, which a test which runs its host gives one of its own.</param>
+    private static TypeHandler NewHostWithField(string fieldName, bool isStatic, string assemblyName = "MemberInjectionAssembly")
     {
-        var handler = (AssemblyHandler) Assembly.Create("MemberInjectionAssembly").Handler;
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
         var attrs = FieldAttributes.Public | (isStatic ? FieldAttributes.Static : 0);
         host.Source.Fields.Add(new FieldDefinition(fieldName, attrs, host.Source.Module.TypeSystem.Int32));
@@ -269,6 +274,34 @@ public class PointerTests
 
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld), Is.True);
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld), Is.False);
+    }
+
+    [Test]
+    public void A_Template_Which_Reads_And_Writes_A_Field_Writes_The_Field_It_Read()
+    {
+        // The two placeholders name the same field, and the accessor which each is paired with is the one which the
+        // value it pushed is the receiver of: the write used to be paired with the read of the inner placeholder,
+        // because the read is the first accessor after the name, and the parse then refused the second of them.
+        var host = NewHostWithField("Value", isStatic: false, "FieldReadAndWriteAssembly");
+        var ins = Rewrite(host, "Bump", typeof(void), [], nameof(ThisMemberTemplates.AddOneToInstanceField), MethodFlags.Public);
+
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(1), "the field was not read exactly once.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
+
+        var assembly = host.AssemblyHandler.Assembly;
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type);
+        type.GetField("Value")!.SetValue(instance, 41);
+        type.GetMethod("Bump")!.Invoke(instance, null);
+
+        Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(42));
     }
 
     [Test]

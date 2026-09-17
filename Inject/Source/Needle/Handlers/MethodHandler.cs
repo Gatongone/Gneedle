@@ -1097,33 +1097,168 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
-    /// Try to get the nearest `call` instruction of `ValuableMember.Get` or `ValuableMember.Set` after the start index, and check if it's a `get` or `set` accessor.
+    /// Try to get the accessor of the placeholder which is written where the value was pushed, which is the call of
+    /// `ValuableMember.Get` or `ValuableMember.Set` that the value is the receiver of.<para/>
+    /// The accessor of another placeholder may stand between the two, and it is the one which its own value is the
+    /// receiver of: the values which the instructions between push and take off the stack are counted, and the accessor
+    /// which is looked for is the one which is reached with exactly as many values above the placeholder's own as it
+    /// takes arguments. An instruction whose count the walk cannot tell ends it, and what the first accessor of the body
+    /// is stands for the one which was looked for.
     /// </summary>
     /// <param name="bodyInstructions">The instruction collection to search.</param>
-    /// <param name="startIndex">The start index to search from.</param>
+    /// <param name="startIndex">The index of the instruction which follows the call which pushed the value.</param>
     /// <param name="isGet">Output whether the accessor is `get` or `set`.</param>
     /// <param name="index">Output the index of the `call` instruction if found.</param>
     /// <returns>True if the `call` instruction of `ValuableMember.Get` or `ValuableMember.Set` is found; otherwise, false.</returns>
     private static bool TryGetNextGetOrSet(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index)
     {
+        // How many values stand on the stack above the one which the placeholder pushed. Every push counts up and every
+        // take counts down, and a count below zero is one which took the placeholder's value itself off the stack.
+        var above = 0;
+        for (var i = startIndex; i < bodyInstructions.Count; i++)
+        {
+            if (IsAnAccessor(bodyInstructions[i], out var accessorIsGet))
+            {
+                if (above == (accessorIsGet ? 0 : 1))
+                {
+                    isGet = accessorIsGet;
+                    index = i;
+                    return true;
+                }
+
+                // The accessor of a value which is not this one: it takes the receiver off the stack and leaves the
+                // value which it reads there, or nothing at all where it writes one.
+                above += accessorIsGet ? 0 : -2;
+                continue;
+            }
+
+            if (StackDelta(bodyInstructions[i]) is not { } delta || above + delta < 0) break;
+            above += delta;
+        }
+
+        return TryGetFirstGetOrSet(bodyInstructions, startIndex, out isGet, out index);
+    }
+
+    /// <summary>
+    /// The first accessor of the body after the start index, which is what the value of a placeholder stood for before
+    /// the accessors were told apart from each other.
+    /// </summary>
+    /// <param name="bodyInstructions">The instruction collection to search.</param>
+    /// <param name="startIndex">The start index to search from.</param>
+    /// <param name="isGet">Output whether the accessor is `get` or `set`.</param>
+    /// <param name="index">Output the index of the `call` instruction if found.</param>
+    /// <returns>True if an accessor is found; otherwise, false.</returns>
+    private static bool TryGetFirstGetOrSet(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index)
+    {
         isGet = false;
         for (var i = startIndex; i < bodyInstructions.Count; i++)
         {
-            if (bodyInstructions[i].OpCode != OpCodes.Callvirt || bodyInstructions[i].Operand is not MethodReference
-            {
-                DeclaringType:
-                {
-                    Name     : nameof(ValuableMember) or nameof(ValuableMember) + "`1",
-                    Namespace: nameof(Gneedle) + "." + nameof(Inject)
-                }
-            } method) continue;
-            if (method.Name.Equals(nameof(ValuableMember.Get))) isGet = true;
+            if (!IsAnAccessor(bodyInstructions[i], out var accessorIsGet)) continue;
+
+            isGet = accessorIsGet;
             index = i;
             return true;
         }
 
         index = 0;
         return false;
+    }
+
+    /// <summary>
+    /// Whether an instruction is the call of an accessor of a value member, which is what reads or writes the field or
+    /// the property which a placeholder stands for.
+    /// </summary>
+    /// <param name="instruction">The instruction which is read.</param>
+    /// <param name="isGet">Output whether the accessor reads the member rather than writing it.</param>
+    /// <returns>Whether the instruction is such a call.</returns>
+    private static bool IsAnAccessor(Instruction instruction, out bool isGet)
+    {
+        isGet = false;
+        if (instruction.OpCode != OpCodes.Callvirt || instruction.Operand is not MethodReference
+            {
+                DeclaringType:
+                {
+                    Name     : nameof(ValuableMember) or nameof(ValuableMember) + "`1",
+                    Namespace: nameof(Gneedle) + "." + nameof(Inject)
+                }
+            } method) return false;
+
+        if (method.Name is not (nameof(ValuableMember.Get) or nameof(ValuableMember.Set))) return false;
+
+        isGet = method.Name.Equals(nameof(ValuableMember.Get));
+        return true;
+    }
+
+    /// <summary>
+    /// The number of values which an instruction leaves on the stack, counted against the number it takes off it, or
+    /// null when the walk cannot tell.<para/>
+    /// The count is what tells the accessor of a placeholder from the accessor of one which is written inside the
+    /// expression of it, and what tells an expression which is written beside a delegate from the call of it. It is read
+    /// off the instruction alone rather than off the member it names where the instruction carries one, which is what
+    /// lets the count be carried over a member the assembly being woven cannot resolve.
+    /// </summary>
+    /// <param name="instruction">The instruction which is counted.</param>
+    /// <returns>The count, or null when the instruction is not one which the walk reads.</returns>
+    private static int? StackDelta(Instruction instruction)
+    {
+        var code = instruction.OpCode.Code;
+        switch (code)
+        {
+            // The loads, which push one value each.
+            case Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg or Code.Ldarg_S
+                or Code.Ldloc_0 or Code.Ldloc_1 or Code.Ldloc_2 or Code.Ldloc_3 or Code.Ldloc or Code.Ldloc_S
+                or Code.Ldarga or Code.Ldarga_S or Code.Ldloca or Code.Ldloca_S
+                or Code.Ldc_I4_M1 or Code.Ldc_I4_0 or Code.Ldc_I4_1 or Code.Ldc_I4_2 or Code.Ldc_I4_3 or Code.Ldc_I4_4
+                or Code.Ldc_I4_5 or Code.Ldc_I4_6 or Code.Ldc_I4_7 or Code.Ldc_I4_8 or Code.Ldc_I4 or Code.Ldc_I4_S
+                or Code.Ldc_I8 or Code.Ldc_R4 or Code.Ldc_R8 or Code.Ldstr or Code.Ldnull or Code.Ldftn or Code.Ldtoken
+                or Code.Ldfld or Code.Ldsfld or Code.Ldflda or Code.Ldsflda or Code.Ldobj or Code.Ldlen
+                or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8 or Code.Ldind_I or Code.Ldind_R4
+                or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2 or Code.Ldind_U4 or Code.Sizeof:
+                return 1;
+
+            // The stores and the pop, which take one value each.
+            case Code.Starg or Code.Starg_S or Code.Stloc or Code.Stloc_S or Code.Stloc_0 or Code.Stloc_1
+                or Code.Stloc_2 or Code.Stloc_3 or Code.Stfld or Code.Stsfld or Code.Stobj
+                or Code.Stind_I or Code.Stind_I1 or Code.Stind_I2 or Code.Stind_I4 or Code.Stind_I8 or Code.Stind_R4
+                or Code.Stind_R8 or Code.Stind_Ref or Code.Pop:
+                return -1;
+
+            // The instructions which leave what they were handed, of another type.
+            case Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_I8 or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2
+                or Code.Conv_Ovf_I4 or Code.Conv_Ovf_I8 or Code.Conv_Ovf_U1 or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4
+                or Code.Conv_Ovf_U8 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un or Code.Conv_R4 or Code.Conv_R8
+                or Code.Conv_R_Un or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4 or Code.Conv_U8
+                or Code.Conv_I or Code.Conv_U or Code.Neg or Code.Not
+                or Code.Box or Code.Unbox or Code.Unbox_Any or Code.Castclass or Code.Isinst or Code.Ckfinite:
+                return 0;
+
+            // The instructions which take two values and leave one.
+            case Code.Add or Code.Sub or Code.Mul or Code.Div or Code.Div_Un or Code.Rem or Code.Rem_Un
+                or Code.And or Code.Or or Code.Xor or Code.Shl or Code.Shr or Code.Shr_Un
+                or Code.Ceq or Code.Cgt or Code.Cgt_Un or Code.Clt or Code.Clt_Un
+                or Code.Ldelem_Any or Code.Ldelem_I or Code.Ldelem_I1 or Code.Ldelem_I2 or Code.Ldelem_I4
+                or Code.Ldelem_I8 or Code.Ldelem_R4 or Code.Ldelem_R8 or Code.Ldelem_Ref or Code.Ldelem_U1
+                or Code.Ldelem_U2 or Code.Ldelem_U4:
+                return -1;
+
+            // The instructions which take three values and leave none.
+            case Code.Stelem_Any or Code.Stelem_I or Code.Stelem_I1 or Code.Stelem_I2 or Code.Stelem_I4
+                or Code.Stelem_I8 or Code.Stelem_R4 or Code.Stelem_R8 or Code.Stelem_Ref:
+                return -3;
+
+            case Code.Dup or Code.Newarr:
+                return 1;
+
+            // A call takes the arguments which the reference names, which the signature counts without resolving the
+            // member they are named on, and leaves what it hands back.
+            case Code.Call or Code.Callvirt or Code.Newobj when instruction.Operand is MethodReference method:
+                var taken = method.Parameters.Count + (method.HasThis && code != Code.Newobj ? 1 : 0);
+                var left = code == Code.Newobj || method.ReturnType.MetadataType != MetadataType.Void ? 1 : 0;
+                return left - taken;
+
+            default:
+                return null;
+        }
     }
 
     /// <summary>
