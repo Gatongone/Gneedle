@@ -94,11 +94,7 @@ internal static class InjectorInterfaces
 
         yield break;
 
-        /// <summary>
-        /// The type and the types which it declares, the nested ones included, depth first.
-        /// </summary>
-        /// <param name="type">The type which is read.</param>
-        /// <returns>The type and the types which it declares.</returns>
+        // The type and the types which it declares, the nested ones included, depth first.
         static IEnumerable<TypeDefinition> AllTypes(TypeDefinition type)
         {
             yield return type;

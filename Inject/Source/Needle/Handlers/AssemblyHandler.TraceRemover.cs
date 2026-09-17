@@ -135,11 +135,8 @@ partial class AssemblyHandler
 
         return removed;
 
-        /// <summary>
-        /// Take the attributes which the injectors were read from off a member.
-        /// </summary>
-        /// <param name="uses">The attributes which the member carries.</param>
-        // The attributes are removed from the end, so that the ones which are left keep the order they were written in.
+        // Take the attributes which the injectors were read from off a member, which are the ones which the member
+        // carries. They are removed from the end, so that the ones which are left keep the order they were written in.
         void Remove(Mono.Collections.Generic.Collection<CustomAttribute> uses)
         {
             for (var index = uses.Count - 1; index >= 0; index--)
@@ -271,13 +268,9 @@ partial class AssemblyHandler
 
         return false;
 
-        /// <summary>
-        /// Whether a reference is the one which is looked for, or is made of it.
-        /// </summary>
-        /// <param name="reference">The reference which is asked about.</param>
-        /// <returns>Whether the reference names what is looked for.</returns>
-        // A reference is asked about together with the references it is made of, so that a type which is named by the
-        // declaring type or the arguments of another one is found as well.
+        // Whether a reference is the one which is looked for, or is made of it: a reference is asked about together
+        // with the references it is made of, so that a type which is named by the declaring type or the arguments of
+        // another one is found as well.
         bool Matches(MemberReference? reference)
         {
             // A reference which was walked already settles the question once, and the visited ones stop a reference

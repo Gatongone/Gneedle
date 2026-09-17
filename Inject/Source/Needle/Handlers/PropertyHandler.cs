@@ -10,6 +10,7 @@ namespace Gneedle.Inject;
 /// </summary>
 /// <param name="methodDef">The property definition which is handled.</param>
 /// <param name="declaringTypeHandler">Handler of the type which declares the property.</param>
+/// <param name="accessorAttributes">The attributes which an accessor is created with, which are the attributes of the property when the decorator describes it and the attributes of an accessor which the property already holds otherwise. It is null for a property which is read out of the metadata rather than described, which leaves the default below.</param>
 internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declaringTypeHandler, MethodAttributes? accessorAttributes = null) : IPropertyHandler, IAttributeContainer
 {
     /// <inheritdoc/>

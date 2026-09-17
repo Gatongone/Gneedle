@@ -82,13 +82,9 @@ partial class AssemblyHandler
         // The base type is described through the decorator before the class is appended, so none is held here.
         return new ClassDecorator(this, typeDef, null, AddClassCallback);
 
-        /// <summary>
-        /// Append the class to the module once the chain has described it, which is called by the decorator when the
-        /// chain ends.
-        /// </summary>
-        /// <param name="type">The class which was described.</param>
-        /// <param name="baseType">The base type which the chain asked for, or null when it asked for none.</param>
-        /// <returns>The handler of the class which was appended.</returns>
+        // Append the class to the module once the chain has described it, which is called by the decorator when the
+        // chain ends, with the class which was described and the base type which the chain asked for, or null when it
+        // asked for none; the handler of the class which was appended is answered.
         IClassHandler AddClassCallback(TypeDefinition type, TypeReference? baseType)
         {
             // Inherits from base type.
@@ -137,13 +133,9 @@ partial class AssemblyHandler
         // The base type is described through the decorator before the struct is appended, so none is held here.
         return new StructDecorator(this, typeDef, null, AddStructCallback);
 
-        /// <summary>
-        /// Append the struct to the module once the chain has described it, which is called by the decorator when the
-        /// chain ends.
-        /// </summary>
-        /// <param name="type">The struct which was described.</param>
-        /// <param name="baseType">The base type which the chain asked for, or null when it asked for none.</param>
-        /// <returns>The handler of the struct which was appended.</returns>
+        // Append the struct to the module once the chain has described it, which is called by the decorator when the
+        // chain ends, with the struct which was described and the base type which the chain asked for, or null when it
+        // asked for none; the handler of the struct which was appended is answered.
         IStructHandler AddStructCallback(TypeDefinition type, TypeReference? baseType)
         {
             // Inherits from base type.

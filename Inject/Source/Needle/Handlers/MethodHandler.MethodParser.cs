@@ -436,26 +436,18 @@ partial class MethodHandler
         index = -1;
         return false;
 
-        // The delegate Invoke expects the stack to hold [delegate-receiver, arg1, ...argN].
-        // We only compare the top N entries (the arguments) against the delegate's Invoke
-        // parameters, ignoring the receiver sitting below them.
-        /// <summary>
-        /// Whether an instruction is the one which invokes the delegate that is looked for, which is a call of the
-        /// <c>Invoke</c> of that delegate's type with the arguments the stack holds the types of.
-        /// </summary>
-        /// <param name="ins">The instruction which is asked about.</param>
-        /// <returns>Whether the instruction invokes the delegate.</returns>
+        // Whether an instruction is the one which invokes the delegate that is looked for, which is a call of the
+        // `Invoke` of that delegate's type with the arguments the stack holds the types of. The delegate Invoke expects
+        // the stack to hold [delegate-receiver, arg1, ...argN], and only the top N entries (the arguments) are compared
+        // against the delegate's Invoke parameters, the receiver sitting below them being ignored.
         bool MatchTargetInvoke(Instruction ins)
             => (ins.OpCode == OpCodes.Callvirt || ins.OpCode == OpCodes.Call)   // It's not double that the instruction must be 'call' type.
                 && ins.Operand is MethodReference {Name: "Invoke"} callMethod   // We only check the 'invoke' method from Delegate.
                 && TypeName.HasSameName(delegateType, callMethod.DeclaringType) // Make sure declaring types are the same.
                 && TopOfStackMatches(callMethod);                               // Make sure the top-of-stack types match the invoke parameters.
 
-        /// <summary>
-        /// Whether the top of the stack holds the arguments which a call of a member is made with.
-        /// </summary>
-        /// <param name="callMethod">The member which the call reads.</param>
-        /// <returns>Whether the values which were pushed last are the arguments of the call.</returns>
+        // Whether the top of the stack holds the arguments which a call of a member is made with, which are the values
+        // which were pushed last.
         bool TopOfStackMatches(MethodReference callMethod)
         {
             var invokeParameters = callMethod.Parameters;
