@@ -117,6 +117,10 @@ public class PointerTests
         // Returns the delegate without invoking -> branch that builds a delegate (ldftn+newobj).
         public static IntBinaryOp GetInstanceMethodDelegate() => This.Method<IntBinaryOp>("Add");
 
+        // The same, of a member which is static, whose delegate is built out of the pointer alone unless the target
+        // which the constructor of a delegate takes is written for it.
+        public static LongOp GetStaticMethodDelegate() => This.Method<LongOp>("Widen");
+
         // Generic delegate (Func<>) currently trips ParseMethod: see MethodParser.cs:40-50.
         public static int InvokeViaGenericDelegate(int a, int b) => This.Method<Func<int, int, int>>("Add")(a, b);
 
@@ -662,9 +666,10 @@ public class PointerTests
     /// Create a host which declares a real static method <c>long Widen(long)</c>, which is <c>value + 1</c>, so that a
     /// template which hands an argument of another type to it has one to be rewritten to and a body which runs.
     /// </summary>
-    private static TypeHandler NewHostWithWiden()
+    /// <param name="assemblyName">Name of the assembly to build, which a test which runs its host gives one of its own.</param>
+    private static TypeHandler NewHostWithWiden(string assemblyName = "MethodInjectionConversionAssembly")
     {
-        var handler = (AssemblyHandler) Assembly.Create("MethodInjectionConversionAssembly").Handler;
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
         var module = host.Source.Module;
         var widen = new MethodDefinition("Widen", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, module.TypeSystem.Int64)
@@ -702,6 +707,33 @@ public class PointerTests
 
         var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(null, [3]), Is.EqualTo(7L));
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Static_Member_Which_Is_Handed_Back_Is_Built_With_A_Null_Target()
+    {
+        // The delegate is built rather than called, and the constructor of a delegate takes the pointer of the member
+        // together with the instance which it is called on, which a member of no instance has none of: the body was
+        // written with the pointer alone, which is a stack the constructor cannot be called with at all.
+        var host = NewHostWithWiden("MethodInjectionStaticDelegateAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(ThisMethodTemplates.LongOp).ToGneedleType(),
+            [],
+            [],
+            MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.GetStaticMethodDelegate)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        var pointer = Array.FindIndex(ins, instruction => instruction.OpCode == OpCodes.Ldftn);
+        Assert.That(pointer, Is.GreaterThanOrEqualTo(0), "the delegate was not built out of the pointer of the member.");
+        Assert.That(pointer > 0 && ins[pointer - 1].OpCode == OpCodes.Ldnull, Is.True,
+                    "the constructor of the delegate was not given the target which a member of no instance takes.");
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        var widen = (ThisMethodTemplates.LongOp) type.GetMethod("Run")!.Invoke(null, null)!;
+
+        Assert.That(widen(3), Is.EqualTo(4L));
     }
 
     [Test]

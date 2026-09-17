@@ -205,6 +205,7 @@ partial class MethodHandler
         else
         {
             var importedMethod = GetCallableReference(methodDef);
+
             var delegateCtor = Source.Module.ImportReference(delegateDef.GetConstructors().FirstOrDefault());
 
             // The name of the symbol is dropped, and the receiver of a member of an instance is loaded in its place: a
@@ -218,6 +219,13 @@ partial class MethodHandler
             if (!methodDef.IsStatic)
             {
                 filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef));
+            }
+            else
+            {
+                // The constructor of a delegate is handed the member to call and the instance it is called on, which a
+                // member which is static has none of: the target is the null which the constructor takes the instance
+                // in the place of, as a compiler writes it for a member which the delegate names without an instance.
+                filter.Insert(callIndex, Instruction.Create(OpCodes.Ldnull));
             }
 
             // call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types}) -> ldftn {return_type} {declaring_type}::{method_name}({parameter_types})
