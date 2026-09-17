@@ -238,4 +238,31 @@ public class MemberQueryTests
             Assert.That(((IPropertyContainer) host).GetProperties().Select(property => property.Name), Is.EqualTo(new[] {"Count"}));
         });
     }
+
+    [Test]
+    public void The_Queries_Are_Answered_To_A_Caller_Which_Holds_The_Shape_Of_The_Type()
+    {
+        // The shape of a class is the type handler and the container of every kind of member at once, so a caller which
+        // holds that shape asks the type for the members of every kind without naming the kind first. The queries of the
+        // two shapes are one declaration which both paths reach rather than a declaration of each of them, because a
+        // member which is declared twice is a call which cannot be bound to either, and the shape of the handler which a
+        // caller holds is not something a query of a type should depend on.
+        var (handler, host, module) = NewHost("MemberQueryHandlerShapeAssembly");
+        host.Source.Fields.Add(NewField(module, "First", FieldAttributes.Private));
+        host.Source.Methods.Add(NewMethod(module, "Run", MethodAttributes.Public));
+        NewProperty(host, module, "Count", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig);
+
+        var classHandler = (IClassHandler) handler.GetType(host.Source);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(classHandler.GetFields().Select(field => field.Name), Is.EqualTo(new[] {"First"}));
+            Assert.That(classHandler.GetField("First"), Is.Not.Null);
+            Assert.That(classHandler.GetMethods().Select(method => method.Name), Is.EqualTo(new[] {"Run", "get_Count"}));
+            Assert.That(classHandler.GetMethod("Run"), Is.Not.Null);
+            Assert.That(classHandler.GetProperties().Select(property => property.Name), Is.EqualTo(new[] {"Count"}));
+            Assert.That(classHandler.GetProperty("Count"), Is.Not.Null);
+            Assert.That(classHandler.ContainsInterface(typeof(IDisposable).ToGneedleType()), Is.False);
+        });
+    }
 }

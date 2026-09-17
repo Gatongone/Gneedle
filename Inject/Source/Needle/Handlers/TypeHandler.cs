@@ -43,7 +43,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         Source          = source;
     }
 
-    /// <inheritdoc cref="IInterfaceContainer.ContainsInterface" />
+    /// <inheritdoc cref="IInterfaceQuery.ContainsInterface" />
     public bool ContainsInterface(IType interfaceType) => Source.Interfaces.Any(implementation => TypeName.HasSameName(implementation.InterfaceType, interfaceType));
 
     /// <inheritdoc/>
@@ -66,7 +66,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         Source.CustomAttributes.Add(attribute);
     }
 
-    /// <inheritdoc cref="IMethodContainer.GetMethod(string, IType[])" />
+    /// <inheritdoc cref="IMethodQuery.GetMethod(string, IType[])" />
     public IMethodHandler? GetMethod(string methodName, params IType[] parameterTypes)
     {
         var curType = Source;
@@ -88,10 +88,10 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         return methodDef == null ? null : new MethodHandler(methodDef, this);
     }
 
-    /// <inheritdoc cref="IMethodContainer.GetMethods()"/>
+    /// <inheritdoc cref="IMethodQuery.GetMethods()"/>
     public IMethodHandler[] GetMethods() => GetMethods(0);
 
-    /// <inheritdoc cref="IMethodContainer.GetMethods(MethodFlags)"/>
+    /// <inheritdoc cref="IMethodQuery.GetMethods(MethodFlags)"/>
     public IMethodHandler[] GetMethods(MethodFlags methodFlags)
         => Source.Methods
             .Where(method => method.ToMethodFlags().HasFlag(methodFlags))
@@ -109,34 +109,34 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     public PropertyDecorator.IPropertyTypeDecorator AddProperty(string propertyName, PropertyFlags propertyFlags)
         => new PropertyDecorator(this, propertyName, propertyFlags);
 
-    /// <inheritdoc cref="IFieldContainer.GetField" />
+    /// <inheritdoc cref="IFieldQuery.GetField" />
     public IFieldHandler? GetField(string fieldName)
     {
         var fieldRef = AssemblyHandler.GetFieldFromType(Source, fieldName);
         return fieldRef == null ? null : new FieldHandler((FieldDefinition) fieldRef, this);
     }
 
-    /// <inheritdoc cref="IFieldContainer.GetFields()" />
+    /// <inheritdoc cref="IFieldQuery.GetFields()" />
     public IFieldHandler[] GetFields() => GetFields(0);
 
-    /// <inheritdoc cref="IFieldContainer.GetFields(FieldFlags)" />
+    /// <inheritdoc cref="IFieldQuery.GetFields(FieldFlags)" />
     public IFieldHandler[] GetFields(FieldFlags fieldFlags)
         => Source.Fields
             .Where(field => field.ToFieldFlags().HasFlag(fieldFlags))
             .Select(IFieldHandler (field) => new FieldHandler(field, this))
             .ToArray();
 
-    /// <inheritdoc cref="IPropertyContainer.GetProperty" />
+    /// <inheritdoc cref="IPropertyQuery.GetProperty" />
     public IPropertyHandler? GetProperty(string propertyName)
     {
         var propDef = AssemblyHandler.GetPropertyFromType(Source, propertyName);
         return propDef == null ? null : new PropertyHandler(propDef, this);
     }
 
-    /// <inheritdoc cref="IPropertyContainer.GetProperties()"/>
+    /// <inheritdoc cref="IPropertyQuery.GetProperties()"/>
     public IPropertyHandler[] GetProperties() => GetProperties(0);
 
-    /// <inheritdoc cref="IPropertyContainer.GetProperties(PropertyFlags)"/>
+    /// <inheritdoc cref="IPropertyQuery.GetProperties(PropertyFlags)"/>
     public IPropertyHandler[] GetProperties(PropertyFlags propertyFlags)
         => Source.Properties
             .Where(property => property.ToPropertyFlags().HasFlag(propertyFlags))

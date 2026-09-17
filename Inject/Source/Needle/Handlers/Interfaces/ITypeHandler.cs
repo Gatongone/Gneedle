@@ -14,17 +14,26 @@ public interface IBaseTypeContainer
 }
 
 /// <summary>
-/// Represents a container that holds interfaces for a class or struct.
+/// Represents the query which reads the interfaces which a type implements.<para/>
+/// The query is declared apart from the container of the kind of member which it names, and the type handler reaches it
+/// as well, because both of the two shapes answer with the same thing and which one a caller holds is no part of what is
+/// asked: a member which is declared by each of the two is a member which neither of them can be called with.
 /// </summary>
-public interface IInterfaceContainer
+public interface IInterfaceQuery
 {
     /// <summary>
-    /// Checks if the container contains the specified interface type.
+    /// Checks if the type which is handled contains the specified interface type.
     /// </summary>
     /// <param name="interfaceType">The interface type to check for.</param>
     /// <returns>True if the container contains the specified interface type; otherwise, false.</returns>
     bool ContainsInterface(IType interfaceType);
+}
 
+/// <summary>
+/// Represents a container that holds interfaces for a class or struct.
+/// </summary>
+public interface IInterfaceContainer : IInterfaceQuery
+{
     /// <summary>
     /// Append an interface to the type which is handled.<para/>
     /// The type which is handled is given the reference to the interface and nothing else: the members of the interface
@@ -36,11 +45,12 @@ public interface IInterfaceContainer
 
 /// <summary>
 /// Represents a handler for a type, providing access to its assembly, name, namespace, and attributes.<para/>
-/// The queries which ask for the members of the type are declared here and by the container of the kind of member which
-/// they name, because a caller which holds either of the two asks the type for the members of every kind: what each of
-/// them answers is written once, at the container which the member belongs to, and is read from there.
+/// The queries which ask for the members of the type are declared by the query of the kind of member which each of them
+/// names, which this shape reaches along with the container of that kind: a caller which holds the type handler asks the
+/// type for the members of every kind, and a caller which holds the container of one kind asks for the members of that
+/// kind, and both calls are bound to the one declaration which the query holds.
 /// </summary>
-public interface ITypeHandler : IAttributeContainer
+public interface ITypeHandler : IAttributeContainer, IInterfaceQuery, IFieldQuery, IMethodQuery, IPropertyQuery
 {
     /// <summary>
     /// Handler of the assembly which declares the type.
@@ -56,51 +66,16 @@ public interface ITypeHandler : IAttributeContainer
     /// Namespace of the type. Setting it moves the type which is handled into another namespace.
     /// </summary>
     string Namespace { get; set; }
-
-    /// <inheritdoc cref="IPropertyContainer.GetProperty(string)" />
-    IPropertyHandler? GetProperty(string propertyName);
-
-    /// <inheritdoc cref="IPropertyContainer.GetProperties()" />
-    IPropertyHandler[] GetProperties();
-
-    /// <inheritdoc cref="IPropertyContainer.GetProperties(PropertyFlags)" />
-    IPropertyHandler[] GetProperties(PropertyFlags propertyFlags);
-
-    /// <inheritdoc cref="IFieldContainer.GetField(string)" />
-    IFieldHandler? GetField(string fieldName);
-
-    /// <inheritdoc cref="IFieldContainer.GetFields()" />
-    IFieldHandler[] GetFields();
-
-    /// <inheritdoc cref="IFieldContainer.GetFields(FieldFlags)" />
-    IFieldHandler[] GetFields(FieldFlags fieldFlags);
-
-    /// <inheritdoc cref="IMethodContainer.GetMethod(string, IType[])" />
-    IMethodHandler? GetMethod(string methodName, params IType[] parameterTypes);
-
-    /// <inheritdoc cref="IMethodContainer.GetMethods()" />
-    IMethodHandler[] GetMethods();
-
-    /// <inheritdoc cref="IMethodContainer.GetMethods(MethodFlags)" />
-    IMethodHandler[] GetMethods(MethodFlags methodFlags);
-
-    /// <inheritdoc cref="IInterfaceContainer.ContainsInterface(IType)" />
-    bool ContainsInterface(IType interfaceType);
 }
 
 /// <summary>
-/// Represents a container that holds fields for a class or struct.
+/// Represents the queries which read the fields which a type declares.<para/>
+/// The queries are declared apart from the container of the kind of member which they name, and the type handler reaches
+/// them as well, because both of the two shapes answer with the same fields and which one a caller holds is no part of
+/// what is asked: a query which is declared by each of the two is a query which neither of them can be called with.
 /// </summary>
-public interface IFieldContainer
+public interface IFieldQuery
 {
-    /// <summary>
-    /// Start building a field through a chainable <see cref="FieldDecorator"/>.
-    /// </summary>
-    /// <param name="fieldName">Name of the field.</param>
-    /// <param name="fieldFlags">Flags of the field.</param>
-    /// <returns>Result for chains calling.</returns>
-    FieldDecorator.IFieldTypeDecorator AddField(string fieldName, FieldFlags fieldFlags);
-
     /// <summary>
     /// Gets a field handler for the specified field name, or null when no field of that name is found.<para/>
     /// A field which a base type declares is a field of the type as well, so the lookup walks the base types, the
@@ -129,18 +104,27 @@ public interface IFieldContainer
 }
 
 /// <summary>
-/// Represents a container that holds methods for a class or struct.
+/// Represents a container that holds fields for a class or struct.
 /// </summary>
-public interface IMethodContainer
+public interface IFieldContainer : IFieldQuery
 {
     /// <summary>
-    /// Start building a method through a chainable <see cref="MethodDecorator"/>.
+    /// Start building a field through a chainable <see cref="FieldDecorator"/>.
     /// </summary>
-    /// <param name="methodName">Name of the method.</param>
-    /// <param name="methodFlags">Flags of the method.</param>
+    /// <param name="fieldName">Name of the field.</param>
+    /// <param name="fieldFlags">Flags of the field.</param>
     /// <returns>Result for chains calling.</returns>
-    MethodDecorator.IGenericParameterDecorator AddMethod(string methodName, MethodFlags methodFlags);
+    FieldDecorator.IFieldTypeDecorator AddField(string fieldName, FieldFlags fieldFlags);
+}
 
+/// <summary>
+/// Represents the queries which read the methods which a type declares.<para/>
+/// The queries are declared apart from the container of the kind of member which they name, and the type handler reaches
+/// them as well, because both of the two shapes answer with the same methods and which one a caller holds is no part of
+/// what is asked: a query which is declared by each of the two is a query which neither of them can be called with.
+/// </summary>
+public interface IMethodQuery
+{
     /// <summary>
     /// Gets a method handler for the specified method name and parameter types, or null when no method of that signature
     /// is found.<para/>
@@ -177,18 +161,27 @@ public interface IMethodContainer
 }
 
 /// <summary>
-/// Represents a container that holds properties for a class or struct.
+/// Represents a container that holds methods for a class or struct.
 /// </summary>
-public interface IPropertyContainer
+public interface IMethodContainer : IMethodQuery
 {
     /// <summary>
-    /// Start building a property through a chainable <see cref="PropertyDecorator"/>.
+    /// Start building a method through a chainable <see cref="MethodDecorator"/>.
     /// </summary>
-    /// <param name="propertyName">Name of the property.</param>
-    /// <param name="propertyFlags">Flags of the property.</param>
+    /// <param name="methodName">Name of the method.</param>
+    /// <param name="methodFlags">Flags of the method.</param>
     /// <returns>Result for chains calling.</returns>
-    PropertyDecorator.IPropertyTypeDecorator AddProperty(string propertyName, PropertyFlags propertyFlags);
+    MethodDecorator.IGenericParameterDecorator AddMethod(string methodName, MethodFlags methodFlags);
+}
 
+/// <summary>
+/// Represents the queries which read the properties which a type declares.<para/>
+/// The queries are declared apart from the container of the kind of member which they name, and the type handler reaches
+/// them as well, because both of the two shapes answer with the same properties and which one a caller holds is no part
+/// of what is asked: a query which is declared by each of the two is a query which neither of them can be called with.
+/// </summary>
+public interface IPropertyQuery
+{
     /// <summary>
     /// Gets a property handler for the specified property name, or null when no property of that name is found.<para/>
     /// A property which a base type declares is a property of the type as well, so the lookup walks the base types, the
@@ -215,6 +208,20 @@ public interface IPropertyContainer
     /// </summary>
     /// <returns>The handlers of the properties.</returns>
     IPropertyHandler[] GetProperties();
+}
+
+/// <summary>
+/// Represents a container that holds properties for a class or struct.
+/// </summary>
+public interface IPropertyContainer : IPropertyQuery
+{
+    /// <summary>
+    /// Start building a property through a chainable <see cref="PropertyDecorator"/>.
+    /// </summary>
+    /// <param name="propertyName">Name of the property.</param>
+    /// <param name="propertyFlags">Flags of the property.</param>
+    /// <returns>Result for chains calling.</returns>
+    PropertyDecorator.IPropertyTypeDecorator AddProperty(string propertyName, PropertyFlags propertyFlags);
 }
 
 /// <summary>
@@ -277,19 +284,23 @@ public interface IEnumHandler : ITypeHandler
 /// </summary>
 public static class TypeHandlerExtensions
 {
-    /// <param name="container">The interface container.</param>
-    extension(IInterfaceContainer container)
+    /// <param name="query">The query which reads the interfaces.</param>
+    extension(IInterfaceQuery query)
     {
         /// <summary>
         /// Checks if the container contains the specified interface type.
         /// </summary>
-        public bool ContainsInterface(Type interfaceType) => container.ContainsInterface(interfaceType.ToGneedleType());
+        public bool ContainsInterface(Type interfaceType) => query.ContainsInterface(interfaceType.ToGneedleType());
 
         /// <summary>
         /// Checks if the container contains the specified interface type.
         /// </summary>
-        public bool ContainsInterface<TInterface>() => container.ContainsInterface(typeof(TInterface));
+        public bool ContainsInterface<TInterface>() => query.ContainsInterface(typeof(TInterface));
+    }
 
+    /// <param name="container">The interface container.</param>
+    extension(IInterfaceContainer container)
+    {
         /// <summary>
         /// Append an interface to the type which is handled.
         /// </summary>
