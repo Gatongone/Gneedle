@@ -21,6 +21,12 @@
              packed names the members it ran. -->
         <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
 
+        <!-- The comments which the sources carry are packed with the assembly they describe, so that a consumer reads
+             the comment of a member where it writes the call rather than in the repository. The file is written by the
+             compiler out of the sources, and a publicly visible member which carries no comment is reported by that
+             same build, which is the check that the file is worth shipping at all. -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
         <!-- The license and the readme of a package are the ones of the repository. The two paths are the ones which the
              files take inside the package, which is what the format reads, rather than the ones they lie at on disk. -->
         <PackageLicenseFile>docs\LICENSE.txt</PackageLicenseFile>

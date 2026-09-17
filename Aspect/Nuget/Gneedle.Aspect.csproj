@@ -65,8 +65,10 @@
         <ItemGroup Condition="'$(TargetFramework)' == 'net472' Or '$(TargetFramework)' == 'netstandard2.1'">
             <TfmSpecificPackageFile Include="$(TargetDir)$(MSBuildProjectName).dll" PackagePath="tools\$(TargetFramework)\"/>
             <TfmSpecificPackageFile Include="$(TargetDir)$(MSBuildProjectName).pdb" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)$(MSBuildProjectName).xml" PackagePath="tools\$(TargetFramework)\"/>
             <TfmSpecificPackageFile Include="$(TargetDir)Gneedle.Inject.dll" PackagePath="tools\$(TargetFramework)\"/>
             <TfmSpecificPackageFile Include="$(TargetDir)Gneedle.Inject.pdb" PackagePath="tools\$(TargetFramework)\"/>
+            <TfmSpecificPackageFile Include="$(TargetDir)Gneedle.Inject.xml" PackagePath="tools\$(TargetFramework)\"/>
             <TfmSpecificPackageFile Include="$(TargetDir)Mono.Cecil*.dll" PackagePath="tools\$(TargetFramework)\"/>
         </ItemGroup>
     </Target>
