@@ -179,8 +179,40 @@ partial class MethodHandler
             }
         }
 
+        // A delegate which the template holds in a local is invoked by that local rather than where the symbol stands, so
+        // what the symbol stands for there is the store of the delegate: the store and the call are dropped together, and
+        // every read of the local which invokes the delegate is written as the call of the member instead.
+        var held            = HeldLocal(filter.Target, callIndex);
+        var heldInvocations = held is { } stored ? InvocationsOfTheHeldDelegate(filter.Target, stored.Local, delegateRef, targetDef) : null;
+
+        if (held is { } heldStore && heldInvocations != null)
+        {
+            if (nameIndex is { } heldName)
+            {
+                filter.Skip(heldName);
+            }
+
+            filter.Skip(callIndex);
+            filter.Skip(heldStore.Store);
+
+            foreach (var (read, invocation) in heldInvocations)
+            {
+                // The read of the local is the receiver of the invocation, and it is written as the receiver of the
+                // member, which a member of no instance takes none of.
+                if (methodDef.IsStatic)
+                {
+                    filter.Skip(read);
+                }
+                else
+                {
+                    filter.Replace(read, CreateReceiver(receiverIns, targetDef));
+                }
+
+                filter.Replace(invocation, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef)));
+            }
+        }
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
-        if (TryGetNextInvoke(filter.Target, callIndex, delegateRef, targetDef, out var callvirtIndex))
+        else if (held == null && TryGetNextInvoke(filter.Target, callIndex, delegateRef, targetDef, out var callvirtIndex))
         {
             // The name of a symbol is dropped, and the receiver of a member of an instance is loaded in its place, which
             // is the instruction ahead of the call. A symbol which carries no name has no such instruction, so the load
@@ -489,6 +521,81 @@ partial class MethodHandler
 
             return true;
         }
+    }
+
+    /// <summary>
+    /// The local which the value of a symbol is stored into, and the instruction which stores it, which is what a template
+    /// which holds the delegate of the symbol writes where it would otherwise invoke it.
+    /// </summary>
+    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="callIndex">Index of the instruction of the call which the symbol stands for.</param>
+    /// <returns>Index of the store and of the local which it writes, or null when the value is not stored into one.</returns>
+    private static (int Store, int Local)? HeldLocal(IReadOnlyList<Instruction> bodyInstructions, int callIndex)
+    {
+        for (var i = callIndex + 1; i < bodyInstructions.Count; i++)
+        {
+            var ins = bodyInstructions[i];
+            if (ins.OpCode == OpCodes.Nop) continue;
+
+            return ins.TryGetStlocIndex(out var local) ? (i, local) : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Where the delegate which a local holds is invoked, which is every read of the local together with the instruction
+    /// which invokes the delegate that the read is the receiver of.<para/>
+    /// What the weaving writes for the symbol stands where each read stood and the delegate is never built, so a local
+    /// which is read or written for anything else as well is one whose delegate stands for more than the invocation, and
+    /// nothing is answered for it and the delegate is built into the local instead.
+    /// </summary>
+    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="local">Index of the local which holds the delegate.</param>
+    /// <param name="delegateType">Type of the delegate which the symbol was parsed into.</param>
+    /// <param name="targetDef">The template which the instructions belong to.</param>
+    /// <returns>Index of every read of the local and of the invocation which it is the receiver of, or null when the
+    /// local stands for more than the invocation of its delegate.</returns>
+    private List<(int Read, int Invocation)>? InvocationsOfTheHeldDelegate(IReadOnlyList<Instruction> bodyInstructions, int local, TypeReference delegateType, MethodDefinition targetDef)
+    {
+        var invocations = new List<(int Read, int Invocation)>();
+        var reads       = 0;
+        var stores      = 0;
+
+        for (var i = 0; i < bodyInstructions.Count; i++)
+        {
+            var ins = bodyInstructions[i];
+            if (ins.TryGetStlocIndex(out var written) && written == local) stores++;
+
+            if (!ins.TryGetLdlocIndex(out var read) || read != local) continue;
+
+            reads++;
+            if (!TryGetNextInvoke(bodyInstructions, i, delegateType, targetDef, out var invocation)) continue;
+            if (!TheReadIsTheReceiver(bodyInstructions, i, invocation)) continue;
+
+            invocations.Add((i, invocation));
+        }
+
+        return stores == 1 && invocations.Count == reads ? invocations : null;
+    }
+
+    /// <summary>
+    /// Whether the delegate which a read of a local leaves on the stack is the one which the invocation is made with,
+    /// which is so where nothing between the two stores a value: a store takes the delegate off the stack, and what the
+    /// invocation reads is a delegate which it has nowhere to read.
+    /// </summary>
+    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="read">Index of the read of the local.</param>
+    /// <param name="invocation">Index of the instruction which invokes the delegate.</param>
+    /// <returns>Whether the read is the receiver of the invocation.</returns>
+    private static bool TheReadIsTheReceiver(IReadOnlyList<Instruction> bodyInstructions, int read, int invocation)
+    {
+        for (var i = read + 1; i < invocation; i++)
+        {
+            if (bodyInstructions[i].TryGetStlocIndex(out _)) return false;
+        }
+
+        return true;
     }
 
     /// <summary>

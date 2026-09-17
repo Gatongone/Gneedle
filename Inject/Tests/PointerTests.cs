@@ -95,6 +95,22 @@ public class PointerTests
             return This.Method<IntBinaryOp>("Add")(sum, sum);
         }
 
+        // The delegate is held in a local and invoked by it rather than where the symbol stands, which is what a
+        // template which reads the member through a delegate of its own and then calls it writes. The local is read
+        // twice, so each read is written as a receiver of its own.
+        public static int InvokeAHeldDelegate(int a)
+        {
+            var add = This.Method<Func<int, int, int>>("Add");
+            return add(a, a) + add(a, 1);
+        }
+
+        // The same, of a member which belongs to no instance, whose invocation is written with no receiver at all.
+        public static long InvokeAHeldDelegateOfAStaticMember(long a)
+        {
+            var widen = This.Method<Func<long, long>>("Widen");
+            return widen(a);
+        }
+
         /// <summary>
         /// Name the method through a value which the template computes, which is a name the weaving has nowhere to read.
         /// </summary>
@@ -765,6 +781,66 @@ public class PointerTests
         var widen = (Func<long, long>) type.GetMethod("Run")!.Invoke(null, null)!;
 
         Assert.That(widen(3), Is.EqualTo(4L));
+    }
+
+    [Test]
+    public void InvokeAHeldDelegate_Rewrites_To_Direct_Call()
+    {
+        // The symbol stands where the delegate is stored into a local rather than where it is invoked, and what invokes
+        // it is a read of that local: the fold used to drop the call and the name alone, which left the second read
+        // invoking a delegate which nothing had built and the call which stood in the place of the first one reading
+        // the receiver of the member rather than the arguments it was written with.
+        var host = NewHostWithAdd(isVirtual: false);
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegate)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                                   && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
+                    "the reads of the local were not both rewritten to a direct call to Add.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+
+        var assembly = host.AssemblyHandler.Assembly;
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(64));
+    }
+
+    [Test]
+    public void InvokeAHeldDelegate_Of_A_Static_Member_Rewrites_To_Direct_Call()
+    {
+        // The store of the delegate is the whole of what the symbol stands for, and a member which belongs to no
+        // instance is reached with no receiver: the store was left reading a stack which nothing had pushed, which is a
+        // body the runtime refuses to run.
+        var host = NewHostWithWiden("MethodInjectionHeldDelegateAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(long).ToGneedleType(),
+            [],
+            [new Parameter(typeof(long).ToGneedleType())],
+            MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateOfAStaticMember)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Widen"), Is.True,
+                    "the delegate was not rewritten to a direct call to Widen.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, [3L]), Is.EqualTo(4L));
     }
 
     [Test]
