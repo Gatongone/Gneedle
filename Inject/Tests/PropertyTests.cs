@@ -46,6 +46,18 @@ public static class PropertyAroundTemplates
 }
 
 /// <summary>
+/// A type which holds an automatic property, so that the field which backs it is one which the compiler wrote and which
+/// no type other than this one is allowed to reach.
+/// </summary>
+public class AutoPropertyBase
+{
+    /// <summary>
+    /// The property which a type which derives from this one is given one of as well.
+    /// </summary>
+    public int Value { get; set; }
+}
+
+/// <summary>
 /// Tests for the handler of a property and for the bodies of its accessors: what the handler hands back, the bodies which
 /// <see cref="PropertyDecorator"/> describes, and the bodies which the handler weaves around.<para/>
 /// A body is described through the chain, and a body is woven around through the <see cref="IMethodHandler"/> which
@@ -114,6 +126,31 @@ public class PropertyTests
 
         host.Source.Properties.Add(property);
         return new PropertyHandler(property, host);
+    }
+
+    /// <summary>
+    /// Create a host which derives from <see cref="AutoPropertyBase"/>, which holds an automatic property of the name
+    /// which the host is given a property of as well.
+    /// </summary>
+    private static (Assembly Assembly, TypeHandler Host) NewDerivedHost(string assemblyName)
+    {
+        var assembly = Assembly.Create(assemblyName);
+        var module = assembly.Source.MainModule;
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler)
+                                 .AddClass("Host", Ns, ClassFlags.Public)
+                                 .WithBaseType(typeof(AutoPropertyBase))
+                                 .GetHandler();
+
+        // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it. A
+        // constructor of a type which derives from another one reaches the constructor of that one rather than the one
+        // of the object at the root of the hierarchy, which is what a type without a base type reaches.
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(AutoPropertyBase).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        return (assembly, host);
     }
 
     private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
@@ -264,6 +301,30 @@ public class PropertyTests
         Assert.That(Holds(GetterOf(host), OpCodes.Ldsfld), Is.True);
         Assert.That(Holds(GetterOf(host), OpCodes.Ldarg_0), Is.False);
         Assert.That(Holds(SetterOf(host), OpCodes.Stsfld), Is.True);
+    }
+
+    [Test]
+    public void PropertyDecorator_WithFieldOperation_Of_A_Derived_Type_Writes_A_Field_Of_That_Type()
+    {
+        // The field which backs an automatic property belongs to the type which declares the property, which is what
+        // makes it private to that type: a type which is given a property of the same name is backed by a field which it
+        // declares itself rather than by the one of its base type, which its accessor is not allowed to reach.
+        var (assembly, host) = NewDerivedHost("PropertyDerivedFieldAssembly");
+
+        host.AddProperty("Value", PropertyFlags.Public)
+            .WithType(typeof(int))
+            .WithGetter(DefaultPropertyBody.WithFieldOperation)
+            .WithSetter(DefaultPropertyBody.WithFieldOperation)
+            .GetHandler();
+
+        Assert.That(host.Source.Fields.Any(field => field.Name == "<Value>k__BackingField"), Is.True,
+                    "the type which holds the accessor declares no backing field of its own, so the field of the base type was taken.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type);
+        type.GetProperty("Value")!.SetValue(instance, 5);
+
+        Assert.That(type.GetProperty("Value")!.GetValue(instance), Is.EqualTo(5));
     }
 
     [Test]

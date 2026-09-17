@@ -245,6 +245,19 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         => AssemblyHandler.GetFieldFromType(Source, fieldName);
 
     /// <summary>
+    /// Get the field which a name names, from this type alone.<para/>
+    /// A field which a base type declares is one which a member of this type reaches only where the base type declared
+    /// it for that to happen, and a field which a base type declares as its own private one is not reached by a member
+    /// of this type at all: the field which a member which this type holds is written against has to be one which this
+    /// type declares, where the walk of <see cref="GetFieldInThisOrABaseType"/> answers with the field of a base type
+    /// which happens to carry the same name.
+    /// </summary>
+    /// <param name="fieldName">Name of the field.</param>
+    /// <returns>The field which this type declares under that name, or null when it declares none.</returns>
+    internal FieldDefinition? GetFieldInThisType(string fieldName)
+        => Source.Fields.FirstOrDefault(field => field.Name.Equals(fieldName));
+
+    /// <summary>
     /// Get the field which a name names, from the direct base type or from a base type of it.<para/>
     /// The walk starts at the direct base type rather than at the type itself, which is what the fields of a base type
     /// are reached through: a field which the type declares is not one which this query answers with.
