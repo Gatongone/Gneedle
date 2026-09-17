@@ -554,6 +554,41 @@ public class InjectionsTests
                     "the woven assembly refers to itself.");
     }
 
+    [Test]
+    public void A_Template_Of_Another_Assembly_Is_Read_Out_Of_The_Assembly_Which_Declares_It()
+    {
+        // A template which another assembly declares is read through the resolution of that assembly, which is the case
+        // of a project which declares the attributes for another project to weave with. The image of an assembly is read
+        // deferred, so the body of a method is read out of the stream of that image as it is asked for: the stream is
+        // handed over to the module rather than closed with the read, which is what this reads the body through.
+        var resolver = new CachedAssemblyResolver(new ResolverWhichFindsNothing());
+        var name = typeof(OverloadBodies).Assembly.GetName();
+
+        var assembly = resolver.Resolve(new AssemblyNameReference(name.Name!, name.Version!));
+        var template = assembly.MainModule.GetType(typeof(OverloadBodies).FullName!)!
+                                .Methods.Single(method => method.Name == nameof(OverloadBodies.None));
+
+        Assert.That(template.Body.Instructions.Select(instruction => instruction.OpCode), Does.Contain(OpCodes.Ldc_I4_1),
+                    "the body of a method of an assembly which is loaded in the process was not read.");
+    }
+
+    /// <summary>
+    /// A resolver which finds nothing, which is what the file system answers with for an assembly which none of the
+    /// search directories of a resolver holds. It stands for the resolver of a module which was read from bytes, which
+    /// holds no directory to look in, so that what is read here is the assembly which the process loaded.
+    /// </summary>
+    private sealed class ResolverWhichFindsNothing : IAssemblyResolver
+    {
+        /// <inheritdoc/>
+        public AssemblyDefinition Resolve(AssemblyNameReference name) => throw new AssemblyResolutionException(name);
+
+        /// <inheritdoc/>
+        public AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters) => throw new AssemblyResolutionException(name);
+
+        /// <inheritdoc/>
+        public void Dispose() { }
+    }
+
     #endregion
 
     #region Taking the weaver back out

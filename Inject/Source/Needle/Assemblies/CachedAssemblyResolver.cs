@@ -60,7 +60,11 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAsse
     /// </summary>
     /// <remarks>
     /// The bytes are read from the file which the assembly was loaded from where it has one, and from the memory which
-    /// the runtime mapped it to otherwise, which is the case for an assembly which was loaded from bytes.
+    /// the runtime mapped it to otherwise, which is the case for an assembly which was loaded from bytes.<para/>
+    /// The stream of the image is handed over to the assembly rather than closed with the read: the module is read
+    /// deferred, so the body of a method is read out of that stream as it is asked for, and a stream which was closed
+    /// with the read is a body which can no longer be read. A template which an injector names and which another
+    /// assembly declares is read that way, which is why the two belong together.
     /// </remarks>
     /// <param name="name">Name of the assembly.</param>
     /// <returns>The assembly definition, or null when no assembly of that name is loaded, or its image can't be read.</returns>
@@ -70,7 +74,9 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback) : IAsse
         if (assembly == null || !TryGetAssemblyRawBytes(assembly, out var rawBytes)) return null;
 
         // The bytes are read whenever it returns true, which the out parameter of a nullable type cannot tell.
-        using var memoryStream = new MemoryStream(rawBytes!);
+        // The stream holds the memory of the image alone, so nothing but the module which reads it keeps it, and no
+        // handle of the file system is left open by a read which a build holds on to for as long as it runs.
+        var memoryStream = new MemoryStream(rawBytes!);
         return AssemblyDefinition.ReadAssembly(memoryStream, new ReaderParameters
         {
             InMemory         = true,
