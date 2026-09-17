@@ -197,6 +197,23 @@ public class PointerTests
         }
 
         /// <summary>
+        /// The local which holds the delegate is read for a call of another member as well as invoked by it, so what the
+        /// local stands for is more than the invocation of the delegate: the delegate is built into the local, and every
+        /// read of it stands where it stood.
+        /// </summary>
+        public static int InvokeAHeldDelegateWhichWasHandedOn(int a)
+        {
+            var add = This.Method<Func<int, int, int>>("Add");
+            Consume(add);
+            return add(a, a);
+        }
+
+        /// <summary>
+        /// Take a delegate for a call of its own, which is what a template hands a delegate it holds to.
+        /// </summary>
+        public static int Consume(Func<int, int, int> unused) => 7;
+
+        /// <summary>
         /// Name the method through a value which the template computes, which is a name the weaving has nowhere to read.
         /// </summary>
         public static int InvokeByNameWhichIsComputed()
@@ -1025,9 +1042,11 @@ public class PointerTests
     /// Create a host which declares a real instance method <c>int Add(int, int)</c>, so that a template which reaches a
     /// method of it has one to be rewritten to.
     /// </summary>
-    private static TypeHandler NewHostWithAdd(bool isVirtual)
+    /// <param name="isVirtual">Whether the member which is added is one which a type of its own may override.</param>
+    /// <param name="assemblyName">The name of the assembly to build, which a test which runs its host gives one of its own.</param>
+    private static TypeHandler NewHostWithAdd(bool isVirtual, string assemblyName = "MethodInjectionAssembly")
     {
-        var handler = (AssemblyHandler) Assembly.Create("MethodInjectionAssembly").Handler;
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
         var module = host.Source.Module;
         var attrs = MethodAttributes.Public | MethodAttributes.HideBySig
@@ -1335,6 +1354,41 @@ public class PointerTests
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(64));
+    }
+
+    [Test]
+    public void A_Held_Delegate_Which_Is_Handed_On_As_Well_Is_Built_Rather_Than_Folded()
+    {
+        // The local holds the delegate for a call of another member as well, so its reads are not the invocations of the
+        // delegate alone: the delegate is built where the symbol stands and every read stands where it stood. The
+        // invocation was answered for the read which hands the delegate on as well, which wrote the one instruction
+        // twice, and the second read was left invoking a delegate which nothing had built.
+        var host = NewHostWithAdd(isVirtual: false, "MethodInjectionHandedOnDelegateAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        Assert.DoesNotThrow(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichWasHandedOn))),
+                            "the template which hands the delegate it holds on was refused rather than woven.");
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
+                    "the delegate was not built into the local which holds it.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+                    "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
+
+        var assembly = host.AssemblyHandler.Assembly;
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(42));
     }
 
     [Test]
