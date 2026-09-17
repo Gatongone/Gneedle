@@ -136,9 +136,13 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     private static void Write(string assemblyPath, byte[] image)
     {
         var written = assemblyPath + WrittenSuffix;
-        File.WriteAllBytes(written, image);
+        // The write lies within the step which takes the image away as well, because an image which the write could not
+        // make in full is one which is beside the assembly without being in its place, which is what nothing of it is
+        // to be left as: a file which was written only in part is taken away by the same step which takes away one
+        // which could not be put in place at all.
         try
         {
+            File.WriteAllBytes(written, image);
             File.Replace(written, assemblyPath, destinationBackupFileName: null);
         }
         finally
