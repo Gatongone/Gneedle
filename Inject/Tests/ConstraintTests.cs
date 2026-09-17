@@ -40,6 +40,24 @@ public class ConstraintTests
         Assert.That(Constraint.Struct.GenericParameterAttributes, Is.EqualTo(expected));
     }
 
+    [Test]
+    public void The_Presets_Are_Not_Overwritten()
+    {
+        // A preset is what a constraint of a shape means, and every use of one reads the preset rather than a copy of it:
+        // a caller which can write to one of them changes what every other caller reads for the rest of the run, and
+        // what it means is not something the caller of a library decides.
+        var presets = typeof(Constraint).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+
+        Assert.That(presets, Is.Not.Empty, "the constraint type holds no preset for the test to read.");
+        Assert.Multiple(() =>
+        {
+            foreach (var preset in presets)
+            {
+                Assert.That(preset.IsInitOnly, Is.True, $"'{preset.Name}' is a preset which a caller can overwrite.");
+            }
+        });
+    }
+
     #endregion
 
     #region FromType construction
