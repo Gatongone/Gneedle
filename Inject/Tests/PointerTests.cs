@@ -402,6 +402,12 @@ public class PointerTests
         public static int BaseMethod(int a) => Base.Method<IntOp>("Calc")(a);
         public static int BaseFieldGet() => Base.Field<int>("Value").Get();
         public static int BasePropertyGet() => Base.Property<int>("Prop").Get();
+
+        /// <summary>
+        /// The member which <see cref="BaseMethod"/> reaches through <c>Base</c> is reached through the type being woven
+        /// here: a member of a base of a base is a member of the type which derives from it as well.
+        /// </summary>
+        public static int ThisMethodOfABaseOfABase(int a) => This.Method<IntOp>("Calc")(a);
     }
 
     /// <summary>
@@ -1205,6 +1211,146 @@ public class PointerTests
         var type = LoadHostOf(asm, host).MakeGenericType(typeof(int));
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
+    }
+
+    /// <summary>
+    /// Create a host which derives from a type which declares a parameter of its own and derives from a generic type in
+    /// turn, so that a member which a template reaches belongs to a base of a base of the type being woven.<para/>
+    /// The member belongs to a declaration which stands two steps away from the body being woven, and the instantiation
+    /// which the body can name for it is the one the chain of base types names rather than one which stands where the
+    /// member is reached.
+    /// </summary>
+    /// <param name="assemblyName">The name of the assembly to build, which a test which runs its host gives one of its own.</param>
+    /// <param name="addBaseMembers">Adds the members which a template reaches to the generic base type.</param>
+    private static TypeHandler NewHostWhichDerivesFromAGenericBaseOfAGenericBase(string assemblyName, Action<TypeDefinition, ModuleDefinition> addBaseMembers)
+    {
+        var asm = Assembly.Create(assemblyName);
+        var mod = asm.Source.MainModule;
+        var baseDef = new TypeDefinition(Ns, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
+        baseDef.GenericParameters.Add(new GenericParameter("T", baseDef));
+        addBaseMembers(baseDef, mod);
+        mod.Types.Add(baseDef);
+
+        var middleDef = new TypeDefinition(Ns, "MiddleType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
+        var middleParameter = new GenericParameter("T", middleDef);
+        middleDef.GenericParameters.Add(middleParameter);
+        var baseOfTheMiddle = new GenericInstanceType(baseDef);
+        baseOfTheMiddle.GenericArguments.Add(middleParameter);
+        middleDef.BaseType = baseOfTheMiddle;
+        mod.Types.Add(middleDef);
+
+        var host = (TypeHandler) ((AssemblyHandler) asm.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        // The middle type hands the argument over to its own base, so the base of the base of the host is reached through
+        // an instantiation which is written where the middle type is declared rather than where the host is.
+        var middleOfTheHost = new GenericInstanceType(middleDef);
+        middleOfTheHost.GenericArguments.Add(mod.TypeSystem.Int32);
+        host.Source.BaseType = middleOfTheHost;
+        return host;
+    }
+
+    /// <summary>
+    /// Add the method which the templates of the tests below call to the generic base type.
+    /// </summary>
+    /// <param name="baseDef">The generic base type which the host derives from through a middle type.</param>
+    /// <param name="mod">The module which the type is declared in.</param>
+    private static void AddCalcToTheGenericBase(TypeDefinition baseDef, ModuleDefinition mod)
+    {
+        var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+        calc.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, mod.TypeSystem.Int32));
+        var calcIl = calc.Body.GetILProcessor();
+        calcIl.Emit(OpCodes.Ldarg_1); calcIl.Emit(OpCodes.Ret);
+        baseDef.Methods.Add(calc);
+    }
+
+    [Test]
+    public void A_Member_Of_A_Generic_Base_Of_A_Generic_Base_Is_Called_On_The_Instantiation_Which_The_Chain_Names()
+    {
+        var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleMemberAssembly", AddCalcToTheGenericBase);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod)));
+
+        var call = ((MethodHandler) method).Source.Body.Instructions
+                                           .First(instruction => (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
+                                                                 && ((MethodReference) instruction.Operand).Name == "Calc");
+        var declaring = ((MethodReference) call.Operand).DeclaringType;
+
+        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
+        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+                    "the instantiation which the call names is not the one which the chain of base types hands down.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
+    }
+
+    [Test]
+    public void A_Member_Of_A_Generic_Base_Of_A_Generic_Base_Is_Called_On_The_Instantiation_Through_This()
+    {
+        var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleThisMemberAssembly", AddCalcToTheGenericBase);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.ThisMethodOfABaseOfABase)));
+
+        var call = ((MethodHandler) method).Source.Body.Instructions
+                                           .First(instruction => (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
+                                                                 && ((MethodReference) instruction.Operand).Name == "Calc");
+        var declaring = ((MethodReference) call.Operand).DeclaringType;
+
+        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
+        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+                    "the instantiation which the call names is not the one which the chain of base types hands down.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
+    }
+
+    [Test]
+    public void A_Field_Of_A_Generic_Base_Of_A_Generic_Base_Is_Read_Off_The_Instantiation_Which_The_Chain_Names()
+    {
+        var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleFieldAssembly",
+                                                                    (baseDef, mod) => baseDef.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, mod.TypeSystem.Int32)));
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseFieldGet)));
+
+        var read = ((MethodHandler) method).Source.Body.Instructions.First(instruction => instruction.OpCode == OpCodes.Ldfld);
+        var declaring = ((FieldReference) read.Operand).DeclaringType;
+
+        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                    "the field is read off the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
+        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+                    "the instantiation which the read names is not the one which the chain of base types hands down.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), null), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void A_Property_Of_A_Generic_Base_Of_A_Generic_Base_Is_Read_Off_The_Instantiation_Which_The_Chain_Names()
+    {
+        var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddlePropertyAssembly", (baseDef, mod) =>
+        {
+            var getter = new MethodDefinition("get_Prop", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+            var getterIl = getter.Body.GetILProcessor();
+            getterIl.Emit(OpCodes.Ldc_I4_1); getterIl.Emit(OpCodes.Ret);
+            baseDef.Methods.Add(getter);
+            baseDef.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, mod.TypeSystem.Int32) { GetMethod = getter });
+        });
+
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BasePropertyGet)));
+
+        var call = ((MethodHandler) method).Source.Body.Instructions
+                                           .First(instruction => (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
+                                                                 && ((MethodReference) instruction.Operand).Name == "get_Prop");
+        var declaring = ((MethodReference) call.Operand).DeclaringType;
+
+        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                    "the accessor is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
+        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+                    "the instantiation which the call names is not the one which the chain of base types hands down.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), null), Is.EqualTo(1));
     }
 
     #endregion

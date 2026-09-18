@@ -49,8 +49,8 @@ partial class MethodHandler
         // Detect Instance/Static patterns to determine skip count and declaring type.
         var skipStaticFromCount = 0;
         TypeDefinition? declaringTypeFromPattern = null;
-        // The type which the template named the instance through, which the accessor is written on where it belongs to
-        // that type itself rather than to a base type of it.
+        // The type of the instance which the template reached the property through, which the accessor is written on
+        // where it belongs to that type itself rather than to a base type of it.
         TypeReference? namedInstance = null;
         // The instance which the template reached the property through, which is the receiver of its call where the
         // accessor which is called takes one: the sequence which builds the instance is dropped, so the value it holds has
@@ -89,6 +89,10 @@ partial class MethodHandler
                 }
             }
         }
+
+        // A property which the template reaches through `This` or `Base` belongs to the woven type or to a base type of
+        // it, and the instance which those symbols stand for is the one which the body is a member of.
+        namedInstance = InstanceNamedBy(memberSymbol, namedInstance);
 
         // Whether the instance which the template reached the property through is a value which it computed where it
         // stands, rather than a load of one of its arguments: the load is written where the name of the property stands,

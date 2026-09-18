@@ -50,9 +50,8 @@ partial class MethodHandler
         // Detect Instance/Static patterns to determine skip count and declaring type.
         var skipStaticFromCount = 0;
         TypeDefinition? declaringTypeFromPattern = null;
-        // The type which the template named the instance through, which stands for the type of the value it holds: the
-        // reference to the field names the instantiation of the type which that value is one of, when it declares
-        // parameters, rather than the definition of it.
+        // The type of the instance which the template reached the field through, which names the instantiation of the
+        // type which declares the field where that type declares parameters, rather than the definition of it.
         TypeReference? namedInstance = null;
         // The instance which the template reached the field through, which is the receiver of it where the field is not
         // static: the sequence which builds the instance is dropped, so the value it holds has to stand where the member
@@ -88,6 +87,10 @@ partial class MethodHandler
                 }
             }
         }
+
+        // A field which the template reaches through `This` or `Base` belongs to the woven type or to a base type of it,
+        // and the instance which those symbols stand for is the one which the body is a member of.
+        namedInstance = InstanceNamedBy(memberSymbol, namedInstance);
 
         // Whether the instance which the template reached the field through is a value which it computed where it stands,
         // rather than a load of one of its arguments: the load is written where the name of the field stands, and a value

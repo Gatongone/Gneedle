@@ -392,6 +392,26 @@ partial class MethodHandler
     }
 
     /// <summary>
+    /// The type of the instance which a symbol of a template reaches a member through: the type which the template
+    /// named where it named one, the type being woven for <see cref="MemberSymbols.This"/> and
+    /// <see cref="MemberSymbols.Base"/>, which stand for a member of the instance which the body is a member of, and
+    /// null where the template named none.<para/>
+    /// The member which one of those two reaches belongs to the woven type or to a base type of it, and the
+    /// instantiation which the body can name for the declaration which holds it is read from the chain of base types
+    /// which the woven type is declared by: the walk of that chain starts at the woven type wherever in the chain the
+    /// member stands.
+    /// </summary>
+    /// <param name="memberSymbol">The symbol which the template reached the member through.</param>
+    /// <param name="namedInstance">The type which the template named the instance through, where it named one.</param>
+    /// <returns>The type of the instance which the member is reached through, or null where the template named none.</returns>
+    private TypeReference? InstanceNamedBy(MemberSymbols memberSymbol, TypeReference? namedInstance = null)
+    {
+        if (namedInstance is not null) return namedInstance;
+
+        return memberSymbol.HasFlag(MemberSymbols.This) || memberSymbol.HasFlag(MemberSymbols.Base) ? Source.DeclaringType : null;
+    }
+
+    /// <summary>
     /// The instantiation of <paramref name="declaringType"/> which the body being woven names, which is the type itself
     /// or the base type which it hands its own parameters down to, or null when the body can name no instantiation of
     /// it.<para/>
@@ -486,14 +506,14 @@ partial class MethodHandler
     /// <param name="parameters">The types of the arguments which the member is called with, which the member that is found has to be described by.</param>
     /// <param name="targetDef">The template which the instructions are read out of.</param>
     /// <param name="namedInstance">
-    /// The type of the instance which the member is reached through where the template names one, or null for the
-    /// symbols which stand for a member of the type being woven rather than for one of a value the template holds.
+    /// The type of the instance which the member is reached through, which is the type being woven for the symbols
+    /// which stand for a member of the body's own instance, or null where the template named none.
     /// </param>
     /// <returns>The method which the symbol stands for, or null when the symbol is not one which names a method.</returns>
     /// <exception cref="ArgumentException">Thrown when the member cannot be resolved, or when the template proceeds without a body being woven around.</exception>
     private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, InstructionFilter filter, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef, out TypeReference? namedInstance)
     {
-        namedInstance = null;
+        namedInstance = InstanceNamedBy(memberSymbol);
 
         if (memberSymbol.HasFlag(MemberSymbols.Base))
         {
