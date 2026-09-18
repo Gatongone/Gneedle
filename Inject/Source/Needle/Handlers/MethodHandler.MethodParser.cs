@@ -125,7 +125,7 @@ partial class MethodHandler
         if (memberSymbol.HasFlag(MemberSymbols.Static) && nameIndex is { } staticName && staticName >= 2)
         {
             var callFromIns = filter.Target[staticName - 1];
-            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference { Name: "From", DeclaringType: var declType }
+            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference {Name: "From", DeclaringType: var declType}
                 && declType.FullName == Static.TYPE_NAME)
             {
                 var ldstrIns = filter.Target[staticName - 2];
@@ -186,8 +186,8 @@ partial class MethodHandler
         // local stands where it stands and is written as the receiver of the member, which is the load of the argument
         // the instance was named by: a value which the template computed is one value in one place, so the local holds the
         // delegate where that is so, as it does for a local which stands for more than the invocation of it.
-        var instanceIsComputed = instance is { Load: null };
-        var held            = HeldLocal(filter.Target, callIndex);
+        var instanceIsComputed = instance is {Load: null};
+        var held = HeldLocal(filter.Target, callIndex);
 
         // The store which the local is written by holds the value which the symbol left only where every path of the body
         // goes through the symbol: the value which another path leaves there is the one the local holds just as well, and
@@ -262,7 +262,7 @@ partial class MethodHandler
             // is an instantiation of: the constructor of the definition takes the arguments of the open type, and a body
             // which named the definition of a generic delegate could not be loaded at all.
             var delegateType = Source.Module.ImportReference(delegateRef);
-            var constructor  = delegateDef.GetConstructors().First();
+            var constructor = delegateDef.GetConstructors().First();
             var delegateCtor = new MethodReference(constructor.Name, Source.Module.TypeSystem.Void, delegateType)
             {
                 HasThis           = constructor.HasThis,
@@ -377,7 +377,7 @@ partial class MethodHandler
     /// <returns>The reference which the call instruction holds.</returns>
     private MethodReference GetMethodReference(MethodDefinition methodDef, TypeReference? namedInstance = null)
     {
-        if (methodDef.DeclaringType is not { HasGenericParameters: true } declaringType) return Source.Module.ImportReference(methodDef);
+        if (methodDef.DeclaringType is not {HasGenericParameters: true} declaringType) return Source.Module.ImportReference(methodDef);
 
         if (InstantiationOf(declaringType, namedInstance) is not { } declaringInstance) return Source.Module.ImportReference(methodDef);
 
@@ -490,7 +490,7 @@ partial class MethodHandler
             // of the declaration it stands in. The walk carries the instantiation which each type was reached through,
             // and hands each declaration the arguments of it, so that a base which is written with a parameter is read
             // as the argument which the instance behind the walk holds.
-            for (var instance = namedInstance; instance.Resolve() is { BaseType: { } baseType } declaration;)
+            for (var instance = namedInstance; instance.Resolve() is {BaseType: { } baseType} declaration;)
             {
                 var reached = baseType.WithTheArgumentsOf(declaration, instance);
                 if (reached is GenericInstanceType instantiation
@@ -516,27 +516,15 @@ partial class MethodHandler
     /// </summary>
     /// <param name="type">The type which the walk of a chain of base types reached.</param>
     /// <returns>Whether the body can write the type with every parameter which stands in it.</returns>
-    private bool HoldsOnlyParametersWhichTheBodyNames(TypeReference type)
+    private bool HoldsOnlyParametersWhichTheBodyNames(TypeReference type) => type switch
     {
-        switch (type)
-        {
-            case GenericParameter parameter:
-                return parameter.Owner == Source.DeclaringType || parameter.Owner == Source;
-
-            // An argument is a type of its own, which may hold a parameter as well, just like Base<List<T>>, and the
-            // element of an array is one, just like Base<T[]>: both are read through the type they stand for.
-            case GenericInstanceType instance:
-                return HoldsOnlyParametersWhichTheBodyNames(instance.ElementType)
-                       && instance.GenericArguments.All(HoldsOnlyParametersWhichTheBodyNames);
-
-            case TypeSpecification specification:
-                return HoldsOnlyParametersWhichTheBodyNames(specification.ElementType);
-
-            // A nested type names the parameters of the type it is declared in, which no argument of it holds.
-            default:
-                return type.DeclaringType is null || HoldsOnlyParametersWhichTheBodyNames(type.DeclaringType);
-        }
-    }
+        GenericParameter parameter => parameter.Owner == Source.DeclaringType || parameter.Owner == Source,
+        // An argument is a type of its own, which may hold a parameter as well, just like Base<List<T>>, and the
+        // element of an array is one, just like Base<T[]>: both are read through the type they stand for.
+        GenericInstanceType instance    => HoldsOnlyParametersWhichTheBodyNames(instance.ElementType) && instance.GenericArguments.All(HoldsOnlyParametersWhichTheBodyNames),
+        TypeSpecification specification => HoldsOnlyParametersWhichTheBodyNames(specification.ElementType),
+        _                               => type.DeclaringType is null || HoldsOnlyParametersWhichTheBodyNames(type.DeclaringType)
+    };
 
     /// <summary>
     /// The method which a symbol of a template stands for: a member of the type being woven, a member of its base type,
@@ -982,8 +970,8 @@ partial class MethodHandler
     private List<(int Read, int Invocation)>? InvocationsOfTheHeldDelegate(IReadOnlyList<Instruction> bodyInstructions, int local, TypeReference delegateType, MethodDefinition targetDef)
     {
         var invocations = new List<(int Read, int Invocation)>();
-        var reads       = 0;
-        var stores      = 0;
+        var reads = 0;
+        var stores = 0;
 
         for (var i = 0; i < bodyInstructions.Count; i++)
         {
@@ -1011,13 +999,13 @@ partial class MethodHandler
     /// <param name="pushedBy">The instruction which pushed the value.</param>
     private bool StackTypeMatches(TypeReference expected, TypeReference actual, Instruction pushedBy)
         => TypeName.HasSameName(expected, actual)
-           || (IsI4Compatible(expected) && IsI4Compatible(actual))
-           // An enumeration is carried as the value under it, which is what a template which computes one out of an
-           // integer leaves on the stack: there is no instruction which names the enumeration.
-           || (IsI4Compatible(actual) && HasAnI4UnderlyingType(expected))
-           // A value which was boxed is carried as the type it was boxed from, and it is the value which a call of a
-           // parameter of `object` is made with rather than a reference of a type which names `object`.
-           || (pushedBy.OpCode.Code == Code.Box && expected.MetadataType == MetadataType.Object);
+            || (IsI4Compatible(expected) && IsI4Compatible(actual))
+            // An enumeration is carried as the value under it, which is what a template which computes one out of an
+            // integer leaves on the stack: there is no instruction which names the enumeration.
+            || (IsI4Compatible(actual) && HasAnI4UnderlyingType(expected))
+            // A value which was boxed is carried as the type it was boxed from, and it is the value which a call of a
+            // parameter of `object` is made with rather than a reference of a type which names `object`.
+            || (pushedBy.OpCode.Code == Code.Box && expected.MetadataType == MetadataType.Object);
 
     /// <summary>
     /// Whether the values of a type are carried by the stack as 4-byte integers, which is what an enumeration of an
@@ -1029,9 +1017,9 @@ partial class MethodHandler
     {
         try
         {
-            return type.ResolveDefinition(Source.Module) is { IsEnum: true } definition
-                   && definition.Fields.FirstOrDefault(field => field.Name == "value__") is { } value
-                   && IsI4Compatible(value.FieldType);
+            return type.ResolveDefinition(Source.Module) is {IsEnum: true} definition
+                && definition.Fields.FirstOrDefault(field => field.Name == "value__") is { } value
+                && IsI4Compatible(value.FieldType);
         }
         catch (AssemblyResolutionException)
         {
@@ -1047,13 +1035,13 @@ partial class MethodHandler
     /// </summary>
     private static bool IsI4Compatible(TypeReference type)
         => type.MetadataType is MetadataType.Boolean
-            or MetadataType.Char
-            or MetadataType.SByte
-            or MetadataType.Byte
-            or MetadataType.Int16
-            or MetadataType.UInt16
-            or MetadataType.Int32
-            or MetadataType.UInt32;
+                             or MetadataType.Char
+                             or MetadataType.SByte
+                             or MetadataType.Byte
+                             or MetadataType.Int16
+                             or MetadataType.UInt16
+                             or MetadataType.Int32
+                             or MetadataType.UInt32;
 
     /// <summary>
     /// Consider how the instruction should pop from or push into <c>paramStack</c>.
@@ -1120,13 +1108,13 @@ partial class MethodHandler
     /// <returns>Whether the instruction leaves another value in place of the one it is handed.</returns>
     private static bool LeavesAValueInPlaceOfTheOneItIsHanded(Instruction ins) => ins.OpCode.Code is
         Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_I8 or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4
-        or Code.Conv_U8 or Code.Conv_I or Code.Conv_U or Code.Conv_R4 or Code.Conv_R8 or Code.Conv_R_Un
-        or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_I8 or Code.Conv_Ovf_U1
-        or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_U8 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un
-        or Code.Box or Code.Unbox or Code.Unbox_Any or Code.Castclass or Code.Isinst
-        or Code.Ldfld or Code.Ldflda or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8
-        or Code.Ldind_I or Code.Ldind_R4 or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2
-        or Code.Ldind_U4;
+     or Code.Conv_U8 or Code.Conv_I or Code.Conv_U or Code.Conv_R4 or Code.Conv_R8 or Code.Conv_R_Un
+     or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_I8 or Code.Conv_Ovf_U1
+     or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_U8 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un
+     or Code.Box or Code.Unbox or Code.Unbox_Any or Code.Castclass or Code.Isinst
+     or Code.Ldfld or Code.Ldflda or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8
+     or Code.Ldind_I or Code.Ldind_R4 or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2
+     or Code.Ldind_U4;
 
     /// <summary>
     /// The type of the value which an instruction leaves on the stack, which is read off the instruction itself where
@@ -1144,38 +1132,38 @@ partial class MethodHandler
 
         type = code switch
         {
-            Code.Ldc_I4_M1                                                                         => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_0                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_1                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_2                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_3                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_4                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_5                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_6                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_7                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_8                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I4_S                                                                          => typeSystem.Int32,                   // Int32
-            Code.Ldc_I8                                                                            => typeSystem.Int64,                   // Int64
-            Code.Ldstr                                                                             => typeSystem.String,                  // String
-            Code.Ldc_R4                                                                            => typeSystem.Single,                  // Single
-            Code.Ldc_R8                                                                            => typeSystem.Double,                  // Double
-            Code.Ldnull                                                                            => typeSystem.Object,                  // Null
+            Code.Ldc_I4_M1 => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_0  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_1  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_2  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_3  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_4  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_5  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_6  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_7  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_8  => typeSystem.Int32,  // Int32
+            Code.Ldc_I4_S  => typeSystem.Int32,  // Int32
+            Code.Ldc_I8    => typeSystem.Int64,  // Int64
+            Code.Ldstr     => typeSystem.String, // String
+            Code.Ldc_R4    => typeSystem.Single, // Single
+            Code.Ldc_R8    => typeSystem.Double, // Double
+            Code.Ldnull    => typeSystem.Object, // Null
             // The conversions which an argument of a type other than the one which was computed is handed over
             // through: the value is left of the type which was converted to, and the narrow ones are all carried as
             // 4-byte integers whichever of them they are.
             Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4
-                or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_U1
-                or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un      => typeSystem.Int32,    // Conv, narrow
-            Code.Conv_I8 or Code.Conv_Ovf_I8                                                             => typeSystem.Int64,    // Conv, Int64
-            Code.Conv_U8 or Code.Conv_Ovf_U8                                                             => typeSystem.UInt64,   // Conv, UInt64
-            Code.Conv_I                                                                                  => typeSystem.IntPtr,   // Conv, native
-            Code.Conv_U                                                                                  => typeSystem.UIntPtr,  // Conv, native
-            Code.Conv_R4                                                                                 => typeSystem.Single,   // Conv, Single
-            Code.Conv_R8 or Code.Conv_R_Un                                                               => typeSystem.Double,   // Conv, Double
+             or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_U1
+             or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un => typeSystem.Int32, // Conv, narrow
+            Code.Conv_I8 or Code.Conv_Ovf_I8 => typeSystem.Int64,                                                     // Conv, Int64
+            Code.Conv_U8 or Code.Conv_Ovf_U8 => typeSystem.UInt64,                                                    // Conv, UInt64
+            Code.Conv_I                      => typeSystem.IntPtr,                                                    // Conv, native
+            Code.Conv_U                      => typeSystem.UIntPtr,                                                   // Conv, native
+            Code.Conv_R4                     => typeSystem.Single,                                                    // Conv, Single
+            Code.Conv_R8 or Code.Conv_R_Un   => typeSystem.Double,                                                    // Conv, Double
             // The instructions which leave the type they name, which is the type of the value they leave: what is
             // looked for when the argument is the value which a call hands over.
-            Code.Box or Code.Unbox_Any or Code.Castclass or Code.Isinst when ins.Operand is TypeReference cast => cast, // Cast
-            Code.Ldfld or Code.Ldsfld when ins.Operand is FieldReference field                     => field.FieldType,                    // Field
+            Code.Box or Code.Unbox_Any or Code.Castclass or Code.Isinst when ins.Operand is TypeReference cast => cast,            // Cast
+            Code.Ldfld or Code.Ldsfld when ins.Operand is FieldReference field                                 => field.FieldType, // Field
             // The instructions which load the address of an argument or of a local rather than the value it holds, which
             // is what a template writes where it hands one to a member by `ref` or `out`: what stands on the stack is an
             // address of that type rather than a value of it, which is the type the delegate declares the argument as.
@@ -1220,11 +1208,11 @@ partial class MethodHandler
         var readsAnArgument = ins.OpCode.Code is Code.Ldarga or Code.Ldarga_S;
         var addressed = ins.Operand switch
         {
-            VariableReference local     => local.VariableType,
-            ParameterReference argument => argument.ParameterType,
-            int slot when readsAnArgument => ArgumentAt(slot, targetDef),
+            VariableReference local                                          => local.VariableType,
+            ParameterReference argument                                      => argument.ParameterType,
+            int slot when readsAnArgument                                    => ArgumentAt(slot, targetDef),
             int slot when slot >= 0 && slot < targetDef.Body.Variables.Count => targetDef.Body.Variables[slot].VariableType,
-            _ => null
+            _                                                                => null
         };
 
         return addressed is { } type ? new ByReferenceType(type.ParseGenericTokens(Source, Source.Module)) : null;
@@ -1279,7 +1267,7 @@ partial class MethodHandler
         /// <summary>
         /// The instruction which pushed each of the values, in the order they were pushed.
         /// </summary>
-        public readonly List<Instruction>   Ins   = [];
+        public readonly List<Instruction> Ins = [];
 
         /// <summary>
         /// The type of each of the values, in the order they were pushed, which is the order of <see cref="Ins"/>.

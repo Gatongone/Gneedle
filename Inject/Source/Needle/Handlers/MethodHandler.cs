@@ -93,8 +93,8 @@ internal sealed partial class MethodHandler : IMethodHandler
         // only once it is whole: the body which a base type does not hold is what CallFromBase refuses, and a refusal
         // leaves the member holding the body it held rather than the one which was being written for it.
         var previous = Source.Body;
-        var body     = new MethodBody(Source);
-        Source.Body  = body;
+        var body = new MethodBody(Source);
+        Source.Body = body;
         try
         {
             var il = body.GetILProcessor();
@@ -336,7 +336,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // which holds no generic parameter.
         if (templateDef.Parameters.Count != Source.Parameters.Count
             || templateDef.Parameters.Where((parameter, index) => !TypeName.HasSameName(parameter.ParameterType.ParseGenericTokens(Source, Source.Module),
-                                                                                       Source.Parameters[index].ParameterType)).Any())
+                Source.Parameters[index].ParameterType)).Any())
         {
             throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_PARAMETERS_MISMATCH, Source.FullName, templateDef.FullName));
         }
@@ -402,8 +402,8 @@ internal sealed partial class MethodHandler : IMethodHandler
         // The instructions are read before the body of the member is swapped, because the member may be the template
         // itself, and the parse reads those instructions for as long as it runs.
         var instructions = templateDef.Body.Instructions;
-        var previous     = Source.Body;
-        var woven        = new MethodBody(Source);
+        var previous = Source.Body;
+        var woven = new MethodBody(Source);
 
         // Every read and write of the body of the member for as long as the parse runs reaches the new body rather than
         // the one which the member holds, which is what leaves the member as it was when the parse is refused. The
@@ -445,7 +445,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     private MethodDefinition CreateProceedMethod(string name)
     {
         var generated = new MethodDefinition(name, MethodAttributes.Private | MethodAttributes.HideBySig
-                                                  | (Source.IsStatic ? MethodAttributes.Static : 0), Source.ReturnType)
+            | (Source.IsStatic ? MethodAttributes.Static : 0), Source.ReturnType)
         {
             DeclaringType = Source.DeclaringType
         };
@@ -464,7 +464,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // very same parameter to the body which was moved and to the call which the template leaves behind.
         foreach (var genericParameter in Source.GenericParameters)
         {
-            var copy = new GenericParameter(genericParameter.Name, generated) { Attributes = genericParameter.Attributes };
+            var copy = new GenericParameter(genericParameter.Name, generated) {Attributes = genericParameter.Attributes};
             foreach (var constraint in genericParameter.Constraints)
             {
                 copy.Constraints.Add(new GenericParameterConstraint(constraint.ConstraintType));
@@ -575,7 +575,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 HandlerStart = filter.Emitted(handler.HandlerStart),
                 HandlerEnd   = filter.Emitted(handler.HandlerEnd),
                 FilterStart  = filter.Emitted(handler.FilterStart),
-                CatchType    = handler.CatchType == null
+                CatchType = handler.CatchType == null
                     ? null
                     : Source.Module.ImportReference(handler.CatchType).ParseGenericTokens(Source, Source.Module)
             };
@@ -626,11 +626,11 @@ internal sealed partial class MethodHandler : IMethodHandler
         // instance captures that instance, and what it reads off it is a member of the instance rather than of the
         // method which holds it.
         var declaringType = templateDef.DeclaringType;
-        var fields  = new List<FieldReference>();
+        var fields = new List<FieldReference>();
         var readIndex = index + 1;
-        while (readIndex < instructions.Count
-               && instructions[readIndex] is { OpCode.Code: Code.Ldfld, Operand: FieldReference field }
-               && TypeName.HasSameName(field.DeclaringType, fields.Count == 0 ? declaringType : fields[fields.Count - 1].FieldType))
+        while (readIndex < instructions.Count &&
+            instructions[readIndex] is {OpCode.Code: Code.Ldfld, Operand: FieldReference field} &&
+            TypeName.HasSameName(field.DeclaringType, fields.Count == 0 ? declaringType : fields[fields.Count - 1].FieldType))
         {
             fields.Add(field);
             readIndex++;
@@ -683,7 +683,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // An enumeration is held as a value of the type under it, which is the type the stack carries. What the instance
         // holds is the enumeration boxed, so it is read as that value before it is written, which is what the box of it
         // holds and what the metadata of the field is named by.
-        if (metadata == MetadataType.ValueType && fieldType.Resolve() is { IsEnum: true } enumDef)
+        if (metadata == MetadataType.ValueType && fieldType.Resolve() is {IsEnum: true} enumDef)
         {
             metadata = enumDef.GetEnumUnderlyingType().MetadataType;
             if (value != null) value = Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()), CultureInfo.InvariantCulture);
@@ -691,19 +691,19 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         literal = metadata switch
         {
-            MetadataType.String when value is string text          => Instruction.Create(OpCodes.Ldstr, text),
-            MetadataType.Boolean when value is bool flag           => Instruction.Create(OpCodes.Ldc_I4, flag ? 1 : 0),
-            MetadataType.Char when value is char character         => Instruction.Create(OpCodes.Ldc_I4, character),
-            MetadataType.SByte when value is sbyte number          => Instruction.Create(OpCodes.Ldc_I4, number),
-            MetadataType.Byte when value is byte number            => Instruction.Create(OpCodes.Ldc_I4, number),
-            MetadataType.Int16 when value is short number          => Instruction.Create(OpCodes.Ldc_I4, number),
-            MetadataType.UInt16 when value is ushort number        => Instruction.Create(OpCodes.Ldc_I4, number),
-            MetadataType.Int32 when value is int number            => Instruction.Create(OpCodes.Ldc_I4, number),
-            MetadataType.UInt32 when value is uint number          => Instruction.Create(OpCodes.Ldc_I4, unchecked((int) number)),
-            MetadataType.Int64 when value is long number           => Instruction.Create(OpCodes.Ldc_I8, number),
-            MetadataType.UInt64 when value is ulong number         => Instruction.Create(OpCodes.Ldc_I8, unchecked((long) number)),
-            MetadataType.Single when value is float number         => Instruction.Create(OpCodes.Ldc_R4, number),
-            MetadataType.Double when value is double number        => Instruction.Create(OpCodes.Ldc_R8, number),
+            MetadataType.String when value is string text   => Instruction.Create(OpCodes.Ldstr, text),
+            MetadataType.Boolean when value is bool flag    => Instruction.Create(OpCodes.Ldc_I4, flag ? 1 : 0),
+            MetadataType.Char when value is char character  => Instruction.Create(OpCodes.Ldc_I4, character),
+            MetadataType.SByte when value is sbyte number   => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Byte when value is byte number     => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Int16 when value is short number   => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.UInt16 when value is ushort number => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.Int32 when value is int number     => Instruction.Create(OpCodes.Ldc_I4, number),
+            MetadataType.UInt32 when value is uint number   => Instruction.Create(OpCodes.Ldc_I4, unchecked((int) number)),
+            MetadataType.Int64 when value is long number    => Instruction.Create(OpCodes.Ldc_I8, number),
+            MetadataType.UInt64 when value is ulong number  => Instruction.Create(OpCodes.Ldc_I8, unchecked((long) number)),
+            MetadataType.Single when value is float number  => Instruction.Create(OpCodes.Ldc_R4, number),
+            MetadataType.Double when value is double number => Instruction.Create(OpCodes.Ldc_R8, number),
             // A null is the same value of every reference type, and the member which it is written into names the type.
             MetadataType.Class or MetadataType.Object or MetadataType.String or MetadataType.Array when value is null
                 => Instruction.Create(OpCodes.Ldnull),
@@ -899,7 +899,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             else
             {
                 ParseMethod(nameof(Proceed) + "." + nameof(Proceed.Method),
-                            MemberSymbols.Proceed | MemberSymbols.Method, currentIndex, null, filter, targetDef);
+                    MemberSymbols.Proceed | MemberSymbols.Method, currentIndex, null, filter, targetDef);
             }
         }
         else
@@ -995,7 +995,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <exception cref="ArgumentException">Thrown when the reference reaches a type which the compiler wrote.</exception>
     private void RefuseTheCompilersOwnType(TypeReference? type, string reference)
     {
-        for (var at = type; at is { IsNested: true }; at = at.DeclaringType)
+        for (var at = type; at is {IsNested: true}; at = at.DeclaringType)
         {
             if (!at.Name.StartsWith("<", StringComparison.Ordinal)) continue;
 
@@ -1123,10 +1123,10 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         memberFlag |= member.DeclaringType.FullName switch
         {
-            This.TYPE_NAME   => MemberSymbols.This,
-            Base.TYPE_NAME   => MemberSymbols.Base,
+            This.TYPE_NAME     => MemberSymbols.This,
+            Base.TYPE_NAME     => MemberSymbols.Base,
             Instance.TYPE_NAME => MemberSymbols.Instance,
-            Static.TYPE_NAME => MemberSymbols.Static,
+            Static.TYPE_NAME   => MemberSymbols.Static,
 
             // The only member which the pointer holds is the method which the advice proceeds through, so the kind of
             // the member is settled here rather than read from the name of the call.
@@ -1226,7 +1226,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     private static List<(int Read, int Accessor, bool IsGet)>? AccessorsOfAHeldHandle(IReadOnlyList<Instruction> bodyInstructions, int local)
     {
         var accessors = new List<(int Read, int Accessor, bool IsGet)>();
-        var stores    = 0;
+        var stores = 0;
 
         for (var i = 0; i < bodyInstructions.Count; i++)
         {
@@ -1290,13 +1290,13 @@ internal sealed partial class MethodHandler : IMethodHandler
     {
         isGet = false;
         if (instruction.OpCode != OpCodes.Callvirt || instruction.Operand is not MethodReference
+        {
+            DeclaringType:
             {
-                DeclaringType:
-                {
-                    Name     : nameof(ValuableMember) or nameof(ValuableMember) + "`1",
-                    Namespace: nameof(Gneedle) + "." + nameof(Inject)
-                }
-            } method) return false;
+                Name     : nameof(ValuableMember) or nameof(ValuableMember) + "`1",
+                Namespace: nameof(Gneedle) + "." + nameof(Inject)
+            }
+        } method) return false;
 
         if (method.Name is not (nameof(ValuableMember.Get) or nameof(ValuableMember.Set))) return false;
 
@@ -1325,55 +1325,55 @@ internal sealed partial class MethodHandler : IMethodHandler
             // The loads, which push a value of their own rather than one which the stack held already, and the field of
             // no instance among them, which is read off the type rather than off a value.
             case Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg or Code.Ldarg_S
-                or Code.Ldloc_0 or Code.Ldloc_1 or Code.Ldloc_2 or Code.Ldloc_3 or Code.Ldloc or Code.Ldloc_S
-                or Code.Ldarga or Code.Ldarga_S or Code.Ldloca or Code.Ldloca_S
-                or Code.Ldc_I4_M1 or Code.Ldc_I4_0 or Code.Ldc_I4_1 or Code.Ldc_I4_2 or Code.Ldc_I4_3 or Code.Ldc_I4_4
-                or Code.Ldc_I4_5 or Code.Ldc_I4_6 or Code.Ldc_I4_7 or Code.Ldc_I4_8 or Code.Ldc_I4 or Code.Ldc_I4_S
-                or Code.Ldc_I8 or Code.Ldc_R4 or Code.Ldc_R8 or Code.Ldstr or Code.Ldnull or Code.Ldftn or Code.Ldtoken
-                or Code.Ldsfld or Code.Ldsflda or Code.Sizeof:
+              or Code.Ldloc_0 or Code.Ldloc_1 or Code.Ldloc_2 or Code.Ldloc_3 or Code.Ldloc or Code.Ldloc_S
+              or Code.Ldarga or Code.Ldarga_S or Code.Ldloca or Code.Ldloca_S
+              or Code.Ldc_I4_M1 or Code.Ldc_I4_0 or Code.Ldc_I4_1 or Code.Ldc_I4_2 or Code.Ldc_I4_3 or Code.Ldc_I4_4
+              or Code.Ldc_I4_5 or Code.Ldc_I4_6 or Code.Ldc_I4_7 or Code.Ldc_I4_8 or Code.Ldc_I4 or Code.Ldc_I4_S
+              or Code.Ldc_I8 or Code.Ldc_R4 or Code.Ldc_R8 or Code.Ldstr or Code.Ldnull or Code.Ldftn or Code.Ldtoken
+              or Code.Ldsfld or Code.Ldsflda or Code.Sizeof:
                 return (0, 1);
 
             // The loads which read what they are handed, which is the value a field is read off, the address one is read
             // through, and the array or the element which stands at it: what each of them leaves stands in the place of
             // the value it took rather than above it.
             case Code.Ldfld or Code.Ldflda or Code.Ldobj or Code.Ldlen
-                or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8 or Code.Ldind_I or Code.Ldind_R4
-                or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2 or Code.Ldind_U4:
+              or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8 or Code.Ldind_I or Code.Ldind_R4
+              or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2 or Code.Ldind_U4:
                 return (1, 1);
 
             // The stores which take what they write and nothing else, and the pop, which takes one value.
             case Code.Starg or Code.Starg_S or Code.Stloc or Code.Stloc_S or Code.Stloc_0 or Code.Stloc_1
-                or Code.Stloc_2 or Code.Stloc_3 or Code.Stsfld or Code.Pop:
+              or Code.Stloc_2 or Code.Stloc_3 or Code.Stsfld or Code.Pop:
                 return (1, 0);
 
             // The stores which take where they write as well as what they write, which is the receiver of a field, the
             // address of a value, and the address of an element of an array or of an element of an array of addresses.
             case Code.Stfld or Code.Stobj
-                or Code.Stind_I or Code.Stind_I1 or Code.Stind_I2 or Code.Stind_I4 or Code.Stind_I8 or Code.Stind_R4
-                or Code.Stind_R8 or Code.Stind_Ref:
+                            or Code.Stind_I or Code.Stind_I1 or Code.Stind_I2 or Code.Stind_I4 or Code.Stind_I8 or Code.Stind_R4
+                            or Code.Stind_R8 or Code.Stind_Ref:
                 return (2, 0);
 
             // The instructions which leave what they were handed, of another type.
             case Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_I8 or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2
-                or Code.Conv_Ovf_I4 or Code.Conv_Ovf_I8 or Code.Conv_Ovf_U1 or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4
-                or Code.Conv_Ovf_U8 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un or Code.Conv_R4 or Code.Conv_R8
-                or Code.Conv_R_Un or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4 or Code.Conv_U8
-                or Code.Conv_I or Code.Conv_U or Code.Neg or Code.Not
-                or Code.Box or Code.Unbox or Code.Unbox_Any or Code.Castclass or Code.Isinst or Code.Ckfinite:
+              or Code.Conv_Ovf_I4 or Code.Conv_Ovf_I8 or Code.Conv_Ovf_U1 or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4
+              or Code.Conv_Ovf_U8 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un or Code.Conv_R4 or Code.Conv_R8
+              or Code.Conv_R_Un or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4 or Code.Conv_U8
+              or Code.Conv_I or Code.Conv_U or Code.Neg or Code.Not
+              or Code.Box or Code.Unbox or Code.Unbox_Any or Code.Castclass or Code.Isinst or Code.Ckfinite:
                 return (1, 1);
 
             // The instructions which take two values and leave one.
             case Code.Add or Code.Sub or Code.Mul or Code.Div or Code.Div_Un or Code.Rem or Code.Rem_Un
-                or Code.And or Code.Or or Code.Xor or Code.Shl or Code.Shr or Code.Shr_Un
-                or Code.Ceq or Code.Cgt or Code.Cgt_Un or Code.Clt or Code.Clt_Un
-                or Code.Ldelem_Any or Code.Ldelem_I or Code.Ldelem_I1 or Code.Ldelem_I2 or Code.Ldelem_I4
-                or Code.Ldelem_I8 or Code.Ldelem_R4 or Code.Ldelem_R8 or Code.Ldelem_Ref or Code.Ldelem_U1
-                or Code.Ldelem_U2 or Code.Ldelem_U4:
+              or Code.And or Code.Or or Code.Xor or Code.Shl or Code.Shr or Code.Shr_Un
+              or Code.Ceq or Code.Cgt or Code.Cgt_Un or Code.Clt or Code.Clt_Un
+              or Code.Ldelem_Any or Code.Ldelem_I or Code.Ldelem_I1 or Code.Ldelem_I2 or Code.Ldelem_I4
+              or Code.Ldelem_I8 or Code.Ldelem_R4 or Code.Ldelem_R8 or Code.Ldelem_Ref or Code.Ldelem_U1
+              or Code.Ldelem_U2 or Code.Ldelem_U4:
                 return (2, 1);
 
             // The instructions which take three values and leave none.
             case Code.Stelem_Any or Code.Stelem_I or Code.Stelem_I1 or Code.Stelem_I2 or Code.Stelem_I4
-                or Code.Stelem_I8 or Code.Stelem_R4 or Code.Stelem_R8 or Code.Stelem_Ref:
+              or Code.Stelem_I8 or Code.Stelem_R4 or Code.Stelem_R8 or Code.Stelem_Ref:
                 return (3, 0);
 
             // The instruction which takes the length of an array off the stack and leaves the array in its place.
@@ -1456,7 +1456,7 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         var constructor = bodyInstructions[nameIndex - 1];
         if (constructor.OpCode != OpCodes.Newobj
-            || constructor.Operand is not MethodReference { Name: ".ctor", DeclaringType: var declaringType }
+            || constructor.Operand is not MethodReference {Name: ".ctor", DeclaringType: var declaringType}
             || declaringType.FullName != Instance.TYPE_NAME)
         {
             return false;
