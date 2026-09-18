@@ -249,6 +249,23 @@ public class PointerTests
         }
 
         /// <summary>
+        /// A read of the local is handed to a member which answers a value of another type, and the invocation is made
+        /// with that value as an argument: what the call leaves stands in the place of the delegate which the read held,
+        /// so the read is one which the invocation has nowhere to read, and the delegate is built into the local.
+        /// </summary>
+        public static int InvokeAHeldDelegateWhichWasCountedFirst(int a)
+        {
+            var add = This.Method<Func<int, int, int>>("Add");
+            return add(CountTheDelegate(add), a);
+        }
+
+        /// <summary>
+        /// Take a delegate for what it holds and answer a value of another type, which is what a member which reads
+        /// something off the delegate it was handed answers.
+        /// </summary>
+        public static int CountTheDelegate(Func<int, int, int> slot) => 7;
+
+        /// <summary>
         /// The instance which a template stores a delegate it holds into on its way.
         /// </summary>
         public static readonly DelegateHolder Held = new DelegateHolder();
@@ -1534,6 +1551,40 @@ public class PointerTests
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(42));
         Assert.That(ThisMethodTemplates.Held.Slot, Is.Not.Null, "the delegate which the template handed over was not held.");
         Assert.That(ThisMethodTemplates.Held.Number, Is.EqualTo(5), "the field which the template wrote on its way was not written.");
+    }
+
+    [Test]
+    public void A_Held_Delegate_Which_A_Call_Took_Under_The_Arguments_Is_Built_Rather_Than_Folded()
+    {
+        // A read of the local is handed to a member which answers a value of another type, and that value is one of the
+        // arguments of the invocation: the call takes the delegate the read left and leaves another value in its place,
+        // which the walk counted as the read still standing, so the read was answered for the invocation as well and
+        // every read of the local was written as the receiver of the member.
+        var host = NewHostWithAdd(isVirtual: false, "MethodInjectionCountedDelegateAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichWasCountedFirst)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
+                    "the delegate was not built into the local which holds it.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+                    "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
+
+        var assembly = host.AssemblyHandler.Assembly;
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(28));
     }
 
     [Test]

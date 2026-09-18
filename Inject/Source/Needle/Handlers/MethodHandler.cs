@@ -1305,16 +1305,19 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
-    /// The number of values which an instruction leaves on the stack, counted against the number it takes off it, or
-    /// null when the walk cannot tell.<para/>
-    /// The count is what tells the accessor of a placeholder from the accessor of one which is written inside the
-    /// expression of it, and what tells an expression which is written beside a delegate from the call of it. It is read
-    /// off the instruction alone rather than off the member it names where the instruction carries one, which is what
-    /// lets the count be carried over a member the assembly being woven cannot resolve.
+    /// The values which an instruction takes off the stack and the values it leaves on it, or null when the walk cannot
+    /// tell.<para/>
+    /// The two are what tells the accessor of a placeholder from the accessor of one which is written inside the
+    /// expression of it, and what tells an expression which is written beside a delegate from the call of it: a value
+    /// which a member is handed is taken off the stack where the call of it is reached, and what the call leaves in its
+    /// place is a value of its own rather than the one it was handed. They are read off the instruction alone rather
+    /// than off the member it names where the instruction carries one, which is what lets them be carried over a member
+    /// the assembly being woven cannot resolve.
     /// </summary>
     /// <param name="instruction">The instruction which is counted.</param>
-    /// <returns>The count, or null when the instruction is not one which the walk reads.</returns>
-    private static int? StackDelta(Instruction instruction)
+    /// <returns>The values which the instruction takes and the values it leaves, or null when it is not one which the
+    /// walk reads.</returns>
+    private static (int Taken, int Left)? StackEffect(Instruction instruction)
     {
         var code = instruction.OpCode.Code;
         switch (code)
@@ -1328,7 +1331,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 or Code.Ldc_I4_5 or Code.Ldc_I4_6 or Code.Ldc_I4_7 or Code.Ldc_I4_8 or Code.Ldc_I4 or Code.Ldc_I4_S
                 or Code.Ldc_I8 or Code.Ldc_R4 or Code.Ldc_R8 or Code.Ldstr or Code.Ldnull or Code.Ldftn or Code.Ldtoken
                 or Code.Ldsfld or Code.Ldsflda or Code.Sizeof:
-                return 1;
+                return (0, 1);
 
             // The loads which read what they are handed, which is the value a field is read off, the address one is read
             // through, and the array or the element which stands at it: what each of them leaves stands in the place of
@@ -1336,19 +1339,19 @@ internal sealed partial class MethodHandler : IMethodHandler
             case Code.Ldfld or Code.Ldflda or Code.Ldobj or Code.Ldlen
                 or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8 or Code.Ldind_I or Code.Ldind_R4
                 or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2 or Code.Ldind_U4:
-                return 0;
+                return (1, 1);
 
             // The stores which take what they write and nothing else, and the pop, which takes one value.
             case Code.Starg or Code.Starg_S or Code.Stloc or Code.Stloc_S or Code.Stloc_0 or Code.Stloc_1
                 or Code.Stloc_2 or Code.Stloc_3 or Code.Stsfld or Code.Pop:
-                return -1;
+                return (1, 0);
 
             // The stores which take where they write as well as what they write, which is the receiver of a field, the
             // address of a value, and the address of an element of an array or of an element of an array of addresses.
             case Code.Stfld or Code.Stobj
                 or Code.Stind_I or Code.Stind_I1 or Code.Stind_I2 or Code.Stind_I4 or Code.Stind_I8 or Code.Stind_R4
                 or Code.Stind_R8 or Code.Stind_Ref:
-                return -2;
+                return (2, 0);
 
             // The instructions which leave what they were handed, of another type.
             case Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_I8 or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2
@@ -1357,7 +1360,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 or Code.Conv_R_Un or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4 or Code.Conv_U8
                 or Code.Conv_I or Code.Conv_U or Code.Neg or Code.Not
                 or Code.Box or Code.Unbox or Code.Unbox_Any or Code.Castclass or Code.Isinst or Code.Ckfinite:
-                return 0;
+                return (1, 1);
 
             // The instructions which take two values and leave one.
             case Code.Add or Code.Sub or Code.Mul or Code.Div or Code.Div_Un or Code.Rem or Code.Rem_Un
@@ -1366,32 +1369,45 @@ internal sealed partial class MethodHandler : IMethodHandler
                 or Code.Ldelem_Any or Code.Ldelem_I or Code.Ldelem_I1 or Code.Ldelem_I2 or Code.Ldelem_I4
                 or Code.Ldelem_I8 or Code.Ldelem_R4 or Code.Ldelem_R8 or Code.Ldelem_Ref or Code.Ldelem_U1
                 or Code.Ldelem_U2 or Code.Ldelem_U4:
-                return -1;
+                return (2, 1);
 
             // The instructions which take three values and leave none.
             case Code.Stelem_Any or Code.Stelem_I or Code.Stelem_I1 or Code.Stelem_I2 or Code.Stelem_I4
                 or Code.Stelem_I8 or Code.Stelem_R4 or Code.Stelem_R8 or Code.Stelem_Ref:
-                return -3;
+                return (3, 0);
 
             // The instruction which takes the length of an array off the stack and leaves the array in its place.
             case Code.Newarr:
-                return 0;
+                return (1, 1);
 
             // The instruction which leaves the value it was handed where it was and one more above it.
             case Code.Dup:
-                return 1;
+                return (0, 1);
 
             // A call takes the arguments which the reference names, which the signature counts without resolving the
             // member they are named on, and leaves what it hands back.
             case Code.Call or Code.Callvirt or Code.Newobj when instruction.Operand is MethodReference method:
                 var taken = method.Parameters.Count + (method.HasThis && code != Code.Newobj ? 1 : 0);
                 var left = code == Code.Newobj || method.ReturnType.MetadataType != MetadataType.Void ? 1 : 0;
-                return left - taken;
+                return (taken, left);
 
             default:
                 return null;
         }
     }
+
+    /// <summary>
+    /// The number of values which an instruction leaves on the stack, counted against the number it takes off it, or
+    /// null when the walk cannot tell.<para/>
+    /// The count is what tells the value which a placeholder was built around from the instructions which stand before
+    /// it, which are walked from the last of them back to the first: what an instruction leaves stands above what it
+    /// was handed rather than in the place of it where the walk goes backwards, so the two are counted against each
+    /// other rather than apart.
+    /// </summary>
+    /// <param name="instruction">The instruction which is counted.</param>
+    /// <returns>The count, or null when the instruction is not one which the walk reads.</returns>
+    private static int? StackDelta(Instruction instruction)
+        => StackEffect(instruction) is { } effect ? effect.Left - effect.Taken : null;
 
     /// <summary>
     /// The value which an instance of <see cref="Instance"/> was built around, which is what the member the placeholder

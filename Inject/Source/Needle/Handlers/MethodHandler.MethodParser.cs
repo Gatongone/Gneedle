@@ -701,9 +701,10 @@ partial class MethodHandler
 
     /// <summary>
     /// Whether the delegate which a read of a local leaves on the stack is the one which the invocation is made with,
-    /// which is so where the value of the read is still the value under the arguments of the invocation: a value which
-    /// another instruction of the body takes off the stack is one the invocation has nowhere to read, and the delegate
-    /// which a local holds is read for the calls which it is handed to as well.
+    /// which is so where the value of the read is still the value under the arguments of the invocation: an instruction
+    /// which takes more values than stand above the one the read left is one which took that value, and what a call
+    /// leaves in the place of what it was handed is a value of its own, so the delegate which a local holds is none of
+    /// the invocation where it was handed to a call on the way, whichever call that was.
     /// </summary>
     /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
     /// <param name="read">Index of the read of the local.</param>
@@ -711,19 +712,20 @@ partial class MethodHandler
     /// <returns>Whether the read is the receiver of the invocation.</returns>
     private static bool TheReadIsTheReceiver(IReadOnlyList<Instruction> bodyInstructions, int read, int invocation)
     {
-        // The value of the read stands on the stack until the invocation, which is where the count of the values above
-        // it is zero: an instruction which brings it back to nothing took it, and one which the walk cannot count is
-        // one which the read cannot be told to stand under, so the read is none of the invocation either way.
+        // The value of the read stands on the stack until the invocation, which is where no instruction takes more
+        // values than the ones which stand above it: an instruction which reaches it took it, and one which the walk
+        // cannot count is one which the read cannot be told to stand under, so the read is none of the invocation either
+        // way.
         var above = 0;
         for (var i = read + 1; i < invocation; i++)
         {
             var ins = bodyInstructions[i];
             if (ins.OpCode == OpCodes.Nop) continue;
 
-            if (StackDelta(ins) is not { } delta) return false;
+            if (StackEffect(ins) is not { } effect) return false;
+            if (effect.Taken > above) return false;
 
-            above += delta;
-            if (above < 0) return false;
+            above += effect.Left - effect.Taken;
         }
 
         return true;
