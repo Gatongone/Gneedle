@@ -307,12 +307,13 @@ partial class MethodHandler
     /// parameter of the method being woven which the member was looked up by, and the member is looked up by names. The
     /// generic method which the template proceeds through is a generated one which declares a parameter of every
     /// position, so the instantiation is the one a compiler emits for a call to a method of the generic parameters of
-    /// its own caller.
+    /// its own caller. A token which stands for a parameter of the type which the method being woven is a member of is
+    /// resolved to that parameter, which the body names as well as the ones it declares itself.
     /// </remarks>
     /// <param name="methodDef">The method which the body calls.</param>
     /// <param name="namedInstance">The type of the instance which the template reached the member through, or null where the template reached none.</param>
     /// <returns>The reference which the call instruction holds.</returns>
-    /// <exception cref="ArgumentException">Thrown when the member declares more generic parameters of its own than the method being woven declares, because the call of it cannot name the arguments of all of them.</exception>
+    /// <exception cref="ArgumentException">Thrown when a parameter of the member stands for no parameter which the body being woven names, because the call of it cannot name the argument for that parameter.</exception>
     private MethodReference GetCallableReference(MethodDefinition methodDef, TypeReference? namedInstance = null)
     {
         var importedMethod = GetMethodReference(methodDef, namedInstance);
@@ -321,26 +322,29 @@ partial class MethodHandler
         // the method being woven have no place in a call of it.
         if (methodDef.GenericParameters.Count == 0) return importedMethod;
 
-        // A member which declares more parameters of its own than the member being woven holds is one whose remaining
-        // parameters no token of the template stands for, and the call of it would leave those open, which the runtime
-        // refuses to run rather than being a call of the member.
-        if (methodDef.GenericParameters.Count > Source.GenericParameters.Count)
-        {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_CALL, methodDef.FullName, Source.FullName));
-        }
-
         var genericInstance = new GenericInstanceMethod(importedMethod);
         for (var position = 0; position < methodDef.GenericParameters.Count; position++)
         {
             // A parameter of the member which its signature names is declared with the parameter itself, and the types
             // of the parameters of the delegate are what the member was looked up by, which are compared by name: the
             // token of the delegate which stands for such a parameter of the member resolved to the parameter of the
-            // member being woven which bears its name, wherever it stands among them. A parameter which the signature
-            // of the member does not name is one which no token ties to anything, and the parameter of the member being
-            // woven which stands at its position is the argument for it, as it was where the two held the same number
-            // of parameters.
+            // member being woven which bears its name, wherever it stands among them. A token stands for a parameter of
+            // the type which the body is a member of just as well, so a parameter of the member which no parameter of
+            // the body bears the name of is one which the type may name: both are parameters which the body names.
             var parameter = methodDef.GenericParameters[position];
-            var named     = Source.GenericParameters.FirstOrDefault(own => own.Name.Equals(parameter.Name));
+            var named = Source.GenericParameters.FirstOrDefault(own => own.Name.Equals(parameter.Name))
+                        ?? Source.DeclaringType.GenericParameters.FirstOrDefault(own => own.Name.Equals(parameter.Name));
+
+            // A parameter of the member which the signature of the member does not name is one which no token ties to
+            // anything, and the parameter of the member being woven which stands at its position is the argument for it,
+            // as it was before the parameters of the member were read by name at all. A parameter of the member which
+            // neither stands for a parameter of the body nor is one the body holds at that position is one whose call
+            // would leave it open, which the runtime refuses to run rather than being a call of the member.
+            if (named == null && position >= Source.GenericParameters.Count)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_CALL, methodDef.FullName, Source.FullName));
+            }
+
             genericInstance.GenericArguments.Add(named ?? Source.GenericParameters[position]);
         }
 

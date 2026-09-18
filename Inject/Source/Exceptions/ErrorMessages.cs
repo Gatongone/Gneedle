@@ -128,13 +128,14 @@ internal static class ErrorMessages
     internal const string INVALID_GENERIC_PARAMETER = "The generic parameter named {0} is declared by neither the type nor the member which is woven.";
 
     /// <summary>
-    /// A template named a member which declares more generic parameters of its own than the member being woven
-    /// declares, so the call of it cannot be written: a parameter of the member is named by the token of the template
-    /// which stands for it, and the parameters of the member which the member being woven holds none for stand for no
-    /// token, which a call cannot leave open and be one the runtime runs. The placeholders are the member and the
-    /// member which is woven.
+    /// A template named a member which declares a generic parameter of its own which stands for no parameter of the
+    /// member being woven, so the call of it cannot be written: a parameter of the member is named by the token of the
+    /// template which stands for it, which is the parameter of the body or of the type which declares it bearing its
+    /// name, or the parameter of the body at the position of it where no name ties it to one, and a parameter which
+    /// stands for none of those is left open by the call, which is one the runtime refuses to run. The placeholders are
+    /// the member and the member which is woven.
     /// </summary>
-    internal const string INVALID_GENERIC_MEMBER_CALL = "A member which the template names declares more generic parameters of its own than the member being woven declares, so the call of it cannot be written: a parameter of the member is named by the token of the template which stands for it, and the parameters of the member which the member being woven holds none for stand for no token, which a call which leaves them open is one the runtime refuses to run. Member: {0}, Method: {1}.";
+    internal const string INVALID_GENERIC_MEMBER_CALL = "A member which the template names declares a generic parameter of its own which no parameter of the member being woven stands for, so the call of it cannot be written: a parameter of the member is named by the token of the template which stands for it, which is the parameter of the member being woven or of the type which declares it bearing its name, or the parameter of the member being woven which stands at the position of it where no name ties it to one, and a call which leaves the parameter of the member open is one the runtime refuses to run. Member: {0}, Method: {1}.";
 
     /// <summary>
     /// The getter of a property which holds no getter was asked for. The placeholder is the name of the property.

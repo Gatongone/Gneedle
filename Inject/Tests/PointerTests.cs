@@ -255,6 +255,15 @@ public class PointerTests
         /// <inheritdoc cref="LaterOp"/>
         public static M_1 InvokeAMemberWhichTheNameOfAParameterNames(M_0 key, M_1 value) => This.Method<LaterOp>("IdentityOfTheLater")(value);
 
+        // The member which the symbol names declares a parameter of its own which its own signature names, and the token
+        // of the template stands for the parameter of the type which the body is a member of, which bears the name of
+        // that parameter as well: the member is looked up by the names of the types of the parameters of the delegate,
+        // and the body declares no parameter of its own to name the parameter of the member with.
+        public delegate T_0 ShadowedOp(T_0 value);
+
+        /// <inheritdoc cref="ShadowedOp"/>
+        public static T_0 InvokeAMemberWhoseParameterTheTypeNames(T_0 value) => This.Method<ShadowedOp>("Identity")(value);
+
         // The same, of a member which belongs to no instance, whose invocation is written with no receiver at all.
         public static long InvokeAHeldDelegateOfAStaticMember(long a)
         {
@@ -1706,14 +1715,72 @@ public class PointerTests
                     "the woven assembly does not hand back the value of the parameter which the member is named by.");
     }
 
+    /// <summary>
+    /// Create a host which declares a parameter of its own and holds <c>T Identity&lt;T&gt;(T value)</c>, whose own
+    /// parameter bears the name of the parameter of the type: a template which names that member through a delegate
+    /// whose parameter is the token of the parameter of the type names the parameter of the member with it.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAMemberWhoseParameterTheTypeNames(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).WithGenericParameter("T").GetHandler();
+        var module = host.Source.Module;
+
+        var identity = new MethodDefinition("Identity", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Object)
+        {
+            DeclaringType = host.Source,
+        };
+        var own = new GenericParameter("T", identity);
+        identity.GenericParameters.Add(own);
+        identity.ReturnType = own;
+        identity.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, own));
+        var il = identity.Body.GetILProcessor();
+        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ret);
+        host.Source.Methods.Add(identity);
+        return host;
+    }
+
+    [Test]
+    public void A_Member_Whose_Parameter_The_Type_Names_Is_Called_With_The_Parameter_Of_The_Type()
+    {
+        // The member which the symbol names declares a parameter of its own which the signature of the member names, and
+        // the token of the delegate stands for the parameter of the type which the body is a member of, which bears the
+        // name of that parameter: the body declares no parameter of its own, and the argument of the instantiation is
+        // the parameter of the type, which the body names, rather than the parameter which would stand at the position
+        // of the parameter of the member.
+        var host = NewHostWithAMemberWhoseParameterTheTypeNames("ShadowedParameterAssembly");
+        var method = (MethodHandler) host.AddMethod(
+            "Run",
+            typeof(T_0).ToGneedleType(),
+            [],
+            [new Parameter(typeof(T_0).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhoseParameterTheTypeNames)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                         .FirstOrDefault(reference => reference.Name == "Identity");
+        Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
+        Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
+                    "the call stands on the definition of the member rather than on an instantiation of it.");
+        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Select(argument => argument.Name), Is.EqualTo(new[] { "T" }),
+                    "the call does not name the parameter of the type which named the parameter of the member.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
+                    "the woven assembly does not hand back the value which the member was called with.");
+    }
+
     [Test]
     public void A_Member_Which_Declares_A_Parameter_The_Template_Names_None_Of_Is_Refused()
     {
         // The member which the template names declares a parameter of its own which no token of the template stands for,
-        // and the body which is woven declares no parameter which one could: the arguments of an instantiation are the
-        // parameters of the body at the positions of the parameters of the member, so the call would stand on the
-        // definition of the member with the parameter of it left open, which is a body the runtime refuses to run rather
-        // than one which names the member, and the weave is refused instead.
+        // and neither the body which is woven nor the type which declares it holds a parameter which the name of that
+        // parameter ties it to, nor one which stands at its position: the call would stand on the definition of the
+        // member with the parameter of it left open, which is a body the runtime refuses to run rather than one which
+        // names the member, and the weave is refused instead.
         var host = NewHostWithAMemberWhichDeclaresAParameterOfItsOwn("MethodInjectionUnnamedParameterAssembly");
         var method = host.AddMethod(
             "Run",
@@ -1725,7 +1792,7 @@ public class PointerTests
         var thrown = Assert.Throws<ArgumentException>(
             () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn))));
 
-        Assert.That(thrown!.Message, Does.Contain("declares more generic parameters of its own than the member being woven declares"));
+        Assert.That(thrown!.Message, Does.Contain("declares a generic parameter of its own which no parameter of the member being woven stands for"));
     }
 
     /// <summary>
