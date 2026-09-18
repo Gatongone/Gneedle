@@ -302,15 +302,17 @@ partial class MethodHandler
     /// <remarks>
     /// A generic method is called through a method specification rather than through the definition itself, because the
     /// call instruction has to name the generic arguments of the call. The template named them by the
-    /// <c>Gneedle.Inject.M_[0-20]</c> tokens which were resolved to the generic parameters of the method being woven, so
-    /// those parameters are the arguments here. The generic method which the template proceeds through is a generated
-    /// one which declares a parameter of every position, so the instantiation is the one a compiler emits for a call to
-    /// a method of the generic parameters of its own caller.
+    /// <c>Gneedle.Inject.M_[0-20]</c> tokens which were resolved to the generic parameters of the method being woven,
+    /// which are the arguments here: the token of the template which names a parameter of the member resolved to the
+    /// parameter of the method being woven which the member was looked up by, and the member is looked up by names. The
+    /// generic method which the template proceeds through is a generated one which declares a parameter of every
+    /// position, so the instantiation is the one a compiler emits for a call to a method of the generic parameters of
+    /// its own caller.
     /// </remarks>
     /// <param name="methodDef">The method which the body calls.</param>
     /// <param name="namedInstance">The type of the instance which the template reached the member through, or null where the template reached none.</param>
     /// <returns>The reference which the call instruction holds.</returns>
-    /// <exception cref="ArgumentException">Thrown when the member declares generic parameters of its own which the template names none of, because the call of it cannot name the arguments.</exception>
+    /// <exception cref="ArgumentException">Thrown when the member declares more generic parameters of its own than the method being woven declares, because the call of it cannot name the arguments of all of them.</exception>
     private MethodReference GetCallableReference(MethodDefinition methodDef, TypeReference? namedInstance = null)
     {
         var importedMethod = GetMethodReference(methodDef, namedInstance);
@@ -319,18 +321,29 @@ partial class MethodHandler
         // the method being woven have no place in a call of it.
         if (methodDef.GenericParameters.Count == 0) return importedMethod;
 
-        // A parameter of a member is named by a token of the template, which stands for the parameter of the member
-        // being woven at the same position, so a member which declares as many parameters as that member does is
-        // instantiated with them: a member which declares a different number of them is one which the template named
-        // none of, and the call of it would stand on the definition with the parameters left open, which the runtime
+        // A member which declares more parameters of its own than the member being woven holds is one whose remaining
+        // parameters no token of the template stands for, and the call of it would leave those open, which the runtime
         // refuses to run rather than being a call of the member.
-        if (methodDef.GenericParameters.Count != Source.GenericParameters.Count)
+        if (methodDef.GenericParameters.Count > Source.GenericParameters.Count)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_CALL, methodDef.FullName, Source.FullName));
         }
 
         var genericInstance = new GenericInstanceMethod(importedMethod);
-        foreach (var genericParameter in Source.GenericParameters) genericInstance.GenericArguments.Add(genericParameter);
+        for (var position = 0; position < methodDef.GenericParameters.Count; position++)
+        {
+            // A parameter of the member which its signature names is declared with the parameter itself, and the types
+            // of the parameters of the delegate are what the member was looked up by, which are compared by name: the
+            // token of the delegate which stands for such a parameter of the member resolved to the parameter of the
+            // member being woven which bears its name, wherever it stands among them. A parameter which the signature
+            // of the member does not name is one which no token ties to anything, and the parameter of the member being
+            // woven which stands at its position is the argument for it, as it was where the two held the same number
+            // of parameters.
+            var parameter = methodDef.GenericParameters[position];
+            var named     = Source.GenericParameters.FirstOrDefault(own => own.Name.Equals(parameter.Name));
+            genericInstance.GenericArguments.Add(named ?? Source.GenericParameters[position]);
+        }
+
         return genericInstance;
     }
 

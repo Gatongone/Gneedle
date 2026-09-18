@@ -128,12 +128,13 @@ internal static class ErrorMessages
     internal const string INVALID_GENERIC_PARAMETER = "The generic parameter named {0} is declared by neither the type nor the member which is woven.";
 
     /// <summary>
-    /// A template named a member which declares generic parameters of its own which no token of the template stands
-    /// for, so the call of it cannot be written: the arguments of an instantiation are the ones which only a template
-    /// gives, and a call which leaves them open is one the runtime refuses to run. The placeholders are the member and
-    /// the member which is woven.
+    /// A template named a member which declares more generic parameters of its own than the member being woven
+    /// declares, so the call of it cannot be written: a parameter of the member is named by the token of the template
+    /// which stands for it, and the parameters of the member which the member being woven holds none for stand for no
+    /// token, which a call cannot leave open and be one the runtime runs. The placeholders are the member and the
+    /// member which is woven.
     /// </summary>
-    internal const string INVALID_GENERIC_MEMBER_CALL = "A member which the template names declares generic parameters which the template names none of, so the call of it cannot be written: the arguments of an instantiation are the ones which only the template can give, and a call which leaves them open is one the runtime refuses to run. Member: {0}, Method: {1}.";
+    internal const string INVALID_GENERIC_MEMBER_CALL = "A member which the template names declares more generic parameters of its own than the member being woven declares, so the call of it cannot be written: a parameter of the member is named by the token of the template which stands for it, and the parameters of the member which the member being woven holds none for stand for no token, which a call which leaves them open is one the runtime refuses to run. Member: {0}, Method: {1}.";
 
     /// <summary>
     /// The getter of a property which holds no getter was asked for. The placeholder is the name of the property.
