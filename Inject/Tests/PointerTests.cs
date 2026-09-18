@@ -231,6 +231,14 @@ public class PointerTests
         public static int InvokeASymbolWithTheValueOfAnother(int a)
             => This.Method<Func<int, int, int>>("Add")(This.Method<Func<int, int, int>>("Add")(a, a), a);
 
+        // The member which the symbol names declares a parameter of its own, and the delegate is written with no token
+        // of it: the types of the parameters of the delegate are what the member is looked up by, so the member is
+        // found, and the call of it stands on the definition of the member with the parameter of it left open.
+        public delegate int IntOp(int a);
+
+        /// <inheritdoc cref="IntOp"/>
+        public static int InvokeAMemberWhichDeclaresAParameterOfItsOwn(int a) => This.Method<IntOp>("Touch")(a);
+
         // The same, of a member which belongs to no instance, whose invocation is written with no receiver at all.
         public static long InvokeAHeldDelegateOfAStaticMember(long a)
         {
@@ -1317,6 +1325,27 @@ public class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create a host which declares the instance method <c>U Touch&lt;U&gt;(int value)</c>, which declares a parameter
+    /// of its own: a template which names that member through a delegate of its own carries no token of the parameter,
+    /// because the delegate has no parameter of the member to write one for.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAMemberWhichDeclaresAParameterOfItsOwn(string assemblyName = "MethodInjectionUnnamedParameterAssembly")
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        host.AddMethod(
+            "Touch",
+            typeof(M_0).ToGneedleType(),
+            [new GenericParameterType("U")],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+
+        return host;
+    }
+
     [Test]
     public void InvokeWithAnArgumentWhichIsHandedByAddress_Rewrites_To_Direct_Call()
     {
@@ -1391,6 +1420,28 @@ public class PointerTests
             () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument))));
 
         Assert.That(thrown!.Message, Does.Contain("is static and belongs to none"));
+    }
+
+    [Test]
+    public void A_Member_Which_Declares_A_Parameter_The_Template_Names_None_Of_Is_Refused()
+    {
+        // The member which the template names declares a parameter of its own, and no token of the template stands for
+        // it: the arguments of an instantiation are the ones which only the template can give, and the parameters of the
+        // member being woven are the ones a token names, of which this member declares more than it holds. The call
+        // would stand on the definition of the member with the parameter of it left open, which is a body the runtime
+        // refuses to run rather than one which names the member, so the weave is refused instead.
+        var host = NewHostWithAMemberWhichDeclaresAParameterOfItsOwn("MethodInjectionUnnamedParameterAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn))));
+
+        Assert.That(thrown!.Message, Does.Contain("declares generic parameters which the template names none of"));
     }
 
     /// <summary>

@@ -310,13 +310,24 @@ partial class MethodHandler
     /// <param name="methodDef">The method which the body calls.</param>
     /// <param name="namedInstance">The type of the instance which the template reached the member through, or null where the template reached none.</param>
     /// <returns>The reference which the call instruction holds.</returns>
+    /// <exception cref="ArgumentException">Thrown when the member declares generic parameters of its own which the template names none of, because the call of it cannot name the arguments.</exception>
     private MethodReference GetCallableReference(MethodDefinition methodDef, TypeReference? namedInstance = null)
     {
         var importedMethod = GetMethodReference(methodDef, namedInstance);
 
-        // A method which holds fewer or more generic parameters than the method being woven cannot be instantiated from
-        // the template, so it is left as the plain reference it was, which is what the call held before.
-        if (methodDef.GenericParameters.Count != Source.GenericParameters.Count) return importedMethod;
+        // A method which declares no parameter of its own is called through the reference itself, and the parameters of
+        // the method being woven have no place in a call of it.
+        if (methodDef.GenericParameters.Count == 0) return importedMethod;
+
+        // A parameter of a member is named by a token of the template, which stands for the parameter of the member
+        // being woven at the same position, so a member which declares as many parameters as that member does is
+        // instantiated with them: a member which declares a different number of them is one which the template named
+        // none of, and the call of it would stand on the definition with the parameters left open, which the runtime
+        // refuses to run rather than being a call of the member.
+        if (methodDef.GenericParameters.Count != Source.GenericParameters.Count)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_CALL, methodDef.FullName, Source.FullName));
+        }
 
         var genericInstance = new GenericInstanceMethod(importedMethod);
         foreach (var genericParameter in Source.GenericParameters) genericInstance.GenericArguments.Add(genericParameter);
