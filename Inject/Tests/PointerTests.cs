@@ -2521,7 +2521,7 @@ public class PointerTests
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().FirstOrDefault(reference => reference.Name == "Identity");
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
         Assert.That(call!.GetElementMethod().GenericParameters.Count, Is.EqualTo(1),
-                    "the call instantiates a member which declares no parameter of its own.");
+                    "the reference which the call stands on does not declare the parameter of the member.");
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
 
