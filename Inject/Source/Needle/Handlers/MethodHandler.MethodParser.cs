@@ -457,9 +457,10 @@ partial class MethodHandler
     /// through stands for.<para/>
     /// The base of a type is written where that type is declared, so a base which names a parameter of the declaration
     /// it stands in names the argument which the instantiation of that declaration holds, whichever base of whichever
-    /// base of the named type it is: the arguments are handed down the chain, and a base which is left with a parameter
-    /// of a type the walk did not instantiate names nothing which the body can write, so the definition of it is what
-    /// the body held before the base was walked.
+    /// base of the named type it is: the arguments are handed down the chain, and the parameters of the woven type
+    /// itself are handed down as they stand, which the body names. A base which is left with a parameter of another
+    /// declaration names nothing which the body can write, so the definition of it is what the body held before the
+    /// base was walked.
     /// </summary>
     /// <param name="declaringType">The type which declares the member which is reached.</param>
     /// <param name="namedInstance">The type of the instance which the template reached the member through.</param>
@@ -477,8 +478,9 @@ partial class MethodHandler
             for (var instance = namedInstance; instance.Resolve() is { BaseType: { } baseType } declaration;)
             {
                 var reached = baseType.WithTheArgumentsOf(declaration, instance);
-                if (reached is GenericInstanceType { ContainsGenericParameter: false } instantiation
-                    && instantiation.ElementType.FullName == declaringType.FullName)
+                if (reached is GenericInstanceType instantiation
+                    && instantiation.ElementType.FullName == declaringType.FullName
+                    && HoldsOnlyParametersWhichTheBodyNames(instantiation))
                 {
                     return instantiation.ParseGenericTokens(Source, Source.Module);
                 }
@@ -489,6 +491,36 @@ partial class MethodHandler
         catch (AssemblyResolutionException) { }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether every generic parameter which stands in <paramref name="type"/> is one which the body being woven names
+    /// itself: the parameters of the woven type and of the member which is being woven are the ones which the body
+    /// holds, which an instantiation of a base of that type is written with, and a parameter of any other declaration
+    /// stands for an argument which the body can write nowhere.
+    /// </summary>
+    /// <param name="type">The type which the walk of a chain of base types reached.</param>
+    /// <returns>Whether the body can write the type with every parameter which stands in it.</returns>
+    private bool HoldsOnlyParametersWhichTheBodyNames(TypeReference type)
+    {
+        switch (type)
+        {
+            case GenericParameter parameter:
+                return parameter.Owner == Source.DeclaringType || parameter.Owner == Source;
+
+            // An argument is a type of its own, which may hold a parameter as well, just like Base<List<T>>, and the
+            // element of an array is one, just like Base<T[]>: both are read through the type they stand for.
+            case GenericInstanceType instance:
+                return HoldsOnlyParametersWhichTheBodyNames(instance.ElementType)
+                       && instance.GenericArguments.All(HoldsOnlyParametersWhichTheBodyNames);
+
+            case TypeSpecification specification:
+                return HoldsOnlyParametersWhichTheBodyNames(specification.ElementType);
+
+            // A nested type names the parameters of the type it is declared in, which no argument of it holds.
+            default:
+                return type.DeclaringType is null || HoldsOnlyParametersWhichTheBodyNames(type.DeclaringType);
+        }
     }
 
     /// <summary>

@@ -1222,7 +1222,11 @@ public class PointerTests
     /// </summary>
     /// <param name="assemblyName">The name of the assembly to build, which a test which runs its host gives one of its own.</param>
     /// <param name="addBaseMembers">Adds the members which a template reaches to the generic base type.</param>
-    private static TypeHandler NewHostWhichDerivesFromAGenericBaseOfAGenericBase(string assemblyName, Action<TypeDefinition, ModuleDefinition> addBaseMembers)
+    /// <param name="theHostDeclaresTheParameter">
+    /// Whether the host declares the parameter which the chain hands down itself rather than naming a type where it hands
+    /// one over, so that the instantiation of the base of the base holds the parameter of the body which reaches it.
+    /// </param>
+    private static TypeHandler NewHostWhichDerivesFromAGenericBaseOfAGenericBase(string assemblyName, Action<TypeDefinition, ModuleDefinition> addBaseMembers, bool theHostDeclaresTheParameter = false)
     {
         var asm = Assembly.Create(assemblyName);
         var mod = asm.Source.MainModule;
@@ -1239,11 +1243,14 @@ public class PointerTests
         middleDef.BaseType = baseOfTheMiddle;
         mod.Types.Add(middleDef);
 
-        var host = (TypeHandler) ((AssemblyHandler) asm.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var handler = (AssemblyHandler) asm.Handler;
+        var host = (TypeHandler) (theHostDeclaresTheParameter
+            ? handler.AddClass("Host", Ns, ClassFlags.Public).WithGenericParameter("T").GetHandler()
+            : handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler());
         // The middle type hands the argument over to its own base, so the base of the base of the host is reached through
         // an instantiation which is written where the middle type is declared rather than where the host is.
         var middleOfTheHost = new GenericInstanceType(middleDef);
-        middleOfTheHost.GenericArguments.Add(mod.TypeSystem.Int32);
+        middleOfTheHost.GenericArguments.Add(theHostDeclaresTheParameter ? host.Source.GenericParameters[0] : mod.TypeSystem.Int32);
         host.Source.BaseType = middleOfTheHost;
         return host;
     }
@@ -1280,6 +1287,27 @@ public class PointerTests
                     "the instantiation which the call names is not the one which the chain of base types hands down.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
+    }
+
+    [Test]
+    public void A_Member_Of_A_Generic_Base_Of_A_Generic_Base_Of_An_Open_Type_Is_Called_On_The_Instantiation_Which_Names_The_Parameter()
+    {
+        var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleOfAnOpenTypeAssembly", AddCalcToTheGenericBase, theHostDeclaresTheParameter: true);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod)));
+
+        var call = ((MethodHandler) method).Source.Body.Instructions
+                                           .First(instruction => (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
+                                                                 && ((MethodReference) instruction.Operand).Name == "Calc");
+        var declaring = ((MethodReference) call.Operand).DeclaringType;
+
+        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the type which declares it, which stands open where the chain of base types hands the parameter of the body down to it.");
+        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.Name), Is.EqualTo(new[] { "T" }),
+                    "the instantiation which the call names does not stand for the parameter which the chain hands down.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
     }
 
