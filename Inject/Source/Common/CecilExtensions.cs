@@ -549,6 +549,64 @@ internal static class CecilExtensions
         }
 
         /// <summary>
+        /// The type which a reference of a declaration stands for where that declaration is instantiated: every generic
+        /// parameter of the declaration which stands in the reference is replaced by the argument of the instantiation
+        /// at the same position.
+        /// </summary>
+        /// <remarks>
+        /// A base type is written where the type which declares it stands, so the base of a generic declaration names
+        /// the parameters of that declaration rather than the arguments of the instance which a body reaches: the base
+        /// of <c>Middle&lt;T&gt;</c> is <c>Base&lt;T&gt;</c> where the base of <c>Middle&lt;int&gt;</c> is <c>Base&lt;int&gt;</c>,
+        /// and only the arguments of the instantiation tell the two apart.
+        /// </remarks>
+        /// <param name="declaration">The type which declares the reference, whose parameters the arguments replace.</param>
+        /// <param name="instance">The instantiation which the declaration was reached through, which holds the arguments.</param>
+        /// <returns>The reference with the arguments of the instantiation in place of the parameters of the declaration. A parameter whose owner is not the declaration stands where it did.</returns>
+        internal TypeReference WithTheArgumentsOf(TypeDefinition declaration, TypeReference instance)
+        {
+            var parameters = declaration.GenericParameters;
+
+            // A declaration which names no parameter passes nothing down, and neither does an instance which holds no
+            // argument for each of them: the reference stands as it is.
+            if (parameters.Count == 0 || instance is not GenericInstanceType instantiation
+                || instantiation.GenericArguments.Count != parameters.Count)
+            {
+                return typeReference;
+            }
+
+            return Replace(typeReference);
+
+            TypeReference Replace(TypeReference type)
+            {
+                switch (type)
+                {
+                    // A parameter of another type, such as one which the base of a nested type names of the type it is
+                    // nested in, is left standing: the caller refuses an instantiation which still holds one.
+                    case GenericParameter parameter
+                        when parameter.Owner is TypeReference owner && owner.FullName == declaration.FullName:
+                        return instantiation.GenericArguments[parameter.Position];
+
+                    // An argument is a type of its own, which may hold a parameter as well, just like Base<List<T>>.
+                    case GenericInstanceType genericInstance:
+                        var replacement = new GenericInstanceType(genericInstance.ElementType);
+                        foreach (var argument in genericInstance.GenericArguments)
+                        {
+                            replacement.GenericArguments.Add(Replace(argument));
+                        }
+
+                        return replacement;
+
+                    // And so is the element of an array, just like Base<T[]>.
+                    case ArrayType arrayType:
+                        return new ArrayType(Replace(arrayType.ElementType), arrayType.Rank);
+
+                    default:
+                        return type;
+                }
+            }
+        }
+
+        /// <summary>
         /// Try to get the definition of the real type which <see cref="FromAssemblyAttribute"/> makes the reference stand for.
         /// </summary>
         /// <remarks>

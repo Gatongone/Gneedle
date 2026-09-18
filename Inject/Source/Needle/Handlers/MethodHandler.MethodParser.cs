@@ -400,10 +400,11 @@ partial class MethodHandler
     /// <summary>
     /// The instantiation of the type which declares a member, which a base of the type the template named the instance
     /// through stands for.<para/>
-    /// The base of a type is written where that type is declared, so the arguments of it stand in the body already
-    /// where they name no parameter at all: a base which receives the parameters of the declaration it is written in,
-    /// or a type of its own, is one which the body names nothing of, and the definition of it is what the body held
-    /// before the base was walked.
+    /// The base of a type is written where that type is declared, so a base which names a parameter of the declaration
+    /// it stands in names the argument which the instantiation of that declaration holds, whichever base of whichever
+    /// base of the named type it is: the arguments are handed down the chain, and a base which is left with a parameter
+    /// of a type the walk did not instantiate names nothing which the body can write, so the definition of it is what
+    /// the body held before the base was walked.
     /// </summary>
     /// <param name="declaringType">The type which declares the member which is reached.</param>
     /// <param name="namedInstance">The type of the instance which the template reached the member through.</param>
@@ -414,13 +415,20 @@ partial class MethodHandler
         // where the chain ends: the reference is the one the body held before the base was walked.
         try
         {
-            for (var baseType = namedInstance.Resolve()?.BaseType; baseType != null; baseType = baseType.Resolve()?.BaseType)
+            // The base of a type is written where that type is declared, so the parameters which it names are the ones
+            // of the declaration it stands in. The walk carries the instantiation which each type was reached through,
+            // and hands each declaration the arguments of it, so that a base which is written with a parameter is read
+            // as the argument which the instance behind the walk holds.
+            for (var instance = namedInstance; instance.Resolve() is { BaseType: { } baseType } declaration;)
             {
-                if (baseType is GenericInstanceType { ContainsGenericParameter: false } instance
-                    && instance.ElementType.FullName == declaringType.FullName)
+                var reached = baseType.WithTheArgumentsOf(declaration, instance);
+                if (reached is GenericInstanceType { ContainsGenericParameter: false } instantiation
+                    && instantiation.ElementType.FullName == declaringType.FullName)
                 {
-                    return instance.ParseGenericTokens(Source, Source.Module);
+                    return instantiation.ParseGenericTokens(Source, Source.Module);
                 }
+
+                instance = reached;
             }
         }
         catch (AssemblyResolutionException) { }

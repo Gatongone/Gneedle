@@ -65,6 +65,18 @@ public class PointerTests
     /// </summary>
     public class DerivedOfAGenericBase : GenericBaseOfAnInstance<int>;
 
+    /// <summary>
+    /// The type which derives from the type above where the instantiation is written with a parameter of its own: the
+    /// argument which reaches the base of it is the parameter the declaration handed down, and the type which reads the
+    /// member is the base of this one.
+    /// </summary>
+    public class MiddleOfAGenericBase<T> : GenericBaseOfAnInstance<T>;
+
+    /// <summary>
+    /// The type which derives from an instantiation of the type above, which is the type the template is handed.
+    /// </summary>
+    public class DerivedOfAMiddleOfAGenericBase : MiddleOfAGenericBase<int>;
+
     // The templates live in the test assembly, so that Cecil resolves them from disk, and each names a member of the
     // type being woven through one placeholder. The type argument of a placeholder tells the member type.
 
@@ -494,6 +506,14 @@ public class PointerTests
         /// than the definition of the base.
         /// </summary>
         public static int InstanceMethod_OfABaseOfAGenericType(DerivedOfAGenericBase derived, int a) => new Instance(derived).Method<IntOp>("Calc")(a);
+
+        /// <summary>
+        /// The instance of <c>Instance</c> is of a type which derives from an instantiation of a type which derives from
+        /// the base that declares the member: the argument which the middle type hands down is a parameter of its own,
+        /// so the instantiation the base was declared with names no type the body could write on its own.
+        /// </summary>
+        public static int InstanceMethod_OfABaseOfABaseOfAGenericType(DerivedOfAMiddleOfAGenericBase derived, int a)
+            => new Instance(derived).Method<IntOp>("Calc")(a);
 
         /// <summary>
         /// The instance of <c>Instance</c> is the field of an instance which the template was handed, so the value which
@@ -2288,6 +2308,29 @@ public class PointerTests
         var type = assembly.Load().GetType($"{Ns}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAGenericBase(), 14]), Is.EqualTo(42),
+                    "the woven assembly does not run.");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Base_Of_A_Base_Of_A_Generic_Type_Runs_The_Member()
+    {
+        // The base which declares the member is written where the type between it and the instance the template was
+        // handed declares it, with a parameter of that type: the argument which reaches the base is the one the middle
+        // instantiation was handed, which the walk has to carry down rather than read off the declaration it stands in.
+        var (assembly, _, method) = NewInstanceHost("InstanceGenericBaseOfABaseAssembly", [typeof(DerivedOfAMiddleOfAGenericBase), typeof(int)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfABaseOfABaseOfAGenericType)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().FirstOrDefault(reference => reference.Name == "Calc");
+        Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
+        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the call names the definition of the base rather than an instantiation of it.");
+        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Select(argument => argument.FullName),
+                    Is.EqualTo(new[] { method.Source.Module.TypeSystem.Int32.FullName }),
+                    "the call names the parameter which the base is written with rather than the argument which the chain handed down.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAMiddleOfAGenericBase(), 14]), Is.EqualTo(42),
                     "the woven assembly does not run.");
     }
 
