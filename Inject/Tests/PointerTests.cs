@@ -77,6 +77,13 @@ public class PointerTests
         // placeholder of the write and the accessor which the write is written to.
         public static void AddOneToInstanceField() => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + 1);
 
+        /// <summary>
+        /// The value which is written holds an element of an array which the template creates, which stands between the
+        /// value of the write and the accessor which writes it.
+        /// </summary>
+        public static void AddTheFirstElementOfAnArrayToTheField()
+            => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + new[] { 1 }[0]);
+
         // Two of the cases begin where the name of a member stands rather than where a value is loaded, and the
         // compiler writes the switch as a table of the instructions the cases begin at.
         public static int ReadAFieldPerCase(int value)
@@ -532,6 +539,31 @@ public class PointerTests
         host.Source.Methods.Add(constructor);
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var instance = Activator.CreateInstance(type);
+        type.GetField("Value")!.SetValue(instance, 41);
+        type.GetMethod("Bump")!.Invoke(instance, null);
+
+        Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void A_Value_Which_Holds_An_Array_Creation_Is_Written_Into_The_Field_It_Names()
+    {
+        // The array which the template creates stands between the value of the write and the accessor which writes it.
+        // Creating an array takes the length off the stack and leaves the array in its place, and the walk which counts
+        // the values above the value of the placeholder read it as an instruction which leaves one more than it took:
+        // the accessor of the write was taken for one which stands above the value, and the read of the same field was
+        // answered for the write as well, which wrote one instruction twice.
+        var host = NewHostWithField("Value", isStatic: false, "FieldArrayValueAssembly");
+        var method = host.AddMethod("Bump", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        Assert.DoesNotThrow(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.AddTheFirstElementOfAnArrayToTheField))),
+                            "the write of a value which holds an array was refused rather than woven.");
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(1), "the field was not read exactly once.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         var instance = Activator.CreateInstance(type);
         type.GetField("Value")!.SetValue(instance, 41);
         type.GetMethod("Bump")!.Invoke(instance, null);

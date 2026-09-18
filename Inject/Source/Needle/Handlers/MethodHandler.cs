@@ -1345,7 +1345,12 @@ internal sealed partial class MethodHandler : IMethodHandler
                 or Code.Stelem_I8 or Code.Stelem_R4 or Code.Stelem_R8 or Code.Stelem_Ref:
                 return -3;
 
-            case Code.Dup or Code.Newarr:
+            // The instruction which takes the length of an array off the stack and leaves the array in its place.
+            case Code.Newarr:
+                return 0;
+
+            // The instruction which leaves the value it was handed where it was and one more above it.
+            case Code.Dup:
                 return 1;
 
             // A call takes the arguments which the reference names, which the signature counts without resolving the
