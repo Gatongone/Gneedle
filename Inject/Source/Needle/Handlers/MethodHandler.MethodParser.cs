@@ -722,25 +722,125 @@ partial class MethodHandler
         // which is what that value being the receiver of the invocation means: the arguments alone do not tell one
         // invocation of a delegate from another, so a template which invokes a delegate on the value of another
         // invocation had the inner instruction answered for both of them, and the invocation of the inner delegate was
-        // written where the outer one stood.
+        // written where the outer one stood.<para/>
+        // The instructions between the symbol and the invocation are walked as the graph which they are rather than in a
+        // row, because a value which the call is handed may be computed along a branch: the paths which a branch leaves
+        // for meet again before the invocation, and every one of them reaches an instruction with the same number of
+        // values above the one the symbol left, which is the number the invocation is handed. A path which leaves the
+        // region says nothing about the invocation, so it is refused rather than followed, and a path which ends inside
+        // the region is one which reaches no invocation at all.
         bool TheSymbolLeftTheReceiver(MethodReference callMethod, int invocation)
         {
-            // The values which stand above the one the symbol left, counted from that one: an instruction which takes
-            // more values than the ones which stand above it took that value, and one which the walk cannot count is one
-            // whose result cannot be told, either way leaving the invocation to be made on something else.
-            var above = 0;
-            for (var i = callIndex + 1; i < invocation; i++)
+            if (invocation <= callIndex) return false;
+
+            // The instructions of the region, which the targets of the branches are read through: a branch which names
+            // an instruction of another place is one which leaves the region.
+            var region = new Dictionary<Instruction, int>(invocation - callIndex);
+            for (var i = callIndex + 1; i <= invocation; i++) region[bodyInstructions[i]] = i;
+
+            // The number of values which stand above the one the symbol left when an instruction is reached, which is
+            // held for every instruction of the region: two paths which reach one instruction with different numbers
+            // are two paths which the count at the invocation cannot be told from, and the instruction alone does not
+            // tell which of them was taken.
+            var aboveAt = new int?[invocation - callIndex];
+
+            // The placeholder hands the name it was given back as the delegate, so the value which the symbol left
+            // stands above nothing.
+            aboveAt[0] = 0;
+            var pending = new Stack<(int Index, int Above)>();
+            pending.Push((callIndex + 1, 0));
+            var reached = false;
+
+            while (pending.Count > 0)
             {
-                var ins = bodyInstructions[i];
-                if (ins.OpCode == OpCodes.Nop) continue;
+                var (index, above) = pending.Pop();
+                var ins = bodyInstructions[index];
 
-                if (StackEffect(ins) is not { } effect) return false;
-                if (effect.Taken > above) return false;
+                // The invocation is where the walk arrives, and the number of values which the paths carried to it is
+                // the number of arguments which the delegate is handed. An invocation which no path reaches is one
+                // which the symbol stands for no more than any other call of the delegate's type.
+                if (index == invocation)
+                {
+                    if (above != callMethod.Parameters.Count) return false;
+                    reached = true;
+                    continue;
+                }
 
-                above += effect.Left - effect.Taken;
+                // An instruction which takes more values than the ones which stand above it took that value, and one
+                // which the walk cannot count is one whose result cannot be told: either way the invocation is made on
+                // something other than the value which the symbol left.
+                var effect = ins.OpCode == OpCodes.Nop ? (Taken: 0, Left: 0)
+                           : BranchEffect(ins) ?? StackEffect(ins);
+                if (effect is not { } counted) return false;
+                if (counted.Taken > above) return false;
+                var left = above + counted.Left - counted.Taken;
+
+                // An instruction which ends the path hands the control to a place which is not an instruction of the
+                // region, so the walk stops there rather than reading the instruction which stands after it.
+                if (ins.OpCode.Code is Code.Ret or Code.Throw or Code.Rethrow or Code.Jmp or Code.Endfinally or Code.Endfilter) continue;
+
+                foreach (var successor in SuccessorsOf(ins))
+                {
+                    if (!region.TryGetValue(successor, out var successorIndex)) return false;
+                    if (aboveAt[successorIndex - callIndex - 1] is { } seen)
+                    {
+                        if (seen != left) return false;
+                        continue;
+                    }
+
+                    aboveAt[successorIndex - callIndex - 1] = left;
+                    pending.Push((successorIndex, left));
+                }
             }
 
-            return above == callMethod.Parameters.Count;
+            return reached;
+        }
+
+        // The values which a branch takes off the stack, which the walk counts before it hands the branch to the
+        // instructions it leaves for: the effect of every other instruction is read off the instruction itself, and a
+        // branch is counted from the case which it stands for rather than from the member it names.
+        (int Taken, int Left)? BranchEffect(Instruction ins)
+        {
+            switch (ins.OpCode.Code)
+            {
+                case Code.Br or Code.Br_S or Code.Leave or Code.Leave_S:
+                    return (0, 0);
+
+                case Code.Brtrue or Code.Brtrue_S or Code.Brfalse or Code.Brfalse_S or Code.Switch:
+                    return (1, 0);
+
+                case Code.Beq or Code.Beq_S or Code.Bne_Un or Code.Bne_Un_S
+                    or Code.Bge or Code.Bge_S or Code.Bge_Un or Code.Bge_Un_S
+                    or Code.Bgt or Code.Bgt_S or Code.Bgt_Un or Code.Bgt_Un_S
+                    or Code.Ble or Code.Ble_S or Code.Ble_Un or Code.Ble_Un_S
+                    or Code.Blt or Code.Blt_S or Code.Blt_Un or Code.Blt_Un_S:
+                    return (2, 0);
+
+                default:
+                    return null;
+            }
+        }
+
+        // The instructions which an instruction hands the walk to: a branch leaves for the ones it names, and a branch
+        // which is taken in one of two cases leaves for the instruction after it as well. The operand is what tells the
+        // two apart, because an instruction which is not a branch carries an instruction as its operand nowhere.
+        IEnumerable<Instruction> SuccessorsOf(Instruction ins)
+        {
+            if (ins.Operand is Instruction target)
+            {
+                yield return target;
+                if (ins.OpCode.FlowControl == FlowControl.Cond_Branch && ins.Next != null) yield return ins.Next;
+                yield break;
+            }
+
+            if (ins.Operand is Instruction[] table)
+            {
+                foreach (var entry in table) yield return entry;
+                if (ins.Next != null) yield return ins.Next;
+                yield break;
+            }
+
+            if (ins.Next != null) yield return ins.Next;
         }
 
         // Whether the top of the stack holds the arguments which a call of a member is made with, which are the values

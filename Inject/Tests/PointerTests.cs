@@ -206,6 +206,12 @@ public class PointerTests
             return This.Method<IntBinaryOp>("Add")(sum, sum);
         }
 
+        // The argument of the call is computed along a branch, so the value which the member is handed is pushed by one
+        // of the paths which the branch leaves for rather than in a row with the value after it: the invocation which
+        // the symbol stands for is the one every path reaches with the arguments of it.
+        public static int InvokeWithAConditionalArgument(int a, int b, bool first)
+            => This.Method<IntBinaryOp>("Add")(first ? a : b, a);
+
         // The delegate is held in a local and invoked by it rather than where the symbol stands, which is what a
         // template which reads the member through a delegate of its own and then calls it writes. The local is read
         // twice, so each read is written as a receiver of its own.
@@ -1146,6 +1152,31 @@ public class PointerTests
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4]), Is.EqualTo(7));
+    }
+
+    [Test]
+    public void A_Call_Whose_Argument_Holds_A_Conditional_Runs_The_Member()
+    {
+        // The argument of the call is computed along a branch, and the value which the symbol left stands under both of
+        // the paths which the branch leaves for: the instructions between the two are walked as the graph which they
+        // are rather than in a row, so the invocation which every path reaches with the two arguments of the delegate is
+        // the one which the symbol stands for, and the call of the member is written in its place.
+        var host = NewRunnableGenericHost("GenericMemberConditionalArgumentAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
+                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+                                    MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAConditionalArgument)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+                    "the member is not called where the delegate was invoked.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
+                    "the member was built into a delegate rather than called.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4, false]), Is.EqualTo(7),
+                    "the woven assembly does not run the member which the symbol stands for.");
     }
 
     [Test]
