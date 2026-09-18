@@ -212,6 +212,21 @@ public class PointerTests
         public static int InvokeWithAConditionalArgument(int a, int b, bool first)
             => This.Method<IntBinaryOp>("Add")(first ? a : b, a);
 
+        // A symbol which names a member on each arm of a branch, whose value the local holds and which the template
+        // invokes once after the join: the invocation is reached by the path of either arm, so what it is made on is the
+        // delegate which the arm which ran built rather than the one which either symbol names, and the store which the
+        // local is written by is reached by the path of either arm as well.
+        public static int InvokeAMemberWhichAConditionNames(int a, int b, bool first)
+        {
+            var op = first ? This.Method<IntBinaryOp>("Add") : This.Method<IntBinaryOp>("Subtract");
+            return op(a, b);
+        }
+
+        // The same, of symbols which stand where they are invoked: the invocation is reached by the path of either arm,
+        // and neither of the two stands on every path which reaches it, so neither stands for the value it is made on.
+        public static int InvokeAMemberWhichAConditionNamesWhereItStands(int a, int b, bool first)
+            => (first ? This.Method<IntBinaryOp>("Add") : This.Method<IntBinaryOp>("Subtract"))(a, b);
+
         // The delegate is held in a local and invoked by it rather than where the symbol stands, which is what a
         // template which reads the member through a delegate of its own and then calls it writes. The local is read
         // twice, so each read is written as a receiver of its own.
@@ -1186,6 +1201,67 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4, false]), Is.EqualTo(7),
                     "the woven assembly does not run the member which the symbol stands for.");
+    }
+
+    [Test]
+    public void A_Held_Delegate_Which_A_Condition_Names_The_Member_Of_Runs_The_Member_Of_The_Arm_Which_Ran()
+    {
+        // The value which the local holds is the delegate which one of the two arms built, and the invocation which
+        // stands after the join is made on it. The store of the local is reached by the path of either arm, so the value
+        // it writes is not the one which either symbol left, and the delegate which each arm built is what the local
+        // holds: the invocation is left as the invocation of that delegate, which runs the member of the arm which ran.
+        var host = NewRunnableGenericHost("GenericMemberConditionalNameAssembly");
+        AddASubtract(host);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
+                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+                                    MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichAConditionNames)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+        var instance = Activator.CreateInstance(type);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, true]), Is.EqualTo(7),
+                    "the woven assembly does not run the member which the arm which ran names.");
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, false]), Is.EqualTo(-1),
+                    "the woven assembly does not run the member which the arm which ran names.");
+    }
+
+    [Test]
+    public void A_Member_Which_A_Condition_Names_Where_It_Stands_Runs_The_Member_Of_The_Arm_Which_Ran()
+    {
+        // The same of a symbol which stands where it is invoked, which both arms reach as well: the value which the
+        // invocation is made on is the one which the arm which ran left, so neither symbol stands for it, and the
+        // delegates which the two arms build are what it invokes.
+        var host = NewRunnableGenericHost("GenericMemberConditionalNameWhereItStandsAssembly");
+        AddASubtract(host);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
+                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+                                    MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichAConditionNamesWhereItStands)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+        var instance = Activator.CreateInstance(type);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, true]), Is.EqualTo(7),
+                    "the woven assembly does not run the member which the arm which ran names.");
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, false]), Is.EqualTo(-1),
+                    "the woven assembly does not run the member which the arm which ran names.");
+    }
+
+    /// <summary>
+    /// Declare <c>int Subtract(int a, int b)</c> on the host which the conditional-name tests weave into, so that a
+    /// template which names a member on each arm of a branch names two members of the same signature.
+    /// </summary>
+    /// <param name="host">The host which the member is declared on.</param>
+    private static void AddASubtract(TypeHandler host)
+    {
+        var module = host.Source.Module;
+        var subtract = new MethodDefinition("Subtract", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Int32) { DeclaringType = host.Source };
+        subtract.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, module.TypeSystem.Int32));
+        subtract.Parameters.Add(new ParameterDefinition("b", ParameterAttributes.None, module.TypeSystem.Int32));
+        var il = subtract.Body.GetILProcessor();
+        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Sub); il.Emit(OpCodes.Ret);
+        host.Source.Methods.Add(subtract);
     }
 
     [Test]

@@ -188,6 +188,17 @@ partial class MethodHandler
         // delegate where that is so, as it does for a local which stands for more than the invocation of it.
         var instanceIsComputed = instance is { Load: null };
         var held            = HeldLocal(filter.Target, callIndex);
+
+        // The store which the local is written by holds the value which the symbol left only where every path of the body
+        // goes through the symbol: the value which another path leaves there is the one the local holds just as well, and
+        // the invocation of the local is then made on the member which that path names rather than on the one which the
+        // symbol names. The delegate which each path built is what the local holds there, and neither symbol stands for
+        // the invocation, so what each of them writes is the delegate of its own member.
+        if (held is { } store && !TheSymbolIsOnEveryPathTo(filter.Target, callIndex, store.Store, targetDef))
+        {
+            held = null;
+        }
+
         var heldInvocations = held is { } stored && !instanceIsComputed
             ? InvocationsOfTheHeldDelegate(filter.Target, stored.Local, delegateRef, targetDef)
             : null;
@@ -720,6 +731,10 @@ partial class MethodHandler
                 && ins.Operand is MethodReference {Name: "Invoke"} callMethod   // We only check the 'invoke' method from Delegate.
                 && TypeName.HasSameName(delegateType, callMethod.DeclaringType) // Make sure declaring types are the same.
                 && TheSymbolLeftTheReceiver(callMethod, index)                  // Make sure the invocation is made on the delegate.
+                // The invocation is made on the value which the symbol left only where every path of the body goes
+                // through the symbol: the arms of a branch which each name a member of the same delegate type both
+                // leave a value for it, and the delegate which the arm which ran built is the one it is made on.
+                && TheSymbolIsOnEveryPathTo(bodyInstructions, callIndex, index, targetDef)
                 && TopOfStackMatches(callMethod);                               // Make sure the top-of-stack types match the invoke parameters.
 
         // Whether the arguments of the invocation are exactly the values which stand above the one which the symbol left,
@@ -779,10 +794,6 @@ partial class MethodHandler
                 if (counted.Taken > above) return false;
                 var left = above + counted.Left - counted.Taken;
 
-                // An instruction which ends the path hands the control to a place which is not an instruction of the
-                // region, so the walk stops there rather than reading the instruction which stands after it.
-                if (ins.OpCode.Code is Code.Ret or Code.Throw or Code.Rethrow or Code.Jmp or Code.Endfinally or Code.Endfilter) continue;
-
                 foreach (var successor in SuccessorsOf(ins))
                 {
                     if (!region.TryGetValue(successor, out var successorIndex)) return false;
@@ -825,28 +836,6 @@ partial class MethodHandler
             }
         }
 
-        // The instructions which an instruction hands the walk to: a branch leaves for the ones it names, and a branch
-        // which is taken in one of two cases leaves for the instruction after it as well. The operand is what tells the
-        // two apart, because an instruction which is not a branch carries an instruction as its operand nowhere.
-        IEnumerable<Instruction> SuccessorsOf(Instruction ins)
-        {
-            if (ins.Operand is Instruction target)
-            {
-                yield return target;
-                if (ins.OpCode.FlowControl == FlowControl.Cond_Branch && ins.Next != null) yield return ins.Next;
-                yield break;
-            }
-
-            if (ins.Operand is Instruction[] table)
-            {
-                foreach (var entry in table) yield return entry;
-                if (ins.Next != null) yield return ins.Next;
-                yield break;
-            }
-
-            if (ins.Next != null) yield return ins.Next;
-        }
-
         // Whether the top of the stack holds the arguments which a call of a member is made with, which are the values
         // which were pushed last.
         bool TopOfStackMatches(MethodReference callMethod)
@@ -868,6 +857,93 @@ partial class MethodHandler
 
             return true;
         }
+    }
+
+    /// <summary>
+    /// Whether every path which the body takes to an instruction passes through the one at <paramref name="callIndex"/>,
+    /// which is what the value which that instruction reads being the one which the symbol left means.<para/>
+    /// A path which reaches the instruction without going through the symbol is a path along which the value came from
+    /// somewhere else, which is what the arms of a branch leave where each of them names a member of the same delegate
+    /// type: the instruction after the join reads the value which the arm which ran left, which is the delegate of the
+    /// member of that arm, so neither symbol stands for it and each of them writes the delegate of its own member. The
+    /// walk starts where the runtime hands the control to the body, which is the instruction it begins with and the
+    /// beginning of each of its handlers, and it reads no instruction past one which ends the path it stands on.
+    /// </summary>
+    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="callIndex">Index of the instruction which the symbol stands for.</param>
+    /// <param name="target">Index of the instruction which reads the value.</param>
+    /// <param name="targetDef">The template which the instructions belong to.</param>
+    /// <returns>Whether the symbol stands on every path which reaches the instruction.</returns>
+    private static bool TheSymbolIsOnEveryPathTo(IReadOnlyList<Instruction> bodyInstructions, int callIndex, int target, MethodDefinition targetDef)
+    {
+        var at = new Dictionary<Instruction, int>(bodyInstructions.Count);
+        for (var i = 0; i < bodyInstructions.Count; i++) at[bodyInstructions[i]] = i;
+
+        var visited = new bool[bodyInstructions.Count];
+        var pending = new Stack<int>();
+
+        // The body is entered where it begins, and a handler of it is entered where it begins as well, because the
+        // runtime is what hands the control to both of them.
+        void Enter(Instruction? entry)
+        {
+            if (entry != null && at.TryGetValue(entry, out var index) && index != callIndex) pending.Push(index);
+        }
+
+        if (bodyInstructions.Count > 0) Enter(bodyInstructions[0]);
+        foreach (var handler in targetDef.Body.ExceptionHandlers)
+        {
+            Enter(handler.TryStart);
+            Enter(handler.HandlerStart);
+            Enter(handler.FilterStart);
+        }
+
+        while (pending.Count > 0)
+        {
+            var index = pending.Pop();
+            if (visited[index]) continue;
+            visited[index] = true;
+
+            // The value which stands there was left by a path which the symbol stands on nowhere, so it is not the
+            // value which the symbol left.
+            if (index == target) return false;
+
+            foreach (var successor in SuccessorsOf(bodyInstructions[index]))
+            {
+                if (at.TryGetValue(successor, out var next) && next != callIndex && !visited[next]) pending.Push(next);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The instructions which an instruction hands a walk to: a branch leaves for the ones it names, and a branch which
+    /// is taken in one of two cases leaves for the instruction after it as well. The operand is what tells the two
+    /// apart, because an instruction which is not a branch carries an instruction as its operand nowhere.<para/>
+    /// An instruction which ends the path it stands on hands the control to no instruction of the body at all: what
+    /// stands after it is reached by nothing which runs, so a walk which read it would read a path the body never takes.
+    /// </summary>
+    /// <param name="ins">The instruction which is read.</param>
+    /// <returns>The instructions which it hands the control to.</returns>
+    private static IEnumerable<Instruction> SuccessorsOf(Instruction ins)
+    {
+        if (ins.Operand is Instruction target)
+        {
+            yield return target;
+            if (ins.OpCode.FlowControl == FlowControl.Cond_Branch && ins.Next != null) yield return ins.Next;
+            yield break;
+        }
+
+        if (ins.Operand is Instruction[] table)
+        {
+            foreach (var entry in table) yield return entry;
+            if (ins.Next != null) yield return ins.Next;
+            yield break;
+        }
+
+        if (ins.OpCode.Code is Code.Ret or Code.Throw or Code.Rethrow or Code.Jmp or Code.Endfinally or Code.Endfilter) yield break;
+
+        if (ins.Next != null) yield return ins.Next;
     }
 
     /// <summary>
