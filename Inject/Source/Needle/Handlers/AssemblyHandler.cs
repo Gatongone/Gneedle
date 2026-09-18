@@ -153,7 +153,15 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         while (methodDef == null)
         {
             if (curType == null) break;
-            methodDef = curType.Methods.FirstOrDefault(method => method.Name.Equals(methodName) && method.Parameters.SameWith(parameters.ToArray()));
+            // A member which declares parameters of its own is one which no list of type names describes, so a candidate
+            // is read as the signature which the caller hands it where that signature binds the parameters: the type
+            // which stands in the place of a parameter of the member is the one the call of it is made with. A candidate
+            // which the signature does not describe is still the one which the names of the types name, which is what
+            // finds a member whose own parameters stand nowhere in its signature - the call of that one is refused by
+            // the rule of the call rather than here, where the member it names is the one it names.
+            methodDef = curType.Methods.FirstOrDefault(
+                method => method.Name.Equals(methodName)
+                          && (method.SameWith(parameters, null, out _) || method.Parameters.SameWith(parameters)));
             curType   = curType.BaseType == null ? null : GetDefinition(curType.BaseType);
         }
 

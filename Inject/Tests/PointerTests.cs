@@ -459,6 +459,31 @@ public class PointerTests
             This.Method<RefOp>("BumpByRef")(ref value);
             return value;
         }
+
+        /// <summary>
+        /// A member which declares a parameter of its own is one which no bare signature names, so the delegate which
+        /// the template wrote is what says which instantiation of it is reached.
+        /// </summary>
+        public static int Identity_OfAnInt(int value) => This.Method<Func<int, int>>("Identity")(value);
+
+        /// <inheritdoc cref="Identity_OfAnInt"/>
+        public static string Identity_OfAString(string value) => This.Method<Func<string, string>>("Identity")(value);
+
+        /// <summary>
+        /// The same of a member whose parameter no delegate of the framework could describe: the token stands for the
+        /// parameter of the member which is woven, which is what the readme writes such a signature with.
+        /// </summary>
+        public delegate M_0 IdentityOfTheMethod(M_0 value);
+
+        /// <inheritdoc cref="Identity_OfAnInt"/>
+        public static M_0 Identity_OfTheMethod(M_0 value) => This.Method<IdentityOfTheMethod>("Identity")(value);
+
+        /// <summary>
+        /// The delegate describes the member whole, so the type which it hands back is what tells one instantiation of
+        /// the member from another: a delegate which hands back a type which the member is not instantiated with names
+        /// no member at all.
+        /// </summary>
+        public static string Mismatched_Identity(int value) => This.Method<Func<int, string>>("Identity")(value);
     }
 
     /// <summary>
@@ -2369,6 +2394,104 @@ public class PointerTests
 
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
                                  && ((MethodReference) i.Operand).Name == "Add"), Is.True);
+    }
+
+    /// <summary>
+    /// Create a host which declares a real instance method <c>T Identity&lt;T&gt;(T value)</c>, which hands its argument
+    /// back, so that a template which reaches a member declaring a parameter of its own has one to be rewritten to.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithIdentity(string assemblyName = "MethodInjectionIdentityAssembly")
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var module = host.Source.Module;
+        var identity = new MethodDefinition("Identity", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
+        {
+            DeclaringType = host.Source,
+        };
+        var parameter = new GenericParameter("T", identity);
+        identity.GenericParameters.Add(parameter);
+        identity.ReturnType = parameter;
+        identity.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, parameter));
+        identity.Body.GetILProcessor().Emit(OpCodes.Ldarg_1);
+        identity.Body.GetILProcessor().Emit(OpCodes.Ret);
+        host.Source.Methods.Add(identity);
+        return host;
+    }
+
+    /// <summary>The name of the type which the call of a member of a woven body is instantiated with.</summary>
+    /// <param name="method">The member which was woven.</param>
+    /// <param name="name">The name of the member which the body calls.</param>
+    /// <returns>The name of the type argument of the call, or null where the call names no instantiation.</returns>
+    private static string? InstantiationOfTheCall(IMethodHandler method, string name)
+        => ((MethodHandler) method).Source.Body.Instructions
+                                    .Select(instruction => instruction.Operand)
+                                    .OfType<GenericInstanceMethod>()
+                                    .FirstOrDefault(reference => reference.Name == name)?
+                                    .GenericArguments[0].FullName;
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Declares_A_Parameter_Of_Its_Own_Is_Instantiated_From_The_Delegate()
+    {
+        // A member which declares a parameter of its own is one which no bare signature names, so the delegate which
+        // the template wrote is what says which instantiation of it is reached: two woven members which name the same
+        // member are calls of two instantiations of it.
+        var host = NewHostWithIdentity();
+        var asInt = host.AddMethod("RunInt", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        asInt.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
+        var asString = host.AddMethod("RunString", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
+        asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString)));
+
+        Assert.That(InstantiationOfTheCall(asInt, "Identity"), Is.EqualTo(typeof(int).FullName),
+                    "the call was not one of the instantiation which the delegate named.");
+        Assert.That(InstantiationOfTheCall(asString, "Identity"), Is.EqualTo(typeof(string).FullName),
+                    "the call was not one of the instantiation which the delegate named.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var instance = Activator.CreateInstance(type)!;
+
+        Assert.That(type.GetMethod("RunInt")!.Invoke(instance, [5]), Is.EqualTo(5),
+                    "the member which declares a parameter of its own was not called through This.");
+        Assert.That(type.GetMethod("RunString")!.Invoke(instance, ["hi"]), Is.EqualTo("hi"),
+                    "the call was not one of the instantiation which the delegate named.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Declares_A_Parameter_Of_Its_Own_Is_Instantiated_From_The_Token()
+    {
+        // The token of the template stands for the parameter of the member which is woven, so the member which
+        // declares a parameter of its own is called with it, whatever the woven member is instantiated with.
+        var host = NewHostWithIdentity("MethodInjectionIdentityByTokenAssembly");
+        var call = host.AddMethod(
+            "Call",
+            typeof(M_0).ToGneedleType(),
+            [new GenericParameterType("U")],
+            [new Parameter(typeof(M_0).ToGneedleType())],
+            MethodFlags.Public);
+        call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfTheMethod)));
+
+        Assert.That(InstantiationOfTheCall(call, "Identity"), Is.EqualTo("U"),
+                    "the call was not one of the member which declares one, instantiated with the parameter of the member.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var instance = Activator.CreateInstance(type)!;
+
+        Assert.That(type.GetMethod("Call")!.MakeGenericMethod(typeof(string)).Invoke(instance, ["hi"]), Is.EqualTo("hi"),
+                    "the member which declares a parameter of its own was not called with the parameter of the member.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Declares_A_Parameter_Of_Its_Own_Refuses_A_Delegate_Which_Describes_Another()
+    {
+        // The arguments of a member which declares a parameter of its own are only read out of the delegate which names
+        // it, so a delegate which hands back another type than the one which those arguments instantiate the member with
+        // names no member: the call is refused rather than woven into a body which cannot run.
+        var host = NewHostWithIdentity("MethodInjectionIdentityMismatchAssembly");
+        var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+
+        Assert.Throws<ArgumentException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
     }
 
     [Test]

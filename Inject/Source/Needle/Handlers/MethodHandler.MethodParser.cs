@@ -100,11 +100,15 @@ partial class MethodHandler
         // parameter, because a delegate cannot declare one, so the token is parsed to the generic parameter of the
         // source method here. Without it, the parameter of the delegate would be a type of the Gneedle.Inject assembly
         // which no method of the declaring type could ever match.
-        var parameters = delegateDef.Methods
-                                    .First(method => method.Name.Equals("Invoke"))
-                                    .Parameters
-                                    .Select(p => ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
-                                    .ToArray();
+        var invoked = delegateDef.Methods.First(method => method.Name.Equals("Invoke"));
+        var parameters = invoked.Parameters
+                                 .Select(p => ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
+                                 .ToArray();
+
+        // The delegate describes the member with the whole of its signature rather than with the types of its arguments
+        // alone: a member which declares parameters of its own is told from another instantiation of itself by the type
+        // which the call of it hands back, which is the type which the delegate hands back as well.
+        var returnType = ResolveDelegateParameterType(invoked.ReturnType, genericArguments).ParseGenericTokens(Source, Source.Module);
 
         // Detect Instance.Method with new Instance(param) syntax: need to skip the array init sequence.
         // The instance which the template reached the method through, which is the receiver of the call where the method
@@ -143,6 +147,21 @@ partial class MethodHandler
         if (methodDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
+        }
+
+        // What the delegate says the member is instantiated with is read out of the signature which it describes it
+        // with: a parameter which the member declares stands where the delegate wrote the type which the call of it is
+        // made with, and a signature which leaves one of those parameters open, or which hands back another type than
+        // the one which the parameters it binds instantiate the member with, describes no member at all. A member which
+        // the signature describes whole is called through that instantiation rather than through the parameters of the
+        // body, which name none of its own; a member which it does not describe is left to the rule the call held
+        // before, which names the parameters of the member by the parameters of the body and refuses the weave where no
+        // parameter of the body stands for one of them. The member which was taken over is described by the parameters
+        // of the body itself, so the call of it is left to that rule as well.
+        IReadOnlyList<TypeReference>? arguments = null;
+        if (!memberSymbol.HasFlag(MemberSymbols.Proceed))
+        {
+            methodDef.SameWith(parameters, returnType, out arguments);
         }
 
         // Skip the array init sequence if this is Instance.Method with new Instance(param), and the Static.From sequence if
@@ -226,7 +245,7 @@ partial class MethodHandler
                     filter.Replace(read, CreateReceiver(receiverIns, targetDef));
                 }
 
-                filter.Replace(invocation, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef, namedInstance)));
+                filter.Replace(invocation, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef, arguments, namedInstance)));
             }
         }
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
@@ -251,12 +270,12 @@ partial class MethodHandler
             // Skip `call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types})`
             filter.Skip(callIndex);
             // callvirt instance class {delegate_type}::Invoke({parameter_types}) -> callvirt/call instance class {declaring_type}::{method_name}({parameter_types})
-            filter.Replace(callvirtIndex, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef, namedInstance)));
+            filter.Replace(callvirtIndex, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef, arguments, namedInstance)));
         }
         // Or create delegate by method pointer and call it right now.
         else
         {
-            var importedMethod = GetCallableReference(methodDef, namedInstance);
+            var importedMethod = GetCallableReference(methodDef, arguments, namedInstance);
 
             // The delegate which is built is the one which the template named rather than the definition which that one
             // is an instantiation of: the constructor of the definition takes the arguments of the open type, and a body
@@ -322,10 +341,14 @@ partial class MethodHandler
     /// resolved to that parameter, which the body names as well as the ones it declares itself.
     /// </remarks>
     /// <param name="methodDef">The method which the body calls.</param>
+    /// <param name="arguments">
+    /// The types which the generic parameters of the method stand for, which the signature which the delegate described
+    /// it with names, or null when that signature describes none of them.
+    /// </param>
     /// <param name="namedInstance">The type of the instance which the template reached the member through, or null where the template reached none.</param>
     /// <returns>The reference which the call instruction holds.</returns>
     /// <exception cref="ArgumentException">Thrown when a parameter of the member stands for no parameter which the body being woven names, because the call of it cannot name the argument for that parameter.</exception>
-    private MethodReference GetCallableReference(MethodDefinition methodDef, TypeReference? namedInstance = null)
+    private MethodReference GetCallableReference(MethodDefinition methodDef, IReadOnlyList<TypeReference>? arguments = null, TypeReference? namedInstance = null)
     {
         var importedMethod = GetMethodReference(methodDef, namedInstance);
 
@@ -334,6 +357,20 @@ partial class MethodHandler
         if (methodDef.GenericParameters.Count == 0) return importedMethod;
 
         var genericInstance = new GenericInstanceMethod(importedMethod);
+
+        // The parameters of a member which declares them are named by the signature which the delegate described the
+        // member with and by nothing else: the types which stand in their places are what the call of it is made with,
+        // in the order the parameters are declared in.
+        if (arguments is {Count: > 0} described)
+        {
+            foreach (var argument in described)
+            {
+                genericInstance.GenericArguments.Add(argument);
+            }
+
+            return genericInstance;
+        }
+
         for (var position = 0; position < methodDef.GenericParameters.Count; position++)
         {
             // A parameter of the member which its signature names is declared with the parameter itself, and the types
