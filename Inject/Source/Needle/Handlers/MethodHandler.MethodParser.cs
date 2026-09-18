@@ -735,7 +735,7 @@ partial class MethodHandler
     /// and therefore indistinguishable on the stack, so they are treated as compatible.
     /// </summary>
     /// <param name="expected">The type which the call expects the value to be.</param>
-    /// <param name="actual">The type of the value which the evalutation stack holds.</param>
+    /// <param name="actual">The type of the value which the evaluation stack holds.</param>
     /// <param name="pushedBy">The instruction which pushed the value.</param>
     private bool StackTypeMatches(TypeReference expected, TypeReference actual, Instruction pushedBy)
         => TypeName.HasSameName(expected, actual)
