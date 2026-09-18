@@ -588,7 +588,8 @@ partial class MethodHandler
 
     /// <summary>
     /// Find the instruction which invokes the delegate that a method symbol was parsed into, which is the first
-    /// instruction after the symbol that calls a member of that delegate's type with the arguments the stack holds.<para/>
+    /// instruction after the symbol that calls a member of that delegate's type with the arguments the stack holds, the
+    /// value which the symbol left being the one which the call is made on.<para/>
     /// The stack is walked from the beginning of the body rather than from the symbol, because the values which the call
     /// is handed are pushed before it and by instructions of their own, so what the call reads can only be told by
     /// carrying the stack along from where it is empty.
@@ -614,7 +615,7 @@ partial class MethodHandler
             if (ins.OpCode == OpCodes.Nop) continue;
 
             // Only in the case could it be matched that is index greater than callIndex.
-            if (i > callIndex && MatchTargetInvoke(ins))
+            if (i > callIndex && MatchTargetInvoke(ins, i))
             {
                 index = i;
                 return true;
@@ -631,13 +632,40 @@ partial class MethodHandler
 
         // Whether an instruction is the one which invokes the delegate that is looked for, which is a call of the
         // `Invoke` of that delegate's type with the arguments the stack holds the types of. The delegate Invoke expects
-        // the stack to hold [delegate-receiver, arg1, ...argN], and only the top N entries (the arguments) are compared
-        // against the delegate's Invoke parameters, the receiver sitting below them being ignored.
-        bool MatchTargetInvoke(Instruction ins)
+        // the stack to hold [delegate-receiver, arg1, ...argN], and the receiver of it is required to be the value which
+        // the read or the call of the placeholder left, which is what tells the invocation of one delegate from the
+        // invocation of another whose arguments happen to be of the same types.
+        bool MatchTargetInvoke(Instruction ins, int index)
             => (ins.OpCode == OpCodes.Callvirt || ins.OpCode == OpCodes.Call)   // It's not double that the instruction must be 'call' type.
                 && ins.Operand is MethodReference {Name: "Invoke"} callMethod   // We only check the 'invoke' method from Delegate.
                 && TypeName.HasSameName(delegateType, callMethod.DeclaringType) // Make sure declaring types are the same.
+                && TheSymbolLeftTheReceiver(callMethod, index)                  // Make sure the invocation is made on the delegate.
                 && TopOfStackMatches(callMethod);                               // Make sure the top-of-stack types match the invoke parameters.
+
+        // Whether the arguments of the invocation are exactly the values which stand above the one which the symbol left,
+        // which is what that value being the receiver of the invocation means: the arguments alone do not tell one
+        // invocation of a delegate from another, so a template which invokes a delegate on the value of another
+        // invocation had the inner instruction answered for both of them, and the invocation of the inner delegate was
+        // written where the outer one stood.
+        bool TheSymbolLeftTheReceiver(MethodReference callMethod, int invocation)
+        {
+            // The values which stand above the one the symbol left, counted from that one: an instruction which takes
+            // more values than the ones which stand above it took that value, and one which the walk cannot count is one
+            // whose result cannot be told, either way leaving the invocation to be made on something else.
+            var above = 0;
+            for (var i = callIndex + 1; i < invocation; i++)
+            {
+                var ins = bodyInstructions[i];
+                if (ins.OpCode == OpCodes.Nop) continue;
+
+                if (StackEffect(ins) is not { } effect) return false;
+                if (effect.Taken > above) return false;
+
+                above += effect.Left - effect.Taken;
+            }
+
+            return above == callMethod.Parameters.Count;
+        }
 
         // Whether the top of the stack holds the arguments which a call of a member is made with, which are the values
         // which were pushed last.
@@ -710,44 +738,11 @@ partial class MethodHandler
 
             reads++;
             if (!TryGetNextInvoke(bodyInstructions, i, delegateType, targetDef, out var invocation)) continue;
-            if (!TheReadIsTheReceiver(bodyInstructions, i, invocation)) continue;
 
             invocations.Add((i, invocation));
         }
 
         return stores == 1 && invocations.Count == reads ? invocations : null;
-    }
-
-    /// <summary>
-    /// Whether the delegate which a read of a local leaves on the stack is the one which the invocation is made with,
-    /// which is so where the value of the read is still the value under the arguments of the invocation: an instruction
-    /// which takes more values than stand above the one the read left is one which took that value, and what a call
-    /// leaves in the place of what it was handed is a value of its own, so the delegate which a local holds is none of
-    /// the invocation where it was handed to a call on the way, whichever call that was.
-    /// </summary>
-    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
-    /// <param name="read">Index of the read of the local.</param>
-    /// <param name="invocation">Index of the instruction which invokes the delegate.</param>
-    /// <returns>Whether the read is the receiver of the invocation.</returns>
-    private static bool TheReadIsTheReceiver(IReadOnlyList<Instruction> bodyInstructions, int read, int invocation)
-    {
-        // The value of the read stands on the stack until the invocation, which is where no instruction takes more
-        // values than the ones which stand above it: an instruction which reaches it took it, and one which the walk
-        // cannot count is one which the read cannot be told to stand under, so the read is none of the invocation either
-        // way.
-        var above = 0;
-        for (var i = read + 1; i < invocation; i++)
-        {
-            var ins = bodyInstructions[i];
-            if (ins.OpCode == OpCodes.Nop) continue;
-
-            if (StackEffect(ins) is not { } effect) return false;
-            if (effect.Taken > above) return false;
-
-            above += effect.Left - effect.Taken;
-        }
-
-        return true;
     }
 
     /// <summary>

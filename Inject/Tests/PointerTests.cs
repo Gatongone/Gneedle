@@ -215,6 +215,22 @@ public class PointerTests
             return add(a, a) + add(a, 1);
         }
 
+        // The delegate which the local holds is invoked with the value of its own invocation as an argument, so the
+        // invocation of the inner read stands among the arguments of the outer one: the delegate which the outer
+        // invocation is made with is the one the local holds no less than the inner one, and the two reads were answered
+        // for the same instruction, which the second answer wrote over.
+        public static int InvokeAHeldDelegateWithTheValueOfItsOwnInvocation(int a)
+        {
+            var add = This.Method<Func<int, int, int>>("Add");
+            return add(add(a, a), a);
+        }
+
+        // Two symbols which name the same member stand one within the arguments of the other, so neither of them is
+        // stored anywhere: the invocation of the inner symbol is the first call of the delegate's type after the outer
+        // symbol stands, and the arguments of the outer invocation matched it for the outer symbol as well.
+        public static int InvokeASymbolWithTheValueOfAnother(int a)
+            => This.Method<Func<int, int, int>>("Add")(This.Method<Func<int, int, int>>("Add")(a, a), a);
+
         // The same, of a member which belongs to no instance, whose invocation is written with no receiver at all.
         public static long InvokeAHeldDelegateOfAStaticMember(long a)
         {
@@ -1511,6 +1527,75 @@ public class PointerTests
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(64));
+    }
+
+    [Test]
+    public void A_Held_Delegate_Which_Is_Invoked_With_The_Value_Of_Its_Own_Invocation_Rewrites_To_Direct_Calls()
+    {
+        // The invocation of the inner read stands among the arguments of the outer one, and the arguments of the outer
+        // invocation match the ones which the inner invocation is made with: the inner instruction was answered for the
+        // outer read as well, and the second answer wrote over the work of the first.
+        var host = NewHostWithAdd(isVirtual: false, "MethodInjectionNestedHeldDelegateAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWithTheValueOfItsOwnInvocation)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                                   && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
+                    "the reads of the local were not both rewritten to a direct call to Add.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.False,
+                    "an invocation of the delegate was left standing rather than folded.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+
+        var assembly = host.AssemblyHandler.Assembly;
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(63));
+    }
+
+    [Test]
+    public void A_Symbol_Which_Stands_Within_The_Arguments_Of_Another_Rewrites_To_Direct_Calls()
+    {
+        // Neither symbol is stored anywhere, so each of them is invoked where it stands and the inner invocation is the
+        // first call of the delegate's type after the outer symbol: the outer symbol was answered for it as well, and
+        // the invocation of the inner symbol was written twice.
+        var host = NewHostWithAdd(isVirtual: false, "MethodInjectionNestedSymbolAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeASymbolWithTheValueOfAnother)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                                   && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
+                    "the symbols were not both rewritten to a direct call to Add.");
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.False,
+                    "an invocation of the delegate was left standing rather than folded.");
+
+        var assembly = host.AssemblyHandler.Assembly;
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(63));
     }
 
     [Test]
