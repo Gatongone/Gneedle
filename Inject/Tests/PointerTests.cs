@@ -31,6 +31,12 @@ public class PointerTests
         public int PublicField;
         public static int StaticField;
         public int PublicProperty { get; set; }
+
+        /// <summary>
+        /// A field which holds another instance of the type, which is what a template reaches a member through where the
+        /// instance of <c>Instance</c> is read off an instance rather than loaded on its own.
+        /// </summary>
+        public HelperClass? Inner;
     }
 
     /// <summary>
@@ -219,6 +225,42 @@ public class PointerTests
         /// Take a delegate for a call of its own, which is what a template hands a delegate it holds to.
         /// </summary>
         public static int Consume(Func<int, int, int> unused) => 7;
+
+        /// <summary>
+        /// The local which holds the delegate is handed to a member which answers the value that the field is written
+        /// into, on the way to the invocation: the store takes the value it writes as well as the value it is read off,
+        /// which is the one the member answered from the delegate, so the read which handed the delegate over is one
+        /// which the invocation has nowhere to read, and the delegate is built into the local.
+        /// </summary>
+        public static int InvokeAHeldDelegateWhichIsStoredThroughAValueItWasHandedTo(int a)
+        {
+            var add = This.Method<Func<int, int, int>>("Add");
+            HeldBy(add).Number = 5;
+            return add(a, a);
+        }
+
+        /// <summary>
+        /// Hold the delegate which was handed over and answer the value which holds it.
+        /// </summary>
+        public static DelegateHolder HeldBy(Func<int, int, int> slot)
+        {
+            Held.Slot = slot;
+            return Held;
+        }
+
+        /// <summary>
+        /// The instance which a template stores a delegate it holds into on its way.
+        /// </summary>
+        public static readonly DelegateHolder Held = new DelegateHolder();
+
+        /// <summary>
+        /// The fields of an instance which a template writes on its way.
+        /// </summary>
+        public class DelegateHolder
+        {
+            public Func<int, int, int>? Slot;
+            public int Number;
+        }
 
         /// <summary>
         /// Name the method through a value which the template computes, which is a name the weaving has nowhere to read.
@@ -435,6 +477,13 @@ public class PointerTests
         /// than the definition of the base.
         /// </summary>
         public static int InstanceMethod_OfABaseOfAGenericType(DerivedOfAGenericBase derived, int a) => new Instance(derived).Method<IntOp>("Calc")(a);
+
+        /// <summary>
+        /// The instance of <c>Instance</c> is the field of an instance which the template was handed, so the value which
+        /// the member is reached through is read off that instance rather than loaded on its own: the instructions which
+        /// leave the value take one as well as leaving one.
+        /// </summary>
+        public static int InstanceMethod_OfAFieldOfAnInstance(HelperClass outer, int a) => new Instance(outer.Inner!).Method<IntOp>("Calc")(a);
     }
 
     private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
@@ -1450,6 +1499,44 @@ public class PointerTests
     }
 
     [Test]
+    public void A_Held_Delegate_Which_Is_Stored_Through_A_Value_It_Was_Handed_To_Is_Built_Rather_Than_Folded()
+    {
+        // The store of a field of an instance takes two values, the value it writes and the value it is read off, and the
+        // walk counted the one it took away as the one which stood under the arguments of the invocation: the read which
+        // handed the delegate over was answered for the invocation as well, which wrote the hand-over with the receiver of
+        // the member rather than with the delegate which the local holds.
+        ThisMethodTemplates.Held.Slot = null;
+        ThisMethodTemplates.Held.Number = 0;
+        var host = NewHostWithAdd(isVirtual: false, "MethodInjectionStoredOnItsWayDelegateAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichIsStoredThroughAValueItWasHandedTo)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+
+        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
+                    "the delegate was not built into the local which holds it.");
+        Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+                    "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
+
+        var assembly = host.AssemblyHandler.Assembly;
+        var module = assembly.Source.MainModule;
+        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
+        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        host.Source.Methods.Add(constructor);
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(42));
+        Assert.That(ThisMethodTemplates.Held.Slot, Is.Not.Null, "the delegate which the template handed over was not held.");
+        Assert.That(ThisMethodTemplates.Held.Number, Is.EqualTo(5), "the field which the template wrote on its way was not written.");
+    }
+
+    [Test]
     public void InvokeAHeldDelegate_Of_A_Static_Member_Rewrites_To_Direct_Call()
     {
         // The store of the delegate is the whole of what the symbol stands for, and a member which belongs to no
@@ -1807,6 +1894,28 @@ public class PointerTests
         type.GetField("Helper")!.SetValue(instance, new HelperClass { PublicField = 21 });
 
         Assert.That(type.GetMethod("Run")!.Invoke(instance, null), Is.EqualTo(21));
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Field_Which_The_Template_Reads_Is_Reached_Through_That_Field()
+    {
+        // The value which the placeholder was built around is read off an instance which the template was handed, so the
+        // instruction which leaves it takes one value as well: the walk which counts the values of the value read the
+        // field as leaving one more than it does, so the sequence which the placeholder was built around was never
+        // recognized and the template was refused rather than woven.
+        var (assembly, host, method) = NewInstanceHost("InstanceFieldValueAssembly", [typeof(HelperClass), typeof(int)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAFieldOfAnInstance)));
+
+        var ins = method.Source.Body.Instructions.ToArray();
+        Assert.That(ins.Any(instruction => instruction.Operand is MemberReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False,
+                    "the array which built the instance of `Instance` was left in the body.");
+        Assert.That(ReceiverOf(ins, "Calc", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldfld),
+                    "the member is called on a value which the template did not name.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var outer = new HelperClass { Inner = new HelperClass() };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [outer, 21]), Is.EqualTo(42));
     }
 
     [Test]

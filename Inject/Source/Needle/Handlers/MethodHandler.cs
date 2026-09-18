@@ -1319,24 +1319,36 @@ internal sealed partial class MethodHandler : IMethodHandler
         var code = instruction.OpCode.Code;
         switch (code)
         {
-            // The loads, which push one value each.
+            // The loads, which push a value of their own rather than one which the stack held already, and the field of
+            // no instance among them, which is read off the type rather than off a value.
             case Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg or Code.Ldarg_S
                 or Code.Ldloc_0 or Code.Ldloc_1 or Code.Ldloc_2 or Code.Ldloc_3 or Code.Ldloc or Code.Ldloc_S
                 or Code.Ldarga or Code.Ldarga_S or Code.Ldloca or Code.Ldloca_S
                 or Code.Ldc_I4_M1 or Code.Ldc_I4_0 or Code.Ldc_I4_1 or Code.Ldc_I4_2 or Code.Ldc_I4_3 or Code.Ldc_I4_4
                 or Code.Ldc_I4_5 or Code.Ldc_I4_6 or Code.Ldc_I4_7 or Code.Ldc_I4_8 or Code.Ldc_I4 or Code.Ldc_I4_S
                 or Code.Ldc_I8 or Code.Ldc_R4 or Code.Ldc_R8 or Code.Ldstr or Code.Ldnull or Code.Ldftn or Code.Ldtoken
-                or Code.Ldfld or Code.Ldsfld or Code.Ldflda or Code.Ldsflda or Code.Ldobj or Code.Ldlen
-                or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8 or Code.Ldind_I or Code.Ldind_R4
-                or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2 or Code.Ldind_U4 or Code.Sizeof:
+                or Code.Ldsfld or Code.Ldsflda or Code.Sizeof:
                 return 1;
 
-            // The stores and the pop, which take one value each.
+            // The loads which read what they are handed, which is the value a field is read off, the address one is read
+            // through, and the array or the element which stands at it: what each of them leaves stands in the place of
+            // the value it took rather than above it.
+            case Code.Ldfld or Code.Ldflda or Code.Ldobj or Code.Ldlen
+                or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8 or Code.Ldind_I or Code.Ldind_R4
+                or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2 or Code.Ldind_U4:
+                return 0;
+
+            // The stores which take what they write and nothing else, and the pop, which takes one value.
             case Code.Starg or Code.Starg_S or Code.Stloc or Code.Stloc_S or Code.Stloc_0 or Code.Stloc_1
-                or Code.Stloc_2 or Code.Stloc_3 or Code.Stfld or Code.Stsfld or Code.Stobj
-                or Code.Stind_I or Code.Stind_I1 or Code.Stind_I2 or Code.Stind_I4 or Code.Stind_I8 or Code.Stind_R4
-                or Code.Stind_R8 or Code.Stind_Ref or Code.Pop:
+                or Code.Stloc_2 or Code.Stloc_3 or Code.Stsfld or Code.Pop:
                 return -1;
+
+            // The stores which take where they write as well as what they write, which is the receiver of a field, the
+            // address of a value, and the address of an element of an array or of an element of an array of addresses.
+            case Code.Stfld or Code.Stobj
+                or Code.Stind_I or Code.Stind_I1 or Code.Stind_I2 or Code.Stind_I4 or Code.Stind_I8 or Code.Stind_R4
+                or Code.Stind_R8 or Code.Stind_Ref:
+                return -2;
 
             // The instructions which leave what they were handed, of another type.
             case Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_I8 or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2
