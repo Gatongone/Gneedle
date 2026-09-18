@@ -48,6 +48,7 @@ public class PointerTests
         public int Calc(int a) => a * 2;
         public int PublicField;
         public int PublicProperty => 42;
+        public U Identity<U>(U value) => value;
     }
 
     /// <summary>
@@ -514,6 +515,18 @@ public class PointerTests
         /// </summary>
         public static int InstanceMethod_OfABaseOfABaseOfAGenericType(DerivedOfAMiddleOfAGenericBase derived, int a)
             => new Instance(derived).Method<IntOp>("Calc")(a);
+
+        /// <summary>
+        /// The delegate of a member which declares a parameter of its own is written with the token which stands for the
+        /// parameter of the member being woven, which is the only name such a signature has: the member of the type
+        /// which declares a parameter as well is matched by it, and the call is one of the instantiation of the member
+        /// which reaches the body.
+        /// </summary>
+        public delegate M_0 IdentityOfTheMethod(M_0 value);
+
+        /// <inheritdoc cref="IdentityOfTheMethod"/>
+        public static M_0 InstanceMethodOfAGenericMemberOfAGenericType(GenericHelper<int> helper, M_0 value)
+            => new Instance(helper).Method<IdentityOfTheMethod>("Identity")(value);
 
         /// <summary>
         /// The instance of <c>Instance</c> is the field of an instance which the template was handed, so the value which
@@ -2095,6 +2108,31 @@ public class PointerTests
     }
 
     /// <summary>
+    /// The same host, of a static member <c>U Run&lt;U&gt;(GenericHelper&lt;int&gt; helper, U value)</c> which declares a
+    /// parameter of its own, which is what a template that reaches a member declaring one as well is woven into: the
+    /// delegate of such a template is written with the token of the parameter of the member, which the member of the
+    /// type is matched by.<para/>
+    /// The parameter is named <c>U</c> because the name is all which ties the two together: the token of the delegate
+    /// stands for the parameter of the member being woven, and the member which is reached declares its own as
+    /// <c>U</c>, so the names are what the lookup compares.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static (Assembly Assembly, TypeHandler Host, MethodHandler Method) NewInstanceHostOfAGenericMember(string assemblyName)
+    {
+        var assembly = Assembly.Create(assemblyName);
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var method = (MethodHandler) host.AddMethod(
+            "Run",
+            typeof(M_0).ToGneedleType(),
+            [new GenericParameterType("U")],
+            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M_0).ToGneedleType())],
+            MethodFlags.Public | MethodFlags.Static);
+
+        return (assembly, host, method);
+    }
+
+    /// <summary>
     /// Give a host a field which holds a <see cref="HelperClass"/>, which is what a template of <c>Instance</c> which
     /// computes its instance reaches one through.
     /// </summary>
@@ -2331,6 +2369,27 @@ public class PointerTests
         var type = assembly.Load().GetType($"{Ns}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAMiddleOfAGenericBase(), 14]), Is.EqualTo(42),
+                    "the woven assembly does not run.");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Generic_Member_Of_A_Generic_Type_Runs_The_Member()
+    {
+        // The member declares a parameter of its own as well as belonging to a type which declares one, and the member
+        // which is woven declares one too, which the delegate of the template stands for: the call is one of the member
+        // instanced with the parameter of the body, so the reference which the call stands on has to declare the
+        // parameter of the member, which the instantiation of the call is an argument of.
+        var (assembly, _, method) = NewInstanceHostOfAGenericMember("InstanceGenericMemberOfAGenericTypeAssembly");
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethodOfAGenericMemberOfAGenericType)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().FirstOrDefault(reference => reference.Name == "Identity");
+        Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
+        Assert.That(call!.GetElementMethod().GenericParameters.Count, Is.EqualTo(1),
+                    "the call instantiates a member which declares no parameter of its own.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.MakeGenericMethod(typeof(int)).Invoke(null, [new GenericHelper<int>(), 42]), Is.EqualTo(42),
                     "the woven assembly does not run.");
     }
 

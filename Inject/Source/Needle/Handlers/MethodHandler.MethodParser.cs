@@ -325,7 +325,8 @@ partial class MethodHandler
 
     /// <summary>
     /// Get the reference which the module holds to call <paramref name="methodDef"/>, which names the instantiation of
-    /// the type which declares it rather than the definition of that type when that type declares parameters.<para/>
+    /// the type which declares it rather than the definition of that type when that type declares parameters, and which
+    /// declares the parameters of the member itself where it declares any.<para/>
     /// A member which such a type declares belongs to the definition, and the call of a method of a type which stands
     /// open is one which the runtime refuses to run: the declaring type is written as the instantiation which the body
     /// being woven stands in for that reason, which is the shape a compiler emits for a call to a member of the
@@ -351,6 +352,16 @@ partial class MethodHandler
         foreach (var parameter in methodDef.Parameters)
         {
             reference.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, parameter.ParameterType));
+        }
+
+        // The member may declare parameters of its own as well, which belong to the definition as the parameters of the
+        // type do, and the reference stands for the member rather than for that definition: a call of a member which is
+        // instanced is one which names a member that declares a parameter for each of the arguments of it, so a call of
+        // a reference which declares none of them is one the runtime refuses to read. The signature names the parameters
+        // by position, so the ones which were copied above stand for the ones declared here.
+        foreach (var genericParameter in methodDef.GenericParameters)
+        {
+            reference.GenericParameters.Add(new GenericParameter(genericParameter.Name, reference));
         }
 
         return reference;
