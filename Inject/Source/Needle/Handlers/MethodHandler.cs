@@ -751,16 +751,32 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// is that receiver, which nothing makes it: the argument is what the template reached the member through, so it is
     /// what the member has to be reached through in the body it is woven into.<para/>
     /// A template which named no instance of its own reaches the member of the member being woven, whose receiver is the
-    /// load of <c>this</c> which the symbols that name a member of this type are written with.
+    /// load of <c>this</c> which the symbols that name a member of this type are written with: a member which is static
+    /// holds no slot for that receiver, so a template which reaches a member of an instance from one is refused.
     /// </remarks>
     /// <param name="instanceIns">The instruction of the template which loads the instance, or null when the template
     /// named none of its own.</param>
     /// <param name="templateDef">The template which the instance is read out of.</param>
     /// <returns>The instruction which loads the receiver.</returns>
+    /// <exception cref="ArgumentException">Thrown when the member being woven is static, and therefore holds no receiver
+    /// for a member of an instance which the template reached through <c>This</c> or <c>Base</c>.</exception>
     private Instruction CreateReceiver(Instruction? instanceIns, MethodDefinition templateDef)
-        => instanceIns is { } ins && ins.TryGetLdargIndex(!templateDef.IsStatic, out var slot)
-               ? CreateLdarg(slot, templateDef)
-               : Instruction.Create(OpCodes.Ldarg_0);
+    {
+        if (instanceIns is { } ins && ins.TryGetLdargIndex(!templateDef.IsStatic, out var slot))
+        {
+            return CreateLdarg(slot, templateDef);
+        }
+
+        // The instance which the member is reached through is the one which the member being woven belongs to, and a
+        // member which is static belongs to none: the slot which `this` takes holds its first argument instead, so the
+        // member would be called on a value the template was handed for something else.
+        if (Source.IsStatic)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.STATIC_MEMBER_REACHES_AN_INSTANCE_MEMBER, Source.FullName));
+        }
+
+        return Instruction.Create(OpCodes.Ldarg_0);
+    }
 
     /// <summary>
     /// The slot which the argument at <paramref name="slot"/> of the template holds in the member being woven.

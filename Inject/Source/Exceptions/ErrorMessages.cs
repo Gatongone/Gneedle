@@ -227,6 +227,12 @@ internal static class ErrorMessages
     internal const string TEMPLATE_READS_ITS_OWN_INSTANCE = "The template reads the instance which it belongs to, which is no argument of the member being woven. A template is a static method, and a lambda which captures a variable is an instance method of the type which holds the capture. Method: {0}.";
 
     /// <summary>
+    /// The template reaches a member of an instance through the instance which the member being woven belongs to, and
+    /// that member is static, so it belongs to none. The placeholder is the member of the member being woven.
+    /// </summary>
+    internal const string STATIC_MEMBER_REACHES_AN_INSTANCE_MEMBER = "The member which the template reaches belongs to an instance, and the member being woven is static and belongs to none: the first argument of it stands where that instance would be loaded from, which the template was handed for something else. An instance which a static member reaches a member of is one it was handed, which is what Instance names. Method: {0}.";
+
+    /// <summary>
     /// The template holds no body to copy, which a member which is abstract, or which is a pinvoke, or which an
     /// interface declares does. The placeholder is the template.
     /// </summary>

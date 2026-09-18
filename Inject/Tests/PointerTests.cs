@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Assembly = Gneedle.Inject.Assembly;
@@ -1232,14 +1232,16 @@ public class PointerTests
     public void InvokeWithTheAddressOfAnArgumentOfItsOwn_Rewrites_To_Direct_Call()
     {
         // The address which the template hands over is of an argument of its own here rather than of a local it holds,
-        // which is another of the two instructions which take an address and another operand to read the type off.
+        // which is another of the two instructions which take an address and another operand to read the type off. The
+        // member is reached through `This`, so it is called on the instance which the member being woven belongs to,
+        // and the argument of the template stands one slot higher in that member than it does in the template.
         var host = NewHostWithAnArgumentTakenByAddress("MethodInjectionByRefArgumentAssembly");
         var method = host.AddMethod(
             "Run",
             typeof(int).ToGneedleType(),
             [],
             [new Parameter(typeof(int).ToGneedleType())],
-            MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -1247,9 +1249,33 @@ public class PointerTests
                     "the delegate was not rewritten to a direct call to BumpByRef.");
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
         Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        Assert.That(ReceiverOf(ins, "BumpByRef", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldarg_0),
+                    "the member is not called on the instance which the member being woven belongs to.");
 
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
-        Assert.That(type.GetMethod("Run")!.Invoke(null, [41]), Is.EqualTo(42));
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(42));
+    }
+
+    [Test]
+    public void An_Instance_Member_Which_A_Static_Member_Reaches_Through_This_Is_Refused()
+    {
+        // The receiver of a member which a template reaches through `This` is the instance which the member being woven
+        // belongs to, and a member which is static belongs to none: the first argument of it stands where that receiver
+        // would be loaded from, which the template was handed for something else, so the call would be written on an
+        // argument rather than on an instance. The instance which a static member reaches a member of is one it was
+        // handed, which is what `Instance` names, so the weave is refused rather than written.
+        var host = NewHostWithAnArgumentTakenByAddress("MethodInjectionStaticThisAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public | MethodFlags.Static);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument))));
+
+        Assert.That(thrown!.Message, Does.Contain("is static and belongs to none"));
     }
 
     /// <summary>
