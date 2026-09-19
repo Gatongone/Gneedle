@@ -180,9 +180,6 @@ internal static class CecilExtensions
             // The two elements are one another's description whatever the rank of the arrays which hold them, so the
             // rank is read here: a signature which describes an element of an array of one rank describes the element
             // of the member which stands in an array of any rank as well, where the signature is a type of its own.
-            // The two elements are one another's description whatever the rank of the arrays which hold them, so the
-            // rank is read here: a signature which describes an element of an array of one rank describes the element
-            // of the member which stands in an array of any rank as well, where the signature is a type of its own.
             if (describedSpecification is ArrayType describedArray && describingSpecification is ArrayType describingArray
                 && describedArray.Rank != describingArray.Rank)
             {

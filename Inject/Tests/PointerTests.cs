@@ -2526,7 +2526,30 @@ public class PointerTests
         var host = NewHostWithIdentity("MethodInjectionIdentityMismatchAssembly");
         var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        Assert.Throws<ArgumentException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
+        var thrown = Assert.Throws<ArgumentException>(
+            () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
+
+        Assert.That(thrown!.Message, Does.Contain("another instantiation"),
+                    "the delegate was refused by the rule of the call rather than as one which names no member.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Declares_A_Parameter_Of_Its_Own_Refuses_Another_Where_The_Body_Names_One()
+    {
+        // The rule which names the parameters of a member by the parameters of the body is not the rule for a member
+        // which the signature of the delegate describes the parameters of: the body of this test declares a parameter of
+        // the name of the parameter of the member, so that rule would name it, and the call would be written as one of
+        // the instantiation which the body names rather than as one of the instantiation which the delegate described -
+        // a call which hands the member a value of a type which its parameter does not stand for, which is a body the
+        // runtime refuses to run rather than one which calls the member.
+        var host = NewHostWithIdentity("MethodInjectionIdentityMismatchNamedAssembly");
+        var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [new GenericParameterType("T")],
+                                  [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
+
+        Assert.That(thrown!.Message, Does.Contain("Identity"));
     }
 
     [Test]
