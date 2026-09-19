@@ -172,10 +172,23 @@ internal static class CecilExtensions
         }
 
         // A type which wraps another is described by one of the same kind, and the element is what describes the
-        // parameter nested in it: int[] is what T[] is described by, and int[,] is not.
+        // parameter nested in it: int[] is what T[] is described by, and int[,] is not, because the rank belongs to
+        // the array rather than to the element which stands in it.
         if (described is TypeSpecification describedSpecification && describing is TypeSpecification describingSpecification
             && describedSpecification.GetType() == describingSpecification.GetType())
         {
+            // The two elements are one another's description whatever the rank of the arrays which hold them, so the
+            // rank is read here: a signature which describes an element of an array of one rank describes the element
+            // of the member which stands in an array of any rank as well, where the signature is a type of its own.
+            // The two elements are one another's description whatever the rank of the arrays which hold them, so the
+            // rank is read here: a signature which describes an element of an array of one rank describes the element
+            // of the member which stands in an array of any rank as well, where the signature is a type of its own.
+            if (describedSpecification is ArrayType describedArray && describingSpecification is ArrayType describingArray
+                && describedArray.Rank != describingArray.Rank)
+            {
+                return false;
+            }
+
             return Bind(methodDef, describedSpecification.ElementType, describingSpecification.ElementType, bound);
         }
 

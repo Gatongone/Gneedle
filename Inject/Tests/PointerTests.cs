@@ -466,6 +466,16 @@ public class PointerTests
         /// </summary>
         public static int Identity_OfAnInt(int value) => This.Method<Func<int, int>>("Identity")(value);
 
+        /// <summary>
+        /// The member which the name stands for declares a parameter of its own which stands in an array, and the
+        /// delegate describes that array: the rank of it is part of the type which describes the parameter, so a
+        /// delegate of another rank describes no member of the type which declares this one.
+        /// </summary>
+        public static int[] Identity_OfAnArray(int[] value) => This.Method<Func<int[], int[]>>("Echo")(value);
+
+        /// <inheritdoc cref="Identity_OfAnArray"/>
+        public static int[,] Identity_OfAnArrayOfAnotherRank(int[,] value) => This.Method<Func<int[,], int[,]>>("Echo")(value);
+
         /// <inheritdoc cref="Identity_OfAnInt"/>
         public static string Identity_OfAString(string value) => This.Method<Func<string, string>>("Identity")(value);
 
@@ -2402,6 +2412,31 @@ public class PointerTests
     /// </summary>
     /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
     /// because two assemblies of the name cannot be loaded into one run.</param>
+    /// <summary>
+    /// Create a host which holds <c>T[] Echo&lt;T&gt;(T[] value)</c>, whose parameter is an array of the parameter which
+    /// the member declares, so that the rank of that array is a type of its own rather than part of the element.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAnArrayEcho(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var module = host.Source.Module;
+        var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
+        {
+            DeclaringType = host.Source,
+        };
+        var parameter = new GenericParameter("T", echo);
+        echo.GenericParameters.Add(parameter);
+        echo.ReturnType = new ArrayType(parameter);
+        echo.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, new ArrayType(parameter)));
+        echo.Body.GetILProcessor().Emit(OpCodes.Ldarg_1);
+        echo.Body.GetILProcessor().Emit(OpCodes.Ret);
+        host.Source.Methods.Add(echo);
+        return host;
+    }
+
     private static TypeHandler NewHostWithIdentity(string assemblyName = "MethodInjectionIdentityAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
@@ -2492,6 +2527,44 @@ public class PointerTests
         var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
         Assert.Throws<ArgumentException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Parameter_Is_An_Array_Of_Its_Own_Is_Instantiated_From_The_Delegate()
+    {
+        // The parameter of the member stands in an array, and the delegate describes that array rather than the element
+        // alone: Array<int> is what Array<T> is described by, so the parameter is bound to the element of the arguments
+        // and the call is one of the instantiation which the delegate named.
+        var host = NewHostWithAnArrayEcho("MethodInjectionArrayIdentityAssembly");
+        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArray)));
+
+        Assert.That(InstantiationOfTheCall(method, "Echo"), Is.EqualTo(typeof(int).FullName),
+                    "the call was not one of the instantiation which the delegate named.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var instance = Activator.CreateInstance(type)!;
+        var value = new[] { 1, 2, 3 };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [value]), Is.SameAs(value),
+                    "the member whose parameter stands in an array was not called through the array it was handed.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Parameter_Is_An_Array_Of_Its_Own_Refuses_Another_Rank()
+    {
+        // The rank of an array belongs to the array rather than to the element which stands in it, and a member whose
+        // parameter is an array of one rank is described by an array of any rank as well where the two elements are
+        // read alone: the member is found, and the call of it is written with the element of the arguments where the
+        // value which stands on the stack is a value of another rank, which is a body the runtime refuses to run. The
+        // rank is read before the elements are, and the weave is refused.
+        var host = NewHostWithAnArrayEcho("MethodInjectionArrayRankAssembly");
+        var method = host.AddMethod("Run", typeof(int[,]).ToGneedleType(), [], [new Parameter(typeof(int[,]).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnotherRank))));
+
+        Assert.That(thrown!.Message, Does.Contain("Echo"));
     }
 
     [Test]
