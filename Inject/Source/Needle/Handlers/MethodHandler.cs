@@ -925,7 +925,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             case MethodReference methodRef:
                 RefuseANameWhichIsNotWritten(methodRef, currentIndex, filter);
                 RefuseTheCompilersOwnType(methodRef.DeclaringType, methodRef.FullName);
-                RefuseTheCompilersOwnMember(methodRef);
+                RefuseTheCompilersOwnMember(methodRef, targetDef);
                 var importedMethod = Source.Module.ImportReference(methodRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
                 break;
@@ -1005,17 +1005,32 @@ internal sealed partial class MethodHandler : IMethodHandler
 
     /// <summary>
     /// Refuse a member which the compiler wrote for a body of the template's own.<para/>
-    /// A local function is not a type of its own the way a lambda is: it is a method of the type which declares the
-    /// template, named with the bracket which no identifier of C# holds. Its body is a body of the template's, so
-    /// carrying the call to it carries a call into a member which the weaving has no instructions of.
+    /// A local function which captured nothing is not a type of its own the way a lambda is: it is a method of the type
+    /// which declares the template, named with the bracket which no identifier of C# holds. Its body is a body of the
+    /// template's, so carrying the call to it carries a call into a member which the weaving has no instructions of.
     /// </summary>
+    /// <remarks>
+    /// The bracket alone is not what makes such a member one of the template's: the compiler writes members under that
+    /// bracket for reasons of its own which hold nothing of the template. A record carries the <c>&lt;Clone&gt;$</c>
+    /// which a <c>with</c> expression calls, and that member belongs to the record rather than to a body of the
+    /// template's, so carrying the call to it carries nothing which the weaving cannot write. What tells the two apart
+    /// is where the member stands rather than what it is called: a body of the template's is written beside the
+    /// template, which is to say on the type which declares it.
+    /// </remarks>
     /// <param name="member">The member which the reference names.</param>
-    /// <exception cref="ArgumentException">Thrown when the member is one which the compiler wrote.</exception>
-    private void RefuseTheCompilersOwnMember(MemberReference member)
+    /// <param name="targetDef">The template which the reference is read out of.</param>
+    /// <exception cref="ArgumentException">Thrown when the member is one which the compiler wrote for a body of the template's own.</exception>
+    private void RefuseTheCompilersOwnMember(MemberReference member, MethodDefinition targetDef)
     {
         if (!member.Name.StartsWith("<", StringComparison.Ordinal)) return;
 
-        throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, member.FullName, Source.FullName));
+        // The declaring type of a member of a generic type is written as the instantiation which the call names rather
+        // than as the definition which the member was written on, and the two are one type to the comparison: what the
+        // reference has to be is a member of the type which declares the template, whichever of the two forms the call
+        // wrote it in.
+        if (member.DeclaringType?.GetElementType().FullName != targetDef.DeclaringType.FullName) return;
+
+        throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_LOCAL_FUNCTION, member.FullName, Source.FullName));
     }
 
     /// <summary>

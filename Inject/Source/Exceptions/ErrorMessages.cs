@@ -231,6 +231,13 @@ internal static class ErrorMessages
     internal const string TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN = "The template names a type which the compiler wrote for a body of the template's own, which is a lambda, a local function, an async body or an iterator: what such a type holds is a method of its own rather than instructions of the template, so the weaving cannot carry it. Reference: {0}, Method: {1}.";
 
     /// <summary>
+    /// The template calls a local function, which the compiler writes as a method of the type which declares the
+    /// template rather than as a type of its own the way a lambda is, and which therefore holds a body of the
+    /// template's own. The placeholders are the reference which names it and the member.
+    /// </summary>
+    internal const string TEMPLATE_HOLDS_A_LOCAL_FUNCTION = "The template calls a local function, which the compiler writes as a method of the type which declares the template: what such a member holds is a body of the template's own rather than instructions of the template, so the weaving cannot carry it. Reference: {0}, Method: {1}.";
+
+    /// <summary>
     /// The template belongs to an instance and reads it, which is the template's own receiver rather than an argument
     /// of the member being woven. The placeholder is the member.
     /// </summary>

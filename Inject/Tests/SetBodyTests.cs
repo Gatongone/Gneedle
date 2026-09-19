@@ -102,6 +102,33 @@ public static class ConstructTemplates
     }
 
     /// <summary>
+    /// A local function which captured a local of the template, which the compiler holds in a type of its own rather
+    /// than on the type which declares the template.
+    /// </summary>
+    public static int LocalFunctionWhichCaptured(int value)
+    {
+        var offset = 1;
+        return Add(value);
+
+        int Add(int number) => number + offset;
+    }
+
+    /// <summary>
+    /// A record, which the compiler writes a member of under the same bracket which it names a local function with: the
+    /// <c>&lt;Clone&gt;$</c> which a <c>with</c> expression calls belongs to the record rather than to any body of the
+    /// template's own, so it is a member which the weaving carries like any other.
+    /// </summary>
+    public record Cloneable
+    {
+        public int Value { get; set; }
+    }
+
+    /// <summary>
+    /// A template which writes the <c>with</c> expression that the call of <c>&lt;Clone&gt;$</c> belongs to.
+    /// </summary>
+    public static int CloneARecord(int value) => (new Cloneable { Value = value } with { Value = value + 1 }).Value;
+
+    /// <summary>
     /// A body which the compiler writes as a state machine of its own.
     /// </summary>
     public static async Task<int> Async(int value)
@@ -459,7 +486,45 @@ public class SetBodyTests
         var thrown = Assert.Throws<ArgumentException>(
             () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunction))!));
 
+        Assert.That(thrown!.Message, Does.Contain("local function"),
+                    "the refusal did not name what the template holds.");
         Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Holds_A_Local_Function_Which_Captured_Throws()
+    {
+        // A local function which captured is written as a method of a type which the compiler writes beside the
+        // template, which the walk of the type which declares the member refuses, rather than as a method of the type
+        // which declares the template.
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunctionWhichCaptured))!));
+
+        Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Clones_A_Record_Is_Woven()
+    {
+        // The bracket which the compiler names a body of the template's own with is not what makes a member one of the
+        // template's: the <Clone>$ of a record stands under it as well, and that member belongs to the record, so the
+        // call of it is carried the way a call of any other member of the assembly the template was compiled into is.
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.CloneARecord))!);
+
+        var body = ((MethodHandler) method).Source.Body;
+        Assert.That(body.Instructions.Any(instruction => instruction.Operand is MethodReference {Name: "<Clone>$"}), Is.True,
+                    "the call of the member which the with expression names was not carried.");
+
+        Assert.That(NewProbe(nameof(ConstructTemplates.CloneARecord)).Invoke(null, [1]), Is.EqualTo(2),
+                    "the woven assembly does not clone the record.");
     }
 
     [Test]
