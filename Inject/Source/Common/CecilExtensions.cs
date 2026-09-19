@@ -26,7 +26,7 @@ internal static class CecilExtensions
         /// Check whether the parameters have same names with <c>targetTypes</c>.
         /// </summary>
         /// <param name="targetTypes"></param>
-        internal bool SameWith(IList<TypeReference> targetTypes)
+        internal bool SameWith(IReadOnlyList<TypeReference> targetTypes)
             => parameterDefs.Count == targetTypes.Count
                 && !parameterDefs.Where((t, index) => !TypeName.HasSameName(t.ParameterType, targetTypes[index])).Any();
 
@@ -45,6 +45,165 @@ internal static class CecilExtensions
         internal bool SameWith(IList<Type> targetTypes)
             => parameterDefs.Count == targetTypes.Count
                 && !parameterDefs.Where((t, index) => !TypeName.HasSameName(t.ParameterType, targetTypes[index])).Any();
+    }
+
+    /// <param name="methodDef">Method definition.</param>
+    extension(MethodDefinition methodDef)
+    {
+        /// <summary>
+        /// Check whether the method is the one which the given signature describes, and read the arguments which the
+        /// generic parameters it declares stand for out of that description.<para/>
+        /// A method which declares a parameter of its own is one which no signature of named types describes, because
+        /// the type of that parameter is the name of the method rather than the name of any type. The description is
+        /// the signature which a caller hands the method, as the delegate of a template describes the member which it
+        /// names, so such a parameter is bound to the type which stands where it stands rather than compared with it:
+        /// the types of the arguments name the parameters which stand in the places of those arguments, and the type
+        /// of the value which the method hands back names the ones which stand nowhere among them, which is the shape a
+        /// member of the parameters of the caller has, just like <c>TOut Make&lt;TIn, TOut&gt;(TIn value)</c>.
+        /// Every parameter of the method has to be described for the method to be named at all, because a call of a
+        /// method which stands open is one which the runtime refuses to run.
+        /// </summary>
+        /// <param name="parameterTypes">The types of the arguments which the method is called with.</param>
+        /// <param name="returnType">
+        /// The type of the value which the method hands back, or null when the caller holds none - a caller which holds
+        /// none describes the method with the type of nothing, just like the delegate of a member which hands nothing
+        /// back. It names the parameters which stand in no position of the arguments, which is the only place left for
+        /// one of them to be named at.
+        /// </param>
+        /// <param name="arguments">
+        /// The types which the generic parameters of the method stand for, in the order they are declared, or null when
+        /// the signature does not describe the method.
+        /// </param>
+        /// <returns>Whether the signature describes the method.</returns>
+        internal bool SameWith(IReadOnlyList<TypeReference> parameterTypes, TypeReference? returnType, out IReadOnlyList<TypeReference>? arguments)
+        {
+            arguments = null;
+
+            // A method which hands nothing back hands back no value, so a caller which describes one with the type of
+            // nothing describes no value at all: a delegate which stands for a member that hands nothing back, just like
+            // `Action<T>`, hands back `System.Void`, and a parameter of the member which that type named is one the call
+            // would leave standing open - and the type of nothing is no argument of an instantiation at all, so the
+            // assembly which named it is one the runtime refuses to load. The type of nothing describes nothing,
+            // wherever the caller wrote it down.
+            if (returnType is { MetadataType: MetadataType.Void })
+            {
+                returnType = null;
+            }
+
+            // A method which declares no parameter of its own names every type of its signature, so it is described by
+            // the signature which holds those very names, and the call names the method itself.
+            if (methodDef.GenericParameters.Count == 0)
+            {
+                return methodDef.Parameters.SameWith(parameterTypes);
+            }
+
+            if (methodDef.Parameters.Count != parameterTypes.Count)
+            {
+                return false;
+            }
+
+            var bound = new TypeReference?[methodDef.GenericParameters.Count];
+            for (var index = 0; index < methodDef.Parameters.Count; index++)
+            {
+                if (!Bind(methodDef, methodDef.Parameters[index].ParameterType, parameterTypes[index], bound))
+                {
+                    return false;
+                }
+            }
+
+            // The type which the method hands back names a parameter of the method as well, because it is what tells one
+            // instantiation of a method which declares parameters of its own from another: a parameter which no argument
+            // of the call stands in the place of is one which the signature names by the value the method hands back,
+            // where the caller wrote that value down, and the call of such a member is written with both arguments.
+            if (returnType != null && !Bind(methodDef, methodDef.ReturnType, returnType, bound))
+            {
+                return false;
+            }
+
+            // A parameter which no position of the signature binds is one which a call cannot name the argument of.
+            var described = new TypeReference[bound.Length];
+            for (var index = 0; index < bound.Length; index++)
+            {
+                if (bound[index] is not { } argument)
+                {
+                    return false;
+                }
+
+                described[index] = argument;
+            }
+
+            arguments = described;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Bind the parameters which <paramref name="methodDef"/> declares in <paramref name="described"/> to the types
+    /// which stand at the same positions of <paramref name="describing"/>, and tell whether the two describe the same
+    /// type.
+    /// </summary>
+    /// <param name="methodDef">The method whose parameters are bound.</param>
+    /// <param name="described">The type which holds the parameters, which is the one the method declares.</param>
+    /// <param name="describing">The type which describes it, which is the one the caller wrote.</param>
+    /// <param name="bound">The arguments which the parameters stand for so far, by position.</param>
+    /// <returns>Whether <paramref name="describing"/> describes <paramref name="described"/>.</returns>
+    private static bool Bind(MethodDefinition methodDef, TypeReference described, TypeReference describing, TypeReference?[] bound)
+    {
+        // A parameter of the method itself stands for whatever the signature holds in its place, and a parameter which
+        // two positions bind is one which only the same type describes both times: a position which is reached again
+        // tells whether it stands for the type which stands there, and a parameter which stands unbound is one which
+        // this position names.
+        if (described is GenericParameter parameter && ReferenceEquals(parameter.Owner, methodDef))
+        {
+            if (bound[parameter.Position] is { } boundArgument)
+            {
+                return TypeName.HasSameName(boundArgument, describing);
+            }
+
+            bound[parameter.Position] = describing;
+            return true;
+        }
+
+        // A generic instance is described by an instance of the same type, and the arguments of it describe the
+        // parameters which stand in the arguments of the definition: List<int> is what List<T> is described by.
+        if (described is GenericInstanceType describedInstance && describing is GenericInstanceType describingInstance)
+        {
+            if (!TypeName.HasSameName(describedInstance.ElementType, describingInstance.ElementType)
+                || describedInstance.GenericArguments.Count != describingInstance.GenericArguments.Count)
+            {
+                return false;
+            }
+
+            for (var index = 0; index < describedInstance.GenericArguments.Count; index++)
+            {
+                if (!Bind(methodDef, describedInstance.GenericArguments[index], describingInstance.GenericArguments[index], bound))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // A type which wraps another is described by one of the same kind, and the element is what describes the
+        // parameter nested in it: int[] is what T[] is described by, and int[,] is not, because the rank belongs to
+        // the array rather than to the element which stands in it.
+        if (described is TypeSpecification describedSpecification && describing is TypeSpecification describingSpecification
+            && describedSpecification.GetType() == describingSpecification.GetType())
+        {
+            // The two elements are one another's description whatever the rank of the arrays which hold them, so the
+            // rank is read here: a signature which describes an element of an array of one rank describes the element
+            // of the member which stands in an array of any rank as well, where the signature is a type of its own.
+            if (describedSpecification is ArrayType describedArray && describingSpecification is ArrayType describingArray
+                && describedArray.Rank != describingArray.Rank)
+            {
+                return false;
+            }
+
+            return Bind(methodDef, describedSpecification.ElementType, describingSpecification.ElementType, bound);
+        }
+
+        return TypeName.HasSameName(described, describing);
     }
 
     /// <param name="attributeDefinition">Type definition of attribute.</param>

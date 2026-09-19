@@ -132,7 +132,7 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         var baseMethod = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(
             DeclaringTypeHandler.AssemblyHandler.GetCecilType(baseType).Definition,
-            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray());
+            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray(), Source.ReturnType);
         if (baseMethod == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));

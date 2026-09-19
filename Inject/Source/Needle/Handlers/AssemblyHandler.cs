@@ -143,17 +143,31 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// <param name="target">The target type, or null when there is no type left to search.</param>
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Parameters of the method.</param>
+    /// <param name="returnType">
+    /// The type of the value which the member hands back, where the caller wrote it down, or null where the caller holds
+    /// none: it names a parameter of the member which stands in no place of the arguments, so a member which is handed
+    /// back a value of the type of one of its parameters is found by it.
+    /// </param>
     /// <param name="throwWhenNotFound">Whether to throw an exception when the method is not found. Default is true.</param>
     /// <returns>The method from target type or its base type. Returns null if there is no matching method in the target type and its base types, which only happens when <paramref name="throwWhenNotFound"/> is false.</returns>
     /// <exception cref="ArgumentException">Thrown when there is no matching method and <paramref name="throwWhenNotFound"/> is true.</exception>
-    internal MethodDefinition? GetMethodFromType(TypeDefinition? target, string methodName, IReadOnlyList<TypeReference> parameters, bool throwWhenNotFound = true)
+    internal MethodDefinition? GetMethodFromType(TypeDefinition? target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType = null, bool throwWhenNotFound = true)
     {
         var curType = target;
         MethodDefinition? methodDef = null;
         while (methodDef == null)
         {
             if (curType == null) break;
-            methodDef = curType.Methods.FirstOrDefault(method => method.Name.Equals(methodName) && method.Parameters.SameWith(parameters.ToArray()));
+            // A member which declares parameters of its own is one which no list of type names describes, so a candidate
+            // is read as the signature which the caller hands it where that signature binds the parameters: the type
+            // which stands in the place of a parameter of the member is the one the call of it is made with, and the
+            // type of the value which the member hands back is the one the call names a parameter which stands in no
+            // such place with. A candidate which the signature does not describe is still the one which the names of the
+            // types name, which is what finds a member whose own parameters stand nowhere in its signature - the call of
+            // that one is refused by the rule of the call rather than here, where the member it names is the one it names.
+            methodDef = curType.Methods.FirstOrDefault(
+                method => method.Name.Equals(methodName)
+                          && (method.SameWith(parameters, returnType, out _) || method.Parameters.SameWith(parameters)));
             curType   = curType.BaseType == null ? null : GetDefinition(curType.BaseType);
         }
 
