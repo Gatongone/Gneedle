@@ -164,12 +164,6 @@ partial class MethodHandler
         {
             methodDef.SameWith(parameters, returnType, out arguments);
 
-if (arguments == null && methodDef.GenericParameters.Count > 0 && methodDef.SameWith(parameters, null, out _))
-            {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_SIGNATURE, methodDef.FullName, Source.FullName));
-            }
-
-
             // A member which declares parameters of its own and whose parameters the signature describes while the
             // value it hands back is one which no instantiation of the delegate names, and the rule below is not the
             // rule for it: that one names the parameters of the member by the parameters of the body, which writes a
@@ -177,7 +171,11 @@ if (arguments == null && methodDef.GenericParameters.Count > 0 && methodDef.Same
             // which hands the member a value of a type which its own parameter does not stand for, where the lookup
             // found the member by the signature which describes its parameters alone. The weave is refused rather than
             // left to a rule which would write a call of another member than the one the delegate described.
-                    }
+            if (arguments == null && methodDef.GenericParameters.Count > 0 && methodDef.SameWith(parameters, null, out _))
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_SIGNATURE, methodDef.FullName, Source.FullName));
+            }
+        }
 
         // Skip the array init sequence if this is Instance.Method with new Instance(param), and the Static.From sequence if
         // this is Static.Method. The two are dropped whichever way the method is reached afterwards, which is the whole
@@ -700,6 +698,7 @@ if (arguments == null && methodDef.GenericParameters.Count > 0 && methodDef.Same
     /// <param name="target">The generic parameter which the member is reached through.</param>
     /// <param name="methodName">Name of the member.</param>
     /// <param name="parameters">The types of the arguments which the member is called with.</param>
+    /// <param name="returnType">Type of the value which the member hands back, or null when the caller holds none.</param>
     /// <returns>The method which the constraints of the parameter describe.</returns>
     /// <exception cref="ArgumentException">Thrown when no constraint holds a method of that name and signature.</exception>
     private MethodDefinition GetMethodFromConstraint(GenericParameter target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType)
