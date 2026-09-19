@@ -1608,7 +1608,10 @@ internal sealed partial class MethodHandler : IMethodHandler
         /// <summary>
         /// Replace the instruction at index with the given instruction. The instruction which was replaced and the one
         /// which replaces it are remembered together, so that an instruction which branches to the first is pointed at
-        /// the second: what a branch was written to reach is whatever stands where that instruction stood.
+        /// the second: what a branch was written to reach is whatever stands where that instruction stood.<para/>
+        /// The replacement which stands is the one which was written last, which is the one the collection of the
+        /// replacements holds as well: an instruction which is replaced twice is written over rather than refused,
+        /// so that the two answers say the same thing about it.
         /// </summary>
         /// <param name="index">Index of the instruction to be replaced.</param>
         /// <param name="ins">The instruction to replace with.</param>
@@ -1620,7 +1623,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // it is pointed at what stands after it instead, which is what ApplyTo does once the body is written.
             if (ins.OpCode != OpCodes.Nop)
             {
-                m_Operands.Add(target[index], ins);
+                m_Operands[target[index]] = ins;
             }
         }
 
