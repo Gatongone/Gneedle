@@ -580,18 +580,14 @@ partial class MethodHandler
         if (memberSymbol.HasFlag(MemberSymbols.Instance))
         {
             // The type of the instance which the member is looked up on: the name is preceded by the construction of the
-            // instance of `Instance` which holds the value, or by a load of the value itself where the template named it
-            // without building an instance around it. A value whose type the walk cannot tell names no type to look the
-            // member up on, which is refused rather than looked up on the member being woven, which holds a member of
-            // that name by coincidence at most.
+            // instance of `Instance` which holds the value, which is the only way the receiver of the member can be
+            // placed ahead of the name of it. A value whose type the walk cannot tell names no type to look the member
+            // up on, which is refused rather than looked up on the member being woven, which holds a member of that name
+            // by coincidence at most.
             TypeReference? argType = null;
             if (TryGetInstanceValue(filter, currentIndex, targetDef, out var instance))
             {
                 argType = instance.Load is { } load ? GetArgType(load, targetDef) : GetValueType(filter, instance.Last, targetDef);
-            }
-            else if (currentIndex >= 1)
-            {
-                argType = GetArgType(filter.Target[currentIndex - 1], targetDef);
             }
 
             if (argType == null)

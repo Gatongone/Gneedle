@@ -120,6 +120,13 @@ public class GenericTokenTests
 
         public static string InstanceMethod_SecondTokenReceiver(T_1 instance)
             => new Instance(instance).Method<NameGetter>("Name")();
+
+        // The same, of a token which is named as the receiver by itself rather than wrapped by `new Instance(instance)`.
+        // The value of the parameter stands ahead of the name of the member in the body which the compiler wrote either
+        // way, and the wrapping is what tells the weaving that the value is the receiver: without it the weaving reads
+        // no receiver at all, and the value which the compiler loaded is left on the stack beside the one it writes.
+        public static string InstanceMethod_TokenReceiverUnwrapped(T_0 instance)
+            => instance.Method<NameGetter>("Name")();
     }
 
     private static TypeHandler NewHost(params string[] genericParameterNames)
@@ -585,6 +592,24 @@ public class GenericTokenTests
                              .FirstOrDefault(reference => reference.Name == nameof(NamedSecondHelperBase.Name));
         Assert.That(call, Is.Not.Null);
         Assert.That(call!.DeclaringType.Name, Is.EqualTo(nameof(NamedSecondHelperBase)));
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Token_Which_Is_Not_Wrapped_Is_Refused()
+    {
+        // The receiver of a member of `Instance` is read off the construction which `new Instance(instance)` writes
+        // around the value, and that construction is what places the value ahead of the name of the member. A template
+        // which names the value as the receiver itself writes the value ahead of the name as well, and the weaving
+        // reads no receiver there: it writes one of its own, which leaves the value of the parameter on the stack
+        // beside it, and the body which comes of it is one the runtime refuses to run rather than one which calls the
+        // member - so the weave is refused, which is what the class of the receiver being unreadable is refused for.
+        var host = NewConstrainedHost();
+        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiverUnwrapped))));
+
+        Assert.That(thrown!.Message, Does.Contain("Name"));
     }
 
     #endregion
