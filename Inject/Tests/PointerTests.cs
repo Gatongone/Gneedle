@@ -243,6 +243,21 @@ public class PointerTests
             }
         }
 
+        // A symbol which stands in the handler of a region which the template protects, so that the beginning of the
+        // handler is where the runtime hands the control to rather than a place which a path of the body reaches: the
+        // path which begins there passes through the symbol, which is what the walk of the paths has to read it as.
+        public static int InvokeAMemberInTheHandler(int a, int b)
+        {
+            try
+            {
+                throw new InvalidOperationException();
+            }
+            catch (InvalidOperationException)
+            {
+                return This.Method<IntBinaryOp>("Add")(a, b);
+            }
+        }
+
         // The delegate is held in a local and invoked by it rather than where the symbol stands, which is what a
         // template which reads the member through a delegate of its own and then calls it writes. The local is read
         // twice, so each read is written as a receiver of its own.
@@ -1231,6 +1246,31 @@ public class PointerTests
                                     [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
                                     MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInsideAProtectedRegion)));
+
+        var body = ((MethodHandler) method).Source.Body;
+        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+                    "the member is not called where the delegate was invoked.");
+        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
+                    "the member was built into a delegate rather than called.");
+        Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4]), Is.EqualTo(7),
+                    "the woven assembly does not run the member which the symbol stands for.");
+    }
+
+    [Test]
+    public void A_Member_Which_A_Template_Invokes_In_The_Handler_Of_A_Region_Is_Called_There()
+    {
+        // The symbol stands in the handler rather than in the region, so the beginning of the handler is a place the
+        // runtime hands the control to rather than one which a path of the body reaches: the path which begins there
+        // passes through the symbol, so the call of the member stands where the delegate was invoked.
+        var host = NewRunnableGenericHost("GenericMemberInTheHandlerAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
+                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInTheHandler)));
 
         var body = ((MethodHandler) method).Source.Body;
         Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,

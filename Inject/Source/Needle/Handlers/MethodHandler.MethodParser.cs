@@ -871,7 +871,10 @@ partial class MethodHandler
         var pending = new Stack<int>();
 
         // The body is entered where it begins, and a handler of it is entered where it begins as well, because the
-        // runtime is what hands the control to both of them.
+        // runtime is what hands the control to both of them. An entry which is the instruction of the symbol itself is
+        // left out rather than pushed: a path which begins at the symbol is one which passes through it, so walking
+        // from there would ask whether the symbol stands on the paths which its own instruction leaves for, which is
+        // not the question the walk is asked.
         void Enter(Instruction? entry)
         {
             if (entry != null && at.TryGetValue(entry, out var index) && index != callIndex) pending.Push(index);
