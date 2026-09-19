@@ -513,6 +513,13 @@ public class PointerTests
         /// rather than in an argument of the call, so the delegate names it by that value.
         /// </summary>
         public static string MakeAString(int value) => This.Method<Func<int, string>>("Make")(value);
+
+        /// <summary>
+        /// The member which the name stands for declares a parameter of its own which stands in the value it hands back,
+        /// and the delegate which names it hands nothing back: the type of nothing describes no value, so it names no
+        /// parameter of the member either.
+        /// </summary>
+        public static void MakeOfNoValue(int value) => This.Method<Action<int>>("Make")(value);
     }
 
     /// <summary>
@@ -2655,8 +2662,8 @@ public class PointerTests
         var thrown = Assert.Throws<ArgumentException>(
             () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
-        Assert.That(thrown!.Message, Does.Contain("Identity"),
-                    "the refusal did not name the member which the delegate describes no instantiation of.");
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved"),
+                    "the member was refused by the rule of the call rather than as one which no candidate describes.");
     }
 
     [Test]
@@ -2714,6 +2721,23 @@ public class PointerTests
 
         Assert.That(InstantiationsOfTheCall(method, "Make"), Is.EqualTo(new[] { typeof(int).FullName, typeof(string).FullName }),
                     "the member was not instantiated with the argument and the value which the delegate describes together.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Names_A_Parameter_Of_Its_Own_Is_Refused_Where_The_Delegate_Hands_Nothing_Back()
+    {
+        // A delegate which stands for a member that hands nothing back, just like `Action<int>`, hands back the type of
+        // nothing, and the type of nothing describes no value: a parameter of the member which stands in no argument of
+        // the call is named by nothing at all, so the delegate describes no member. Writing the call with the type of
+        // nothing as the argument of the member is what naming it there would come to, and an assembly which names it is
+        // one the runtime refuses to load, so the weave is refused instead.
+        var host = NewHostWithAMake("MethodInjectionMakeOfNoValueAssembly");
+        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeOfNoValue))));
+
+        Assert.That(thrown!.Message, Does.Contain("Make"));
     }
 
     [Test]

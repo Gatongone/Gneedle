@@ -65,8 +65,10 @@ internal static class CecilExtensions
         /// </summary>
         /// <param name="parameterTypes">The types of the arguments which the method is called with.</param>
         /// <param name="returnType">
-        /// The type of the value which the method hands back, or null when the caller holds none. It names the parameters
-        /// which stand in no position of the arguments, which is the only place left for one of them to be named at.
+        /// The type of the value which the method hands back, or null when the caller holds none - a caller which holds
+        /// none describes the method with the type of nothing, just like the delegate of a member which hands nothing
+        /// back. It names the parameters which stand in no position of the arguments, which is the only place left for
+        /// one of them to be named at.
         /// </param>
         /// <param name="arguments">
         /// The types which the generic parameters of the method stand for, in the order they are declared, or null when
@@ -76,6 +78,17 @@ internal static class CecilExtensions
         internal bool SameWith(IReadOnlyList<TypeReference> parameterTypes, TypeReference? returnType, out IReadOnlyList<TypeReference>? arguments)
         {
             arguments = null;
+
+            // A method which hands nothing back hands back no value, so a caller which describes one with the type of
+            // nothing describes no value at all: a delegate which stands for a member that hands nothing back, just like
+            // `Action<T>`, hands back `System.Void`, and a parameter of the member which that type named is one the call
+            // would leave standing open - and the type of nothing is no argument of an instantiation at all, so the
+            // assembly which named it is one the runtime refuses to load. The type of nothing describes nothing,
+            // wherever the caller wrote it down.
+            if (returnType is { MetadataType: MetadataType.Void })
+            {
+                returnType = null;
+            }
 
             // A method which declares no parameter of its own names every type of its signature, so it is described by
             // the signature which holds those very names, and the call names the method itself.
