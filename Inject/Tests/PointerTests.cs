@@ -49,6 +49,14 @@ public class PointerTests
         public int PublicField;
         public int PublicProperty => 42;
         public U Identity<U>(U value) => value;
+
+        /// <summary>
+        /// A member whose signature names the parameter of the type which declares it, which the lookup of a member
+        /// cannot describe: the delegate which a template writes describes the parameter as a type of the assembly
+        /// the delegate stands in, and the parameter of the declaring type names none of those until the
+        /// instantiation of it is read.
+        /// </summary>
+        public T Echo(T value) => value;
     }
 
     /// <summary>
@@ -551,6 +559,13 @@ public class PointerTests
         /// another placeholder handed back: the pointer of the member is taken out of the value where it stands.
         /// </summary>
         public static IntOp InstanceMethod_OfAValueWhichAMemberHandedBackAsADelegate() => new Instance(This.Field<HelperClass>("Helper").Get()).Method<IntOp>("Calc");
+
+        /// <summary>
+        /// The member which the name stands for declares a parameter of the type which declares it, which the delegate
+        /// describes as a type of an assembly rather than as the parameter: nothing matches, so the member is not found.
+        /// </summary>
+        public static int InstanceMethod_OfAMemberWhoseSignatureNamesTheParameter(GenericHelper<int> helper, int value)
+            => new Instance(helper).Method<Func<int, int>>("Echo")(value);
 
         /// <summary>
         /// The instance of <c>Instance</c> is an element of an array, which names the type of what it reads nowhere, so
@@ -2610,6 +2625,23 @@ public class PointerTests
         var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnElementOfAnArray))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Member_Whose_Signature_Names_The_Parameter_Of_The_Type_Is_Refused()
+    {
+        // A member is looked up by the types which the delegate of the template describes it with, and the parameter of
+        // the member is the parameter of the type which declares it, which names no type of an assembly until the
+        // instantiation of that type is read: no candidate matches, and the member which the name stands for is not the
+        // one the name was read for, so the weave is refused. Reading the parameter of a member as the argument which
+        // the instantiation of its declaring type holds is what would reach it, which nothing of the lookup does.
+        var (_, host, method) = NewInstanceHost("InstanceMemberSignatureParameterAssembly",
+            [typeof(GenericHelper<int>), typeof(int)]);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAMemberWhoseSignatureNamesTheParameter))));
+
+        Assert.That(thrown!.Message, Does.Contain("Echo"));
     }
 
     [Test]
