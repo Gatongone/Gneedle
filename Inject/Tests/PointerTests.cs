@@ -1510,8 +1510,9 @@ public class PointerTests
 
         Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
                     "the member is called on the definition of the type which declares it, which stands open where the chain of base types hands the parameter of the body down to it.");
-        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.Name), Is.EqualTo(new[] { "T" }),
-                    "the instantiation which the call names does not stand for the parameter which the chain hands down.");
+        Assert.That(((GenericInstanceType) declaring).GenericArguments.Single(), Is.SameAs(host.Source.GenericParameters[0]),
+                    "the instantiation which the call names does not stand for the parameter of the type which is woven, "
+                    + "which is the one the chain of base types hands down to the definition which declares the member.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
@@ -1872,7 +1873,7 @@ public class PointerTests
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
         Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
                     "the call stands on the definition of the member rather than on an instantiation of it.");
-        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Select(argument => argument.Name), Is.EqualTo(new[] { "TRes" }),
+        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(method.Source.GenericParameters[1]),
                     "the call does not name the parameter of the body which the name of the parameter of the member ties it to.");
 
         var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
@@ -1930,8 +1931,9 @@ public class PointerTests
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
         Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
                     "the call stands on the definition of the member rather than on an instantiation of it.");
-        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Select(argument => argument.Name), Is.EqualTo(new[] { "T" }),
-                    "the call does not name the parameter of the type which named the parameter of the member.");
+        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(host.Source.GenericParameters[0]),
+                    "the call does not name the parameter of the type which named the parameter of the member, which is "
+                    + "the one the parameter of the member bears the name of rather than the one the member declares.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
 
@@ -3100,8 +3102,9 @@ public class PointerTests
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
         Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
                     "the call stands on the definition of the member rather than on an instantiation of it.");
-        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Select(argument => argument.Name), Is.EqualTo(new[] { "U" }),
-                    "the call does not name the parameter of the body which the token of the delegate stands for.");
+        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(method.Source.GenericParameters[0]),
+                    "the call does not name the parameter of the body which the token of the delegate stands for, which is "
+                    + "the one it stands at the position of rather than the one beyond it.");
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
 
