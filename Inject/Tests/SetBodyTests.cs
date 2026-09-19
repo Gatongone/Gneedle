@@ -129,6 +129,23 @@ public static class ConstructTemplates
     public static int CloneARecord(int value) => (new Cloneable { Value = value } with { Value = value + 1 }).Value;
 
     /// <summary>
+    /// A record which declares the template itself, so that the <c>&lt;Clone&gt;$</c> which a <c>with</c> expression
+    /// over it calls stands on the type which declares the template, which is where a body of the template's own stands
+    /// as well.<para/>
+    /// The two are told apart by the name of the member rather than by the type it is written on, which no test of a
+    /// member of another type reaches.
+    /// </summary>
+    public record Cloner
+    {
+        public int Value { get; set; }
+
+        /// <summary>
+        /// A template which clones the record it is declared in.
+        /// </summary>
+        public static int CloneItself(int value) => (new Cloner { Value = value } with { Value = value + 1 }).Value;
+    }
+
+    /// <summary>
     /// A body which the compiler writes as a state machine of its own.
     /// </summary>
     public static async Task<int> Async(int value)
@@ -486,9 +503,9 @@ public class SetBodyTests
         var thrown = Assert.Throws<ArgumentException>(
             () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunction))!));
 
-        Assert.That(thrown!.Message, Does.Contain("local function"),
-                    "the refusal did not name what the template holds.");
         Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
+        Assert.That(thrown!.Message, Does.Contain("calls a member"),
+                    "the refusal did not name the member which the template calls rather than the type which holds it.");
     }
 
     [Test]
@@ -505,6 +522,8 @@ public class SetBodyTests
             () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunctionWhichCaptured))!));
 
         Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
+        Assert.That(thrown!.Message, Does.Contain("names a type"),
+                    "the refusal did not name the type which the compiler wrote for the body.");
     }
 
     [Test]
@@ -513,18 +532,27 @@ public class SetBodyTests
         // The bracket which the compiler names a body of the template's own with is not what makes a member one of the
         // template's: the <Clone>$ of a record stands under it as well, and that member belongs to the record, so the
         // call of it is carried the way a call of any other member of the assembly the template was compiled into is.
-        var (_, host) = NewCalc();
-        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+        var (woven, handler) =
+            NewProbeOf("SetBodyCloneARecordAssembly", typeof(ConstructTemplates), nameof(ConstructTemplates.CloneARecord));
 
-        method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.CloneARecord))!);
+        Assert.That(handler.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference {Name: "<Clone>$"}),
+                    Is.True, "the call of the member which the with expression names was not carried.");
+        Assert.That(woven.Invoke(null, [1]), Is.EqualTo(2), "the woven assembly does not clone the record.");
+    }
 
-        var body = ((MethodHandler) method).Source.Body;
-        Assert.That(body.Instructions.Any(instruction => instruction.Operand is MethodReference {Name: "<Clone>$"}), Is.True,
-                    "the call of the member which the with expression names was not carried.");
+    [Test]
+    public void SetBody_Of_A_Template_Which_Clones_The_Record_It_Is_Declared_In_Is_Woven()
+    {
+        // The member the compiler writes for the with expression stands on the type which declares the template, which
+        // is where a body of the template's own stands as well, so the type alone does not tell the two apart: what
+        // does is the name of the member, because the name of a body carries the method it was written in.
+        var (woven, handler) =
+            NewProbeOf("SetBodyCloneItselfAssembly", typeof(ConstructTemplates.Cloner),
+                       nameof(ConstructTemplates.Cloner.CloneItself));
 
-        Assert.That(NewProbe(nameof(ConstructTemplates.CloneARecord)).Invoke(null, [1]), Is.EqualTo(2),
-                    "the woven assembly does not clone the record.");
+        Assert.That(handler.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference {Name: "<Clone>$"}),
+                    Is.True, "the call of the member which the with expression names was not carried.");
+        Assert.That(woven.Invoke(null, [1]), Is.EqualTo(2), "the woven assembly does not clone the record.");
     }
 
     [Test]
@@ -556,6 +584,27 @@ public class SetBodyTests
         method.SetBody(typeof(ConstructTemplates).GetMethod(templateName)!);
 
         return assembly.Load().GetType($"{Ns}.Calc")!.GetMethod("Probe")!;
+    }
+
+    /// <summary>
+    /// Weave a template of the given type into <c>public static int Probe(int value)</c> of an assembly of its own, and
+    /// hand back the method of the type which was woven together with the handler which holds the body woven for it, so
+    /// that a test can run the one and read the other.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test gives one of its own.</param>
+    /// <param name="holder">The type which declares the template.</param>
+    /// <param name="templateName">Name of the template of that type which is woven.</param>
+    /// <returns>The method which was woven, and the handler which holds the body of it.</returns>
+    private static (MethodInfo Woven, MethodHandler Handler) NewProbeOf(string assemblyName, Type holder, string templateName)
+    {
+        var assembly = Assembly.Create(assemblyName);
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var intType = typeof(int).ToGneedleType();
+        var method = host.AddMethod("Probe", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+
+        method.SetBody(holder.GetMethod(templateName)!);
+
+        return (assembly.Load().GetType($"{Ns}.Calc")!.GetMethod("Probe")!, (MethodHandler) method);
     }
 
     /// <summary>

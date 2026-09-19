@@ -227,6 +227,22 @@ public class PointerTests
         public static int InvokeAMemberWhichAConditionNamesWhereItStands(int a, int b, bool first)
             => (first ? This.Method<IntBinaryOp>("Add") : This.Method<IntBinaryOp>("Subtract"))(a, b);
 
+        // A symbol which stands inside a region which the template protects, so that the walk of the paths of the body
+        // reads what the region leaves for as well as what stands in a row: the handler is entered where the runtime
+        // hands the control to it, and every path which the body takes to the invocation of the delegate passes through
+        // the symbol still.
+        public static int InvokeAMemberInsideAProtectedRegion(int a, int b)
+        {
+            try
+            {
+                return This.Method<IntBinaryOp>("Add")(a, b);
+            }
+            catch (InvalidOperationException)
+            {
+                return -1;
+            }
+        }
+
         // The delegate is held in a local and invoked by it rather than where the symbol stands, which is what a
         // template which reads the member through a delegate of its own and then calls it writes. The local is read
         // twice, so each read is written as a receiver of its own.
@@ -1200,6 +1216,32 @@ public class PointerTests
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4, false]), Is.EqualTo(7),
+                    "the woven assembly does not run the member which the symbol stands for.");
+    }
+
+    [Test]
+    public void A_Member_Which_A_Template_Invokes_Inside_A_Protected_Region_Is_Called_There()
+    {
+        // The symbol stands inside a region which the template protects, and the walk of the paths of the body reads
+        // the region as well: the runtime hands the control to the beginning of the handler as well as to the beginning
+        // of the body, and every path which reaches the invocation of the delegate passes through the symbol either
+        // way, so the call of the member stands where the delegate was invoked rather than a delegate being built.
+        var host = NewRunnableGenericHost("GenericMemberInsideAProtectedRegionAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
+                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInsideAProtectedRegion)));
+
+        var body = ((MethodHandler) method).Source.Body;
+        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+                    "the member is not called where the delegate was invoked.");
+        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
+                    "the member was built into a delegate rather than called.");
+        Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4]), Is.EqualTo(7),
                     "the woven assembly does not run the member which the symbol stands for.");
     }
 

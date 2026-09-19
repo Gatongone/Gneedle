@@ -1012,10 +1012,11 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <remarks>
     /// The bracket alone is not what makes such a member one of the template's: the compiler writes members under that
     /// bracket for reasons of its own which hold nothing of the template. A record carries the <c>&lt;Clone&gt;$</c>
-    /// which a <c>with</c> expression calls, and that member belongs to the record rather than to a body of the
-    /// template's, so carrying the call to it carries nothing which the weaving cannot write. What tells the two apart
-    /// is where the member stands rather than what it is called: a body of the template's is written beside the
-    /// template, which is to say on the type which declares it.
+    /// which a <c>with</c> expression calls, and a template which is itself declared in a record names it where it
+    /// clones that record, so the member stands on the type which declares the template and belongs to the record
+    /// rather than to a body of the template's. What tells the two apart is what the name is: the compiler names the
+    /// body of a lambda or of a local function under the name of the method it was written in, which the bracket closes
+    /// before the name of the body itself follows, while a member it wrote for any other reason carries no such body.
     /// </remarks>
     /// <param name="member">The member which the reference names.</param>
     /// <param name="targetDef">The template which the reference is read out of.</param>
@@ -1024,13 +1025,23 @@ internal sealed partial class MethodHandler : IMethodHandler
     {
         if (!member.Name.StartsWith("<", StringComparison.Ordinal)) return;
 
+        // The body of a lambda and the body of a local function are named `<Method>b__...` and `<Method>g__...` by the
+        // compiler, so the closing bracket stands ahead of the name of the body rather than after it: a member which
+        // the compiler wrote for another reason, such as the `<Clone>$` of a record, is named with the bracket alone.
+        if (member.Name.IndexOf(">b__", StringComparison.Ordinal) < 0 &&
+            member.Name.IndexOf(">g__", StringComparison.Ordinal) < 0)
+        {
+            return;
+        }
+
         // The declaring type of a member of a generic type is written as the instantiation which the call names rather
         // than as the definition which the member was written on, and the two are one type to the comparison: what the
         // reference has to be is a member of the type which declares the template, whichever of the two forms the call
-        // wrote it in.
+        // wrote it in. A body of the compiler's own which captured is written on a type beside the template instead,
+        // which the walk of the declaring type refuses before this one is asked.
         if (member.DeclaringType?.GetElementType().FullName != targetDef.DeclaringType.FullName) return;
 
-        throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_LOCAL_FUNCTION, member.FullName, Source.FullName));
+        throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN, member.FullName, Source.FullName));
     }
 
     /// <summary>
