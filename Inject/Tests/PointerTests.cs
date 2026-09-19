@@ -558,6 +558,14 @@ public class PointerTests
         /// </summary>
         public static int InstanceField_OfAnElementOfAnArray(HelperClass[] helpers) => new Instance(helpers[0]).Field<int>("PublicField").Get();
 
+        /// <summary>
+        /// The instance of <c>Instance</c> is a value which the template computed along a branch, which is left by one
+        /// of the paths the branch takes rather than in a row with the name of the member: the count which the walk of
+        /// the sequence before the name carries cannot be read over a branch, so the type is named nowhere as well.
+        /// </summary>
+        public static int InstanceField_OfAValueWhichAConditionComputed(HelperClass first, HelperClass second, bool takeFirst)
+            => new Instance(takeFirst ? first : second).Field<int>("PublicField").Get();
+
         // Instance.Property get/set
         public static int InstanceProperty_Get(HelperClass h) => new Instance(h).Property<int>("PublicProperty").Get();
         public static void InstanceProperty_Set(HelperClass h, int v) => new Instance(h).Property<int>("PublicProperty").Set(v);
@@ -2598,6 +2606,24 @@ public class PointerTests
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass[]).ToGneedleType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnElementOfAnArray))));
+
+        Assert.That(thrown!.Message, Does.Contain("PublicField"));
+    }
+
+    [Test]
+    public void InstanceField_Of_A_Value_Which_A_Condition_Computed_Throws()
+    {
+        // The value which the instance was built around is read off the stack which the instructions ahead of the name
+        // leave, and a branch is an instruction whose count the walk of that stack cannot read: the name is refused
+        // rather than looked up on the member being woven, which holds a field of that name of its own here, because a
+        // name which is woven into another member than the one it names is worse than a name which is refused.
+        var host = NewHostWithField("PublicField", isStatic: false);
+        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [],
+                                    [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(HelperClass).ToGneedleType()),
+                                     new Parameter(typeof(bool).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAValueWhichAConditionComputed))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
     }
