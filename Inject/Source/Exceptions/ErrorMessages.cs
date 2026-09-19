@@ -109,6 +109,13 @@ internal static class ErrorMessages
     internal const string INVALID_METHOD = "The method cannot be resolved in the assembly which is woven. Method: {0}.";
 
     /// <summary>
+    /// The handle of a field or a property was held in a local and read for something other than the member which the
+    /// handle stands for, which is a value which the weaving has no way to write. The placeholder is the name of the
+    /// member.
+    /// </summary>
+    internal const string INVALID_HELD_HANDLE = "The value member which the template holds in a local is read for something other than the member itself, which the weaving has no way to write. Member: {0}.";
+
+    /// <summary>
     /// A template reads the parameter at a position which the member being woven does not hold. The placeholders are
     /// the position and the member which was being woven.
     /// </summary>
@@ -119,6 +126,16 @@ internal static class ErrorMessages
     /// is the name which was given.
     /// </summary>
     internal const string INVALID_GENERIC_PARAMETER = "The generic parameter named {0} is declared by neither the type nor the member which is woven.";
+
+    /// <summary>
+    /// A template named a member which declares a generic parameter of its own which stands for no parameter of the
+    /// member being woven, so the call of it cannot be written: a parameter of the member is named by the token of the
+    /// template which stands for it, which is the parameter of the body or of the type which declares it bearing its
+    /// name, or the parameter of the body at the position of it where no name ties it to one, and a parameter which
+    /// stands for none of those is left open by the call, which is one the runtime refuses to run. The placeholders are
+    /// the member and the member which is woven.
+    /// </summary>
+    internal const string INVALID_GENERIC_MEMBER_CALL = "A member which the template names declares a generic parameter of its own which no parameter of the member being woven stands for, so the call of it cannot be written: a parameter of the member is named by the token of the template which stands for it, which is the parameter of the member being woven or of the type which declares it bearing its name, or the parameter of the member being woven which stands at the position of it where no name ties it to one, and a call which leaves the parameter of the member open is one the runtime refuses to run. Member: {0}, Method: {1}.";
 
     /// <summary>
     /// The getter of a property which holds no getter was asked for. The placeholder is the name of the property.
@@ -214,10 +231,23 @@ internal static class ErrorMessages
     internal const string TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN = "The template names a type which the compiler wrote for a body of the template's own, which is a lambda, a local function, an async body or an iterator: what such a type holds is a method of its own rather than instructions of the template, so the weaving cannot carry it. Reference: {0}, Method: {1}.";
 
     /// <summary>
+    /// The template calls a member which the compiler wrote as the body of a lambda or of a local function of the
+    /// template's own, which is written on the type which declares the template rather than as a type of its own. The
+    /// placeholders are the reference which names it and the member.
+    /// </summary>
+    internal const string TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN = "The template calls a member which the compiler wrote for a body of the template's own, which is the body of a lambda or of a local function written inside the template: what such a member holds is a body of its own rather than instructions of the template, so the weaving cannot carry it. Reference: {0}, Method: {1}.";
+
+    /// <summary>
     /// The template belongs to an instance and reads it, which is the template's own receiver rather than an argument
     /// of the member being woven. The placeholder is the member.
     /// </summary>
     internal const string TEMPLATE_READS_ITS_OWN_INSTANCE = "The template reads the instance which it belongs to, which is no argument of the member being woven. A template is a static method, and a lambda which captures a variable is an instance method of the type which holds the capture. Method: {0}.";
+
+    /// <summary>
+    /// The template reaches a member of an instance through the instance which the member being woven belongs to, and
+    /// that member is static, so it belongs to none. The placeholder is the member of the member being woven.
+    /// </summary>
+    internal const string STATIC_MEMBER_REACHES_AN_INSTANCE_MEMBER = "The member which the template reaches belongs to an instance, and the member being woven is static and belongs to none: the first argument of it stands where that instance would be loaded from, which the template was handed for something else. An instance which a static member reaches a member of is one it was handed, which is what Instance names. Method: {0}.";
 
     /// <summary>
     /// The template holds no body to copy, which a member which is abstract, or which is a pinvoke, or which an

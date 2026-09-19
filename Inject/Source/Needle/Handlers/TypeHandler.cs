@@ -77,7 +77,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
                 methodDef == null)
             {
                 methodDef = curType.Methods.FirstOrDefault(method => method.Name == methodName && method.Parameters.SameWith(parameterTypes));
-                curType   = curType.BaseType == null ? null : AssemblyHandler.GetCecilType(curType.BaseType).Definition;
+                curType   = curType.BaseType == null ? null : AssemblyHandler.GetDefinition(curType.BaseType);
             }
         }
         else
@@ -265,7 +265,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     /// <param name="fieldName">Name of the field.</param>
     /// <returns>The field from a base type, or null when the type has no base type or none of them declares one of that name.</returns>
     internal FieldReference? GetFieldInBase(string fieldName)
-        => Source.BaseType == null ? null : AssemblyHandler.GetFieldFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, fieldName);
+        => Source.BaseType == null ? null : AssemblyHandler.GetFieldFromType(AssemblyHandler.GetDefinition(Source.BaseType), fieldName);
 
     /// <summary>
     /// Get the property which a name names, from this type or from a base type of it.<para/>
@@ -285,7 +285,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     /// <param name="propertyName">Name of the property.</param>
     /// <returns>The property from a base type, or null when the type has no base type or none of them declares one of that name.</returns>
     internal PropertyDefinition? GetPropertyInBase(string propertyName)
-        => Source.BaseType == null ? null : AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, propertyName);
+        => Source.BaseType == null ? null : AssemblyHandler.GetPropertyFromType(AssemblyHandler.GetDefinition(Source.BaseType), propertyName);
 
     /// <summary>
     /// Get the method which a name and a signature name, from this type or from a base type of it.<para/>
@@ -307,7 +307,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     /// <param name="parameters">Types of the parameters of the method.</param>
     /// <returns>The method from a base type, or null when the type has no base type or none of them declares one of that signature.</returns>
     internal MethodDefinition? GetMethodInBase(string methodName, IReadOnlyList<TypeReference> parameters)
-        => Source.BaseType == null ? null : AssemblyHandler.GetMethodFromType(AssemblyHandler.GetCecilType(Source.BaseType).Definition, methodName, parameters, false);
+        => Source.BaseType == null ? null : AssemblyHandler.GetMethodFromType(AssemblyHandler.GetDefinition(Source.BaseType), methodName, parameters, false);
 
     /// <summary>
     /// Get the method which a signature names, which is the name of the method and the types of the parameters of it.<para/>
@@ -325,7 +325,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         {
             var methodDef = curType.Methods.FirstOrDefault(method => method.Name == methodName && method.Parameters.SameWith(parameterTypes));
             if (methodDef != null) return new MethodHandler(methodDef, this);
-            curType = curType.BaseType == null ? null : AssemblyHandler.GetCecilType(curType.BaseType).Definition;
+            curType = curType.BaseType == null ? null : AssemblyHandler.GetDefinition(curType.BaseType);
         }
 
         return null;

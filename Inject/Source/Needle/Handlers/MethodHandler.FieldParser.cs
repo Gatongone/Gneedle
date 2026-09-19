@@ -48,36 +48,29 @@ partial class MethodHandler
         }
 
         // Detect Instance/Static patterns to determine skip count and declaring type.
-        var skipArrayInitCount = 0;
         var skipStaticFromCount = 0;
         TypeDefinition? declaringTypeFromPattern = null;
+        // The type of the instance which the template reached the field through, which names the instantiation of the
+        // type which declares the field where that type declares parameters, rather than the definition of it.
+        TypeReference? namedInstance = null;
         // The instance which the template reached the field through, which is the receiver of it where the field is not
-        // static: the sequence which builds the instance is dropped along with the name, so the argument it names has to
-        // be loaded in place of the name rather than the receiver of the member being woven.
+        // static: the sequence which builds the instance is dropped, so the value it holds has to stand where the member
+        // takes a receiver.
         Instruction? receiverIns = null;
+        InstanceValue? instance = null;
 
-        if (memberSymbol.HasFlag(MemberSymbols.Instance) && currentIndex >= 1)
+        if (memberSymbol.HasFlag(MemberSymbols.Instance) && TryGetInstanceValue(filter, currentIndex, targetDef, out var value))
         {
-            var prevIns = filter.Target[currentIndex - 1];
-            if (prevIns.OpCode == OpCodes.Newobj && prevIns.Operand is MethodReference { Name: ".ctor", DeclaringType: var declType }
-                && declType.FullName == Instance.TYPE_NAME)
+            instance    = value;
+            receiverIns = value.Load;
+            // The type of the instance may stand for the type of another assembly, in which case the field is looked up on
+            // the real one. A value whose type the walk cannot tell names no type to look one up on, which the lookup
+            // below refuses in the same way as a sequence which was not read at all.
+            var instanceType = value.Load is { } load ? GetArgType(load, targetDef) : GetValueType(filter, value.Last, targetDef);
+            if (instanceType != null)
             {
-                var baseIdx = currentIndex - 7;
-                if (baseIdx >= 0
-                    && filter.Target[baseIdx].OpCode.Code == Code.Ldc_I4_1
-                    && filter.Target[baseIdx + 1].OpCode == OpCodes.Newarr
-                    && filter.Target[baseIdx + 2].OpCode == OpCodes.Dup
-                    && filter.Target[baseIdx + 3].OpCode.Code == Code.Ldc_I4_0
-                    && (filter.Target[baseIdx + 4].OpCode.Code is Code.Ldarg or Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S)
-                    && filter.Target[baseIdx + 5].OpCode == OpCodes.Stelem_Ref)
-                {
-                    skipArrayInitCount = 7;
-                    var instanceIns = filter.Target[baseIdx + 4];
-                    receiverIns = instanceIns;
-                    var argType = GetArgType(instanceIns, targetDef) ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
-                    // The instance type may stand for the type of another assembly, in which case the field is looked up on the real one.
-                    declaringTypeFromPattern = argType.ResolveDefinition(Source.Module);
-                }
+                declaringTypeFromPattern = instanceType.ResolveDefinition(Source.Module);
+                namedInstance            = instanceType;
             }
         }
         else if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
@@ -95,6 +88,15 @@ partial class MethodHandler
             }
         }
 
+        // A field which the template reaches through `This` or `Base` belongs to the woven type or to a base type of it,
+        // and the instance which those symbols stand for is the one which the body is a member of.
+        namedInstance = InstanceNamedBy(memberSymbol, namedInstance);
+
+        // Whether the instance which the template reached the field through is a value which it computed where it stands,
+        // rather than a load of one of its arguments: the load is written where the name of the field stands, and a value
+        // which was computed is not held anywhere else than where it was computed.
+        var instanceIsComputed = instance is { Load: null };
+
         var field = memberSymbol.HasFlag(MemberSymbols.Base)
             ? DeclaringTypeHandler.GetFieldInBase(memberName)
             : memberSymbol.HasFlag(MemberSymbols.Instance) || memberSymbol.HasFlag(MemberSymbols.Static)
@@ -111,21 +113,63 @@ partial class MethodHandler
 
         // The field is reached through the type which the sequence named, which is the member being woven for the
         // symbols which carry no such sequence: the branch above refuses an Instance or a Static which named none.
+        // A handle which the template holds in a local is read and written through that local rather than where the
+        // name stands, so what the name stands for is the handle itself: nothing of it is written, and every accessor
+        // which a read of the local is the receiver of is written as the field instead.
+        var held          = HeldLocal(filter.Target, currentIndex + 1);
+        var heldAccessors = held is { } handle ? AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
+        if (held != null && heldAccessors == null)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
+        }
+
         var declaringType = declaringTypeFromPattern ?? DeclaringTypeHandler.Source;
-        var fieldRef = field.ContainsGenericParameter
-            // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
-            // Related to issue: https://github.com/jbevain/cecil/issues/954
-            ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
-            // Otherwise we can directly import the field definition as reference.
-            : Source.Module.ImportReference(field);
+        // The field belongs to the definition of the type which the template named an instance of, and that type declares
+        // a parameter of its own: the reference names the instantiation which was named rather than that definition,
+        // which is what the reference to a member of such a type is written as wherever one is reached.
+        var namedInstantiation = namedInstance is not null && field.DeclaringType.HasGenericParameters
+            ? InstantiationOf(field.DeclaringType, namedInstance)
+            : null;
+        var fieldRef = namedInstantiation is { } instantiation
+            ? new FieldReference(field.Name, field.FieldType, instantiation)
+            : field.ContainsGenericParameter
+                // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
+                // Related to issue: https://github.com/jbevain/cecil/issues/954
+                ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
+                // Otherwise we can directly import the field definition as reference.
+                : Source.Module.ImportReference(field);
         var isStatic = field.Resolve().IsStatic;
 
-        // Skip the array init sequence if this is Instance.Field with new Instance(param).
-        if (skipArrayInitCount > 0)
+        // A read of the local stands where it stands and is written as the receiver of the field, which is the load of the
+        // argument the instance was named by: a value which the template computed is one value in one place, and no read
+        // of the local could be written as it.
+        if (heldAccessors != null && instanceIsComputed && !isStatic)
         {
-            for (var i = currentIndex - skipArrayInitCount; i < currentIndex; i++)
+            throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
+        }
+
+        // The array which carried the value of the instance is dropped, because what the field is reached through is the
+        // value itself rather than a handle which holds it. The value goes with it where the field takes no receiver, or
+        // where the load of it is written where the name stands instead: a value which is read for nothing is not left on
+        // the stack.
+        if (instance is { } heldValue)
+        {
+            for (var i = heldValue.First - 4; i < heldValue.First; i++)
             {
                 filter.Skip(i);
+            }
+
+            for (var i = heldValue.Last + 1; i < currentIndex; i++)
+            {
+                filter.Skip(i);
+            }
+
+            if (heldValue.Load != null || isStatic)
+            {
+                for (var i = heldValue.First; i <= heldValue.Last; i++)
+                {
+                    filter.Skip(i);
+                }
             }
         }
 
@@ -138,24 +182,61 @@ partial class MethodHandler
             }
         }
 
-        if (!isStatic)
+        Instruction AccessorOf(bool isGet)
+            => Instruction.Create(isGet
+                // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> ldfld/ldsfld class {field_type} {declaring_type}::{field_name}
+                ? isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld
+                // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> stfld/stsfld class {field_type} {declaring_type}::{field_name}
+                : isStatic ? OpCodes.Stsfld : OpCodes.Stfld,
+                fieldRef);
+
+        if (heldAccessors is { } accessors)
+        {
+            // ldstr {field_name} -> nop, because the name is not what the field is reached through: every read of the
+            // local is, and each of them stands where it stood.
+            filter.Skip(currentIndex);
+
+            // Skip `call class [Gneedle.Inject]Gneedle.Inject.ValuableMember [Gneedle.Inject]Gneedle.Inject.This::Field(string)`
+            filter.Skip(currentIndex + 1);
+
+            // Skip the store of the handle which the placeholder handed back. The local which it would have written is
+            // the one which the weaving empties, so nothing of the handle is left in the body.
+            filter.Skip(held!.Value.Store);
+
+            foreach (var (read, accessor, accessorIsGet) in accessors)
+            {
+                // The read of the local is the receiver of the accessor, and it is written as the receiver of the
+                // field, which a field of no instance takes none of.
+                if (isStatic)
+                {
+                    filter.Skip(read);
+                }
+                else
+                {
+                    filter.Replace(read, CreateReceiver(receiverIns, targetDef));
+                }
+
+                filter.Replace(accessor, AccessorOf(accessorIsGet));
+            }
+
+            return;
+        }
+
+        if (!isStatic && !instanceIsComputed)
         {
             // ldstr {field_name} -> the argument which holds the instance the field is read off
             filter.Replace(currentIndex, CreateReceiver(receiverIns, targetDef));
         }
         else
         {
-            // ldstr {field_name} -> nop
+            // ldstr {field_name} -> nop, because the instance stands where the template computed it rather than where the
+            // name stands, and a field of no instance takes no receiver at all.
             filter.Skip(currentIndex);
         }
 
         // Skip `call class [Gneedle.Inject]Gneedle.Inject.ValuableMember [Gneedle.Inject]Gneedle.Inject.This::Field(string)`
         filter.Skip(currentIndex + 1);
 
-        filter.Replace(callvirtIndex, isGet
-            // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> ldfld/ldsfld class {field_type} {declaring_type}::{field_name}
-            ? Instruction.Create(isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, fieldRef)
-            // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> stfld/stsfld class {field_type} {declaring_type}::{field_name}
-            : Instruction.Create(isStatic ? OpCodes.Stsfld : OpCodes.Stfld, fieldRef));
+        filter.Replace(callvirtIndex, AccessorOf(isGet));
     }
 }

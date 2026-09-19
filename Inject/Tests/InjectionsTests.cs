@@ -585,6 +585,60 @@ public class InjectionsTests
     }
 
     [Test]
+    public void A_Template_Of_The_Assembly_Which_Is_Woven_Is_Woven_Into_Every_Member_It_Is_Given_To()
+    {
+        // The table of a switch belongs to the instruction of the template, which every weave of that template adds to
+        // the body it writes: a template which the assembly being woven declares is the same definition on every weave,
+        // so a table which is carried onto that instruction is the table which the next weave reads, and the entries of
+        // it name the instructions of the body which was written first.
+        var image = TestAssemblyImage();
+        using var stream = new MemoryStream(image);
+        using var target = Assembly.Read(stream);
+        var handler = (AssemblyHandler) target.Handler;
+        var first = SwitchHost(handler, "SwitchHostFirst");
+        var second = SwitchHost(handler, "SwitchHostSecond");
+        var template = typeof(PointerTests.ThisMemberTemplates).GetMethod(nameof(PointerTests.ThisMemberTemplates.ReadAFieldPerCase))!;
+
+        var firstMethod = first.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        firstMethod.SetBody(template);
+        var firstBody = ((MethodHandler) firstMethod).Source.Body;
+
+        var secondMethod = second.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        Assert.DoesNotThrow(() => secondMethod.SetBody(template),
+                            "the second weave of a template of the assembly itself was refused rather than carried.");
+        var secondBody = ((MethodHandler) secondMethod).Source.Body;
+
+        AssertTableOf(firstBody);
+        AssertTableOf(secondBody);
+    }
+
+    /// <summary>
+    /// Assert that every entry of the table of the switch which the body holds names an instruction of that body.
+    /// </summary>
+    /// <param name="body">The body which was woven.</param>
+    private static void AssertTableOf(Mono.Cecil.Cil.MethodBody body)
+    {
+        var table = body.Instructions.SelectMany(instruction => instruction.Operand as Instruction[] ?? []).ToArray();
+
+        Assert.That(table, Is.Not.Empty, "the switch table of the template was not written.");
+        Assert.That(table.All(body.Instructions.Contains), Is.True,
+                    "an entry of the switch table named an instruction which the body does not hold.");
+    }
+
+    /// <summary>
+    /// Create a class of a host assembly which declares the two fields the switch template names.
+    /// </summary>
+    /// <param name="handler">The handler of the assembly to add the class to.</param>
+    /// <param name="name">The name of the class, which a test runs one of its own so that the two weaves are told apart.</param>
+    private static TypeHandler SwitchHost(AssemblyHandler handler, string name)
+    {
+        var host = (TypeHandler) handler.AddClass(name, Ns, ClassFlags.Public).GetHandler();
+        host.Source.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
+        host.Source.Fields.Add(new FieldDefinition("Other", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
+        return host;
+    }
+
+    [Test]
     public void A_Template_Of_Another_Assembly_Is_Read_Out_Of_The_Assembly_Which_Declares_It()
     {
         // A template which another assembly declares is read through the resolution of that assembly, which is the case

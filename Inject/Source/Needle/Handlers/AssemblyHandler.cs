@@ -105,12 +105,24 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     }
 
     /// <summary>
+    /// The definition which a type reference stands for, resolved without a reference of it being imported to the
+    /// assembly which is woven.<para/>
+    /// A walk up the base types asks for the definition alone, and the reference of a base type is one which the import
+    /// refuses: a base type is written where the type which declares it stands, so the base of a generic declaration
+    /// names the parameters of that declaration, and a module which held a reference of it would name a generic
+    /// parameter which it does not declare.
+    /// </summary>
+    /// <param name="typeRef">The type reference which the definition is resolved from.</param>
+    /// <returns>The definition of the reference, or null when it stands for no type which can be read.</returns>
+    internal TypeDefinition? GetDefinition(TypeReference typeRef) => typeRef.ResolveDefinition(Assembly.Source.MainModule);
+
+    /// <summary>
     /// Get field from target type, if the target type does not contain a matching field, recursively fetch it from its base type.
     /// </summary>
-    /// <param name="target"></param>
+    /// <param name="target">The target type, or null when there is no type left to search.</param>
     /// <param name="fieldName">Name of the field.</param>
     /// <returns>The field from target type or its base type. Returns null if there is no matching field in the target type and its base types.</returns>
-    internal FieldReference? GetFieldFromType(TypeDefinition target, string fieldName)
+    internal FieldReference? GetFieldFromType(TypeDefinition? target, string fieldName)
     {
         var curType = target;
         FieldReference? fieldDef = null;
@@ -119,7 +131,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             if (curType == null)
                 break;
             fieldDef = curType.Fields.FirstOrDefault(field => field.Name.Equals(fieldName));
-            curType  = curType.BaseType == null ? null : GetCecilType(curType.BaseType).Definition;
+            curType  = curType.BaseType == null ? null : GetDefinition(curType.BaseType);
         }
 
         return fieldDef;
@@ -128,13 +140,13 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// <summary>
     /// Get method from target type, if the target type does not contain a matching method, recursively fetch it from its base type.
     /// </summary>
-    /// <param name="target">The target type.</param>
+    /// <param name="target">The target type, or null when there is no type left to search.</param>
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Parameters of the method.</param>
     /// <param name="throwWhenNotFound">Whether to throw an exception when the method is not found. Default is true.</param>
     /// <returns>The method from target type or its base type. Returns null if there is no matching method in the target type and its base types, which only happens when <paramref name="throwWhenNotFound"/> is false.</returns>
     /// <exception cref="ArgumentException">Thrown when there is no matching method and <paramref name="throwWhenNotFound"/> is true.</exception>
-    internal MethodDefinition? GetMethodFromType(TypeDefinition target, string methodName, IReadOnlyList<TypeReference> parameters, bool throwWhenNotFound = true)
+    internal MethodDefinition? GetMethodFromType(TypeDefinition? target, string methodName, IReadOnlyList<TypeReference> parameters, bool throwWhenNotFound = true)
     {
         var curType = target;
         MethodDefinition? methodDef = null;
@@ -142,7 +154,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         {
             if (curType == null) break;
             methodDef = curType.Methods.FirstOrDefault(method => method.Name.Equals(methodName) && method.Parameters.SameWith(parameters.ToArray()));
-            curType   = curType.BaseType == null ? null : GetCecilType(curType.BaseType).Definition;
+            curType   = curType.BaseType == null ? null : GetDefinition(curType.BaseType);
         }
 
         if (methodDef == null && throwWhenNotFound) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
@@ -152,10 +164,10 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// <summary>
     /// Get property from target type, if the target type does not contain a matching property, recursively fetch it from its base type.
     /// </summary>
-    /// <param name="target">The target type.</param>
+    /// <param name="target">The target type, or null when there is no type left to search.</param>
     /// <param name="propertyName">Name of the property.</param>
     /// <returns>The property from target type or its base type. Returns null if there is no matching property in the target type and its base types.</returns>
-    internal PropertyDefinition? GetPropertyFromType(TypeDefinition target, string propertyName)
+    internal PropertyDefinition? GetPropertyFromType(TypeDefinition? target, string propertyName)
     {
         var curType = target;
         PropertyDefinition? propertyDef = null;
@@ -164,7 +176,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             if (curType == null)
                 break;
             propertyDef = curType.Properties.FirstOrDefault(property => property.Name.Equals(propertyName));
-            curType     = curType.BaseType == null ? null : GetCecilType(curType.BaseType).Definition;
+            curType     = curType.BaseType == null ? null : GetDefinition(curType.BaseType);
         }
 
         return propertyDef;
