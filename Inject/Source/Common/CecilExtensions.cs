@@ -56,12 +56,18 @@ internal static class CecilExtensions
         /// A method which declares a parameter of its own is one which no signature of named types describes, because
         /// the type of that parameter is the name of the method rather than the name of any type. The description is
         /// the signature which a caller hands the method, as the delegate of a template describes the member which it
-        /// names, so such a parameter is bound to the type which stands where it stands rather than compared with it.
+        /// names, so such a parameter is bound to the type which stands where it stands rather than compared with it:
+        /// the types of the arguments name the parameters which stand in the places of those arguments, and the type
+        /// of the value which the method hands back names the ones which stand nowhere among them, which is the shape a
+        /// member of the parameters of the caller has, just like <c>TOut Make&lt;TIn, TOut&gt;(TIn value)</c>.
         /// Every parameter of the method has to be described for the method to be named at all, because a call of a
         /// method which stands open is one which the runtime refuses to run.
         /// </summary>
         /// <param name="parameterTypes">The types of the arguments which the method is called with.</param>
-        /// <param name="returnType">The type of the value which the method hands back, or null when the caller holds none.</param>
+        /// <param name="returnType">
+        /// The type of the value which the method hands back, or null when the caller holds none. It names the parameters
+        /// which stand in no position of the arguments, which is the only place left for one of them to be named at.
+        /// </param>
         /// <param name="arguments">
         /// The types which the generic parameters of the method stand for, in the order they are declared, or null when
         /// the signature does not describe the method.
@@ -92,13 +98,11 @@ internal static class CecilExtensions
                 }
             }
 
-            // The type which the method hands back is read as well, because it is what tells one instantiation of a
-            // method which declares parameters of its own from another. It is read as a check of the arguments rather
-            // than as another place which names a parameter: the arguments of the call are the types which stand in the
-            // places of the parameters of the method, and a parameter which none of those places describes is one the
-            // call would leave standing open whatever the method hands back, so the member being woven names it by the
-            // parameters of its own body, or the weave is refused.
-            if (returnType != null && !Bind(methodDef, methodDef.ReturnType, returnType, bound, false))
+            // The type which the method hands back names a parameter of the method as well, because it is what tells one
+            // instantiation of a method which declares parameters of its own from another: a parameter which no argument
+            // of the call stands in the place of is one which the signature names by the value the method hands back,
+            // where the caller wrote that value down, and the call of such a member is written with both arguments.
+            if (returnType != null && !Bind(methodDef, methodDef.ReturnType, returnType, bound))
             {
                 return false;
             }
@@ -129,26 +133,19 @@ internal static class CecilExtensions
     /// <param name="described">The type which holds the parameters, which is the one the method declares.</param>
     /// <param name="describing">The type which describes it, which is the one the caller wrote.</param>
     /// <param name="bound">The arguments which the parameters stand for so far, by position.</param>
-    /// <param name="names">
-    /// Whether a parameter which stands unbound in <paramref name="described"/> is one which this position names. It is
-    /// read at every position of the type rather than at the one the walk began at, because a type which holds a
-    /// parameter of the member inside a generic instance or in an array names it no more than the parameter alone does.
-    /// </param>
     /// <returns>Whether <paramref name="describing"/> describes <paramref name="described"/>.</returns>
-    private static bool Bind(MethodDefinition methodDef, TypeReference described, TypeReference describing, TypeReference?[] bound, bool names = true)
+    private static bool Bind(MethodDefinition methodDef, TypeReference described, TypeReference describing, TypeReference?[] bound)
     {
         // A parameter of the method itself stands for whatever the signature holds in its place, and a parameter which
-        // two positions bind is one which only the same type describes both times: a position which is read as a check
-        // tells whether it stands for the type which stands there, and a parameter which no such place bound is one it
-        // describes no more than it did before.
+        // two positions bind is one which only the same type describes both times: a position which is reached again
+        // tells whether it stands for the type which stands there, and a parameter which stands unbound is one which
+        // this position names.
         if (described is GenericParameter parameter && ReferenceEquals(parameter.Owner, methodDef))
         {
             if (bound[parameter.Position] is { } boundArgument)
             {
                 return TypeName.HasSameName(boundArgument, describing);
             }
-
-            if (!names) return false;
 
             bound[parameter.Position] = describing;
             return true;
@@ -166,7 +163,7 @@ internal static class CecilExtensions
 
             for (var index = 0; index < describedInstance.GenericArguments.Count; index++)
             {
-                if (!Bind(methodDef, describedInstance.GenericArguments[index], describingInstance.GenericArguments[index], bound, names))
+                if (!Bind(methodDef, describedInstance.GenericArguments[index], describingInstance.GenericArguments[index], bound))
                 {
                     return false;
                 }
@@ -190,7 +187,7 @@ internal static class CecilExtensions
                 return false;
             }
 
-            return Bind(methodDef, describedSpecification.ElementType, describingSpecification.ElementType, bound, names);
+            return Bind(methodDef, describedSpecification.ElementType, describingSpecification.ElementType, bound);
         }
 
         return TypeName.HasSameName(described, describing);

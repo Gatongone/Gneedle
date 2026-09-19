@@ -496,10 +496,23 @@ public class PointerTests
         public static string Mismatched_Identity(int value) => This.Method<Func<int, string>>("Identity")(value);
 
         /// <summary>
+        /// The argument of the call is described with the parameter of the body, which bears the name of the parameter
+        /// of the member, and the value which the member hands back is described with a type of its own: the two
+        /// disagree, so the delegate describes no instantiation of the member.
+        /// </summary>
+        public static int IdentityOfTheTokenWithAValueOfAnotherType(M_0 value) => This.Method<Func<M_0, int>>("Identity")(value);
+
+        /// <summary>
         /// The member which the name stands for declares a parameter of its own which stands inside the value which the
         /// delegate hands back rather than in an argument of the call, so no argument names it.
         /// </summary>
         public static List<string> MakeAList(int value) => This.Method<Func<int, List<string>>>("Make")(value);
+
+        /// <summary>
+        /// The member which the name stands for declares a parameter of its own which stands in the value it hands back
+        /// rather than in an argument of the call, so the delegate names it by that value.
+        /// </summary>
+        public static string MakeAString(int value) => This.Method<Func<int, string>>("Make")(value);
     }
 
     /// <summary>
@@ -1801,6 +1814,27 @@ public class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create a host which declares the method <c>int Touch&lt;U&gt;(int value)</c>, which declares a parameter of its own
+    /// that stands nowhere in its signature: no argument of a call names it, and neither does the value which the method
+    /// hands back, so no delegate describes the method.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAMemberWhoseParameterStandsNowhere(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        host.AddMethod(
+            "Touch",
+            typeof(int).ToGneedleType(),
+            [new GenericParameterType("U")],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+
+        return host;
+    }
+
     [Test]
     public void InvokeWithAnArgumentWhichIsHandedByAddress_Rewrites_To_Direct_Call()
     {
@@ -2005,7 +2039,7 @@ public class PointerTests
         // parameter ties it to, nor one which stands at its position: the call would stand on the definition of the
         // member with the parameter of it left open, which is a body the runtime refuses to run rather than one which
         // names the member, and the weave is refused instead.
-        var host = NewHostWithAMemberWhichDeclaresAParameterOfItsOwn("MethodInjectionUnnamedParameterAssembly");
+        var host = NewHostWithAMemberWhoseParameterStandsNowhere("MethodInjectionUnnamedParameterAssembly");
         var method = host.AddMethod(
             "Run",
             typeof(int).ToGneedleType(),
@@ -2017,6 +2051,25 @@ public class PointerTests
             () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn))));
 
         Assert.That(thrown!.Message, Does.Contain("declares a generic parameter of its own which no parameter of the member being woven stands for"));
+    }
+
+    [Test]
+    public void A_Member_Which_Declares_A_Parameter_Of_Its_Own_Which_The_Value_It_Hands_Back_Names_Is_Called_With_It()
+    {
+        // The member which the template names declares a parameter of its own which stands in no argument of the call,
+        // and the value which the member hands back is what names it: the delegate hands back the type of the value which
+        // the member hands back, so the member is instantiated with the type of its own argument and that value at once.
+        var host = NewHostWithAMemberWhichDeclaresAParameterOfItsOwn("MethodInjectionParameterNamedByTheValueAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn)));
+
+        Assert.That(InstantiationOfTheCall(method, "Touch"), Is.EqualTo(typeof(int).FullName),
+                    "the member was not instantiated with the type which the delegate describes the value it hands back with.");
     }
 
     /// <summary>
@@ -2425,6 +2478,33 @@ public class PointerTests
     /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
     /// because two assemblies of the name cannot be loaded into one run.</param>
     /// <summary>
+    /// Create a host which holds <c>TOut Make&lt;TIn, TOut&gt;(TIn value)</c>, which declares a parameter of its own
+    /// which stands in the value it hands back rather than in an argument of the call.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAMake(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var module = host.Source.Module;
+        var make = new MethodDefinition("Make", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
+        {
+            DeclaringType = host.Source,
+        };
+        var tIn = new GenericParameter("TIn", make);
+        var tOut = new GenericParameter("TOut", make);
+        make.GenericParameters.Add(tIn);
+        make.GenericParameters.Add(tOut);
+        make.ReturnType = tOut;
+        make.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, tIn));
+        make.Body.GetILProcessor().Emit(OpCodes.Ldarg_1);
+        make.Body.GetILProcessor().Emit(OpCodes.Ret);
+        host.Source.Methods.Add(make);
+        return host;
+    }
+
+    /// <summary>
     /// Create a host which holds <c>List&lt;TOut&gt; Make&lt;TIn, TOut&gt;(TIn value)</c>, one of whose parameters stands
     /// inside the value which the member hands back rather than in an argument of the call.
     /// </summary>
@@ -2502,6 +2582,17 @@ public class PointerTests
                                     .FirstOrDefault(reference => reference.Name == name)?
                                     .GenericArguments[0].FullName;
 
+    /// <summary>The names of the types which the call of a member of a woven body is instantiated with, in order.</summary>
+    /// <param name="method">The member which was woven.</param>
+    /// <param name="name">The name of the member which the body calls.</param>
+    /// <returns>The names of the type arguments of the call, or an empty list where the call names no instantiation.</returns>
+    private static string[] InstantiationsOfTheCall(IMethodHandler method, string name)
+        => ((MethodHandler) method).Source.Body.Instructions
+                                    .Select(instruction => instruction.Operand)
+                                    .OfType<GenericInstanceMethod>()
+                                    .FirstOrDefault(reference => reference.Name == name)?
+                                    .GenericArguments.Select(argument => argument.FullName).ToArray() ?? [];
+
     [Test]
     public void ThisMethod_Of_A_Member_Which_Declares_A_Parameter_Of_Its_Own_Is_Instantiated_From_The_Delegate()
     {
@@ -2564,8 +2655,32 @@ public class PointerTests
         var thrown = Assert.Throws<ArgumentException>(
             () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
-        Assert.That(thrown!.Message, Does.Contain("another instantiation"),
-                    "the delegate was refused by the rule of the call rather than as one which names no member.");
+        Assert.That(thrown!.Message, Does.Contain("Identity"),
+                    "the refusal did not name the member which the delegate describes no instantiation of.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Declares_A_Parameter_Of_Its_Own_Refuses_A_Value_Of_Another_Type()
+    {
+        // The member is found by the name which its parameter bears, which is the name of the parameter of the body as
+        // well, so the rule which names the parameters of a member by the parameters of the body would name it: the
+        // delegate describes the argument of the call with that parameter and the value which the member hands back with
+        // a type which the instantiation of it does not stand for, and the two disagree. The call is refused rather than
+        // written as one of the parameter of the body, which would hand the member a value its own parameter does not
+        // stand for, which is a body the runtime refuses to run.
+        var host = NewHostWithIdentity("MethodInjectionIdentityOfTheTokenAssembly");
+        var method = (MethodHandler) host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [new GenericParameterType("T")],
+            [new Parameter(new GenericParameterType("T"))],
+            MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.IdentityOfTheTokenWithAValueOfAnotherType))));
+
+        Assert.That(thrown!.Message, Does.Contain("names no member"),
+                    "the delegate was refused as one which names no member rather than by the rule of the call.");
     }
 
     [Test]
@@ -2588,20 +2703,32 @@ public class PointerTests
     }
 
     [Test]
-    public void ThisMethod_Of_A_Member_Which_Names_A_Parameter_Of_Its_Own_Only_By_The_Value_It_Hands_Back_Is_Refused()
+    public void ThisMethod_Of_A_Member_Which_Names_A_Parameter_Of_Its_Own_By_The_Value_It_Hands_Back_Is_Instantiated_With_It()
     {
-        // A member is found by the signature which describes the arguments of the call, and the parameter of this one
-        // stands inside the value which the member hands back rather than in an argument: no argument names it, so the
-        // lookup describes no candidate and the member is not found, whether the parameter stands in that value bare or
-        // inside a generic instance of it. Reading the parameter out of the value which is handed back would reach it,
-        // which is a shape of its own rather than this one.
+        // The member declares a parameter of its own which stands in no argument of the call, and the value which it
+        // hands back is what names it: the delegate hands that value back, so the member is instantiated with the type
+        // of its argument and the type of the value at once, in the order its parameters are declared in.
+        var host = NewHostWithAMake("MethodInjectionMakeAssembly");
+        var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeAString)));
+
+        Assert.That(InstantiationsOfTheCall(method, "Make"), Is.EqualTo(new[] { typeof(int).FullName, typeof(string).FullName }),
+                    "the member was not instantiated with the argument and the value which the delegate describes together.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Names_A_Parameter_Of_Its_Own_Inside_The_Value_It_Hands_Back_Is_Instantiated_With_It()
+    {
+        // The same, of a parameter which stands inside a type which the value the member hands back is an instance of:
+        // List<string> is what List<TOut> is described by, so TOut is named by the argument of that value rather than by
+        // the value itself, and the instantiation names that argument.
         var host = NewHostWithAListReturn("MethodInjectionListReturnAssembly");
         var method = host.AddMethod("Run", typeof(List<string>).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeAList)));
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeAList))));
-
-        Assert.That(thrown!.Message, Does.Contain("Make"));
+        Assert.That(InstantiationsOfTheCall(method, "Make"),
+                    Is.EqualTo(new[] { typeof(int).FullName, typeof(string).FullName }),
+                    "the member was not instantiated with the argument and the type which stands in the value it hands back.");
     }
 
     [Test]

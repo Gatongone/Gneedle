@@ -105,6 +105,12 @@ partial class MethodHandler
                                  .Select(p => ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
                                  .ToArray();
 
+        // The delegate describes the member with the whole of its signature rather than with the types of its arguments
+        // alone: what a member which declares parameters of its own hands back is what tells one instantiation of it
+        // from another, and a parameter of it which no argument of the call stands in the place of is named by the value
+        // which the delegate hands back, so that value is read where the member is looked up as well.
+        var returnType = ResolveDelegateParameterType(invoked.ReturnType, genericArguments).ParseGenericTokens(Source, Source.Module);
+
         // Detect Instance.Method with new Instance(param) syntax: need to skip the array init sequence.
         // The instance which the template reached the method through, which is the receiver of the call where the method
         // is not static: the sequence which builds the instance is dropped, so the value it holds has to stand where the
@@ -138,7 +144,7 @@ partial class MethodHandler
         // The index which is given is the one of the name, which is what the members reached through an instance of
         // Instance or Static are read against: a symbol which carries no name is not one of those, so the call stands in
         // its place, where it is read by nothing.
-        var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter, parameters, targetDef, out var namedInstance);
+        var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter, parameters, returnType, targetDef, out var namedInstance);
         if (methodDef == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
@@ -156,13 +162,13 @@ partial class MethodHandler
         IReadOnlyList<TypeReference>? arguments = null;
         if (!memberSymbol.HasFlag(MemberSymbols.Proceed))
         {
-            // The delegate describes the member with the whole of its signature rather than with the types of its
-            // arguments alone: what a member which declares parameters of its own hands back is what tells one
-            // instantiation of it from another, so the value which the delegate hands back is read as well. The member
-            // which was taken over is described by the parameters of the body itself, so nothing of it is read here.
-            var returnType = ResolveDelegateParameterType(invoked.ReturnType, genericArguments).ParseGenericTokens(Source, Source.Module);
-
             methodDef.SameWith(parameters, returnType, out arguments);
+
+if (arguments == null && methodDef.GenericParameters.Count > 0 && methodDef.SameWith(parameters, null, out _))
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_SIGNATURE, methodDef.FullName, Source.FullName));
+            }
+
 
             // A member which declares parameters of its own and whose parameters the signature describes while the
             // value it hands back is one which no instantiation of the delegate names, and the rule below is not the
@@ -171,11 +177,7 @@ partial class MethodHandler
             // which hands the member a value of a type which its own parameter does not stand for, where the lookup
             // found the member by the signature which describes its parameters alone. The weave is refused rather than
             // left to a rule which would write a call of another member than the one the delegate described.
-            if (arguments == null && methodDef.GenericParameters.Count > 0 && methodDef.SameWith(parameters, null, out _))
-            {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_SIGNATURE, methodDef.FullName, Source.FullName));
-            }
-        }
+                    }
 
         // Skip the array init sequence if this is Instance.Method with new Instance(param), and the Static.From sequence if
         // this is Static.Method. The two are dropped whichever way the method is reached afterwards, which is the whole
@@ -589,6 +591,10 @@ partial class MethodHandler
     /// <param name="currentIndex">Index of the instruction which loads the name of the member.</param>
     /// <param name="filter">The filter which the body is written through.</param>
     /// <param name="parameters">The types of the arguments which the member is called with, which the member that is found has to be described by.</param>
+    /// <param name="returnType">
+    /// The type of the value which the delegate of the template hands back, which names a parameter of the member that
+    /// stands in no place of the arguments, or null when the caller wrote none down.
+    /// </param>
     /// <param name="targetDef">The template which the instructions are read out of.</param>
     /// <param name="namedInstance">
     /// The type of the instance which the member is reached through, which is the type being woven for the symbols
@@ -596,18 +602,18 @@ partial class MethodHandler
     /// </param>
     /// <returns>The method which the symbol stands for, or null when the symbol is not one which names a method.</returns>
     /// <exception cref="ArgumentException">Thrown when the member cannot be resolved, or when the template proceeds without a body being woven around.</exception>
-    private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, InstructionFilter filter, IReadOnlyList<TypeReference> parameters, MethodDefinition targetDef, out TypeReference? namedInstance)
+    private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, InstructionFilter filter, IReadOnlyList<TypeReference> parameters, TypeReference? returnType, MethodDefinition targetDef, out TypeReference? namedInstance)
     {
         namedInstance = InstanceNamedBy(memberSymbol);
 
         if (memberSymbol.HasFlag(MemberSymbols.Base))
         {
-            return DeclaringTypeHandler.GetMethodInBase(methodName, parameters);
+            return DeclaringTypeHandler.GetMethodInBase(methodName, parameters, returnType);
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.This))
         {
-            return DeclaringTypeHandler.GetMethodInThisOrABaseType(methodName, parameters);
+            return DeclaringTypeHandler.GetMethodInThisOrABaseType(methodName, parameters, returnType);
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Proceed))
@@ -653,7 +659,7 @@ partial class MethodHandler
 
             if (instanceType is GenericParameter parameter)
             {
-                return GetMethodFromConstraint(parameter, methodName, parameters);
+                return GetMethodFromConstraint(parameter, methodName, parameters, returnType);
             }
 
             // The type which the template named the instance through is written out where the member is called where
@@ -662,7 +668,7 @@ partial class MethodHandler
             namedInstance = instanceType;
 
             // The instance type may stand for the type of another assembly, in which case the method is looked up on the real one.
-            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.ResolveDefinition(Source.Module), (string) filter.Target[currentIndex].Operand, parameters);
+            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.ResolveDefinition(Source.Module), (string) filter.Target[currentIndex].Operand, parameters, returnType);
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Static))
@@ -680,7 +686,7 @@ partial class MethodHandler
 
             // Resolve the type using GetCecilType (checks cache + Type.GetType reflection + current assembly).
             var staticType = DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition;
-            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(staticType, (string) filter.Target[currentIndex].Operand, parameters);
+            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(staticType, (string) filter.Target[currentIndex].Operand, parameters, returnType);
         }
 
         return null;
@@ -696,12 +702,12 @@ partial class MethodHandler
     /// <param name="parameters">The types of the arguments which the member is called with.</param>
     /// <returns>The method which the constraints of the parameter describe.</returns>
     /// <exception cref="ArgumentException">Thrown when no constraint holds a method of that name and signature.</exception>
-    private MethodDefinition GetMethodFromConstraint(GenericParameter target, string methodName, IReadOnlyList<TypeReference> parameters)
+    private MethodDefinition GetMethodFromConstraint(GenericParameter target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType)
     {
         MethodDefinition? methodDef = null;
         foreach (var curType in target.Constraints.Select(item => DeclaringTypeHandler.AssemblyHandler.GetCecilType(item.ConstraintType).Definition))
         {
-            methodDef = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(curType, methodName, parameters, false);
+            methodDef = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(curType, methodName, parameters, returnType, false);
             if (methodDef != null!)
             {
                 return methodDef;
