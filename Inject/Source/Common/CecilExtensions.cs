@@ -129,7 +129,11 @@ internal static class CecilExtensions
     /// <param name="described">The type which holds the parameters, which is the one the method declares.</param>
     /// <param name="describing">The type which describes it, which is the one the caller wrote.</param>
     /// <param name="bound">The arguments which the parameters stand for so far, by position.</param>
-    /// <param name="names">Whether a parameter which stands unbound in <paramref name="described"/> is one which this position names.</param>
+    /// <param name="names">
+    /// Whether a parameter which stands unbound in <paramref name="described"/> is one which this position names. It is
+    /// read at every position of the type rather than at the one the walk began at, because a type which holds a
+    /// parameter of the member inside a generic instance or in an array names it no more than the parameter alone does.
+    /// </param>
     /// <returns>Whether <paramref name="describing"/> describes <paramref name="described"/>.</returns>
     private static bool Bind(MethodDefinition methodDef, TypeReference described, TypeReference describing, TypeReference?[] bound, bool names = true)
     {
@@ -162,7 +166,7 @@ internal static class CecilExtensions
 
             for (var index = 0; index < describedInstance.GenericArguments.Count; index++)
             {
-                if (!Bind(methodDef, describedInstance.GenericArguments[index], describingInstance.GenericArguments[index], bound))
+                if (!Bind(methodDef, describedInstance.GenericArguments[index], describingInstance.GenericArguments[index], bound, names))
                 {
                     return false;
                 }
@@ -186,7 +190,7 @@ internal static class CecilExtensions
                 return false;
             }
 
-            return Bind(methodDef, describedSpecification.ElementType, describingSpecification.ElementType, bound);
+            return Bind(methodDef, describedSpecification.ElementType, describingSpecification.ElementType, bound, names);
         }
 
         return TypeName.HasSameName(described, describing);

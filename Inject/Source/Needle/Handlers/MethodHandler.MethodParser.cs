@@ -105,11 +105,6 @@ partial class MethodHandler
                                  .Select(p => ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
                                  .ToArray();
 
-        // The delegate describes the member with the whole of its signature rather than with the types of its arguments
-        // alone: a member which declares parameters of its own is told from another instantiation of itself by the type
-        // which the call of it hands back, which is the type which the delegate hands back as well.
-        var returnType = ResolveDelegateParameterType(invoked.ReturnType, genericArguments).ParseGenericTokens(Source, Source.Module);
-
         // Detect Instance.Method with new Instance(param) syntax: need to skip the array init sequence.
         // The instance which the template reached the method through, which is the receiver of the call where the method
         // is not static: the sequence which builds the instance is dropped, so the value it holds has to stand where the
@@ -161,6 +156,12 @@ partial class MethodHandler
         IReadOnlyList<TypeReference>? arguments = null;
         if (!memberSymbol.HasFlag(MemberSymbols.Proceed))
         {
+            // The delegate describes the member with the whole of its signature rather than with the types of its
+            // arguments alone: what a member which declares parameters of its own hands back is what tells one
+            // instantiation of it from another, so the value which the delegate hands back is read as well. The member
+            // which was taken over is described by the parameters of the body itself, so nothing of it is read here.
+            var returnType = ResolveDelegateParameterType(invoked.ReturnType, genericArguments).ParseGenericTokens(Source, Source.Module);
+
             methodDef.SameWith(parameters, returnType, out arguments);
 
             // A member which declares parameters of its own and whose parameters the signature describes while the

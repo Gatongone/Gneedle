@@ -494,6 +494,12 @@ public class PointerTests
         /// no member at all.
         /// </summary>
         public static string Mismatched_Identity(int value) => This.Method<Func<int, string>>("Identity")(value);
+
+        /// <summary>
+        /// The member which the name stands for declares a parameter of its own which stands inside the value which the
+        /// delegate hands back rather than in an argument of the call, so no argument names it.
+        /// </summary>
+        public static List<string> MakeAList(int value) => This.Method<Func<int, List<string>>>("Make")(value);
     }
 
     /// <summary>
@@ -2418,6 +2424,35 @@ public class PointerTests
     /// </summary>
     /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
     /// because two assemblies of the name cannot be loaded into one run.</param>
+    /// <summary>
+    /// Create a host which holds <c>List&lt;TOut&gt; Make&lt;TIn, TOut&gt;(TIn value)</c>, one of whose parameters stands
+    /// inside the value which the member hands back rather than in an argument of the call.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAListReturn(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var module = host.Source.Module;
+        var make = new MethodDefinition("Make", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
+        {
+            DeclaringType = host.Source,
+        };
+        var tIn = new GenericParameter("TIn", make);
+        var tOut = new GenericParameter("TOut", make);
+        make.GenericParameters.Add(tIn);
+        make.GenericParameters.Add(tOut);
+        var list = new GenericInstanceType(module.ImportReference(typeof(List<>)));
+        list.GenericArguments.Add(tOut);
+        make.ReturnType = list;
+        make.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, tIn));
+        make.Body.GetILProcessor().Emit(OpCodes.Ldnull);
+        make.Body.GetILProcessor().Emit(OpCodes.Ret);
+        host.Source.Methods.Add(make);
+        return host;
+    }
+
     private static TypeHandler NewHostWithAnArrayEcho(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
@@ -2550,6 +2585,23 @@ public class PointerTests
             () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
         Assert.That(thrown!.Message, Does.Contain("Identity"));
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Names_A_Parameter_Of_Its_Own_Only_By_The_Value_It_Hands_Back_Is_Refused()
+    {
+        // A member is found by the signature which describes the arguments of the call, and the parameter of this one
+        // stands inside the value which the member hands back rather than in an argument: no argument names it, so the
+        // lookup describes no candidate and the member is not found, whether the parameter stands in that value bare or
+        // inside a generic instance of it. Reading the parameter out of the value which is handed back would reach it,
+        // which is a shape of its own rather than this one.
+        var host = NewHostWithAListReturn("MethodInjectionListReturnAssembly");
+        var method = host.AddMethod("Run", typeof(List<string>).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeAList))));
+
+        Assert.That(thrown!.Message, Does.Contain("Make"));
     }
 
     [Test]
