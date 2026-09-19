@@ -749,7 +749,7 @@ internal static class CecilExtensions
         /// <param name="declaration">The type which declares the reference, whose parameters the arguments replace.</param>
         /// <param name="instance">The instantiation which the declaration was reached through, which holds the arguments.</param>
         /// <returns>The reference with the arguments of the instantiation in place of the parameters of the declaration. A parameter whose owner is not the declaration stands where it did.</returns>
-        internal TypeReference WithTheArgumentsOf(TypeDefinition declaration, TypeReference instance)
+        internal TypeReference WithTheArgumentsOf(TypeDefinition declaration, TypeReference? instance)
         {
             var parameters = declaration.GenericParameters;
 

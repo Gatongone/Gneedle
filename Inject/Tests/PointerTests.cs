@@ -473,6 +473,12 @@ public class PointerTests
         public static int Identity_OfAnInt(int value) => This.Method<Func<int, int>>("Identity")(value);
 
         /// <summary>
+        /// The member which the name stands for is one of two of that name, and the delegate describes the one whose
+        /// signature the names of its types are rather than the one which declares a parameter of its own.
+        /// </summary>
+        public static int Filter_OfAnInt(int value) => This.Method<Func<int, int>>("Filter")(value);
+
+        /// <summary>
         /// The member which the name stands for declares a parameter of its own which stands in an array, and the
         /// delegate describes that array: the rank of it is part of the type which describes the parameter, so a
         /// delegate of another rank describes no member of the type which declares this one.
@@ -2498,6 +2504,33 @@ public class PointerTests
     /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
     /// because two assemblies of the name cannot be loaded into one run.</param>
     /// <summary>
+    /// Create a host which declares two members of one name, <c>T Filter&lt;T&gt;(T value)</c> first and
+    /// <c>int Filter(int value)</c> after it, so that the order they are declared in is not what decides which of them
+    /// a delegate of <c>Func&lt;int, int&gt;</c> names.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithTwoMembersOfOneName(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        host.AddMethod(
+            "Filter",
+            typeof(int).ToGneedleType(),
+            [new GenericParameterType("T")],
+            [new Parameter(new GenericParameterType("T"))],
+            MethodFlags.Public);
+        host.AddMethod(
+            "Filter",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+
+        return host;
+    }
+
+    /// <summary>
     /// Create a host which holds <c>TOut Make&lt;TIn, TOut&gt;(TIn value)</c>, which declares a parameter of its own
     /// which stands in the value it hands back rather than in an argument of the call.
     /// </summary>
@@ -2612,6 +2645,26 @@ public class PointerTests
                                     .OfType<GenericInstanceMethod>()
                                     .FirstOrDefault(reference => reference.Name == name)?
                                     .GenericArguments.Select(argument => argument.FullName).ToArray() ?? [];
+
+    [Test]
+    public void ThisMethod_Of_A_Name_Which_Two_Members_Share_Is_The_One_Which_The_Names_Of_The_Types_Describe()
+    {
+        // Two members of one name are told apart by the signature which the caller hands them, which is what a compiler
+        // does with them: the member which the names of the types describe is answered with wherever there is one, and a
+        // member which only the binding of the parameters describes - one which declares a parameter of its own - is
+        // what those names leave open rather than what they say. So a type which declares both is called through the one
+        // the names name, whether or not the other is declared first.
+        var host = NewHostWithTwoMembersOfOneName("MethodInjectionTwoMembersAssembly");
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Filter_OfAnInt)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                         .FirstOrDefault(reference => reference.Name == "Filter");
+
+        Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
+        Assert.That(call, Is.Not.InstanceOf<GenericInstanceMethod>(),
+                    "the member which declares a parameter of its own was called rather than the one the names describe.");
+    }
 
     [Test]
     public void ThisMethod_Of_A_Member_Which_Declares_A_Parameter_Of_Its_Own_Is_Instantiated_From_The_Delegate()

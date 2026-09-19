@@ -167,6 +167,14 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         while (methodDef == null)
         {
             if (curType == null) break;
+            // The members of the name are read in the order of what tells them apart, and the member which the names of
+            // the types describe is the one which is answered with wherever there is one: two members of one name are two
+            // members which a compiler tells apart by the signature it is handed, and a member which the names describe
+            // is that one, so a member which only the binding of the parameters describes - one which declares a
+            // parameter of its own which the signature names a type for - answers for what the names leave open rather
+            // than for what they say. A type which declares both `T Filter<T>(T)` and `int Filter(int)` is called through
+            // the `int` one by a delegate of `Func<int, int>`, whichever of the two is declared first.
+            var candidates = curType.Methods.Where(method => method.Name.Equals(methodName)).ToArray();
             // A member which declares parameters of its own is one which no list of type names describes, so a candidate
             // is read as the signature which the caller hands it where that signature binds the parameters: the type
             // which stands in the place of a parameter of the member is the one the call of it is made with, and the
@@ -174,9 +182,8 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             // such place with. A candidate which the signature does not describe is still the one which the names of the
             // types name, which is what finds a member whose own parameters stand nowhere in its signature - the call of
             // that one is refused by the rule of the call rather than here, where the member it names is the one it names.
-            methodDef = curType.Methods.FirstOrDefault(
-                method => method.Name.Equals(methodName)
-                          && (method.SameWith(parameters, returnType, out _, curInstance) || method.DescribedBy(parameters, curInstance)));
+            methodDef = candidates.FirstOrDefault(method => method.DescribedBy(parameters, curInstance))
+                     ?? candidates.FirstOrDefault(method => method.SameWith(parameters, returnType, out _, curInstance));
 
             if (curType.BaseType == null)
             {
