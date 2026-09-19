@@ -148,12 +148,21 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// none: it names a parameter of the member which stands in no place of the arguments, so a member which is handed
     /// back a value of the type of one of its parameters is found by it.
     /// </param>
+    /// <param name="instance">
+    /// The instantiation of the type which is searched which the member is reached through, or null where it is reached
+    /// through none. It is what the parameters of the signature of a member of a generic type stand for.
+    /// </param>
     /// <param name="throwWhenNotFound">Whether to throw an exception when the method is not found. Default is true.</param>
     /// <returns>The method from target type or its base type. Returns null if there is no matching method in the target type and its base types, which only happens when <paramref name="throwWhenNotFound"/> is false.</returns>
     /// <exception cref="ArgumentException">Thrown when there is no matching method and <paramref name="throwWhenNotFound"/> is true.</exception>
-    internal MethodDefinition? GetMethodFromType(TypeDefinition? target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType = null, bool throwWhenNotFound = true)
+    internal MethodDefinition? GetMethodFromType(TypeDefinition? target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType = null, bool throwWhenNotFound = true, TypeReference? instance = null)
     {
         var curType = target;
+
+        // The instantiation which each type of the chain of base types was reached through: the signature of a member is
+        // written where the type which declares it stands, so a parameter which stands in it is the argument which the
+        // instantiation holds for it, and a base type is handed the arguments which the type above it hands down.
+        var curInstance = instance;
         MethodDefinition? methodDef = null;
         while (methodDef == null)
         {
@@ -167,8 +176,20 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             // that one is refused by the rule of the call rather than here, where the member it names is the one it names.
             methodDef = curType.Methods.FirstOrDefault(
                 method => method.Name.Equals(methodName)
-                          && (method.SameWith(parameters, returnType, out _) || method.Parameters.SameWith(parameters)));
-            curType   = curType.BaseType == null ? null : GetDefinition(curType.BaseType);
+                          && (method.SameWith(parameters, returnType, out _, curInstance) || method.DescribedBy(parameters, curInstance)));
+
+            if (curType.BaseType == null)
+            {
+                curType     = null;
+                curInstance = null;
+                continue;
+            }
+
+            // The base of a type is written where that type stands, so the arguments of the instance are handed down
+            // to it: the base of `Middle<T>` is `Base<T>`, and the argument which `Middle<int>` holds for its own
+            // parameter is the one which the `T` of that base stands for.
+            curInstance = curInstance is null ? null : curType.BaseType.WithTheArgumentsOf(curType, curInstance);
+            curType     = GetDefinition(curType.BaseType);
         }
 
         if (methodDef == null && throwWhenNotFound) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));

@@ -66,6 +66,12 @@ public class PointerTests
     public class GenericBaseOfAnInstance<T>
     {
         public int Calc(int a) => a * 3;
+
+        /// <summary>
+        /// A member whose signature names the parameter of the type which declares it, which only the instantiation of
+        /// that type reads: the argument which the chain of base types hands down is what the parameter stands for.
+        /// </summary>
+        public T Echo(T value) => value;
     }
 
     /// <summary>
@@ -692,6 +698,13 @@ public class PointerTests
         /// than the definition of the base.
         /// </summary>
         public static int InstanceMethod_OfABaseOfAGenericType(DerivedOfAGenericBase derived, int a) => new Instance(derived).Method<IntOp>("Calc")(a);
+
+        /// <summary>
+        /// The same, of a member whose signature names the parameter which the base declares rather than a type: the
+        /// argument which the chain of base types hands down to that base is what it stands for.
+        /// </summary>
+        public static int InstanceMethod_OfABaseOfAGenericTypeWhichNamesTheParameter(DerivedOfAGenericBase derived, int a)
+            => new Instance(derived).Method<Func<int, int>>("Echo")(a);
 
         /// <summary>
         /// The instance of <c>Instance</c> is of a type which derives from an instantiation of a type which derives from
@@ -3050,20 +3063,29 @@ public class PointerTests
     }
 
     [Test]
-    public void InstanceMethod_Of_A_Member_Whose_Signature_Names_The_Parameter_Of_The_Type_Is_Refused()
+    public void InstanceMethod_Of_A_Member_Whose_Signature_Names_The_Parameter_Of_The_Type_Is_Called()
     {
-        // A member is looked up by the types which the delegate of the template describes it with, and the parameter of
-        // the member is the parameter of the type which declares it, which names no type of an assembly until the
-        // instantiation of that type is read: no candidate matches, and the member which the name stands for is not the
-        // one the name was read for, so the weave is refused. Reading the parameter of a member as the argument which
-        // the instantiation of its declaring type holds is what would reach it, which nothing of the lookup does.
-        var (_, host, method) = NewInstanceHost("InstanceMemberSignatureParameterAssembly",
+        // The signature of a member of a generic type is written where that type is declared, so the parameter which
+        // stands in it is the one the instantiation which the template named holds an argument for: the member of
+        // `GenericHelper<int>` which takes the parameter of the type is the one which takes an `int`, and the member
+        // which the delegate describes is found and called on the instantiation rather than on the definition.
+        var (assembly, _, method) = NewInstanceHost("InstanceMemberSignatureParameterAssembly",
             [typeof(GenericHelper<int>), typeof(int)]);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAMemberWhoseSignatureNamesTheParameter))));
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAMemberWhoseSignatureNamesTheParameter)));
 
-        Assert.That(thrown!.Message, Does.Contain("Echo"));
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                         .FirstOrDefault(reference => reference.Name == "Echo");
+        Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
+        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the type which declares it rather than on the instantiation.");
+        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                    "the member is not called on the instantiation which the template named.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new GenericHelper<int>(), 41]), Is.EqualTo(41),
+                    "the woven assembly does not run the member which the signature names the parameter of the type with.");
     }
 
     [Test]
@@ -3474,6 +3496,30 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(42),
                     "the woven assembly does not run.");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Base_Of_A_Generic_Type_Which_Names_The_Parameter_Runs_The_Member()
+    {
+        // The member belongs to the definition of a base of the type which the template named the instance through, and
+        // the signature of that member names the parameter which the base declares: the argument which the chain of base
+        // types hands down to it is what that parameter stands for, so the member which the delegate describes is found
+        // on the instantiation which the chain names and called there.
+        var (assembly, _, method) = NewInstanceHost("InstanceGenericBaseSignatureAssembly", [typeof(DerivedOfAGenericBase), typeof(int)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfABaseOfAGenericTypeWhichNamesTheParameter)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                         .FirstOrDefault(reference => reference.Name == "Echo");
+        Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
+        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the base rather than on the instantiation of it.");
+        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                    "the member is not called on the instantiation which the chain of base types names.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAGenericBase(), 41]), Is.EqualTo(41),
+                    "the woven assembly does not run the member which the signature of the base names the parameter of it with.");
     }
 
     [Test]

@@ -162,7 +162,7 @@ partial class MethodHandler
         IReadOnlyList<TypeReference>? arguments = null;
         if (!memberSymbol.HasFlag(MemberSymbols.Proceed))
         {
-            methodDef.SameWith(parameters, returnType, out arguments);
+            methodDef.SameWith(parameters, returnType, out arguments, namedInstance);
 
             // A member which declares parameters of its own and whose parameters the signature describes while the
             // value it hands back is one which no instantiation of the delegate names, and the rule below is not the
@@ -666,7 +666,7 @@ partial class MethodHandler
             namedInstance = instanceType;
 
             // The instance type may stand for the type of another assembly, in which case the method is looked up on the real one.
-            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.ResolveDefinition(Source.Module), (string) filter.Target[currentIndex].Operand, parameters, returnType);
+            return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(instanceType.ResolveDefinition(Source.Module), (string) filter.Target[currentIndex].Operand, parameters, returnType, instance: instanceType);
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Static))

@@ -70,13 +70,21 @@ internal static class CecilExtensions
         /// back. It names the parameters which stand in no position of the arguments, which is the only place left for
         /// one of them to be named at.
         /// </param>
+        /// <param name="instance">
+        /// The instantiation of the type which declares the method which the method is reached through, or null where it
+        /// is reached through none: the signature of a member of a generic type is written where that type is declared,
+        /// so the parameter which stands in it is the one the instantiation holds an argument for rather than a type
+        /// which names an assembly. <c>int</c> is what the <c>T</c> of <c>GenericHelper&lt;int&gt;</c> is.
+        /// </param>
         /// <param name="arguments">
         /// The types which the generic parameters of the method stand for, in the order they are declared, or null when
         /// the signature does not describe the method.
         /// </param>
         /// <returns>Whether the signature describes the method.</returns>
-        internal bool SameWith(IReadOnlyList<TypeReference> parameterTypes, TypeReference? returnType, out IReadOnlyList<TypeReference>? arguments)
+        internal bool SameWith(IReadOnlyList<TypeReference> parameterTypes, TypeReference? returnType, out IReadOnlyList<TypeReference>? arguments, TypeReference? instance = null)
         {
+            var declaration = methodDef.DeclaringType;
+
             arguments = null;
 
             // A method which hands nothing back hands back no value, so a caller which describes one with the type of
@@ -94,7 +102,7 @@ internal static class CecilExtensions
             // the signature which holds those very names, and the call names the method itself.
             if (methodDef.GenericParameters.Count == 0)
             {
-                return methodDef.Parameters.SameWith(parameterTypes);
+                return methodDef.DescribedBy(parameterTypes, instance);
             }
 
             if (methodDef.Parameters.Count != parameterTypes.Count)
@@ -105,7 +113,7 @@ internal static class CecilExtensions
             var bound = new TypeReference?[methodDef.GenericParameters.Count];
             for (var index = 0; index < methodDef.Parameters.Count; index++)
             {
-                if (!Bind(methodDef, methodDef.Parameters[index].ParameterType, parameterTypes[index], bound))
+                if (!Bind(methodDef, methodDef.Parameters[index].ParameterType.WithTheArgumentsOf(declaration, instance), parameterTypes[index], bound))
                 {
                     return false;
                 }
@@ -115,7 +123,7 @@ internal static class CecilExtensions
             // instantiation of a method which declares parameters of its own from another: a parameter which no argument
             // of the call stands in the place of is one which the signature names by the value the method hands back,
             // where the caller wrote that value down, and the call of such a member is written with both arguments.
-            if (returnType != null && !Bind(methodDef, methodDef.ReturnType, returnType, bound))
+            if (returnType != null && !Bind(methodDef, methodDef.ReturnType.WithTheArgumentsOf(declaration, instance), returnType, bound))
             {
                 return false;
             }
@@ -135,6 +143,26 @@ internal static class CecilExtensions
             arguments = described;
             return true;
         }
+    }
+
+    extension(MethodDefinition methodDef)
+    {
+        /// <summary>
+        /// Check whether the parameters of the method, read through the instance which it was reached through, are the
+        /// types which the given signature names.<para/>
+        /// A method which declares no parameter of its own names every type of its signature, and the signature of a
+        /// member of a generic type is written where that type is declared: the parameter which stands in it is the one
+        /// the instantiation of the type holds an argument for, so <c>int</c> is what the <c>T</c> of the parameter of
+        /// <c>Echo</c> on <c>GenericHelper&lt;int&gt;</c> is.
+        /// </summary>
+        /// <param name="parameterTypes">The types of the arguments which the method is called with.</param>
+        /// <param name="instance">The instantiation of the type which declares the method, or null where it was reached through none.</param>
+        /// <returns>Whether the parameters describe the method.</returns>
+        internal bool DescribedBy(IReadOnlyList<TypeReference> parameterTypes, TypeReference? instance)
+            => methodDef.Parameters.Count == parameterTypes.Count
+                && !methodDef.Parameters.Where((parameter, index) =>
+                       !TypeName.HasSameName(parameter.ParameterType.WithTheArgumentsOf(methodDef.DeclaringType, instance),
+                                             parameterTypes[index])).Any();
     }
 
     /// <summary>
