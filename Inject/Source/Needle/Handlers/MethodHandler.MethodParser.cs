@@ -125,20 +125,12 @@ partial class MethodHandler
             receiverIns  = value.Load;
         }
 
-        // Detect Static.Method with Static.From("typename"): need to skip ldstr+call Static::From.
+        // A member which the template reaches through `Static.From("TypeName")` has the two instructions of that
+        // arrangement ahead of its name, and they are consumed by the weaving rather than woven.
         var skipStaticFromCount = 0;
-        if (memberSymbol.HasFlag(MemberSymbols.Static) && nameIndex is { } staticName && staticName >= 2)
+        if (memberSymbol.HasFlag(MemberSymbols.Static) && nameIndex is { } staticName && IsAStaticFrom(filter, staticName))
         {
-            var callFromIns = filter.Target[staticName - 1];
-            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference {Name: "From", DeclaringType: var declType}
-                && declType.FullName == Static.TYPE_NAME)
-            {
-                var ldstrIns = filter.Target[staticName - 2];
-                if (ldstrIns.OpCode == OpCodes.Ldstr)
-                {
-                    skipStaticFromCount = 2; // ldstr + call Static::From
-                }
-            }
+            skipStaticFromCount = 2;
         }
 
         // The index which is given is the one of the name, which is what the members reached through an instance of
@@ -696,19 +688,11 @@ partial class MethodHandler
 
         if (memberSymbol.HasFlag(MemberSymbols.Static))
         {
-            // Static.From("FullTypeName").Method<D>("methodName") pattern:
-            // [currentIndex-2]: ldstr "FullTypeName"
-            // [currentIndex-1]: call Static::From
-            // [currentIndex]:   ldstr "methodName"
-            if (currentIndex < 2) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
-            var typeNameIns = filter.Target[currentIndex - 2];
-            if (typeNameIns.OpCode != OpCodes.Ldstr || typeNameIns.Operand is not string fullTypeName)
-            {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
-            }
+            // The type which the member is reached on is the one the arrangement ahead of the name stands for, which is
+            // the same arrangement the parse read the name of the member through.
+            var staticType = TypeNamedByAStaticFrom(filter, currentIndex)
+                             ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
 
-            // Resolve the type using GetCecilType (checks cache + Type.GetType reflection + current assembly).
-            var staticType = DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition;
             return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(staticType, (string) filter.Target[currentIndex].Operand, parameters, returnType);
         }
 
