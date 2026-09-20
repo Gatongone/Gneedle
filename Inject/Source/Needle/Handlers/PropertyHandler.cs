@@ -41,9 +41,9 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// <returns>The declaration of the property, indented by that many levels.</returns>
     internal string ToString(int level)
     {
-        var attributes = MethodHandler.TheAttributesOf(Source);
+        var attributes = IlPrinter.TheAttributesOf(Source);
 
-        return $"{new string(' ', level * MethodHandler.Indentation)}.property "
+        return $"{new string(' ', level * IlPrinter.Indentation)}.property "
                + (attributes is { Length: > 0 } ? $"{attributes} " : "")
                + $"{Source.PropertyType.FullName} {Source.Name}\n";
     }
