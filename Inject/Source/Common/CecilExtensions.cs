@@ -7,6 +7,13 @@ namespace Gneedle.Inject;
 /// </summary>
 internal static class CecilExtensions
 {
+    /// <summary>
+    /// The kinds which the constraints of a type parameter name, which the runtime reads the instantiation of that
+    /// parameter against.
+    /// </summary>
+    private const GenericParameterAttributes TheKindsWhichAConstraintNames
+        = GenericParameterAttributes.ReferenceTypeConstraint | GenericParameterAttributes.NotNullableValueTypeConstraint;
+
     /// <param name="attributes">The attributes which need to convert.</param>
     extension(System.Reflection.GenericParameterAttributes attributes)
     {
@@ -183,6 +190,15 @@ internal static class CecilExtensions
         // this position names.
         if (described is GenericParameter parameter && ReferenceEquals(parameter.Owner, methodDef))
         {
+            // A parameter which the type it is instantiated with does not fit is one the runtime refuses to call: the
+            // instantiation which the signature names is the one which is written into the woven assembly, so a
+            // signature which names a type the constraints of the parameter reject describes no member rather than one
+            // which cannot be called.
+            if (!Fits(parameter, describing))
+            {
+                return false;
+            }
+
             if (bound[parameter.Position] is { } boundArgument)
             {
                 return TypeName.HasSameName(boundArgument, describing);
@@ -232,6 +248,97 @@ internal static class CecilExtensions
         }
 
         return TypeName.HasSameName(described, describing);
+    }
+
+    /// <summary>
+    /// Whether the type which a parameter of a method is instantiated with fits the kind which the parameter itself
+    /// declares.<para/>
+    /// A parameter which declares that its type is a reference, or that it is a value which is not nullable, is one
+    /// which the runtime accepts the types of that kind alone for: the instantiation which the signature names is the
+    /// one which the woven assembly calls, so a type of the other kind is one the member is not called with, and a
+    /// signature which names it describes no member rather than one which cannot run.<para/>
+    /// The kinds which the constraints of the parameter name are what is read here, and the types which they name are
+    /// left to the runtime: whether a type fits a constraint of a named type is told by the base types and the
+    /// interfaces of that type, which the assembly of the type is read for rather than the type itself.
+    /// </summary>
+    /// <param name="parameter">The parameter which the method declares.</param>
+    /// <param name="argument">The type which the parameter is instantiated with.</param>
+    /// <returns>Whether the argument is of a kind which the parameter accepts.</returns>
+    private static bool Fits(GenericParameter parameter, TypeReference argument)
+    {
+        var kind = parameter.Attributes & TheKindsWhichAConstraintNames;
+        if (kind == 0) return true;
+
+        // Both kinds at once is a constraint which no type fits, and the runtime accepts no instantiation of it.
+        if (kind == TheKindsWhichAConstraintNames) return false;
+
+        // A type which this read does not tell the kind of is left to the runtime, because the refusal here is a member
+        // which no signature describes: an instantiation which the runtime refuses is one which is not called, and one
+        // which it accepts is one which this read would otherwise have refused.
+        if (IsAValueType(argument) is not { } isValueType) return true;
+
+        return kind == GenericParameterAttributes.ReferenceTypeConstraint ? !isValueType : isValueType;
+    }
+
+    /// <summary>
+    /// Whether the values of a type are the values of the type itself rather than references to values of it, which the
+    /// metadata of the type tells without reading the assembly of it where the type is one of the types the runtime
+    /// names itself.
+    /// </summary>
+    /// <param name="type">The type which is read.</param>
+    /// <returns>Whether the type is a value type, or null where the kind of the type is one this read does not tell.</returns>
+    private static bool? IsAValueType(TypeReference type)
+    {
+        // A parameter of a member or of a type stands for the type which the constraints of it name, and for no kind at
+        // all where they name none.
+        if (type is GenericParameter parameter)
+        {
+            var kind = parameter.Attributes & TheKindsWhichAConstraintNames;
+            if (kind == GenericParameterAttributes.ReferenceTypeConstraint) return false;
+            if (kind == GenericParameterAttributes.NotNullableValueTypeConstraint) return true;
+            return null;
+        }
+
+        // An array is a reference to its elements whatever the type of those elements is, which the metadata of the type
+        // names as an array rather than as one of the types the runtime holds the values of.
+        if (type is ArrayType) return false;
+
+        switch (type.MetadataType)
+        {
+            case MetadataType.Boolean
+              or MetadataType.Char
+              or MetadataType.SByte
+              or MetadataType.Byte
+              or MetadataType.Int16
+              or MetadataType.UInt16
+              or MetadataType.Int32
+              or MetadataType.UInt32
+              or MetadataType.Int64
+              or MetadataType.UInt64
+              or MetadataType.Single
+              or MetadataType.Double
+              or MetadataType.IntPtr
+              or MetadataType.UIntPtr:
+                return true;
+
+            // A string and the type of every value which the stack carries as a reference are references, which is
+            // what `object` stands for.
+            case MetadataType.String
+              or MetadataType.Object:
+                return false;
+        }
+
+        // Every other type of the metadata is one which an assembly of its own declares, so the definition of it is what
+        // tells its kind: it is read where the assembly of it can be read, and a type whose assembly is not there at all
+        // - one which was woven against a reference without the assembly beside it - is one this read does not tell.
+        try
+        {
+            return type.Resolve()?.IsValueType;
+        }
+        catch (AssemblyResolutionException)
+        {
+            return null;
+        }
     }
 
     /// <param name="attributeDefinition">Type definition of attribute.</param>

@@ -3,6 +3,7 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Assembly = Gneedle.Inject.Assembly;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
+using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -552,6 +553,13 @@ public class PointerTests
         /// disagree, so the delegate describes no instantiation of the member.
         /// </summary>
         public static int IdentityOfTheTokenWithAValueOfAnotherType(M_0 value) => This.Method<Func<M_0, int>>("Identity")(value);
+
+        /// <summary>
+        /// The member which the name stands for declares a parameter of its own which accepts only the types of
+        /// references, and the delegate describes the member with a type of a value: the runtime refuses a member which
+        /// is instantiated with a type its own parameter rejects, so no signature describes one here.
+        /// </summary>
+        public static int Identity_OfAnIntWhichTheConstraintRefuses(int value) => This.Method<Func<int, int>>("Identity")(value);
 
         /// <summary>
         /// The member which the name stands for declares a parameter of its own which stands inside the value which the
@@ -2796,6 +2804,23 @@ public class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create a host which declares a real instance method <c>T Identity&lt;T&gt;(T value)</c> whose parameter accepts
+    /// the types of one kind alone, so that a template which describes the member with a type of the other kind
+    /// describes no member of it.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    /// <param name="kind">The kind which the parameter accepts, which is the types of references where the caller names
+    /// none.</param>
+    private static TypeHandler NewHostWithAConstrainedIdentity(
+        string assemblyName, GenericParameterAttributes kind = GenericParameterAttributes.ReferenceTypeConstraint)
+    {
+        var host = NewHostWithIdentity(assemblyName);
+        host.Source.Methods.First(method => method.Name == "Identity").GenericParameters[0].Attributes = kind;
+        return host;
+    }
+
     /// <summary>The name of the type which the call of a member of a woven body is instantiated with.</summary>
     /// <param name="method">The member which was woven.</param>
     /// <param name="name">The name of the member which the body calls.</param>
@@ -2928,6 +2953,67 @@ public class PointerTests
 
         Assert.That(thrown!.Message, Does.Contain("names no member"),
                     "the delegate was refused as one which names no member rather than by the rule of the call.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Is_Instantiated_With_A_Type_Its_Own_Constraint_Refuses_Is_Refused()
+    {
+        // The parameter of the member accepts the types of references alone and the delegate describes the member with
+        // the type of an int. The delegate is what says which instantiation of a member of a parameter of its own is
+        // reached, and the instantiation which it names here is one the runtime refuses to call: the woven assembly
+        // holds a call the verifier rejects rather than failing the weave, so the mismatch of the constraint is what
+        // the weave reads as well, just as the mismatch of the value which the member hands back already is.
+        var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnIntWhichTheConstraintRefuses))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    "the member was called with a type which the constraint of its own parameter refuses.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_The_Instantiation_Fits_Is_Called()
+    {
+        // The same host, woven with a delegate which names a type of the kind which the parameter accepts: the kind is
+        // what the constraint is read against, so the member is found and the woven assembly runs.
+        var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAStringAssembly");
+        var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString)));
+
+        Assert.That(InstantiationOfTheCall(method, "Identity"), Is.EqualTo(typeof(string).FullName),
+                    "the member was not called one of the instantiation which fits the constraint of its parameter.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), ["hi"]), Is.EqualTo("hi"),
+                    "the member whose constraint the instantiation fits was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Parameter_Accepts_The_Types_Of_Values_Alone_Is_Refused_A_Reference()
+    {
+        // The other kind which a constraint names, which is read the same way: a parameter which accepts the types of
+        // values is one which the type of a string does not fit and one which the type of an int does.
+        var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAValueAssembly",
+                                                  GenericParameterAttributes.NotNullableValueTypeConstraint);
+        var asInt = host.AddMethod("RunInt", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        asInt.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
+        var asString = host.AddMethod("RunString", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    "the member was called with a type of a reference where its parameter accepts the types of values.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(InstantiationOfTheCall(asInt, "Identity"), Is.EqualTo(typeof(int).FullName),
+                    "the member was not called one of the instantiation which fits the constraint of its parameter.");
+        Assert.That(type.GetMethod("RunInt")!.Invoke(Activator.CreateInstance(type), [5]), Is.EqualTo(5),
+                    "the member whose parameter accepts the types of values was not called with one.");
     }
 
     [Test]
