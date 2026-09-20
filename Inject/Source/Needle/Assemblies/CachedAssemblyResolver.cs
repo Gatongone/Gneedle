@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace Gneedle.Inject;
 
 /// <summary>
@@ -27,9 +29,11 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
 #endif
 
     /// <summary>
-    /// Assemblies which were read into the module, keyed by the full name of each.
+    /// Assemblies which were read into the module, keyed by the full name of each.<para/>
+    /// The assemblies of one project are woven at the same time as each other, and the requests of the runtime for an
+    /// assembly arrive on threads which are not the one which weaves: the cache is read and written on all of them.
     /// </summary>
-    internal Dictionary<string, AssemblyDefinition> Assemblies { get; } = new();
+    internal ConcurrentDictionary<string, AssemblyDefinition> Assemblies { get; } = new();
 
     /// <inheritdoc/>
     public AssemblyDefinition Resolve(AssemblyNameReference name) => Resolve(name, new ReaderParameters());
