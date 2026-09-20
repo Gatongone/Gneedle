@@ -627,6 +627,17 @@ public class PointerTests
             => This.Method<Func<List<string[]>, List<string[]>>>("Identity")(value);
 
         /// <summary>
+        /// The same, of an array whose element is an array: the conversion which the collection of the constraint names
+        /// is the covariance of the arrays, which the element of the array is read with as well.
+        /// </summary>
+        public static string[][] Identity_OfAnArrayOfAnArrayOfString(string[][] value)
+            => This.Method<Func<string[][], string[][]>>("Identity")(value);
+
+        /// <inheritdoc cref="Identity_OfAnArrayOfAnArrayOfString"/>
+        public static List<string>[] Identity_OfAnArrayOfAListOfString(List<string>[] value)
+            => This.Method<Func<List<string>[], List<string>[]>>("Identity")(value);
+
+        /// <summary>
         /// The same, of a sequence whose element is an interface: an interface is a reference of the type of every value
         /// as a class is, which the walk of it reads through no base type, because the metadata declares it none.
         /// </summary>
@@ -3556,6 +3567,51 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
                     "the member whose constraint names a collection of the values of the framework was not called for an array.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_Arrays_Is_Called_For_An_Array_Of_Arrays()
+    {
+        // The element of the array is an array as well, and the type which the collection of the constraint names is one
+        // which the covariance of the arrays takes it to: an array of arrays of strings is a collection of arrays of the
+        // values of the framework.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfArraysAssembly",
+                                                      typeof(IList<object[]>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(string[][]).ToGneedleType(),
+            [],
+            [new Parameter(typeof(string[][]).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnArrayOfString)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { new[] { "a" }, new[] { "b" } };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a collection of arrays was not called for an array of arrays.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_Sequences_Is_Called_For_An_Array_Of_Instances()
+    {
+        // The element of the array is an instance of a generic type whose conversion is the variance of the sequence it
+        // implements: an array of lists of strings is a collection of sequences of the values of the framework.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfSequencesAssembly",
+                                                      typeof(IList<IEnumerable<object>>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(List<string>[]).ToGneedleType(),
+            [],
+            [new Parameter(typeof(List<string>[]).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAListOfString)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { new List<string> { "a" } };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a collection of sequences was not called for an array of instances.");
     }
 
     [Test]

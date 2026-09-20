@@ -379,6 +379,17 @@ internal static class CecilExtensions
             return IsConvertedByReference(givenArray.ElementType, wantedArray.ElementType);
         }
 
+        // The collections and the sequences which name the element are given to an array of one dimension for every
+        // type which the element is converted to by a reference conversion, so the argument which one of them names is
+        // read as the element of the array rather than as a type which the array is made of: an array of strings is a
+        // collection of the values of the framework, and an array of arrays of strings is a collection of arrays of
+        // them, although neither is made of those types.
+        if (type is ArrayType vector && vector.Rank == 1 && wanted is GenericInstanceType named
+            && s_TheCollectionsWhichNameTheElement.Any(declaration => TypeName.HasSameName(named.ElementType, declaration)))
+        {
+            return IsConvertedByReference(vector.ElementType, named.GenericArguments[0]);
+        }
+
         // A constraint which names no instance of a generic type names the type itself, which the name of the type
         // tells, and a type which is not an instance of one is named by no argument at all.
         if (wanted is not GenericInstanceType constraint) return false;
@@ -460,9 +471,7 @@ internal static class CecilExtensions
 
         if (type is ArrayType array)
         {
-            var (given, givenTold) = TypesWhichAnArrayIsGiven(array);
-            foreach (var one in given) pending.Push(one);
-            told = givenTold;
+            foreach (var given in TypesWhichAnArrayIsGiven(array)) pending.Push(given);
         }
         else
         {
@@ -535,8 +544,8 @@ internal static class CecilExtensions
     /// the array holds.
     /// </summary>
     /// <param name="array">The array which is read.</param>
-    /// <returns>The types which the array is given, itself among them, and whether every element which they name was read.</returns>
-    private static (IReadOnlyList<TypeReference> Given, bool Told) TypesWhichAnArrayIsGiven(ArrayType array)
+    /// <returns>The types which the array is given, itself among them.</returns>
+    private static IReadOnlyList<TypeReference> TypesWhichAnArrayIsGiven(ArrayType array)
     {
         var module = array.Module;
         var given = new List<TypeReference> { array };
@@ -546,39 +555,11 @@ internal static class CecilExtensions
             given.Add(module.ImportReference(declaration));
         }
 
-        if (array.Rank != 1) return (given, true);
-
-        // The collections which name the element are given to a vector for every type which the element is converted to
-        // by a reference conversion, which is the conversion the runtime gives them by: a value is converted to the very
-        // type it is alone, while a reference is converted to every type which the types it is made of hold.
-        var element = array.ElementType;
-
-        if (IsAValueType(element) is not { } isAValue) return (given, false);
-
-        IReadOnlyList<TypeReference> elements;
-        bool told;
-
-        if (isAValue)
-        {
-            elements = [element];
-            told = true;
-        }
-        else
-        {
-            (elements, told) = TypesWhichTheTypeIsMadeOf(element);
-        }
-
-        foreach (var named in elements)
-        {
-            foreach (var declaration in s_TheCollectionsWhichNameTheElement)
-            {
-                var instance = new GenericInstanceType(module.ImportReference(declaration));
-                instance.GenericArguments.Add(named);
-                given.Add(instance);
-            }
-        }
-
-        return (given, told);
+        // The collections and the sequences of the runtime which name the element are given to a vector, and they are
+        // read where the array meets one of them rather than here: they name every type which the element of the array
+        // is converted to, which no walk of the types it is made of tells, because the conversion of the element is a
+        // conversion of the argument rather than of a type which the element is made of.
+        return given;
     }
 
     /// <summary>
