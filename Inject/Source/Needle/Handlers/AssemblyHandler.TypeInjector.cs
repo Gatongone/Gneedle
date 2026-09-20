@@ -74,11 +74,14 @@ partial class AssemblyHandler
     {
         var fullName = $"{typeNamespace}.{typeName}";
 
-        // Check type redefined.
-        if (m_TypeCache.ContainsKey(fullName)) throw new ArgumentException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
-
         // Create type definition from context.
         var typeDef = new TypeDefinition(typeNamespace, typeName, classFlags.ToTypeAttributes());
+
+        // The name is taken before the chain which describes the type runs, because the chain runs at the end of it: two
+        // chains of one name would both find the name free where the reservation stood last, and the second would append
+        // a definition which is taken for the first wherever a name is looked up.
+        Reserve(typeDef, fullName);
+
         // The base type is described through the decorator before the class is appended, so none is held here.
         return new ClassDecorator(this, typeDef, null, AddClassCallback);
 
@@ -93,10 +96,23 @@ partial class AssemblyHandler
             // Add type to module.
             Assembly.Source.MainModule.Types.Add(type);
 
-            // Track for redefinition check.
-            m_TypeCache[fullName] = new CecilType(type, type);
-
             return new ClassHandler(this, type);
+        }
+    }
+
+    /// <summary>
+    /// Take the name which a type is declared with, where no definition of that name is held yet, which is what a name
+    /// is looked up by: the definition itself is held, because it is the same one which the chain which describes the
+    /// type appends to the module, and the name of the type which is described first is the one which stands.
+    /// </summary>
+    /// <param name="typeDef">The definition of the type which is declared.</param>
+    /// <param name="fullName">The name which the type is declared with, which the refusal names.</param>
+    /// <exception cref="ArgumentException">Thrown when a type of that name was declared already.</exception>
+    private void Reserve(TypeDefinition typeDef, string fullName)
+    {
+        if (!m_TypeCache.TryAdd(new TypeName(typeDef).ToString(), new CecilType(typeDef, typeDef)))
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
         }
     }
 
@@ -105,11 +121,11 @@ partial class AssemblyHandler
     {
         var fullName = $"{typeNamespace}.{typeName}";
 
-        // Check type redefined.
-        if (m_TypeCache.ContainsKey(fullName)) throw new ArgumentException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
-
         // Create type definition from context.
         var typeDef = new TypeDefinition(typeNamespace, typeName, structFlags.ToTypeAttributes());
+
+        // The name is taken before the chain which describes the type runs, which is described where the class above is.
+        Reserve(typeDef, fullName);
 
         if (structFlags.HasFlag(StructFlags.Ref))
         {
@@ -144,9 +160,6 @@ partial class AssemblyHandler
             // Add type to module.
             Assembly.Source.MainModule.Types.Add(type);
 
-            // Track for redefinition check.
-            m_TypeCache[fullName] = new CecilType(type, type);
-
             return new StructHandler(this, type);
         }
     }
@@ -163,17 +176,15 @@ partial class AssemblyHandler
     {
         var fullName = $"{typeNamespace}.{typeName}";
 
-        // Check type redefined.
-        if (m_TypeCache.ContainsKey(fullName)) throw new ArgumentException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
-
         // Create type definition from context.
         var typeDef = new TypeDefinition(typeNamespace, typeName, enumFlags.ToTypeAttributes());
 
         // Default underlying type is int.
         var underlyingType = Assembly.Source.MainModule.TypeSystem.Int32;
 
-        // Register the type in the cache immediately so the decorator can build on it.
-        m_TypeCache[fullName] = new CecilType(typeDef, typeDef);
+        // The name is taken before the enum is described, which is the same reservation the class and the struct above
+        // take, so that the chain of every kind of type which is added is guarded by one rule.
+        Reserve(typeDef, fullName);
 
         return new EnumDecorator(this, typeDef, underlyingType);
     }

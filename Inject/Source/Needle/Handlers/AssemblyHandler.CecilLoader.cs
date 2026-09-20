@@ -72,8 +72,10 @@ partial class AssemblyHandler
     /// <returns>The cecil type from current definition.</returns>
     internal CecilType GetCecilType(string typeName)
     {
-        // Check assembly has be appended to cache.
-        if (m_TypeCache.TryGetValue(typeName, out var cecilType)) return cecilType;
+        // The name which a caller writes is the one of the metadata, which separates the types a type is nested in with a
+        // slash, or the one which a System.Type spells, which separates them with a plus: the cache is keyed by one name,
+        // so the two are read as one name here.
+        if (m_TypeCache.TryGetValue(typeName.Replace('/', '+'), out var cecilType)) return cecilType;
 
         // Type.GetType searches the assembly which calls it and the corlib only, so this resolves the types of the weaver
         // itself and of the corlib. A type of any other assembly is resolved through its System.Type instead, which the

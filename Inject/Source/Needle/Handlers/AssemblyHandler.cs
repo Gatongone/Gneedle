@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 
 namespace Gneedle.Inject;
@@ -13,14 +14,19 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     public readonly Assembly Assembly;
 
     /// <summary>
-    /// The assembly has referenced.
+    /// The assembly has referenced.<para/>
+    /// It is the cache of the resolver of the module, which the assemblies of a project share while they are woven at
+    /// the same time as each other, and which the requests of the runtime for an assembly are answered from as well.
     /// </summary>
-    private readonly Dictionary<string, AssemblyDefinition> m_AssemblyCache;
+    private readonly ConcurrentDictionary<string, AssemblyDefinition> m_AssemblyCache;
 
     /// <summary>
-    /// The cecil types has imported.
+    /// The cecil types has imported.<para/>
+    /// The types of the module are read through it while the weaving runs, and a decorator which describes a type holds
+    /// the handler which holds this cache until the chain which describes it ends: the reads and the writes of it are
+    /// not one thread's.
     /// </summary>
-    private readonly Dictionary<string, CecilType> m_TypeCache = new();
+    private readonly ConcurrentDictionary<string, CecilType> m_TypeCache = new();
 
     /// <param name="assembly">Handled target assembly.</param>
     internal AssemblyHandler(Assembly assembly)
@@ -31,7 +37,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         // finds the assemblies which the cache holds. It is created with the module, which is why it is taken from there
         // rather than made here, and it is seeded with the target assembly before anything is resolved.
         m_AssemblyCache = (assembly.Source.MainModule.AssemblyResolver as CachedAssemblyResolver)?.Assemblies
-                       ?? new Dictionary<string, AssemblyDefinition>();
+                       ?? new ConcurrentDictionary<string, AssemblyDefinition>();
         m_AssemblyCache[assembly.Source.FullName] = assembly.Source;
 
         AddDefaultTypes();
