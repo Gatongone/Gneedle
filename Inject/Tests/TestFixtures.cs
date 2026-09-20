@@ -17,6 +17,22 @@ internal static class TestFixtures
     internal const string Ns = "Gneedle.Test.Generated";
 
     /// <summary>
+    /// Create an assembly of a class named <c>Host</c>, and hand back the handler of the type, the handler of the
+    /// assembly which declares it, and the module of that assembly.
+    /// </summary>
+    /// <param name="assemblyName">The name of the assembly to build, which a test which loads its host gives one of its
+    /// own because two assemblies of one name cannot be loaded into one run.</param>
+    /// <returns>The handler of the assembly, the handler of the host, and the module which declares it.</returns>
+    internal static (AssemblyHandler Handler, TypeHandler Host, ModuleDefinition Module) NewHost(string assemblyName)
+    {
+        var assembly = Assembly.Create(assemblyName);
+        var handler = (AssemblyHandler) assembly.Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+
+        return (handler, host, assembly.Source.MainModule);
+    }
+
+    /// <summary>
     /// The method of a holder which a template is, which is what a test hands over as the body to be woven.
     /// </summary>
     /// <param name="holder">The type which declares the template.</param>

@@ -51,16 +51,6 @@ public class HandlerFlagsTests
         return (ClassHandler) handler.GetType(inner);
     }
 
-    /// <summary>
-    /// A type handler for a class of the assembly, which is what a member of a member is read through.
-    /// </summary>
-    private static (AssemblyHandler Handler, TypeHandler Host, ModuleDefinition Module) NewHost(string assemblyName)
-    {
-        var assembly = Assembly.Create(assemblyName);
-        var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-        return (handler, host, assembly.Source.MainModule);
-    }
 
     #region Class
 

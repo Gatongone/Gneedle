@@ -16,16 +16,6 @@ using static Gneedle.Inject.Test.TestFixtures;
 public class MemberQueryTests
 {
 
-    /// <summary>
-    /// A type handler for a class of an assembly of its own, which is what the members of a test are declared on.
-    /// </summary>
-    private static (AssemblyHandler Handler, TypeHandler Host, ModuleDefinition Module) NewHost(string assemblyName)
-    {
-        var assembly = Assembly.Create(assemblyName);
-        var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-        return (handler, host, assembly.Source.MainModule);
-    }
 
     /// <summary>
     /// A method of the type which carries the attributes named.
