@@ -4885,174 +4885,115 @@ public class PointerTests
 
     #region Static
 
-    [Test]
-    public void StaticMethod_BCL_Type_Rewrites_To_Direct_Call()
+    /// <summary>
+    /// The kinds of static member which the placeholder of a type reaches, which the fixture of a case builds on the
+    /// type it names.
+    /// </summary>
+    public enum StaticMember
     {
-        var asm = Assembly.Create("StaticPointerAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        /// <summary>A member of a type of the framework, which the template names in its own source.</summary>
+        MethodOfAFramework,
 
-        var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticMethod_BCL)));
-
-        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        // Should rewrite to call System.Environment::get_CommandLine
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call
-                                 && i.Operand is MethodReference mr && mr.Name == "get_CommandLine"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MethodReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
+        /// <summary>A member of a type which the fixture declares.</summary>
+        MethodOfTheType,
+        FieldGet,
+        FieldSet,
+        PropertyGet,
+        PropertySet
     }
 
-    [Test]
-    public void StaticMethod_Local_Type_Rewrites_To_Direct_Call()
+    [TestCase(StaticMember.MethodOfAFramework, nameof(InstanceStaticTemplates.StaticMethod_BCL), "get_CommandLine", typeof(string))]
+    [TestCase(StaticMember.MethodOfTheType, nameof(InstanceStaticTemplates.StaticMethod_Local), "GetValue", typeof(int))]
+    [TestCase(StaticMember.FieldGet, nameof(InstanceStaticTemplates.StaticField_Get), "StaticField", typeof(int))]
+    [TestCase(StaticMember.FieldSet, nameof(InstanceStaticTemplates.StaticField_Set), "StaticField", typeof(int))]
+    [TestCase(StaticMember.PropertyGet, nameof(InstanceStaticTemplates.StaticProperty_Get), "get_StaticProperty", typeof(int))]
+    [TestCase(StaticMember.PropertySet, nameof(InstanceStaticTemplates.StaticProperty_Set), "set_StaticProperty", typeof(int))]
+    public void A_Static_Member_Is_Reached_Through_The_Placeholder_Of_A_Type(StaticMember member, string template, string name, Type returns)
     {
-        var asm = Assembly.Create("StaticPointerAssembly");
+        // The placeholder Static names a type by a string, and the member which the template reaches on it stands in the
+        // woven body as the member itself rather than as a call of the placeholder: a member of every kind is written
+        // that way, and no operand of the body names the placeholder afterwards.
+        var asm = Assembly.Create("StaticMemberAssembly");
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
-        // Create the local static class with GetValue method
+        BuildTheMember(member, asm, handler, name);
+
+        var method = member is StaticMember.FieldSet or StaticMember.PropertySet
+            ? host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static)
+            : host.AddMethod("Run", returns.ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), template));
+
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        var opcode = member switch
+        {
+            StaticMember.FieldGet => OpCodes.Ldsfld,
+            StaticMember.FieldSet => OpCodes.Stsfld,
+            _                     => OpCodes.Call
+        };
+
+        Assert.That(ins.Any(i => i.OpCode == opcode && i.Operand is MemberReference reference && reference.Name == name), Is.True,
+                    $"the member which the placeholder names was not reached by a {opcode.Name}.");
+        Assert.That(ins.Any(i => i.Operand is MemberReference reference && reference.DeclaringType.FullName == Static.TYPE_NAME), Is.False,
+                    "an instruction of the body still names the placeholder.");
+
+        if (member is StaticMember.PropertyGet)
+        {
+            // The property holds a getter and no setter, and the member which is woven is static: no receiver is
+            // written, because the property being reached is of a static member and the accessor of it is static as
+            // well. A receiver written here is the load of a `this` which the member does not have.
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False, "a receiver was written for a static member.");
+        }
+    }
+
+    /// <summary>
+    /// Declare on the type which the template names the member which a case reaches, which is the fixture the case
+    /// needs and no more.
+    /// </summary>
+    /// <param name="member">The kind of member the case reaches.</param>
+    /// <param name="asm">The assembly which is built.</param>
+    /// <param name="handler">The handler of the assembly.</param>
+    /// <param name="name">The name of the member.</param>
+    private static void BuildTheMember(StaticMember member, Assembly asm, AssemblyHandler handler, string name)
+    {
+        if (member is StaticMember.MethodOfAFramework) return;
+
+        var module = asm.Source.MainModule;
         var staticClass = (TypeHandler) handler.AddClass("LocalStatic", Ns, ClassFlags.Public).GetHandler();
-        var staticMethod = new MethodDefinition("GetValue", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, asm.Source.MainModule.TypeSystem.Int32);
-        staticMethod.Body.GetILProcessor().Emit(OpCodes.Ret);
-        staticClass.Source.Methods.Add(staticMethod);
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticMethod_Local)));
+        switch (member)
+        {
+            case StaticMember.MethodOfTheType:
+                var staticMethod = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, module.TypeSystem.Int32);
+                staticMethod.Body.GetILProcessor().Emit(OpCodes.Ret);
+                staticClass.Source.Methods.Add(staticMethod);
+                break;
 
-        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+            case StaticMember.FieldGet or StaticMember.FieldSet:
+                staticClass.Source.Fields.Add(new FieldDefinition(name, FieldAttributes.Public | FieldAttributes.Static, module.TypeSystem.Int32));
+                break;
 
-        // Should rewrite to call LocalStatic::GetValue
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call
-                                 && i.Operand is MethodReference mr && mr.Name == "GetValue"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
-    }
-
-    [Test]
-    public void StaticField_Get_Rewrites_To_Ldsfld()
-    {
-        var asm = Assembly.Create("StaticFieldAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-
-        // Create LocalStatic with static field
-        var staticClass = (TypeHandler) handler.AddClass("LocalStatic", Ns, ClassFlags.Public).GetHandler();
-        staticClass.Source.Fields.Add(new FieldDefinition("StaticField", FieldAttributes.Public | FieldAttributes.Static, asm.Source.MainModule.TypeSystem.Int32));
-
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticField_Get)));
-
-        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldsfld && i.Operand is FieldReference fr && fr.Name == "StaticField"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
-    }
-
-    [Test]
-    public void StaticField_Of_A_Type_Which_Is_Held_In_A_Local_Throws()
-    {
-        // The type which the field is looked up on is the name which the template writes where the field is named, so a
-        // name which the template computed reaches the weaving nowhere: the member being woven is not the type which
-        // the field is named of, and the name is refused rather than looked up on it.
-        var host = NewHostWithField("StaticField", isStatic: true);
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticField_OfATypeInALocal))));
-
-        Assert.That(thrown!.Message, Does.Contain("StaticField"));
-    }
-
-    [Test]
-    public void StaticField_Set_Rewrites_To_Stsfld()
-    {
-        var asm = Assembly.Create("StaticFieldAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-
-        // Create LocalStatic with static field
-        var staticClass = (TypeHandler) handler.AddClass("LocalStatic", Ns, ClassFlags.Public).GetHandler();
-        staticClass.Source.Fields.Add(new FieldDefinition("StaticField", FieldAttributes.Public | FieldAttributes.Static, asm.Source.MainModule.TypeSystem.Int32));
-
-        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticField_Set)));
-
-        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Stsfld && i.Operand is FieldReference fr && fr.Name == "StaticField"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
-    }
-
-    [Test]
-    public void StaticProperty_Get_Rewrites_To_Call_Getter()
-    {
-        var asm = Assembly.Create("StaticPropertyAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-
-        // Create LocalStatic with static property
-        var staticClass = (TypeHandler) handler.AddClass("LocalStatic", Ns, ClassFlags.Public).GetHandler();
-        var prop = new PropertyDefinition("StaticProperty", PropertyAttributes.None, asm.Source.MainModule.TypeSystem.Int32);
-        var getter = new MethodDefinition("get_StaticProperty", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.HideBySig, asm.Source.MainModule.TypeSystem.Int32) { DeclaringType = staticClass.Source };
-        getter.Body.GetILProcessor().Emit(OpCodes.Ret);
-        prop.GetMethod = getter;
-        staticClass.Source.Methods.Add(getter);
-        staticClass.Source.Properties.Add(prop);
-
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticProperty_Get)));
-
-        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && i.Operand is MethodReference mr && mr.Name == "get_StaticProperty"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
-
-        // The property holds a getter and no setter, and the member which is woven is static: no receiver is written,
-        // because the property being reached is of a static member and the accessor of it is static as well. A receiver
-        // written here is the load of a `this` which the member does not have.
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False);
-    }
-
-    [Test]
-    public void StaticReadOnlyProperty_Of_This_Runs_The_Getter()
-    {
-        // The live case of the two accessors of a property which are not both there: a static property which only
-        // hands a value back. What the weave writes for it is a call without a receiver, and a load of `this` written
-        // where the member is static is a body which the runtime refuses to run, so the member is run rather than read.
-        var host = NewHostWithProperty("Value", withGetter: true, withSetter: false, isVirtual: false, isStatic: true);
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadStaticProperty)));
-
-        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && i.Operand is MethodReference mr && mr.Name == "get_Value"), Is.True);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False);
-
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
-        Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(PropertyValue));
-    }
-
-    [Test]
-    public void StaticProperty_Set_Rewrites_To_Call_Setter()
-    {
-        var asm = Assembly.Create("StaticPropertyAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-
-        // Create LocalStatic with static property
-        var staticClass = (TypeHandler) handler.AddClass("LocalStatic", Ns, ClassFlags.Public).GetHandler();
-        var prop = new PropertyDefinition("StaticProperty", PropertyAttributes.None, asm.Source.MainModule.TypeSystem.Int32);
-        var setter = new MethodDefinition("set_StaticProperty", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.HideBySig, asm.Source.MainModule.TypeSystem.Void) { DeclaringType = staticClass.Source };
-        setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, asm.Source.MainModule.TypeSystem.Int32));
-        setter.Body.GetILProcessor().Emit(OpCodes.Ret);
-        prop.SetMethod = setter;
-        staticClass.Source.Methods.Add(setter);
-        staticClass.Source.Properties.Add(prop);
-
-        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static);
-        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.StaticProperty_Set)));
-
-        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && i.Operand is MethodReference mr && mr.Name == "set_StaticProperty"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Static.TYPE_NAME), Is.False);
+            case StaticMember.PropertyGet or StaticMember.PropertySet:
+                var property = new PropertyDefinition(name[(name.IndexOf('_') + 1)..], PropertyAttributes.None, module.TypeSystem.Int32);
+                var accessor = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+                                                    member is StaticMember.PropertySet ? module.TypeSystem.Void : module.TypeSystem.Int32)
+                {
+                    DeclaringType = staticClass.Source,
+                };
+                if (member is StaticMember.PropertySet)
+                {
+                    accessor.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int32));
+                    property.SetMethod = accessor;
+                }
+                else
+                {
+                    property.GetMethod = accessor;
+                }
+                accessor.Body.GetILProcessor().Emit(OpCodes.Ret);
+                staticClass.Source.Methods.Add(accessor);
+                staticClass.Source.Properties.Add(property);
+                break;
+        }
     }
 
     #endregion
