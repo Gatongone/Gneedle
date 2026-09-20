@@ -325,7 +325,6 @@ public class AssemblyHandlerTests
 
     #endregion
 
-
     #region AddInterface
 
     [Test]

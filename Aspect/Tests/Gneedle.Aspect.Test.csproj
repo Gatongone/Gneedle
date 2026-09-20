@@ -1,15 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
 
         <IsPackable>false</IsPackable>
         <IsTestProject>true</IsTestProject>
         <!-- The framework which MSBuild runs a task in on Windows, which is the one the task is loaded by here. -->
         <TargetFramework>net472</TargetFramework>
         <OutputType>Library</OutputType>
-        <LangVersion>12</LangVersion>
+        <!-- The comments of the tree are written for every project of it, and the tests document nothing of their own:
+             what a test asserts is its name and what it reports, and a comment beside it would be a second copy of
+             that. The one report which is turned off here is the member which carries no comment. -->
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+
         <RootNamespace>Gneedle.Aspect.Test</RootNamespace>
 
         <!-- Ignore .net5.0 EOL -->

@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
 
         <IsPackable>false</IsPackable>
         <IsTestProject>true</IsTestProject>
@@ -17,7 +15,11 @@
         <CheckEolTargetFramework>false</CheckEolTargetFramework>
 
         <OutputType>Library</OutputType>
-        <LangVersion>preview</LangVersion>
+        <!-- The comments of the tree are written for every project of it, and the tests document nothing of their own:
+             what a test asserts is its name and what it reports, and a comment beside it would be a second copy of
+             that. The one report which is turned off here is the member which carries no comment. -->
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+
         <RootNamespace>Gneedle.Inject.Test</RootNamespace>
 
         <!-- The templates which the tests weave are the IL which the compiler wrote for them, and the tests read that
