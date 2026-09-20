@@ -558,6 +558,13 @@ public class PointerTests
         /// here: a member of a base of a base is a member of the type which derives from it as well.
         /// </summary>
         public static int ThisMethodOfABaseOfABase(int a) => This.Method<IntOp>("Calc")(a);
+
+        /// <summary>
+        /// The same, of a member of the generic base whose signature names the parameter which that base declares: the
+        /// body is a member of the type which derives from the instantiation of it, and the instantiation names the
+        /// argument.
+        /// </summary>
+        public static int ThisMethodOfABaseWhichNamesTheParameter(int a) => This.Method<Func<int, int>>("Echo")(a);
     }
 
     /// <summary>
@@ -1573,6 +1580,22 @@ public class PointerTests
     /// </summary>
     /// <param name="baseDef">The generic base type which the host derives from through a middle type.</param>
     /// <param name="mod">The module which the type is declared in.</param>
+    /// <summary>
+    /// Add the member <c>T Echo(T value)</c> to the type which the chain of base types ends at, which names the
+    /// parameter that the type declares rather than a type.
+    /// </summary>
+    /// <param name="baseDef">The definition of the base type.</param>
+    /// <param name="mod">The module which the type belongs to.</param>
+    private static void AddEchoToTheGenericBase(TypeDefinition baseDef, ModuleDefinition mod)
+    {
+        var parameter = baseDef.GenericParameters[0];
+        var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, parameter) { DeclaringType = baseDef };
+        echo.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, parameter));
+        echo.Body.GetILProcessor().Emit(OpCodes.Ldarg_1);
+        echo.Body.GetILProcessor().Emit(OpCodes.Ret);
+        baseDef.Methods.Add(echo);
+    }
+
     private static void AddCalcToTheGenericBase(TypeDefinition baseDef, ModuleDefinition mod)
     {
         var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
@@ -1623,6 +1646,30 @@ public class PointerTests
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
+    }
+
+    [Test]
+    public void A_Member_Of_A_Generic_Base_Which_Names_The_Parameter_Of_It_Is_Called_Through_This()
+    {
+        // The body belongs to a type which derives from an instantiation of the type which declares the member, and the
+        // member is reached through `This`: the walk of the chain of base types reads the member through the
+        // instantiation which the chain names, which is what the argument of the instantiation is, so the member which
+        // the delegate describes is found rather than refused.
+        var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleSignatureAssembly", AddEchoToTheGenericBase);
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.ThisMethodOfABaseWhichNamesTheParameter)));
+
+        var call = ((MethodHandler) method).Source.Body.Instructions
+                                           .Select(instruction => instruction.Operand).OfType<MethodReference>()
+                                           .FirstOrDefault(reference => reference.Name == "Echo");
+        Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
+        Assert.That(((GenericInstanceType) call!.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                    "the member is not called on the instantiation which the chain of base types names.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
+                    "the woven assembly does not run the member of the base.");
     }
 
     [Test]

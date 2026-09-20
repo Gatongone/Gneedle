@@ -195,7 +195,10 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             // The base of a type is written where that type stands, so the arguments of the instance are handed down
             // to it: the base of `Middle<T>` is `Base<T>`, and the argument which `Middle<int>` holds for its own
             // parameter is the one which the `T` of that base stands for.
-            curInstance = curInstance is null ? null : curType.BaseType.WithTheArgumentsOf(curType, curInstance);
+            // A type which declares no parameter of its own hands the base over as it was written, which is what the
+            // substitution answers with as well, and a type which declares one hands its own arguments down: the walk reads
+            // every type of the chain whether or not the member was reached through an instance of the first of them.
+            curInstance = curType.BaseType.WithTheArgumentsOf(curType, curInstance);
             curType     = GetDefinition(curType.BaseType);
         }
 

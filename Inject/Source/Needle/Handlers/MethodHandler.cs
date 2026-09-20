@@ -130,9 +130,11 @@ internal sealed partial class MethodHandler : IMethodHandler
         var baseType = Source.DeclaringType.BaseType;
         if (baseType == null) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
 
+        // No delegate describes the member which is called, so the value which it hands back names no parameter of it:
+        // the member which a body calls from its base is the one which its name and its parameters name.
         var baseMethod = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(
             DeclaringTypeHandler.AssemblyHandler.GetCecilType(baseType).Definition,
-            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray(), Source.ReturnType);
+            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray());
         if (baseMethod == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
