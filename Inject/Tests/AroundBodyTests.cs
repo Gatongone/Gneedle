@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
@@ -7,6 +7,8 @@ using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// Signature of the method which the templates below proceed through, which a template names as the generic argument
@@ -184,7 +186,6 @@ public class InstanceCaptureTemplate
 [TestFixture]
 public class AroundBodyTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     private const string ProceedMethodName = "<Add>k__Proceed";
 
@@ -213,11 +214,7 @@ public class AroundBodyTests
         if (isStatic) return (assembly, host, add);
 
         // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it.
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         return (assembly, host, add);
     }
@@ -265,18 +262,13 @@ public class AroundBodyTests
         add.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
         host.Source.Methods.Add(add);
 
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         return (assembly, host, add);
     }
 
     private static MethodHandler HandlerOf(TypeHandler host, string name) => (MethodHandler) host.GetMethod(name)!;
 
-    private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
 
     #endregion
 

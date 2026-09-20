@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
@@ -6,10 +6,11 @@ using OpCodes = Mono.Cecil.Cil.OpCodes;
 
 namespace Gneedle.Inject.Test;
 
+using static Gneedle.Inject.Test.TestFixtures;
+
 [TestFixture]
 public class DecoratorTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     /// <summary>
     /// Template bodies live in the test assembly so Cecil can resolve them from disk.

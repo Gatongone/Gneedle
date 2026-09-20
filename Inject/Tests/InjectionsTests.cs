@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Assembly = Gneedle.Inject.Assembly;
@@ -8,6 +8,8 @@ using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// An attribute which marks the type it is put on as obsolete, so that the injection is visible in the image which was
@@ -203,7 +205,6 @@ public class ThroughAnInterfaceFixture
 [TestFixture]
 public class InjectionsTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     private const string MarkedType = "Gneedle.Inject.Test.MarkedFixture";
 

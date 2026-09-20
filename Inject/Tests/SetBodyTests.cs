@@ -1,8 +1,10 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using MethodInfo = System.Reflection.MethodInfo;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// A template of five arguments which belongs to an instance of its own type, so that its first argument is the slot
@@ -153,6 +155,14 @@ public static class ConstructTemplates
         await Task.Yield();
         return value + 1;
     }
+
+    /// <summary>
+    /// The other body which the compiler writes as a state machine of its own.
+    /// </summary>
+    public static IEnumerable<int> Iterator(int value)
+    {
+        yield return value;
+    }
 }
 
 /// <summary>
@@ -217,7 +227,6 @@ public sealed class DisposableElements(int value) : IEnumerable<int>
 [TestFixture]
 public class SetBodyTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     // Template method bodies copied by the injector. Kept in the test assembly so
     // Cecil can resolve them from disk via the default assembly resolver.
@@ -559,13 +568,34 @@ public class SetBodyTests
     public void SetBody_Of_A_Template_Which_Is_Async_Throws()
     {
         // The body of an async method is the stub which starts a state machine, whose MoveNext holds what was written,
-        // so what the weaving would carry is the stub rather than the body which the template was written with.
+        // so what the weaving would carry is the stub rather than the body which the template was written with: the
+        // refusal names the type of the machine which the stub calls, which is a type of the compiler's own.
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
                                     MethodFlags.Public | MethodFlags.Static);
 
-        Assert.Throws<ArgumentException>(
+        var thrown = Assert.Throws<ArgumentException>(
             () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Async))!));
+
+        Assert.That(thrown!.Message, Does.Contain("names a type"),
+                    $"the refusal does not name the type which the stub of the state machine calls: {thrown.Message}");
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Yields_Throws()
+    {
+        // An iterator is the other body which the compiler writes as a state machine of its own: the method which holds
+        // it starts the machine, and the instructions which were written live in the MoveNext of the type beside it, so
+        // what the weaving would carry is the stub rather than the body which the template was written with.
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Iterator))!));
+
+        Assert.That(thrown!.Message, Does.Contain("names a type"),
+                    $"the refusal does not name the type which the stub of the state machine calls: {thrown.Message}");
     }
 
     /// <summary>

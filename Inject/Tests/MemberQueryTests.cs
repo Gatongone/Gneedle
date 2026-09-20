@@ -1,7 +1,9 @@
-using System.Linq;
+﻿using System.Linq;
 using Mono.Cecil;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// The queries which a type handler answers with the members of a type and with its base type. A member is asked for by
@@ -13,18 +15,7 @@ namespace Gneedle.Inject.Test;
 [TestFixture]
 public class MemberQueryTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
-    /// <summary>
-    /// A type handler for a class of an assembly of its own, which is what the members of a test are declared on.
-    /// </summary>
-    private static (AssemblyHandler Handler, TypeHandler Host, ModuleDefinition Module) NewHost(string assemblyName)
-    {
-        var assembly = Assembly.Create(assemblyName);
-        var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-        return (handler, host, assembly.Source.MainModule);
-    }
 
     /// <summary>
     /// A method of the type which carries the attributes named.
