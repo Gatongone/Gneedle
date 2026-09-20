@@ -251,13 +251,13 @@ partial class MethodHandler
         // the invocation of the local is then made on the member which that path names rather than on the one which the
         // symbol names. The delegate which each path built is what the local holds there, and neither symbol stands for
         // the invocation, so what each of them writes is the delegate of its own member.
-        if (held is { } store && !StackWalk.TheSymbolIsOnEveryPathTo(filter.Target, callIndex, store.Store, targetDef))
+        if (held is { } store && !StackWalk.TheSymbolIsOnEveryPathTo(filter, callIndex, store.Store, targetDef))
         {
             held = null;
         }
 
         var heldInvocations = held is { } stored && !instanceIsComputed
-            ? InvocationsOfTheHeldDelegate(filter.Target, stored.Local, delegateRef, targetDef)
+            ? InvocationsOfTheHeldDelegate(filter, stored.Local, delegateRef, targetDef)
             : null;
 
         if (held is { } heldStore && heldInvocations != null)
@@ -287,7 +287,7 @@ partial class MethodHandler
             }
         }
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
-        else if (held == null && TryGetNextInvoke(filter.Target, callIndex, delegateRef, targetDef, out var callvirtIndex))
+        else if (held == null && TryGetNextInvoke(filter, callIndex, delegateRef, targetDef, out var callvirtIndex))
         {
             // The name of a symbol is dropped, and the receiver of a member of an instance is loaded in its place, which
             // is the instruction ahead of the call. A symbol which carries no name has no such instruction, so the load
@@ -755,22 +755,24 @@ partial class MethodHandler
     /// is handed are pushed before it and by instructions of their own, so what the call reads can only be told by
     /// carrying the stack along from where it is empty.
     /// </summary>
-    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="filter">The filter which holds the instructions of the body which is parsed.</param>
     /// <param name="callIndex">Index of the instruction which loads the delegate.</param>
     /// <param name="delegateType">Type of the delegate which the symbol was parsed into.</param>
     /// <param name="targetDef">The template which the instructions belong to.</param>
     /// <param name="index">Index of the instruction which invokes the delegate.</param>
     /// <returns>Whether the instruction was found, which is false when the body invokes no such delegate after the symbol.</returns>
-    private bool TryGetNextInvoke(IReadOnlyList<Instruction> bodyInstructions, int callIndex, TypeReference delegateType, MethodDefinition targetDef, out int index)
+    private bool TryGetNextInvoke(InstructionFilter filter, int callIndex, TypeReference delegateType, MethodDefinition targetDef, out int index)
     {
+        var bodyInstructions = filter.Target;
+
         // This stack is used to ensure that the method parameters are of the same type as the method signature before they're all pushed to the stack.
         var paramStack = new StackWalk.ParameterStack();
         // This stack is used to cache the types of 'stloc' operand during scanning the method body.
-        var localStack = new TypeReference[bodyInstructions.Count];
+        var localStack = new TypeReference[bodyInstructions.Length];
 
         // TODO: Maybe we could cache all scanning results that wouldn't simulate parameter balance every time.
         // Scanning method body.
-        for (var i = 0; i < bodyInstructions.Count; i++)
+        for (var i = 0; i < bodyInstructions.Length; i++)
         {
             var ins = bodyInstructions[i];
             if (ins.OpCode == OpCodes.Nop) continue;
@@ -804,7 +806,7 @@ partial class MethodHandler
                 // The invocation is made on the value which the symbol left only where every path of the body goes
                 // through the symbol: the arms of a branch which each name a member of the same delegate type both
                 // leave a value for it, and the delegate which the arm which ran built is the one it is made on.
-                && StackWalk.TheSymbolIsOnEveryPathTo(bodyInstructions, callIndex, index, targetDef)
+                && StackWalk.TheSymbolIsOnEveryPathTo(filter, callIndex, index, targetDef)
                 && TopOfStackMatches(callMethod);                               // Make sure the top-of-stack types match the invoke parameters.
 
         // Whether the arguments of the invocation are exactly the values which stand above the one which the symbol left,
@@ -821,11 +823,6 @@ partial class MethodHandler
         bool TheSymbolLeftTheReceiver(MethodReference callMethod, int invocation)
         {
             if (invocation <= callIndex) return false;
-
-            // The instructions of the region, which the targets of the branches are read through: a branch which names
-            // an instruction of another place is one which leaves the region.
-            var region = new Dictionary<Instruction, int>(invocation - callIndex);
-            for (var i = callIndex + 1; i <= invocation; i++) region[bodyInstructions[i]] = i;
 
             // The number of values which stand above the one the symbol left when an instruction is reached, which is
             // held for every instruction of the region: two paths which reach one instruction with different numbers
@@ -864,9 +861,14 @@ partial class MethodHandler
                 if (counted.Taken > above) return false;
                 var left = above + counted.Left - counted.Taken;
 
+                // The instructions of the region are the ones which stand between the symbol and the invocation, which
+                // the index of an instruction tells: a branch which names an instruction before the symbol, after the
+                // invocation, or one of another body, is one which leaves the region.
                 foreach (var successor in StackWalk.SuccessorsOf(ins))
                 {
-                    if (!region.TryGetValue(successor, out var successorIndex)) return false;
+                    if (!filter.Index.TryGetValue(successor, out var successorIndex)
+                        || successorIndex <= callIndex || successorIndex > invocation) return false;
+
                     if (aboveAt[successorIndex - callIndex - 1] is { } seen)
                     {
                         if (seen != left) return false;
@@ -954,19 +956,20 @@ partial class MethodHandler
     /// which is read or written for anything else as well is one whose delegate stands for more than the invocation, and
     /// nothing is answered for it and the delegate is built into the local instead.
     /// </summary>
-    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="filter">The filter which holds the instructions of the body which is parsed.</param>
     /// <param name="local">Index of the local which holds the delegate.</param>
     /// <param name="delegateType">Type of the delegate which the symbol was parsed into.</param>
     /// <param name="targetDef">The template which the instructions belong to.</param>
     /// <returns>Index of every read of the local and of the invocation which it is the receiver of, or null when the
     /// local stands for more than the invocation of its delegate.</returns>
-    private List<(int Read, int Invocation)>? InvocationsOfTheHeldDelegate(IReadOnlyList<Instruction> bodyInstructions, int local, TypeReference delegateType, MethodDefinition targetDef)
+    private List<(int Read, int Invocation)>? InvocationsOfTheHeldDelegate(InstructionFilter filter, int local, TypeReference delegateType, MethodDefinition targetDef)
     {
+        var bodyInstructions = filter.Target;
         var invocations = new List<(int Read, int Invocation)>();
         var reads = 0;
         var stores = 0;
 
-        for (var i = 0; i < bodyInstructions.Count; i++)
+        for (var i = 0; i < bodyInstructions.Length; i++)
         {
             var ins = bodyInstructions[i];
             if (ins.TryGetStlocIndex(out var written) && written == local) stores++;
@@ -974,7 +977,7 @@ partial class MethodHandler
             if (!ins.TryGetLdlocIndex(out var read) || read != local) continue;
 
             reads++;
-            if (!TryGetNextInvoke(bodyInstructions, i, delegateType, targetDef, out var invocation)) continue;
+            if (!TryGetNextInvoke(filter, i, delegateType, targetDef, out var invocation)) continue;
 
             invocations.Add((i, invocation));
         }

@@ -41,6 +41,28 @@ internal sealed class InstructionFilter(Mono.Collections.Generic.Collection<Inst
     public readonly Instruction[] Target = target.ToArray();
 
     /// <summary>
+    /// The index which each instruction of <see cref="Target"/> stands at, which is where a branch of the body, an
+    /// entry of a table of a switch, and the walk which asks whether a symbol stands on every path to an instruction
+    /// read the instruction which they name off.<para/>
+    /// The instructions of the template are the ones the filter was built around and the array is a copy of the
+    /// collection which nothing writes, so the one table answers for as long as the filter stands.
+    /// </summary>
+    public readonly IReadOnlyDictionary<Instruction, int> Index = BuildIndexOf(target);
+
+    /// <summary>
+    /// The index of each instruction of the given collection. Where an instruction stands in it more than once it is
+    /// the first of them which is held, which is the one a walk of the collection from the beginning finds.
+    /// </summary>
+    /// <param name="instructions">The instructions of a body, in the order they are read.</param>
+    /// <returns>The index of each of them.</returns>
+    private static IReadOnlyDictionary<Instruction, int> BuildIndexOf(Mono.Collections.Generic.Collection<Instruction> instructions)
+    {
+        var index = new Dictionary<Instruction, int>(instructions.Count);
+        for (var at = instructions.Count - 1; at >= 0; at--) index[instructions[at]] = at;
+        return index;
+    }
+
+    /// <summary>
     /// Check if there is a replacement instruction for the instruction at index.
     /// If true, it means the instruction at index will be replaced with another instruction, and the original instruction will be skipped.
     /// </summary>
@@ -100,9 +122,11 @@ internal sealed class InstructionFilter(Mono.Collections.Generic.Collection<Inst
     /// <returns>The instruction of the body which stands where that one stood, or null when there is none.</returns>
     public Instruction? Emitted(Instruction? instruction)
     {
-        if (instruction == null) return null;
+        // An instruction which the template does not hold stands where nothing of the body stands, and one which it
+        // holds is carried on from the instruction which stands where it stood.
+        if (instruction == null || !Index.TryGetValue(instruction, out var index)) return null;
 
-        for (var index = Array.IndexOf(Target, instruction); index >= 0 && index < m_Written.Length; index++)
+        for (; index < m_Written.Length; index++)
         {
             if (m_Written[index] != null) return m_Written[index];
         }
@@ -169,7 +193,8 @@ internal sealed class InstructionFilter(Mono.Collections.Generic.Collection<Inst
     /// <returns>The instruction of the body which stands where it stood.</returns>
     /// <exception cref="InvalidILException">Thrown when nothing stands for the instruction.</exception>
     private Instruction Standing(Instruction ins)
-        => Emitted(ins) ?? throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, "$" + Array.IndexOf(Target, ins)));
+        => Emitted(ins) ?? throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL,
+            "$" + (Index.TryGetValue(ins, out var at) ? at : -1)));
 
     /// <summary>
     /// If there are instructions to insert before current index, add them to source in the order they were

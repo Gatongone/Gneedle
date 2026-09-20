@@ -314,17 +314,18 @@ internal static class StackWalk
     /// walk starts where the runtime hands the control to the body, which is the instruction it begins with and the
     /// beginning of each of its handlers, and it reads no instruction past one which ends the path it stands on.
     /// </summary>
-    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="filter">The filter which holds the instructions of the body which is parsed, and the index of each
+    /// of them.</param>
     /// <param name="callIndex">Index of the instruction which the symbol stands for.</param>
     /// <param name="target">Index of the instruction which reads the value.</param>
     /// <param name="targetDef">The template which the instructions belong to.</param>
     /// <returns>Whether the symbol stands on every path which reaches the instruction.</returns>
-    internal static bool TheSymbolIsOnEveryPathTo(IReadOnlyList<Instruction> bodyInstructions, int callIndex, int target, MethodDefinition targetDef)
+    internal static bool TheSymbolIsOnEveryPathTo(InstructionFilter filter, int callIndex, int target, MethodDefinition targetDef)
     {
-        var at = new Dictionary<Instruction, int>(bodyInstructions.Count);
-        for (var i = 0; i < bodyInstructions.Count; i++) at[bodyInstructions[i]] = i;
+        var bodyInstructions = filter.Target;
+        var at = filter.Index;
 
-        var visited = new bool[bodyInstructions.Count];
+        var visited = new bool[bodyInstructions.Length];
         var pending = new Stack<int>();
 
         // The body is entered where it begins, and a handler of it is entered where it begins as well, because the
@@ -337,7 +338,7 @@ internal static class StackWalk
             if (entry != null && at.TryGetValue(entry, out var index) && index != callIndex) pending.Push(index);
         }
 
-        if (bodyInstructions.Count > 0) Enter(bodyInstructions[0]);
+        if (bodyInstructions.Length > 0) Enter(bodyInstructions[0]);
         foreach (var handler in targetDef.Body.ExceptionHandlers)
         {
             Enter(handler.TryStart);
