@@ -162,6 +162,17 @@ public static class Injections
         }
 
         /// <summary>
+        /// Report a type which an injector of a kind was asked to inject into and which is not of that kind.<para/>
+        /// What is reported is the report which the injector of a kind is answered with by every one of the kinds: the
+        /// type, the injector which named the kind, and the kind it named.
+        /// </summary>
+        /// <param name="type">The type which the injector was asked of.</param>
+        /// <param name="injector">The attribute which is the injector.</param>
+        /// <param name="kind">The word for the kind which the injector names.</param>
+        private void ReportTheKindOf(Type type, Attribute injector, string kind)
+            => Report($"Type '{type.FullName}' is not a {kind}, which '{injector.GetType().FullName}' injects into.");
+
+        /// <summary>
         /// The assemblies which the image of one run refers to, read into the process for as long as that run lasts.
         /// <para/>
         /// An injector is an attribute, which the runtime makes out of the type which the image names, so the assembly
@@ -433,14 +444,16 @@ public static class Injections
                     dirty = true;
                 }
 
-                // A type injector applies to any type, while the three below apply to the kind which they name and to no
-                // other. One which is asked of a type of another kind is reported rather than passed over, because the
-                // injection it stands for does not happen, and a build which carried on would say that it had.
+                // An injector which names the kind of type it applies to applies to a type of that kind alone, and one
+                // which is asked of a type of another kind is reported rather than passed over, because the injection
+                // it stands for does not happen and a build which carried on would say that it had. The three kinds are
+                // one shape, and each of them is asked in turn rather than one of them being answered: an attribute
+                // which implements more than one of the interfaces is applied through every one the type answers to.
                 if (typeAttribute is IClassInjector classInjector)
                 {
                     if (typeHandler is not IClassHandler classHandler)
                     {
-                        Report($"Type '{type.FullName}' is not a class, which '{typeAttribute.GetType().FullName}' injects into.");
+                        ReportTheKindOf(type, typeAttribute, "class");
                         continue;
                     }
 
@@ -452,7 +465,7 @@ public static class Injections
                 {
                     if (typeHandler is not IStructHandler structHandler)
                     {
-                        Report($"Type '{type.FullName}' is not a struct, which '{typeAttribute.GetType().FullName}' injects into.");
+                        ReportTheKindOf(type, typeAttribute, "struct");
                         continue;
                     }
 
@@ -464,7 +477,7 @@ public static class Injections
                 {
                     if (typeHandler is not IEnumHandler enumHandler)
                     {
-                        Report($"Type '{type.FullName}' is not an enum, which '{typeAttribute.GetType().FullName}' injects into.");
+                        ReportTheKindOf(type, typeAttribute, "enum");
                         continue;
                     }
 
