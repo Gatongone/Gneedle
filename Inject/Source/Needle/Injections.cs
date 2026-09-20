@@ -31,18 +31,51 @@ public static class Injections
     public static (bool Changed, byte[] Image) Apply(System.Reflection.Assembly assembly, byte[] image,
                                                      bool removesTheWeaver = true, Action<string>? reportError = null,
                                                      string? searchDirectory = null)
-        => new Injection(assembly, image, removesTheWeaver, reportError, searchDirectory).Run();
+    {
+        var (changed, woven, _) = Apply(assembly, image, symbols: null, removesTheWeaver, reportError, searchDirectory);
+
+        return (changed, woven);
+    }
+
+    /// <summary>
+    /// Apply the injectors which <paramref name="assembly"/> declares to the image it was loaded from, and to the
+    /// symbols which were compiled with it.
+    /// </summary>
+    /// <remarks>
+    /// The symbols of an image which was woven are woven with it rather than carried over: the image which is written
+    /// holds the instructions of the template where the image which was read held the stub of it, and the places which
+    /// the symbols record are places of the instructions which were read. Reading them with the image is what keeps the
+    /// two in step, because a symbol reader hands the debug information of a body over with the body, and what the
+    /// writer of the symbols writes is what the module holds.
+    /// </remarks>
+    /// <param name="assembly">The assembly whose attributes are the injectors, which is the image being woven.</param>
+    /// <param name="image">The bytes of the image which the assembly was loaded from.</param>
+    /// <param name="symbols">The bytes of the portable program database which describes the image, or null when the
+    /// image has none. The woven symbols are handed back, and null when none was read.</param>
+    /// <param name="removesTheWeaver">Whether the attributes and the reference to this library are taken back out. They are removed by default, which leaves the woven assembly standing alone.</param>
+    /// <param name="reportError">Where a member which an injector names and the assembly does not hold is reported, or null when nothing reports it.</param>
+    /// <param name="searchDirectory">Directory which the assemblies the image refers to lie in, or null when the caller
+    /// knows of none.</param>
+    /// <returns>Whether the assembly was changed, the image which holds the result, and the symbols which describe it.
+    /// A run which reported anything hands back what it was given rather than what it wove, because a report leaves an
+    /// assembly which is woven in part, which no caller could tell from one which was woven whole.</returns>
+    public static (bool Changed, byte[] Image, byte[]? Symbols) Apply(System.Reflection.Assembly assembly, byte[] image, byte[]? symbols,
+                                                                     bool removesTheWeaver = true, Action<string>? reportError = null,
+                                                                     string? searchDirectory = null)
+        => new Injection(assembly, image, symbols, removesTheWeaver, reportError, searchDirectory).Run();
 
     /// <summary>
     /// One run of the injectors of one assembly.
     /// </summary>
     /// <param name="assembly">The assembly whose attributes are the injectors.</param>
     /// <param name="image">The bytes of the image which the assembly was loaded from.</param>
+    /// <param name="symbols">The bytes of the portable program database which describes the image, or null when it has
+    /// none.</param>
     /// <param name="removesTheWeaver">Whether the attributes and the reference to this library are taken back out.</param>
     /// <param name="reportError">Where a member which an injector names and the assembly does not hold is reported.</param>
     /// <param name="searchDirectory">Directory which the assemblies the image refers to lie in, or null when the caller
     /// knows of none.</param>
-    private sealed class Injection(System.Reflection.Assembly assembly, byte[] image, bool removesTheWeaver, Action<string>? reportError, string? searchDirectory)
+    private sealed class Injection(System.Reflection.Assembly assembly, byte[] image, byte[]? symbols, bool removesTheWeaver, Action<string>? reportError, string? searchDirectory)
     {
         /// <summary>
         /// The members which the injectors of a type are looked for on: every member which the type declares, whichever
@@ -85,14 +118,14 @@ public static class Injections
         /// <summary>
         /// Apply every injector of the assembly.
         /// </summary>
-        public (bool Changed, byte[] Image) Run()
+        public (bool Changed, byte[] Image, byte[]? Symbols) Run()
         {
             // The assembly is read as an image of bytes and written back as one, so that the caller keeps the file to
             // itself: a reader which holds the file leaves the write which follows nowhere to go. The folder which the
             // assemblies it refers to lie in is handed over with it, because the resolution of the module holds no
             // folder of its own: the image came from bytes, and nothing beside a stream names where its references are.
             using var stream = new MemoryStream(image);
-            using var target = Assembly.Read(stream, AssemblySymbol.None, searchDirectory);
+            using var target = Assembly.Read(stream, AssemblySymbol.None, searchDirectory, symbols);
 
             // The same folder answers the runtime as well, because an injector is an attribute which the runtime makes
             // out of the type the image names: the metadata is read through the folder of the module, and the type of
@@ -144,11 +177,21 @@ public static class Injections
             // is what keeps an assembly which is woven in part from being taken for one which was woven whole. The
             // caller which was given no image of a run which reported anything holds the one it gave, which is the
             // assembly it built.
-            if (!changed || m_Reported) return (false, image);
+            if (!changed || m_Reported) return (false, image, symbols);
 
+            // The symbols are written beside the image when they were read with it, and the two are written from the
+            // same module: what the writer of the symbols writes is the debug information which the reader attached to
+            // the bodies, so the two describe one image rather than two.
             using var result = new MemoryStream();
-            target.SaveTo(result);
-            return (true, result.ToArray());
+            if (symbols == null)
+            {
+                target.SaveTo(result);
+                return (true, result.ToArray(), null);
+            }
+
+            using var written = new MemoryStream();
+            target.SaveTo(result, written);
+            return (true, result.ToArray(), written.ToArray());
         }
 
         /// <summary>

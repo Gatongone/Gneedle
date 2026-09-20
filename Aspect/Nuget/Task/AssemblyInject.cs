@@ -23,10 +23,21 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     private const string WrittenSuffix = ".gneedle";
 
     /// <summary>
-    /// The extensions which the symbols of an assembly lie beside it under, which are the formats which the weaver
-    /// reads and writes.
+    /// The extensions which the symbols of an assembly lie beside it under: the program database, which is the format
+    /// the weaving reads and writes, and the Mono database, which it only takes away.
     /// </summary>
     private static readonly string[] SymbolExtensions = {".pdb", ".mdb"};
+
+    /// <summary>
+    /// The extension which the program database of an assembly lies beside it under.
+    /// </summary>
+    private const string PortableSymbolExtension = ".pdb";
+
+    /// <summary>
+    /// The first four bytes of a program database of the portable format, which are what tells it from the database of
+    /// the Windows format, which is written by a build which was asked for it by name.
+    /// </summary>
+    private const int PortableSymbolMagic = 0x424A5342;   // "BSJB"
 
     /// <summary>
     /// Path of the project which was built, which is read to tell whether that project turns the aspect off. The
@@ -122,12 +133,20 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
         var image = File.ReadAllBytes(assemblyPath);
         var runtimeAssembly = AssemblyLoader.LoadFromBytes(image);
 
-        var (changed, result) = Injections.Apply(runtimeAssembly, image, !keepsTheWeaver, message => Log.LogError(message),
-                                                 searchDirectory: Path.GetDirectoryName(assemblyPath));
+        // The symbols which were compiled beside the assembly are read with it, because the image which is written is
+        // not the image which was read: the weaving writes the instructions of a template where the stub of it stood, so
+        // the places which the symbols record are places which the woven image no longer holds. The two are woven
+        // together, and the symbols which describe the image which was written are written beside it.
+        var symbols = ReadSymbols(assemblyPath);
+
+        var (changed, result, wovenSymbols) = Injections.Apply(runtimeAssembly, image, symbols, !keepsTheWeaver,
+                                                               message => Log.LogError(message),
+                                                               searchDirectory: Path.GetDirectoryName(assemblyPath));
         if (!changed) return false;
 
         Write(assemblyPath, result);
-        RemoveSymbols(assemblyPath);
+        WriteSymbols(assemblyPath, wovenSymbols);
+        RemoveTheSymbolsWhichCannotBeWoven(assemblyPath);
         return true;
     }
 
@@ -160,19 +179,71 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     }
 
     /// <summary>
-    /// Take away the symbols which lie beside an assembly whose image was just written over.<para/>
-    /// The image which the weaver writes holds no debug directory, because it writes the image alone and the symbols
-    /// which were compiled with it are not woven: a reader goes by that directory to find the symbols of an assembly,
-    /// so the symbols which were compiled for the assembly which was replaced describe an image which is no longer
-    /// there. They are taken away rather than left, because a reader which goes by the name of the file alone would be
-    /// given them for an image which they do not describe.
+    /// The symbols which lie beside an assembly, which are the ones the weaving reads with it.<para/>
+    /// The symbols of the portable format are the ones which the builds this runs in write beside an image, and the ones
+    /// the weaving writes. Symbols of another format - the Windows database which a build was asked for by name, or the
+    /// Mono database of an assembly which Unity compiled - are not read, because the weaving writes the portable format
+    /// alone: they are taken away once the image is written, rather than left describing an image which is no longer
+    /// there.
+    /// </summary>
+    /// <param name="assemblyPath">Path of the assembly whose symbols are read.</param>
+    /// <returns>The bytes of the portable program database which describes the assembly, or null when it has none.</returns>
+    private static byte[]? ReadSymbols(string assemblyPath)
+    {
+        var path = Path.ChangeExtension(assemblyPath, PortableSymbolExtension);
+        if (!File.Exists(path)) return null;
+
+        var symbols = File.ReadAllBytes(path);
+        return symbols.Length >= sizeof(int) && BitConverter.ToInt32(symbols, 0) == PortableSymbolMagic ? symbols : null;
+    }
+
+    /// <summary>
+    /// Put the symbols which were woven with the image in the place of the ones which lie beside the assembly.<para/>
+    /// The write is made the way the write of the image is, so that a build which is stopped while it is going on finds
+    /// the symbols which were there rather than a file which was written only in part.
+    /// </summary>
+    /// <param name="assemblyPath">Path of the assembly whose symbols are written.</param>
+    /// <param name="symbols">Bytes of the portable program database which describes the woven image, or null when the
+    /// assembly had no symbols to weave.</param>
+    private void WriteSymbols(string assemblyPath, byte[]? symbols)
+    {
+        if (symbols == null) return;
+
+        var path = Path.ChangeExtension(assemblyPath, PortableSymbolExtension);
+        var written = path + WrittenSuffix;
+        try
+        {
+            File.WriteAllBytes(written, symbols);
+            File.Replace(written, path, destinationBackupFileName: null);
+        }
+        catch (Exception exception)
+        {
+            // The assembly was woven and is in place, which is what the build asked for: symbols which stay as they
+            // were are worth telling about and are not a failure of the weaving.
+            Log.LogWarning(string.Format(TaskMessages.SYMBOLS_LEFT, path, exception.Message));
+        }
+        finally
+        {
+            if (File.Exists(written)) File.Delete(written);
+        }
+    }
+
+    /// <summary>
+    /// Take away the symbols which lie beside an assembly whose image was just written over and which the weaving could
+    /// not write.<para/>
+    /// A reader goes by the name of the file to find the symbols of an assembly, so symbols which were compiled for the
+    /// image which was read describe an image which is no longer there: they are taken away rather than left.
     /// </summary>
     /// <param name="assemblyPath">Path of the assembly whose symbols are taken away.</param>
-    private void RemoveSymbols(string assemblyPath)
+    private void RemoveTheSymbolsWhichCannotBeWoven(string assemblyPath)
     {
         foreach (var extension in SymbolExtensions)
         {
             var symbols = Path.ChangeExtension(assemblyPath, extension);
+
+            // The portable database is the one which was written back over the image, so what is taken away is every
+            // symbol file which is not it.
+            if (extension == PortableSymbolExtension && ReadSymbols(assemblyPath) != null) continue;
             if (!File.Exists(symbols)) continue;
 
             try

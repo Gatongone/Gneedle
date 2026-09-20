@@ -128,10 +128,12 @@ public abstract class Assembly : IDisposable
     /// <param name="searchDirectory">Directory which the assemblies the image refers to lie in, or null when the caller
     /// knows of none. It is the folder of the assembly which is woven where a build weaves the assembly it produced,
     /// whose references the build copied beside it.</param>
-    public static Assembly Read(Stream stream, AssemblySymbol symbol = AssemblySymbol.None, string? searchDirectory = null)
+    /// <param name="symbols">Bytes of the portable program database which describes the image, or null for the symbols
+    /// which <paramref name="symbol"/> names beside the image.</param>
+    public static Assembly Read(Stream stream, AssemblySymbol symbol = AssemblySymbol.None, string? searchDirectory = null, byte[]? symbols = null)
     {
         var cache = new SimpleCache(stream);
-        return new StreamAssembly(cache, symbol, searchDirectory)
+        return new StreamAssembly(cache, symbol, searchDirectory, symbols)
         {
             m_AssemblyCache = cache
         };
