@@ -461,6 +461,9 @@ internal static class CecilExtensions
             MetadataType.Int16 or MetadataType.UInt16 => "2",
             MetadataType.Int32 or MetadataType.UInt32 => "4",
             MetadataType.Int64 or MetadataType.UInt64 => "8",
+            // The native int and the native unsigned int are related to one another alone, whatever the width the
+            // runtime holds them at: neither is related to the value of the width which that runtime has.
+            MetadataType.IntPtr or MetadataType.UIntPtr => "n",
             _ => null
         };
 

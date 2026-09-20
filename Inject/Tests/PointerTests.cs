@@ -665,12 +665,23 @@ public class PointerTests
         public static ulong[] Identity_OfAnArrayOfTheWidestUnsignedValues(ulong[] value)
             => This.Method<Func<ulong[], ulong[]>>("Identity")(value);
 
+        /// <inheritdoc cref="Identity_OfAnArrayOfUnsignedValues"/>
+        public static long[] Identity_OfAnArrayOfTheWidestSignedValues(long[] value)
+            => This.Method<Func<long[], long[]>>("Identity")(value);
+
         /// <summary>
         /// The same, of an array of the values under an enumeration of one byte, which is what tells the width of the
         /// values of an enumeration from the width of the one which holds four bytes.
         /// </summary>
         public static byte[] Identity_OfAnArrayOfTheValuesUnderAByteEnumeration(byte[] value)
             => This.Method<Func<byte[], byte[]>>("Identity")(value);
+
+        /// <summary>
+        /// The same, of an array of the native values of one sign where the constraint names the other: the runtime
+        /// relates the two to one another whatever the width it holds them at.
+        /// </summary>
+        public static UIntPtr[] Identity_OfAnArrayOfTheUnsignedNativeValues(UIntPtr[] value)
+            => This.Method<Func<UIntPtr[], UIntPtr[]>>("Identity")(value);
 
         /// <summary>
         /// The same, of a sequence whose element is an interface: an interface is a reference of the type of every value
@@ -3721,6 +3732,44 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
                     "the member whose constraint names a collection of the widest signed values was not called for an array of the unsigned ones.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_The_Signed_Native_Values_Is_Called_For_An_Array_Of_The_Unsigned_Ones()
+    {
+        // The native values of the two signs are related to one another whatever the width the runtime holds them at,
+        // which the width of the values of every other type of the integer family does not tell.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfTheNativeValuesAssembly",
+                                                      typeof(IList<IntPtr>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(UIntPtr[]).ToGneedleType(),
+            [],
+            [new Parameter(typeof(UIntPtr[]).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheUnsignedNativeValues)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { (UIntPtr) 1, (UIntPtr) 2 };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a collection of the signed native values was not called for an array of the unsigned ones.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_The_Native_Values_Is_Refused_An_Array_Of_One_Width()
+    {
+        // The native values are related to one another alone, and neither to the values of the width which the runtime
+        // holds them at: the runtime refuses the instantiation as well.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfTheNativeValuesOfOneWidthAssembly",
+                                                      typeof(IList<IntPtr>));
+        var method = host.AddMethod("Run", typeof(long[]).ToGneedleType(), [], [new Parameter(typeof(long[]).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestSignedValues))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with an array of the width which the native values are held at: {thrown.Message}");
     }
 
     [Test]
