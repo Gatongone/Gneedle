@@ -51,7 +51,6 @@ public class HandlerFlagsTests
         return (ClassHandler) handler.GetType(inner);
     }
 
-
     #region Class
 
     [TestCase(TypeAttributes.Public, ClassFlags.Public)]

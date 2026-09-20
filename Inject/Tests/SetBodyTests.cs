@@ -221,8 +221,8 @@ public sealed class DisposableElements(int value) : IEnumerable<int>
 }
 
 /// <summary>
-/// Tests for <see cref="IMethodHandler.SetBody"/>: the body which is copied out of a member, and the default bodies
-/// which are written from the kind of body which is asked for.
+/// Tests for <see cref="IMethodHandler.SetBody(MethodInfo)"/>: the body which is copied out of a member, and the default
+/// bodies which are written from the kind of body which is asked for.
 /// </summary>
 [TestFixture]
 public class SetBodyTests

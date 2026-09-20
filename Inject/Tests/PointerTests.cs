@@ -1014,7 +1014,6 @@ public class PointerTests
         public static int InstanceMethod_OfAFieldOfAnInstance(HelperClass outer, int a) => new Instance(outer.Inner!).Method<IntOp>("Calc")(a);
     }
 
-
     /// <summary>
     /// Assert that the assembly which was woven names nothing of the weaver: the weaving writes what the template asked
     /// for rather than a value of its own, so the assembly stands alone at runtime.
@@ -1033,6 +1032,8 @@ public class PointerTests
     /// <summary>
     /// Create a host which declares a field of the given name, which is static when it is asked for.
     /// </summary>
+    /// <param name="fieldName">Name of the field which the host declares.</param>
+    /// <param name="isStatic">Whether the field is declared static.</param>
     /// <param name="assemblyName">Name of the assembly to build, which a test which runs its host gives one of its own.</param>
     private static TypeHandler NewHostWithField(string fieldName, bool isStatic, string assemblyName = "MemberInjectionAssembly")
     {
@@ -1816,13 +1817,11 @@ public class PointerTests
     /// <summary>
     /// Add the method which the templates of the tests below call to the generic base type.
     /// </summary>
-    /// <param name="baseDef">The generic base type which the host derives from through a middle type.</param>
-    /// <param name="mod">The module which the type is declared in.</param>
     /// <summary>
     /// Add the member <c>T Echo(T value)</c> to the type which the chain of base types ends at, which names the
     /// parameter that the type declares rather than a type.
     /// </summary>
-    /// <param name="baseDef">The definition of the base type.</param>
+    /// <param name="baseDef">The definition of the base type which the host derives from through a middle type.</param>
     /// <param name="mod">The module which the type belongs to.</param>
     private static void AddEchoToTheGenericBase(TypeDefinition baseDef, ModuleDefinition mod)
     {

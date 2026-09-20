@@ -146,7 +146,6 @@ public class PropertyTests
         return (assembly, host);
     }
 
-
     private static MethodDefinition GetterOf(TypeHandler host) => host.Source.Properties.Single().GetMethod!;
 
     private static MethodDefinition SetterOf(TypeHandler host) => host.Source.Properties.Single().SetMethod!;

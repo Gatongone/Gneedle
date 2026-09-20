@@ -16,7 +16,6 @@ using static Gneedle.Inject.Test.TestFixtures;
 public class MemberQueryTests
 {
 
-
     /// <summary>
     /// A method of the type which carries the attributes named.
     /// </summary>

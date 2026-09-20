@@ -269,7 +269,6 @@ public class AroundBodyTests
 
     private static MethodHandler HandlerOf(TypeHandler host, string name) => (MethodHandler) host.GetMethod(name)!;
 
-
     #endregion
 
     #region The woven method runs

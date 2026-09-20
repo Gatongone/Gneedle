@@ -10,7 +10,6 @@
 
         <Authors>Gatongone</Authors>
         <Copyright>© 2026 Gatongone</Copyright>
-        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 
         <PackageProjectUrl>https://github.com/Gatongone/Gneedle</PackageProjectUrl>
         <RepositoryUrl>https://github.com/Gatongone/Gneedle.git</RepositoryUrl>
@@ -19,11 +18,6 @@
         <!-- A package carries the symbols of what it holds as well, so that a stack trace of the assembly which was
              packed names the members it ran. -->
         <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
-
-        <!-- The comments which the sources carry are packed with the assembly they describe, so that a consumer reads
-             the comment of a member where it writes the call; a member which carries none is reported by the build,
-             which is what keeps the file worth shipping. -->
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
         <!-- The license and the readme of a package are the ones of the repository: the two paths are the ones which the
              files take inside the package rather than the ones they lie at on disk. -->
