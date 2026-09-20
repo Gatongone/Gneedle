@@ -294,20 +294,24 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     /// </summary>
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Types of the parameters of the method.</param>
+    /// <param name="returnType">Type of the value which the method hands back, or null when the caller holds none.</param>
     /// <returns>The method from this type or from a base type of it, or null when neither declares one of that signature.</returns>
-    internal MethodDefinition? GetMethodInThisOrABaseType(string methodName, IReadOnlyList<TypeReference> parameters)
-        => AssemblyHandler.GetMethodFromType(Source, methodName, parameters, false);
+    internal MethodDefinition? GetMethodInThisOrABaseType(string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType = null)
+        => AssemblyHandler.GetMethodFromType(Source, methodName, parameters, returnType, false);
 
     /// <summary>
     /// Get the method which a name and a signature name, from the direct base type or from a base type of it.<para/>
     /// The walk starts at the direct base type rather than at the type itself, which is what the methods of a base type
-    /// are reached through: a method which the type declares is not one which this query answers with.
+    /// are reached through: a method which the type declares is not one which this query answers with. The base is the
+    /// one which the type being woven declared, so a parameter which the signature of a member of it names is the
+    /// argument of that instantiation rather than the parameter of the definition alone.
     /// </summary>
     /// <param name="methodName">Name of the method.</param>
     /// <param name="parameters">Types of the parameters of the method.</param>
+    /// <param name="returnType">Type of the value which the method hands back, or null when the caller holds none.</param>
     /// <returns>The method from a base type, or null when the type has no base type or none of them declares one of that signature.</returns>
-    internal MethodDefinition? GetMethodInBase(string methodName, IReadOnlyList<TypeReference> parameters)
-        => Source.BaseType == null ? null : AssemblyHandler.GetMethodFromType(AssemblyHandler.GetDefinition(Source.BaseType), methodName, parameters, false);
+    internal MethodDefinition? GetMethodInBase(string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType = null)
+        => Source.BaseType == null ? null : AssemblyHandler.GetMethodFromType(AssemblyHandler.GetDefinition(Source.BaseType), methodName, parameters, returnType, false, Source.BaseType);
 
     /// <summary>
     /// Get the method which a signature names, which is the name of the method and the types of the parameters of it.<para/>

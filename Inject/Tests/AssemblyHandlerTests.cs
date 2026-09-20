@@ -259,7 +259,7 @@ public class AssemblyHandlerTests
         var handler = (AssemblyHandler) asm.Handler;
         var type = asm.Source.MainModule.Types[0];
 
-        Assert.That(handler.GetMethodFromType(type, "Missing", [], false), Is.Null);
+        Assert.That(handler.GetMethodFromType(type, "Missing", [], returnType: null, throwWhenNotFound: false), Is.Null);
     }
 
     [Test]

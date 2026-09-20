@@ -130,9 +130,13 @@ internal sealed partial class MethodHandler : IMethodHandler
         var baseType = Source.DeclaringType.BaseType;
         if (baseType == null) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
 
+        // No delegate describes the member which is called, so the value which it hands back names no parameter of it:
+        // the member which a body calls from its base is the one which its name and its parameters name. The base is the
+        // one which the type being woven declared, so a parameter which the signature of a member of it names is the
+        // argument of that instantiation rather than the parameter of the definition alone.
         var baseMethod = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(
             DeclaringTypeHandler.AssemblyHandler.GetCecilType(baseType).Definition,
-            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray());
+            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray(), instance: baseType);
         if (baseMethod == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
@@ -152,7 +156,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             il.Emit(OpCodes.Ldarg, parameter);
         }
 
-        il.Emit(baseMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, Source.Module.ImportReference(baseMethod));
+        il.Emit(baseMethod.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetMethodReference(baseMethod, Source.DeclaringType));
         il.Emit(OpCodes.Ret);
     }
 

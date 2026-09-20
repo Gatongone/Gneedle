@@ -138,6 +138,23 @@ internal static class ErrorMessages
     internal const string INVALID_GENERIC_MEMBER_CALL = "A member which the template names declares a generic parameter of its own which no parameter of the member being woven stands for, so the call of it cannot be written: a parameter of the member is named by the token of the template which stands for it, which is the parameter of the member being woven or of the type which declares it bearing its name, or the parameter of the member being woven which stands at the position of it where no name ties it to one, and a call which leaves the parameter of the member open is one the runtime refuses to run. Member: {0}, Method: {1}.";
 
     /// <summary>
+    /// The delegate of the template describes a member which declares a generic parameter of its own with a signature
+    /// which hands back a type that the instantiation which its parameters bind does not hand back, so the delegate
+    /// names no member: what a member hands back is what tells one instantiation of it from another. The placeholders
+    /// are the member and the member which is woven.
+    /// </summary>
+    internal const string INVALID_GENERIC_MEMBER_SIGNATURE = "A member which the template names declares a generic parameter of its own, and the signature which the delegate describes it with hands back a type which the instantiation which the parameters of that signature bind does not hand back, so the delegate names no member rather than another instantiation of one: a member which stands open is one the runtime refuses to run, and a call of it which names the parameters of the member being woven instead is a call of another instantiation than the one the delegate described. Member: {0}, Method: {1}.";
+
+    /// <summary>
+    /// The delegate of the template hands back a value where the member hands back none, or a value of another type
+    /// than the member hands back, so the delegate describes no member: the value which the call leaves where the symbol
+    /// stood is the one the body hands back, and a body which hands back another value than the member, or hands one
+    /// back where the member hands none, is one the runtime refuses to run. The placeholders are the member and the
+    /// member which is woven.
+    /// </summary>
+    internal const string INVALID_MEMBER_RETURN_TYPE = "The value which the delegate of the template hands back is not the one which the member hands back, so the delegate describes no member: the call of the member leaves the value which the body hands back, and a body which hands back another value than the member does, or a value where the member hands back none, is one the runtime refuses to run. Member: {0}, Method: {1}.";
+
+    /// <summary>
     /// The getter of a property which holds no getter was asked for. The placeholder is the name of the property.
     /// </summary>
     internal const string NON_GET_METHOD = "The property holds no getter. Property: {0}.";
