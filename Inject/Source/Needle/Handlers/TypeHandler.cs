@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Gneedle.Inject;
 
 /// <summary>
@@ -41,6 +43,73 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     {
         AssemblyHandler = assemblyHandler;
         Source          = source;
+    }
+
+    /// <summary>
+    /// Get the string representation of the type, which is the declaration of it and the members which it declares.
+    /// </summary>
+    /// <returns>The declaration of the type, and its members, with the IL of every method of it.</returns>
+    public override string ToString() => ToString(0);
+
+    /// <summary>
+    /// The same, written at the given number of levels of indentation, which is what a nested type is written at.
+    /// </summary>
+    /// <param name="level">The number of levels of indentation which the declaration stands at.</param>
+    /// <returns>The declaration of the type, and its members, each line indented by that many levels.</returns>
+    internal string ToString(int level)
+    {
+        var declaration = new string(' ', level * MethodHandler.Indentation);
+        var line        = new string(' ', (level + 1) * MethodHandler.Indentation);
+        var text        = new StringBuilder();
+
+        text.Append(declaration).Append(".class ").Append(MethodHandler.TheAttributesOf(Source)).Append(' ').Append(Source.FullName);
+
+        if (Source.BaseType != null)
+        {
+            text.Append(" extends ").Append(Source.BaseType.FullName);
+        }
+
+        if (Source.HasInterfaces)
+        {
+            text.Append(" implements ").Append(string.Join(", ", Source.Interfaces.Select(implementation => implementation.InterfaceType.FullName)));
+        }
+
+        text.AppendLine();
+        text.Append(declaration).AppendLine("{");
+
+        foreach (var field in Source.Fields)
+        {
+            text.Append(line).Append(".field ").Append(MethodHandler.TheAttributesOf(field)).Append(' ')
+                .Append(field.FieldType.FullName).Append(' ').Append(field.Name).AppendLine();
+        }
+
+        // The accessors of a property are methods of the type like any other, so they are written with the methods
+        // rather than beside the property which they read and write.
+        foreach (var property in Source.Properties)
+        {
+            text.Append(line).Append(".property ");
+
+            if (MethodHandler.TheAttributesOf(property) is { Length: > 0 } attributes)
+            {
+                text.Append(attributes).Append(' ');
+            }
+
+            text.Append(property.PropertyType.FullName).Append(' ').Append(property.Name).AppendLine();
+        }
+
+        foreach (var method in Source.Methods)
+        {
+            text.Append(new MethodHandler(method, this).ToString(level + 1));
+        }
+
+        foreach (var nested in Source.NestedTypes)
+        {
+            text.Append(new TypeHandler(AssemblyHandler, nested).ToString(level + 1));
+        }
+
+        text.Append(declaration).AppendLine("}");
+
+        return text.ToString();
     }
 
     /// <inheritdoc cref="IInterfaceQuery.ContainsInterface" />
