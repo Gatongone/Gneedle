@@ -72,6 +72,14 @@ public class PointerTests
         /// that type reads: the argument which the chain of base types hands down is what the parameter stands for.
         /// </summary>
         public T Echo(T value) => value;
+
+        /// <summary>
+        /// The same, of a member which declares a parameter of its own as well: the argument of the instantiation reads
+        /// the parameter of the type and the signature of the delegate binds the one the member declares, and the member
+        /// is read through the instantiation of the type which declares it rather than through the one of the type which
+        /// the template named an instance of.
+        /// </summary>
+        public U EchoBoth<U>(T value, U seed) => seed;
     }
 
     /// <summary>
@@ -711,6 +719,10 @@ public class PointerTests
         /// </summary>
         public static int InstanceMethod_OfABaseOfAGenericTypeWhichNamesTheParameter(DerivedOfAGenericBase derived, int a)
             => new Instance(derived).Method<Func<int, int>>("Echo")(a);
+
+        /// <inheritdoc cref="InstanceMethod_OfABaseOfAGenericTypeWhichNamesTheParameter"/>
+        public static string InstanceMethod_OfABaseOfAGenericTypeWhichNamesTheParameterAndOneOfItsOwn(DerivedOfAGenericBase derived, int a, string b)
+            => new Instance(derived).Method<Func<int, string, string>>("EchoBoth")(a, b);
 
         /// <summary>
         /// The instance of <c>Instance</c> is of a type which derives from an instantiation of a type which derives from
@@ -3549,6 +3561,33 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(42),
                     "the woven assembly does not run.");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Base_Of_A_Generic_Type_Which_Names_The_Parameter_And_One_Of_Its_Own_Runs_The_Member()
+    {
+        // The member declares a parameter of its own as well as naming the parameter of the type which declares it, and
+        // the type is reached through an instance of a type which derives from an instantiation of it: the argument of
+        // that instantiation reads the parameter of the type and the signature of the delegate binds the one the member
+        // declares, so the member is read through the instantiation of the type which declares it rather than through
+        // the type of the value which the template named.
+        var (assembly, _, method) = NewInstanceHost("InstanceGenericBaseBothAssembly", [typeof(DerivedOfAGenericBase), typeof(int), typeof(string)]);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfABaseOfAGenericTypeWhichNamesTheParameterAndOneOfItsOwn)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                         .FirstOrDefault(reference => reference.Name == "EchoBoth");
+        Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
+        Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
+                    "the member which declares a parameter of its own was not called through an instantiation of it.");
+        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single().FullName, Is.EqualTo(typeof(string).FullName),
+                    "the member is not called with the type which the delegate binds the parameter it declares to.");
+        Assert.That(((GenericInstanceType) call!.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                    "the member is not called on the instantiation which the chain of base types names.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAGenericBase(), 41, "seed"]), Is.EqualTo("seed"),
+                    "the woven assembly does not run the member of the base.");
     }
 
     [Test]

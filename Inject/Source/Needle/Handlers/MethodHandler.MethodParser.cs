@@ -162,7 +162,15 @@ partial class MethodHandler
         IReadOnlyList<TypeReference>? arguments = null;
         if (!memberSymbol.HasFlag(MemberSymbols.Proceed))
         {
-            methodDef.SameWith(parameters, returnType, out arguments, namedInstance);
+            // The member is read through the instantiation of the type which declares it, which is the one the lookup
+            // found it on as well: the value which the template reaches the member through is an instance of a type
+            // which may derive from that one, and the signature of a member of a base is written where that base stands
+            // rather than where the type which derives from it does. A type which declares no parameter of its own names
+            // every type of the signature of its members, so it is read through no instantiation at all.
+            var declaringInstance = methodDef.DeclaringType is { HasGenericParameters: true } declaring
+                ? InstantiationOf(declaring, namedInstance)
+                : null;
+            methodDef.SameWith(parameters, returnType, out arguments, declaringInstance);
 
             // A member which declares parameters of its own and whose parameters the signature describes while the
             // value it hands back is one which no instantiation of the delegate names, and the rule below is not the
