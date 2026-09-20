@@ -10,24 +10,30 @@ namespace Gneedle.Aspect;
 /// one which stopped referring to it, or which disables the aspect, is taken back out of again, so that what the task
 /// writes is a function of the solution and not a matter of how often it ran.
 /// </summary>
+/// <remarks>
+/// The build hands the task the values it runs on as the properties below, which it sets before the task is run: the
+/// constructor stands for none of them, which is what the initializer of nothing which each of them carries says
+/// rather than a value being written here, since the task is run by the build which wrote the project and holds
+/// nothing of its own.
+/// </remarks>
 public class AddProjectsPostBuild : Microsoft.Build.Utilities.Task
 {
     /// <summary>
     /// Name of the weaver, which is the name of the project and of the package which a project of the solution is
     /// looked for a reference to by.
     /// </summary>
-    [Required] public string ProjectName { get; private set; }
+    [Required] public string ProjectName { get; private set; } = null!;
 
     /// <summary>
     /// Path of the solution which the weaver is built with, whose projects are the ones which the target is written
     /// into.
     /// </summary>
-    [Required] public string SolutionPath { get; private set; }
+    [Required] public string SolutionPath { get; private set; } = null!;
 
     /// <summary>
     /// Path of the assembly of the weaver, which is what the task which the written target runs is looked for in.
     /// </summary>
-    [Required] public string TargetPath { get; private set; }
+    [Required] public string TargetPath { get; private set; } = null!;
 
     /// <inheritdoc/>
     /// <remarks>
