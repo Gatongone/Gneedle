@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Gneedle.Inject;
 
 /// <summary>
@@ -33,6 +35,34 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         m_AssemblyCache[assembly.Source.FullName] = assembly.Source;
 
         AddDefaultTypes();
+    }
+
+    /// <summary>
+    /// Get the string representation of the assembly, which is the declaration of it and the types which the modules of
+    /// it declare.
+    /// </summary>
+    /// <returns>The declaration of the assembly, and its types, with the IL of every method which they hold.</returns>
+    public override string ToString()
+    {
+        var line = new string(' ', MethodHandler.Indentation);
+        var text = new StringBuilder();
+
+        text.Append(".assembly ").Append(Assembly.Source.Name.Name).AppendLine();
+        text.AppendLine("{");
+
+        foreach (var module in Assembly.Source.Modules)
+        {
+            text.Append(line).Append(".module ").Append(module.Name).AppendLine();
+
+            foreach (var type in module.Types)
+            {
+                text.Append(new TypeHandler(this, type).ToString(1));
+            }
+        }
+
+        text.AppendLine("}");
+
+        return text.ToString();
     }
 
     /// <inheritdoc cref="AssemblyHandler.AddReference(AssemblyDefinition)"/>
