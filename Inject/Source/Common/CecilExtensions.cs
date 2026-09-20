@@ -371,12 +371,13 @@ internal static class CecilExtensions
         if (TypeName.HasSameName(type, wanted)) return true;
 
         // An array is accepted for an array which holds the values of the same number of dimensions where the element of
-        // it is converted to the element of that one by a reference conversion, which is the covariance of the arrays.
+        // it is converted to the element of that one by a reference conversion, which is the covariance of the arrays,
+        // and where the two elements are the ones which the runtime reads an array of either for.
         if (wanted is ArrayType wantedArray && type is ArrayType givenArray)
         {
             if (givenArray.Rank != wantedArray.Rank) return false;
 
-            return IsConvertedByReference(givenArray.ElementType, wantedArray.ElementType);
+            return IsConvertedOrCompatible(givenArray.ElementType, wantedArray.ElementType);
         }
 
         // The collections and the sequences which name the element are given to an array of one dimension for every
@@ -387,7 +388,7 @@ internal static class CecilExtensions
         if (type is ArrayType vector && vector.Rank == 1 && wanted is GenericInstanceType named
             && s_TheCollectionsWhichNameTheElement.Any(declaration => TypeName.HasSameName(named.ElementType, declaration)))
         {
-            return IsConvertedByReference(vector.ElementType, named.GenericArguments[0]);
+            return IsConvertedOrCompatible(vector.ElementType, named.GenericArguments[0]);
         }
 
         // A constraint which names no instance of a generic type names the type itself, which the name of the type
@@ -432,6 +433,65 @@ internal static class CecilExtensions
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether the runtime reads an array of either of the two types as an array of the other where the two stand as the
+    /// elements of arrays, which is a relation which no reference conversion tells: the values of the integer family of
+    /// one width are read as one another whatever the sign of each of them is, and an enumeration is read as the type
+    /// which stands under it.
+    /// </summary>
+    /// <param name="left">The type which an array holds.</param>
+    /// <param name="right">The type which another array holds.</param>
+    /// <returns>Whether the two arrays are related by the elements which they hold.</returns>
+    private static bool AreCompatibleAsElementsOfAnArray(TypeReference left, TypeReference right)
+        => WidthOfAnElement(left) is { } width && width == WidthOfAnElement(right);
+
+    /// <summary>
+    /// The width which the runtime reads the values of a type as where it relates two arrays by the elements which they
+    /// hold, or null where the type is one which it relates to no other: the width of an enumeration is the width of the
+    /// type which stands under it.
+    /// </summary>
+    /// <param name="type">The type which an array holds.</param>
+    /// <returns>The width of the values of the type, or null where no other type of that width is related to it.</returns>
+    private static string? WidthOfAnElement(TypeReference type)
+        => ElementTypeWhichTheValuesAreReadAs(type)?.MetadataType switch
+        {
+            MetadataType.SByte or MetadataType.Byte => "1",
+            MetadataType.Int16 or MetadataType.UInt16 => "2",
+            MetadataType.Int32 or MetadataType.UInt32 => "4",
+            MetadataType.Int64 or MetadataType.UInt64 => "8",
+            _ => null
+        };
+
+    /// <summary>
+    /// The type which the values of a type are read as where the runtime relates two arrays by the elements which they
+    /// hold, which is the type under an enumeration and the type itself for every other type.
+    /// </summary>
+    /// <param name="type">The type which an array holds.</param>
+    /// <returns>The type which the values are read as, or null where the assembly of the type is not there to be read.</returns>
+    private static TypeReference? ElementTypeWhichTheValuesAreReadAs(TypeReference type)
+    {
+        var definition = DefinitionOf(type);
+
+        if (definition is not { IsEnum: true }) return definition is null ? null : type;
+
+        return definition.Fields.FirstOrDefault(field => field.Name == "value__")?.FieldType;
+    }
+
+    /// <summary>
+    /// Whether the runtime reads a value of one type as a value of the other where the two stand as the elements of
+    /// arrays: a reference conversion is one which the variance of a parameter is read with as well, so it is read
+    /// first, and the widths of the two are what the elements of arrays are related by.
+    /// </summary>
+    /// <param name="type">The type which is converted.</param>
+    /// <param name="wanted">The type which it is converted to.</param>
+    /// <returns>Whether the two are read as one another, or null where this read does not tell.</returns>
+    private static bool? IsConvertedOrCompatible(TypeReference type, TypeReference wanted)
+    {
+        var converted = IsConvertedByReference(type, wanted);
+
+        return converted == true || AreCompatibleAsElementsOfAnArray(type, wanted) ? true : converted;
     }
 
     /// <summary>

@@ -638,6 +638,20 @@ public class PointerTests
             => This.Method<Func<List<string>[], List<string>[]>>("Identity")(value);
 
         /// <summary>
+        /// The same, of an array whose element is an enumeration: the runtime reads an array of an enumeration as an
+        /// array of the type under it, which is the relation the elements of two arrays are read by.
+        /// </summary>
+        public static DayOfWeek[] Identity_OfAnArrayOfAnEnumeration(DayOfWeek[] value)
+            => This.Method<Func<DayOfWeek[], DayOfWeek[]>>("Identity")(value);
+
+        /// <summary>
+        /// The same, of an array of values of one sign where the constraint names the other: the two are one width, and
+        /// the runtime relates the values of one width whatever the sign of each of them is.
+        /// </summary>
+        public static uint[] Identity_OfAnArrayOfUnsignedValues(uint[] value)
+            => This.Method<Func<uint[], uint[]>>("Identity")(value);
+
+        /// <summary>
         /// The same, of a sequence whose element is an interface: an interface is a reference of the type of every value
         /// as a class is, which the walk of it reads through no base type, because the metadata declares it none.
         /// </summary>
@@ -3612,6 +3626,68 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
                     "the member whose constraint names a collection of sequences was not called for an array of instances.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_The_Type_Under_An_Enumeration_Is_Called_For_An_Array_Of_It()
+    {
+        // The runtime reads an array of an enumeration as an array of the type under it, so a member whose parameter is
+        // constrained to a collection of that type is one which such an array is called for: the read of the elements of
+        // the two arrays is what tells it, which no reference conversion does.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAnUnderlyingTypeAssembly",
+                                                      typeof(IList<int>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(DayOfWeek[]).ToGneedleType(),
+            [],
+            [new Parameter(typeof(DayOfWeek[]).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { DayOfWeek.Monday };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a collection of the type under an enumeration was not called for an array of it.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_One_Width_Is_Called_For_An_Array_Of_Another()
+    {
+        // The values of one width are read as one another whatever the sign of each of them is, so a member whose
+        // parameter is constrained to a collection of the values of one sign is one which an array of the other sign is
+        // called for.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfOneWidthAssembly",
+                                                      typeof(IList<int>));
+        var method = host.AddMethod("Run", typeof(uint[]).ToGneedleType(), [], [new Parameter(typeof(uint[]).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfUnsignedValues)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { 1u, 2u };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a collection of one width was not called for an array of another.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_Another_Width_Is_Refused_An_Array()
+    {
+        // The widths of the elements are what relates them, and the values of two widths are related by nothing: the
+        // runtime refuses the instantiation as well, whichever of the two the constraint names.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAnotherWidthAssembly",
+                                                      typeof(IList<float>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(DayOfWeek[]).ToGneedleType(),
+            [],
+            [new Parameter(typeof(DayOfWeek[]).ToGneedleType())],
+            MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with an array whose element is of another width than the one the constraint names: {thrown.Message}");
     }
 
     [Test]
