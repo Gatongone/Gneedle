@@ -43,6 +43,45 @@ public class AssemblyHandlerTests
         Assert.That(result, Is.InstanceOf<IClassHandler>());
     }
 
+    /// <summary>
+    /// The type which is nested in this fixture, whose name the runtime and the metadata write two ways.
+    /// </summary>
+    public class Nested;
+
+    [Test]
+    public void The_Name_Of_A_Nested_Type_Is_One_Name_From_A_Type_And_From_A_Reference()
+    {
+        // The name of a type is written by the runtime with a plus between the types which it is nested in, and by the
+        // metadata with a slash. The two are one name here, which is what a handler keys its types by, so a type which
+        // was resolved through one of them is found through the other rather than resolved and held twice.
+        using var read = AssemblyDefinition.ReadAssembly(typeof(AssemblyHandlerTests).Assembly.Location);
+        var nested = read.MainModule.GetType(typeof(Nested).FullName!.Replace('+', '/'));
+
+        Assert.That(nested, Is.Not.Null, "the assembly of the tests does not declare the nested type which is read.");
+        Assert.That(new TypeName(nested!).ToString(), Is.EqualTo(new TypeName(typeof(Nested)).ToString()),
+                    "the name which the metadata writes is not the one which the runtime writes.");
+    }
+
+    [Test]
+    public void A_Type_Whose_Name_Was_Taken_Is_Refused_Where_The_Second_One_Is_Asked_For()
+    {
+        // The chain which describes a type runs at the end of it, so a check which stood where the chain begins found
+        // the name free both times, and the second chain appended a definition which is taken for the first wherever
+        // the name is looked up: the name is taken where the chain begins now, so the second one is refused by the name
+        // of the type whichever kind of type it is.
+        var asm = Assembly.Create("TwiceDeclaredAssembly");
+        var handler = (AssemblyHandler) asm.Handler;
+
+        handler.AddClass("Host", Ns, ClassFlags.Public);
+        handler.AddEnum("Kind", Ns, EnumFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(() => handler.AddClass("Host", Ns, ClassFlags.Public));
+
+        Assert.That(thrown!.Message, Does.Contain("Host"), "the refusal does not name the type which was asked for twice.");
+        Assert.Throws<ArgumentException>(() => handler.AddStruct("Kind", Ns, StructFlags.Public),
+                                        "a type of a name which another kind of type took was not refused.");
+    }
+
     [Test]
     public void GetType_Returns_Null_For_Nonexistent_Type()
     {
