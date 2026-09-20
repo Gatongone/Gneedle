@@ -189,12 +189,13 @@ internal sealed class InstructionFilter(Mono.Collections.Generic.Collection<Inst
     /// branch or an entry of a table which names it is pointed: an instruction which nothing stands for leaves what
     /// names it reaching out of the body it is written in, which is not IL the runtime accepts.
     /// </summary>
-    /// <param name="ins">The instruction of the template which is named.</param>
+    /// <param name="ins">The instruction of the template which is named, or null for the entry of a table which names
+    /// nothing at all, which stands where nothing of the body does just as well.</param>
     /// <returns>The instruction of the body which stands where it stood.</returns>
     /// <exception cref="InvalidILException">Thrown when nothing stands for the instruction.</exception>
-    private Instruction Standing(Instruction ins)
+    private Instruction Standing(Instruction? ins)
         => Emitted(ins) ?? throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL,
-            "$" + (Index.TryGetValue(ins, out var at) ? at : -1)));
+            "$" + (ins is not null && Index.TryGetValue(ins, out var at) ? at : -1)));
 
     /// <summary>
     /// If there are instructions to insert before current index, add them to source in the order they were

@@ -77,6 +77,20 @@ public class InstructionFilterTests
             "an instruction of the template which nothing stands for is not reported by the index it stands at.");
     }
 
+    [Test]
+    public void An_Entry_Of_A_Table_Which_Names_Nothing_Is_Refused_By_The_Message_Of_The_Filter()
+    {
+        // A table which names nothing at all names no instruction of the template either, and what is refused is the
+        // entry rather than the filter: the reading of the place of a thing which stands nowhere answers with the
+        // place of nothing, which is what the message reports, and it is not the reading of a table which breaks.
+        var filter = new InstructionFilter(Instructions(2));
+        var body = new List<Instruction> { Instruction.Create(OpCodes.Switch, new Instruction[] { null! }) };
+
+        var thrown = Assert.Throws<InvalidILException>(() => filter.ApplyTo(body));
+        Assert.That(thrown!.Message, Is.EqualTo(string.Format(ErrorMessages.INVALID_IL, "$-1")),
+            "an entry which names nothing is not refused by the message which the filter writes.");
+    }
+
     /// <summary>
     /// The instructions of a template which holds the given number of them, which stand for no member and are read
     /// through nothing but their identity.
