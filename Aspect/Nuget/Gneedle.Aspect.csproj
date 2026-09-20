@@ -27,6 +27,22 @@
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     </PropertyGroup>
 
+    <!-- Two of the warnings of this project are the arrangement rather than a fault of it, and are turned off here for
+         the reason each of them is raised with.
+
+         NU1701: the packages this project is built on carry no assembly for the frameworks it is built for -
+         Microsoft.Build and Microsoft.IO.Redist hold a net472 build and a net7.0 build alone - so a project of net5.0
+         or of netstandard2.1 resolves them through the net472 one. That is what the task wants: what runs them is the
+         build which loads the task, and the reference below excludes their runtime, so nothing of theirs is carried
+         beside the task.
+
+         NU5128: the pack of this project reports that the frameworks of its dependency groups have no assemblies to
+         answer to, which is the same arrangement from the other side - a task which is loaded and run by a build is
+         packed under tools and has nothing to put under lib. -->
+    <PropertyGroup>
+        <NoWarn>$(NoWarn);NU1701;NU5128</NoWarn>
+    </PropertyGroup>
+
     <PropertyGroup>
         <AspectOutPath Condition="$(MSBuildRuntimeType) == 'Core'">$(MSBuildThisFileDirectory)bin\$(Configuration)\netstandard2.1</AspectOutPath>
         <AspectOutPath Condition="$(MSBuildRuntimeType) != 'Core'">$(MSBuildThisFileDirectory)bin\$(Configuration)\net472</AspectOutPath>

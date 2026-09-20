@@ -8,6 +8,12 @@ namespace Gneedle.Aspect;
 /// The task is run by the target which the package writes into a project, and so are its two properties read, so that
 /// weaving is a part of the build that produced the assembly rather than a step of its own after it.
 /// </summary>
+/// <remarks>
+/// The build hands the task the paths it runs on as the properties below, which it sets before the task is run: the
+/// constructor stands for none of them, which is what the initializer of nothing which each of them carries says
+/// rather than a value being written here, since the task is run by the build which wrote the project and holds
+/// nothing of its own.
+/// </remarks>
 public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
 {
     /// <summary>
@@ -26,12 +32,12 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     /// Path of the project which was built, which is read to tell whether that project turns the aspect off. The
     /// project is not written to.
     /// </summary>
-    [Required] public string ProjectPath { get; private set; }
+    [Required] public string ProjectPath { get; private set; } = null!;
 
     /// <summary>
     /// Path of the assembly which the project built, which is the file which the weaving reads and writes back.
     /// </summary>
-    [Required] public string TargetPath { get; private set; }
+    [Required] public string TargetPath { get; private set; } = null!;
 
     /// <summary>
     /// Whether the attributes which the injectors are read from, and the reference to the weaver which they name, are

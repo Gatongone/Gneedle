@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Check out the release
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.release.tag_name }}
           # The branch which the release was cut from, and the commits between this release and the one before it, are
@@ -46,14 +46,14 @@ jobs:
           fetch-depth: 0
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           # 5.0 runs the tests which are built for net5.0. Every other framework is built and run by the SDK of the
           # runner, which is the newest one it carries.
           dotnet-version: 5.0.x
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # 22.14 carries the runtime which publishing through a trusted publisher asks for, and the registry is named
           # so that the .npmrc which is written for it is the one which a publish reads.
