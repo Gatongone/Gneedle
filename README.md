@@ -63,14 +63,14 @@ Or, in the project file:
 
 ```xml
 
-<PackageReference Include="Gneedle.Aspect" Version="0.0.2"/>
+<PackageReference Include="Gneedle.Aspect" Version="0.0.3"/>
 ```
 
 `Gneedle.Inject` is a dependency of it, so the weaver that the task weaves with is installed along with it. It is also the package to reference on its own, and the only one, when you drive the weaving yourself or when you write an injector, because the interfaces that one implements are declared in it:
 
 ```xml
 
-<PackageReference Include="Gneedle.Inject" Version="0.0.2"/>
+<PackageReference Include="Gneedle.Inject" Version="0.0.3"/>
 ```
 
 ## Unity
@@ -84,8 +84,8 @@ A package is installed by the path it lies at, and a revision may be named after
 ```json
 {
   "dependencies": {
-    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.2",
-    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.2"
+    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.3",
+    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.3"
   }
 }
 ```
@@ -110,8 +110,8 @@ The same two are published to npm under the names above, which the Package Manag
     }
   ],
   "dependencies": {
-    "com.gatongone.gneedle.inject": "0.0.2",
-    "com.gatongone.gneedle.aspect": "0.0.2"
+    "com.gatongone.gneedle.inject": "0.0.3",
+    "com.gatongone.gneedle.aspect": "0.0.3"
   }
 }
 ```
@@ -134,8 +134,8 @@ What is installed this way is held at the version that is named until another is
     }
   ],
   "dependencies": {
-    "com.gatongone.gneedle.inject": "0.0.2",
-    "com.gatongone.gneedle.aspect": "0.0.2"
+    "com.gatongone.gneedle.inject": "0.0.3",
+    "com.gatongone.gneedle.aspect": "0.0.3"
   }
 }
 ```
