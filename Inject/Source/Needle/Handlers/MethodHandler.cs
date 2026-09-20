@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Reflection;
-using System.Text;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using MethodBody = Mono.Cecil.Cil.MethodBody;
 using PropertyAttributes = Mono.Cecil.PropertyAttributes;
