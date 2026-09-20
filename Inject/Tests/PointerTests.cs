@@ -2780,15 +2780,17 @@ public class PointerTests
     {
         // The arguments of a member which declares a parameter of its own are only read out of the delegate which names
         // it, so a delegate which hands back another type than the one which those arguments instantiate the member with
-        // names no member: the call is refused rather than woven into a body which cannot run.
+        // names no member: no candidate of that name is described, and the member is not found at all rather than being
+        // found and refused by the rule of the call. The refusal names the member which was looked for either way, so
+        // both are read.
         var host = NewHostWithIdentity("MethodInjectionIdentityMismatchAssembly");
         var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<ArgumentException>(
             () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
-        Assert.That(thrown!.Message, Does.Contain("cannot be resolved"),
-                    "the member was refused by the rule of the call rather than as one which no candidate describes.");
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    "the member was found and refused by the rule of the call rather than as one which no candidate describes.");
     }
 
     [Test]
