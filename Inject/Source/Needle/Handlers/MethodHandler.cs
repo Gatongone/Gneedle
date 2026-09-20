@@ -1271,5 +1271,4 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         return StackWalk.TryGetStackType(Context, instruction, targetDef, out var type) ? type : null;
     }
-
 }

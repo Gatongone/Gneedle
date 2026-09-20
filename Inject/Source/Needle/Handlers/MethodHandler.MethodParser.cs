@@ -1050,5 +1050,4 @@ partial class MethodHandler
             }
         }
     }
-
 }

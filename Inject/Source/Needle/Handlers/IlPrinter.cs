@@ -274,5 +274,4 @@ internal static class IlPrinter
         ExceptionHandlerType.Finally => "finally",
         _                            => "fault"
     };
-
 }
