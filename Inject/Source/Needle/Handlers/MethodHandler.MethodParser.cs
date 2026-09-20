@@ -665,7 +665,7 @@ partial class MethodHandler
 
             if (instanceType is GenericParameter parameter)
             {
-                return GetMethodFromConstraint(parameter, methodName, parameters, returnType);
+                return GetMethodFromConstraint(parameter, methodName, parameters, returnType, out namedInstance);
             }
 
             // The type which the template named the instance through is written out where the member is called where
@@ -701,27 +701,33 @@ partial class MethodHandler
     /// <summary>
     /// The method which a template reaches through a generic parameter, which is looked up on each of the constraints
     /// of the parameter in turn: the parameter itself holds no definition to look a method up on, and a call on one
-    /// which is unconstrained would be invalid IL.
+    /// which is unconstrained would be invalid IL.<para/>
+    /// A constraint may be an instantiation of a type which declares a parameter of its own, and the member belongs to
+    /// the definition of that type: the lookup is handed the instantiation which the constraint names, and the call
+    /// names it as well, because the parameters of a member of a type which stands open are the ones of the definition
+    /// rather than the arguments of the instantiation.
     /// </summary>
     /// <param name="target">The generic parameter which the member is reached through.</param>
     /// <param name="methodName">Name of the member.</param>
     /// <param name="parameters">The types of the arguments which the member is called with.</param>
     /// <param name="returnType">Type of the value which the member hands back, or null when the caller holds none.</param>
+    /// <param name="namedInstance">The type of the instance which the member was found on, which is what the call names.</param>
     /// <returns>The method which the constraints of the parameter describe.</returns>
     /// <exception cref="ArgumentException">Thrown when no constraint holds a method of that name and signature.</exception>
-    private MethodDefinition GetMethodFromConstraint(GenericParameter target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType)
+    private MethodDefinition GetMethodFromConstraint(GenericParameter target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType, out TypeReference? namedInstance)
     {
-        MethodDefinition? methodDef = null;
-        foreach (var curType in target.Constraints.Select(item => DeclaringTypeHandler.AssemblyHandler.GetCecilType(item.ConstraintType).Definition))
+        foreach (var constraint in target.Constraints)
         {
-            methodDef = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(curType, methodName, parameters, returnType, false);
-            if (methodDef != null!)
+            var type = DeclaringTypeHandler.AssemblyHandler.GetCecilType(constraint.ConstraintType);
+            var methodDef = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(type.Definition, methodName, parameters, returnType, false, instance: type.Reference);
+            if (methodDef != null)
             {
+                namedInstance = type.Reference;
                 return methodDef;
             }
         }
 
-        return methodDef ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+        throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
     }
 
     /// <summary>

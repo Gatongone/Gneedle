@@ -112,6 +112,25 @@ public class PointerTests
     /// </summary>
     public class DerivedOfAMiddleOfAGenericBase : MiddleOfAGenericBase<int>;
 
+    /// <summary>
+    /// The interface which a type of the tests implements as an instantiation of it, which is what the constraint of a
+    /// generic parameter of the body is where a template reaches a member of it through that parameter.
+    /// </summary>
+    public interface ICountedOfAnInstantiation<T>
+    {
+        /// <summary>The member whose signature names the parameter which the interface declares.</summary>
+        T Echo(T value);
+    }
+
+    /// <summary>
+    /// The type which implements that interface as an instantiation of it, which is the type which a body that reaches a
+    /// member of the constraint is instantiated with.
+    /// </summary>
+    public class CountedOfAnInstantiation : ICountedOfAnInstantiation<int>
+    {
+        public int Echo(int value) => value;
+    }
+
     // The templates live in the test assembly, so that Cecil resolves them from disk, and each names a member of the
     // type being woven through one placeholder. The type argument of a placeholder tells the member type.
 
@@ -577,6 +596,13 @@ public class PointerTests
         /// argument.
         /// </summary>
         public static int ThisMethodOfABaseWhichNamesTheParameter(int a) => This.Method<Func<int, int>>("Echo")(a);
+
+        /// <summary>
+        /// The same, of the member of the base which the body's own type derives from rather than of a base of a base:
+        /// the member is reached through <c>Base</c>, and the type which is being woven is the one which the base was
+        /// declared with the instantiation in, so that instantiation is what the parameter of the member stands for.
+        /// </summary>
+        public static int BaseMethodOfABaseWhichNamesTheParameter(int a) => Base.Method<Func<int, int>>("Echo")(a);
     }
 
     /// <summary>
@@ -765,6 +791,15 @@ public class PointerTests
         /// </summary>
         public static int InstanceMethod_OfABaseOfABaseOfAGenericType(DerivedOfAMiddleOfAGenericBase derived, int a)
             => new Instance(derived).Method<IntOp>("Calc")(a);
+
+        /// <summary>
+        /// The instance of <c>Instance</c> is the generic parameter of the body itself, whose constraint is an
+        /// instantiation of an interface which declares a parameter of its own: the member is looked up on that
+        /// instantiation rather than on the definition of the constraint, which names no type of the body, and the call
+        /// names that instantiation.
+        /// </summary>
+        public static int InstanceMethod_OfAConstraintWhichIsAnInstantiation(M_0 box, int a)
+            => new Instance(box).Method<IntOp>("Echo")(a);
 
         /// <summary>
         /// The delegate of a member which declares a parameter of its own is written with the token which stands for the
@@ -1697,6 +1732,57 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
                     "the woven assembly does not run the member of the base.");
+    }
+
+    [Test]
+    public void A_Member_Of_A_Base_Which_Is_An_Instantiation_Is_Called_Through_Base()
+    {
+        // The base which the body's own type derives from is an instantiation of a type which declares a parameter of
+        // its own, and the member which the delegate describes names that parameter: the member belongs to the
+        // definition of the base, and the walk which reaches it through `Base` is handed the instantiation which the
+        // type being woven derives from, so the member is found and called on that instantiation rather than refused.
+        var host = NewHostWhichDerivesFromAnInstantiationOfAGenericType("BaseSignatureOfAnInstantiationAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethodOfABaseWhichNamesTheParameter)));
+
+        var call = ((MethodHandler) method).Source.Body.Instructions
+                                           .Select(instruction => instruction.Operand).OfType<MethodReference>()
+                                           .FirstOrDefault(reference => reference.Name == "Echo");
+        Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
+        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the base rather than on the instantiation which the body's own type derives from.");
+        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                    "the member is not called on the instantiation which the base was declared with.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
+                    "the woven assembly does not run the member of the base which names the parameter of it.");
+    }
+
+    [Test]
+    public void A_Default_Body_Which_Calls_The_Base_Calls_The_Member_On_The_Instantiation()
+    {
+        // The body of a member which is set to call the member of the base that carries its name and parameters is
+        // written where the type which derives is declared, and the base of this type is an instantiation: the member
+        // of the base which takes the parameter of it is the one which takes an `int`, so the member is found and the
+        // call names that instantiation rather than the definition of the base, which stands open.
+        var host = NewHostWhichDerivesFromAnInstantiationOfAGenericType("BaseCallOfAnInstantiationAssembly");
+        var method = host.AddMethod("Echo", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(DefaultMethodBody.CallFromBase);
+
+        var call = ((MethodHandler) method).Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                                           .FirstOrDefault(reference => reference.Name == "Echo");
+        Assert.That(call, Is.Not.Null, "the member of the base was not called.");
+        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the base rather than on the instantiation which the type derives from.");
+        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                    "the member is not called on the instantiation which the base was declared with.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(type.GetMethod("Echo")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
+                    "the woven assembly does not run the member of the base which the body calls.");
     }
 
     [Test]
@@ -2994,6 +3080,20 @@ public class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create a host which derives from an instantiation of a type of the assembly which carries the members which are
+    /// asked for, so that a member of the base which names the parameter of it has the argument of that instantiation to
+    /// stand for rather than the parameter alone.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which runs its host gives one of its own.</param>
+    private static TypeHandler NewHostWhichDerivesFromAnInstantiationOfAGenericType(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        host.Source.BaseType = host.Source.Module.ImportReference(typeof(GenericBaseOfAnInstance<int>));
+        return host;
+    }
+
     [Test]
     public void BaseMethod_Rewrites_To_Direct_Call()
     {
@@ -3227,6 +3327,38 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new GenericHelper<int>(), 41]), Is.EqualTo(41),
                     "the woven assembly does not run the member which the signature names the parameter of the type with.");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Constraint_Which_Is_An_Instantiation_Is_Called()
+    {
+        // The instance which the template named is the generic parameter of the body itself, and the constraint of that
+        // parameter is an instantiation of a type which declares a parameter of its own: the member belongs to the
+        // definition of the constraint, and the instantiation which the constraint names is what the parameter of the
+        // member stands for, so the member is found and called on that instantiation rather than refused.
+        var assembly = Assembly.Create("InstanceConstraintInstantiationAssembly");
+        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var method = (MethodHandler) host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [new GenericParameterType("T", Constraint.FromType(typeof(ICountedOfAnInstantiation<int>)))],
+            [new Parameter(typeof(M_0).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAConstraintWhichIsAnInstantiation)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                         .FirstOrDefault(reference => reference.Name == "Echo");
+        Assert.That(call, Is.Not.Null, "the member of the constraint was not called.");
+        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the constraint rather than on the instantiation which it names.");
+        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                    "the member is not called on the instantiation which the constraint names.");
+
+        var type = LoadHostOf(assembly, host);
+
+        Assert.That(type.GetMethod("Run")!.MakeGenericMethod(typeof(CountedOfAnInstantiation))
+                        .Invoke(Activator.CreateInstance(type), [new CountedOfAnInstantiation(), 41]), Is.EqualTo(41),
+                    "the woven assembly does not run the member of the constraint which names the parameter of it.");
     }
 
     [Test]
