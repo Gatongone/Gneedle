@@ -1,4 +1,4 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Gneedle.Inject;
 using Gneedle.Test.Generated;
@@ -416,7 +416,7 @@ namespace Gneedle.Inject.Test
         {
             var module = NewTarget().Source.MainModule;
 
-            var definition = CecilExtensions.ResolveTypeFromAssembly(module, StubTarget.AssemblyName, $"{Ns}.{nameof(Stub)}");
+            var definition = FromAssembly.ResolveTypeFromAssembly(module, StubTarget.AssemblyName, $"{Ns}.{nameof(Stub)}");
 
             Assert.That(definition.FullName, Is.EqualTo($"{Ns}.{nameof(Stub)}"));
             Assert.That(definition.Module, Is.SameAs(module));
@@ -429,7 +429,7 @@ namespace Gneedle.Inject.Test
             // which already resolves Gneedle.Inject.This while a marker is parsed.
             var module = NewTarget().Source.MainModule;
 
-            var definition = CecilExtensions.ResolveTypeFromAssembly(module, "Gneedle.Inject", "Gneedle.Inject.TypeName");
+            var definition = FromAssembly.ResolveTypeFromAssembly(module, "Gneedle.Inject", "Gneedle.Inject.TypeName");
 
             Assert.That(definition.FullName, Is.EqualTo("Gneedle.Inject.TypeName"));
         }
@@ -445,7 +445,7 @@ namespace Gneedle.Inject.Test
             var assembly = NewTarget();
             ((AssemblyHandler) assembly.Handler).GetCecilType(dependencyType.Source);
 
-            var definition = CecilExtensions.ResolveTypeFromAssembly(assembly.Source.MainModule, "InMemoryDependencyAssembly", $"{Ns}.Dependency");
+            var definition = FromAssembly.ResolveTypeFromAssembly(assembly.Source.MainModule, "InMemoryDependencyAssembly", $"{Ns}.Dependency");
 
             Assert.That(definition.FullName, Is.EqualTo($"{Ns}.Dependency"));
         }
@@ -469,7 +469,7 @@ namespace Gneedle.Inject.Test
                 System.Reflection.Assembly.LoadFrom(path);
 
                 var assembly = NewTarget();
-                var definition = CecilExtensions.ResolveTypeFromAssembly(assembly.Source.MainModule, "FileDependencyAssembly", $"{Ns}.Dependency");
+                var definition = FromAssembly.ResolveTypeFromAssembly(assembly.Source.MainModule, "FileDependencyAssembly", $"{Ns}.Dependency");
 
                 Assert.That(definition.FullName, Is.EqualTo($"{Ns}.Dependency"));
             }
@@ -504,7 +504,7 @@ namespace Gneedle.Inject.Test
             System.Reflection.Assembly.Load(bytes);
 
             var assembly = NewTarget();
-            var definition = CecilExtensions.ResolveTypeFromAssembly(assembly.Source.MainModule, "BytesDependencyAssembly", $"{Ns}.Dependency");
+            var definition = FromAssembly.ResolveTypeFromAssembly(assembly.Source.MainModule, "BytesDependencyAssembly", $"{Ns}.Dependency");
 
             Assert.That(definition.FullName, Is.EqualTo($"{Ns}.Dependency"));
         }
@@ -563,14 +563,14 @@ namespace Gneedle.Inject.Test
             AssemblyLoader.LoadFromBytes(bytes);
 
             var assembly = NewTarget();
-            var definition = CecilExtensions.ResolveTypeFromAssembly(assembly.Source.MainModule, "LoaderDependencyAssembly", $"{Ns}.Dependency");
+            var definition = FromAssembly.ResolveTypeFromAssembly(assembly.Source.MainModule, "LoaderDependencyAssembly", $"{Ns}.Dependency");
 
             Assert.That(definition.FullName, Is.EqualTo($"{Ns}.Dependency"));
         }
 
         [Test]
         public void ResolveTypeFromAssembly_With_An_Unknown_Assembly_Throws()
-            => Assert.Throws<ArgumentException>(() => CecilExtensions.ResolveTypeFromAssembly(NewTarget().Source.MainModule, "No.Such.Assembly", $"{Ns}.{nameof(Stub)}"));
+            => Assert.Throws<ArgumentException>(() => FromAssembly.ResolveTypeFromAssembly(NewTarget().Source.MainModule, "No.Such.Assembly", $"{Ns}.{nameof(Stub)}"));
 
         #endregion
 

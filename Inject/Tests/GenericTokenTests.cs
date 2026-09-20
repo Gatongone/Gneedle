@@ -1,4 +1,4 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
@@ -8,7 +8,7 @@ using static Gneedle.Inject.Test.TestFixtures;
 /// <summary>
 /// Tests for the <c>Gneedle.Inject.T_[0-20]</c> / <c>Gneedle.Inject.M_[0-20]</c> tokens.
 /// <para/>
-/// The tokens are parsed by <c>CecilExtensions.TryGetParsedGenericParameter</c>, and consumed by
+/// The tokens are parsed by <c>TokenParsing.TryGetParsedGenericParameter</c>, and consumed by
 /// <see cref="MethodHandler.ParseReturnType(IType)"/> (rewrites the return type of the injected method)
 /// and <c>MethodHandler.CopyVariables</c> (rewrites the local variable types of the injected method).
 /// They are parsed as well when a type is declared through the public API, by
