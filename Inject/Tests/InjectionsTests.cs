@@ -453,6 +453,35 @@ public class InjectionsTests
     // runs on its own rather than beside the others, which would be woven by the injector of this test.
     [Test]
     [NonParallelizable]
+    public void Apply_Reports_The_Kind_Of_The_Fault_And_The_Frame_It_Stands_At()
+    {
+        // What is reported of a type which could not be woven is what a reader has to find the fault by. A shape which
+        // the weaver did not expect is the fault which is hardest to find, so the kind of the exception and the frame it
+        // stands at are written rather than its message alone, which an exception of the runtime says nothing with.
+        var image = TestAssemblyImage();
+        var assembly = AssemblyLoader.LoadFromBytes(image);
+        var reported = new List<string>();
+        Environment.SetEnvironmentVariable(ThrowTypeAttribute.TypeVariable, ThrowingType);
+
+        try
+        {
+            Injections.Apply(assembly, image, reportError: reported.Add);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ThrowTypeAttribute.TypeVariable, null);
+        }
+
+        var report = reported.Single(message => message.Contains(ThrowingType));
+        Assert.That(report, Does.Contain(nameof(InvalidOperationException)), $"the report does not name the kind of the fault: {report}");
+        Assert.That(report, Does.Contain($"{nameof(ThrowTypeAttribute)}.{nameof(ThrowTypeAttribute.Inject)}"),
+                    $"the report does not name the frame which the fault stands at: {report}");
+    }
+
+    // The variable of the process is read by the injector of every type which is woven while it is set, so this test
+    // runs on its own rather than beside the others, which would be woven by the injector of this test.
+    [Test]
+    [NonParallelizable]
     public void Apply_Which_Reported_A_Type_Answers_With_The_Image_It_Was_Given()
     {
         // One type of the assembly is woven and another one is not, which the run reports. What the assembly holds by

@@ -125,7 +125,11 @@ public static class Injections
                 }
                 catch (Exception exception)
                 {
-                    Report($"Type '{type.FullName}' could not be woven. {exception.Message}");
+                    // A refusal which the weaver raised deliberately names what it refused in its own message, and the
+                    // frame of it tells a reader nothing which that message does not. Every other exception is a shape
+                    // which the weaver did not expect, which is the fault a reader has the least to find it by: the kind
+                    // of the exception and the frame it stands at are written with it.
+                    Report($"Type '{type.FullName}' could not be woven. {(exception is ArgumentException ? exception.Message : exception.ToString())}");
                 }
             }
 
