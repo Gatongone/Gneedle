@@ -40,10 +40,13 @@ partial class AssemblyHandler
                 var arguments = genericType.GenericArguments
                                            .Select(argument => ResolveParameterType(target, argument, methodGenericParameters))
                                            .ToArray();
-                // Create generic instance.
-                return Assembly.Source.MainModule
-                               .ImportReference(parameterTypeDef.Definition)
-                               .MakeGenericInstanceType(arguments);
+                // Create generic instance. The import appends to the tables of the module, which are written under its
+                // lock.
+                var module = Assembly.Source.MainModule;
+                lock (ModuleLock.Of(module))
+                {
+                    return module.ImportReference(parameterTypeDef.Definition).MakeGenericInstanceType(arguments);
+                }
             default: throw new ArgumentOutOfRangeException(nameof(parameterType));
         }
     }
@@ -104,45 +107,55 @@ partial class AssemblyHandler
     /// <returns>The cecil type from current definition</returns>
     internal CecilType GetCecilType(TypeReference typeRef)
     {
-        // If has imported, then return from cache.
-        if (m_TypeCache.TryGetValue(new TypeName(typeRef).ToString(), out var cecilType)) return cecilType;
+        var name = new TypeName(typeRef).ToString();
 
-        // A type which FromAssemblyAttribute marks stands for the real type of the same name which another assembly
-        // declares. It is resolved before the assembly of the reference is appended, so that the assembly which only
-        // declares the stub is not referenced by the produced assembly. The stub and the real type share a full name,
-        // so they share the cache entry as well.
-        if (typeRef.TryGetFromAssemblyDefinition(Assembly.Source.MainModule, out var fromAssemblyType))
+        // If has imported, then return from cache.
+        if (m_TypeCache.TryGetValue(name, out var cecilType)) return cecilType;
+
+        // What the lookup which missed writes is the module itself, which is written under the lock of that module, and
+        // the lookup is made again there because another thread may have imported the same type while this one waited.
+        var module = Assembly.Source.MainModule;
+        lock (ModuleLock.Of(module))
         {
-            cecilType                                     = new CecilType(fromAssemblyType!, Assembly.Source.MainModule.ImportReference(fromAssemblyType));
-            m_TypeCache[new TypeName(typeRef).ToString()] = cecilType;
+            if (m_TypeCache.TryGetValue(name, out cecilType)) return cecilType;
+
+            // A type which FromAssemblyAttribute marks stands for the real type of the same name which another assembly
+            // declares. It is resolved before the assembly of the reference is appended, so that the assembly which only
+            // declares the stub is not referenced by the produced assembly. The stub and the real type share a full
+            // name, so they share the cache entry as well.
+            if (typeRef.TryGetFromAssemblyDefinition(module, out var fromAssemblyType))
+            {
+                cecilType           = new CecilType(fromAssemblyType!, module.ImportReference(fromAssemblyType));
+                m_TypeCache[name]   = cecilType;
+                return cecilType;
+            }
+
+            // Get assembly name.
+            var assemblyName = typeRef.Module.Assembly.Name.FullName;
+
+            // Check assembly has be appended to cache.
+            if (!m_AssemblyCache.TryGetValue(assemblyName, out var assemblyDef))
+            {
+                // Get target assembly definition.
+                assemblyDef = typeRef.Module.Assembly;
+                // Append to cache.
+                m_AssemblyCache[assemblyName] = assemblyDef;
+                //Add to Reference.
+                AddReference(assemblyDef);
+            }
+
+            // Import type ref into the current assembly definition, and add to type cache. A reference which belongs to
+            // another module cannot be written to the produced assembly, so Reference must be owned by the current one.
+            // The definition is what the members of the type are read from, and a reference which names a type that the
+            // assembly it was asked of does not hold has none: the type is refused where it is read rather than being
+            // carried about as a type of nothing, whose every query would throw from somewhere the caller cannot see the
+            // reason of.
+            var definition = typeRef.Resolve()
+                             ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, typeRef.FullName));
+            cecilType           = new CecilType(definition, module.ImportReference(typeRef));
+            m_TypeCache[name]   = cecilType;
             return cecilType;
         }
-
-        // Get assembly name.
-        var assemblyName = typeRef.Module.Assembly.Name.FullName;
-
-        // Check assembly has be appended to cache.
-        if (!m_AssemblyCache.TryGetValue(assemblyName, out var assemblyDef))
-        {
-            // Get target assembly definition.
-            assemblyDef = typeRef.Module.Assembly;
-            // Append to cache.
-            m_AssemblyCache[assemblyName] = assemblyDef;
-            //Add to Reference.
-            AddReference(assemblyDef);
-        }
-
-        // Import type ref into the current assembly definition, and add to type cache. A reference which belongs to
-        // another module cannot be written to the produced assembly, so Reference must be owned by the current one.
-        // The definition is what the members of the type are read from, and a reference which names a type that the
-        // assembly it was asked of does not hold has none: the type is refused where it is read rather than being
-        // carried about as a type of nothing, whose every query would throw from somewhere the caller cannot see the
-        // reason of.
-        var definition = typeRef.Resolve()
-                         ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, typeRef.FullName));
-        cecilType                                     = new CecilType(definition, Assembly.Source.MainModule.ImportReference(typeRef));
-        m_TypeCache[new TypeName(typeRef).ToString()] = cecilType;
-        return cecilType;
     }
 
     /// <summary>
@@ -153,52 +166,62 @@ partial class AssemblyHandler
     /// <returns>The cecil type from current definition</returns>
     internal CecilType GetCecilType(Type type)
     {
+        var name = new TypeName(type).ToString();
+
         // If has imported, then return from cache.
-        if (m_TypeCache.TryGetValue(new TypeName(type), out var cecilType)) return cecilType;
+        if (m_TypeCache.TryGetValue(name, out var cecilType)) return cecilType;
 
-        // A type which the assembly being woven declares is taken from the module rather than imported from the runtime.
-        // The import of a type names the assembly which declares it, and the name of the assembly which is being written
-        // is a reference of an assembly to itself, which no loader reads back: the whole of the assembly which the
-        // weaving produced would be discarded, declared to be referring to itself.
-        if (type.Assembly.GetName().Name == Assembly.Source.Name.Name)
+        // What the lookup which missed writes is the module itself, which is written under the lock of that module, and
+        // the lookup is made again there because another thread may have imported the same type while this one waited.
+        var module = Assembly.Source.MainModule;
+        lock (ModuleLock.Of(module))
         {
-            var declaredType = FindDeclaredType(type) ?? throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);
-            cecilType                                  = new CecilType(declaredType, declaredType);
-            m_TypeCache[new TypeName(type).ToString()] = cecilType;
+            if (m_TypeCache.TryGetValue(name, out cecilType)) return cecilType;
+
+            // A type which the assembly being woven declares is taken from the module rather than imported from the
+            // runtime. The import of a type names the assembly which declares it, and the name of the assembly which is
+            // being written is a reference of an assembly to itself, which no loader reads back: the whole of the
+            // assembly which the weaving produced would be discarded, declared to be referring to itself.
+            if (type.Assembly.GetName().Name == Assembly.Source.Name.Name)
+            {
+                var declaredType = FindDeclaredType(type) ?? throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);
+                cecilType         = new CecilType(declaredType, declaredType);
+                m_TypeCache[name] = cecilType;
+                return cecilType;
+            }
+
+            // A reference cycle cannot be represented in metadata, so it is rejected before the type is imported. The
+            // assembly of the type does not have to be read for it, because the reflection type knows its references.
+            if (type.Assembly.GetReferencedAssemblies().Any(reference => reference.FullName.Equals(Assembly.Source.FullName)))
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, type.Assembly.FullName));
+            }
+
+            // A type which FromAssemblyAttribute marks stands for the real type of the same name which another assembly
+            // declares. The real type is resolved before the stub is imported, so that the assembly which only declares
+            // the stub is not appended as a reference of the produced assembly. The stub and the real type share a full
+            // name, so they share the cache entry as well.
+            if (Attribute.GetCustomAttribute(type, typeof(FromAssemblyAttribute)) is FromAssemblyAttribute fromAssembly)
+            {
+                var fromAssemblyDefinition = FromAssembly.ResolveTypeFromAssembly(module, fromAssembly.Name, type.FullName!);
+                cecilType         = new CecilType(fromAssemblyDefinition, module.ImportReference(fromAssemblyDefinition));
+                m_TypeCache[name] = cecilType;
+                return cecilType;
+            }
+
+            // Import type ref into the current assembly definition. The import registers the assembly reference which the
+            // type is resolved through as well, and that one may differ from the assembly which declares the type,
+            // because the reflection importer maps the corlib to another assembly.
+            var targetTypeRef = module.ImportReference(type);
+
+            // The definition is the one for looking the members up, and a type which the assembly it was asked of does
+            // not hold has none: the type is refused here rather than being carried about as a type of nothing.
+            var definition = targetTypeRef.Resolve()
+                             ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, type.FullName));
+            cecilType         = new CecilType(definition, targetTypeRef);
+            m_TypeCache[name] = cecilType;
             return cecilType;
         }
-
-        // A reference cycle cannot be represented in metadata, so it is rejected before the type is imported. The
-        // assembly of the type does not have to be read for it, because the reflection type knows its references.
-        if (type.Assembly.GetReferencedAssemblies().Any(name => name.FullName.Equals(Assembly.Source.FullName)))
-        {
-            throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, type.Assembly.FullName));
-        }
-
-        // A type which FromAssemblyAttribute marks stands for the real type of the same name which another assembly
-        // declares. The real type is resolved before the stub is imported, so that the assembly which only declares the
-        // stub is not appended as a reference of the produced assembly. The stub and the real type share a full name, so
-        // they share the cache entry as well.
-        if (Attribute.GetCustomAttribute(type, typeof(FromAssemblyAttribute)) is FromAssemblyAttribute fromAssembly)
-        {
-            var fromAssemblyDefinition = FromAssembly.ResolveTypeFromAssembly(Assembly.Source.MainModule, fromAssembly.Name, type.FullName!);
-            cecilType                                  = new CecilType(fromAssemblyDefinition, Assembly.Source.MainModule.ImportReference(fromAssemblyDefinition));
-            m_TypeCache[new TypeName(type).ToString()] = cecilType;
-            return cecilType;
-        }
-
-        // Import type ref into the current assembly definition. The import registers the assembly reference which the
-        // type is resolved through as well, and that one may differ from the assembly which declares the type, because
-        // the reflection importer maps the corlib to another assembly.
-        var targetTypeRef = Assembly.Source.MainModule.ImportReference(type);
-
-        // The definition is the one for looking the members up, and a type which the assembly it was asked of does not
-        // hold has none: the type is refused here rather than being carried about as a type of nothing.
-        var definition = targetTypeRef.Resolve()
-                         ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, type.FullName));
-        cecilType                                  = new CecilType(definition, targetTypeRef);
-        m_TypeCache[new TypeName(type).ToString()] = cecilType;
-        return cecilType;
     }
 
     /// <summary>
@@ -219,7 +242,13 @@ partial class AssemblyHandler
     {
         if (template.DeclaringType == null || template.DeclaringType.Assembly.GetName().Name != Assembly.Source.Name.Name)
         {
-            return Assembly.Source.MainModule.ImportReference(template).Resolve();
+            // The import appends the assembly which declares the template to the tables of the module, which are written
+            // under its lock.
+            var module = Assembly.Source.MainModule;
+            lock (ModuleLock.Of(module))
+            {
+                return module.ImportReference(template).Resolve();
+            }
         }
 
         // The name of a method alone does not tell two of one name apart, so the signature is what the template is
