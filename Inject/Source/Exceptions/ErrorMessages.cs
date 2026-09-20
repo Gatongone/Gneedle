@@ -109,6 +109,14 @@ internal static class ErrorMessages
     internal const string INVALID_METHOD = "The method cannot be resolved in the assembly which is woven. Method: {0}.";
 
     /// <summary>
+    /// A call which the template wrote names a member whose declaring type cannot be read, so the walk of the argument
+    /// stack cannot tell whether the call is made on an instance — which is what the count of the values it takes the
+    /// receiver off the stack with is read from. The placeholders are the member which is called and the member which is
+    /// woven.
+    /// </summary>
+    internal const string INVALID_CALLED_MEMBER = "A member which the template calls is declared by a type which cannot be read, so whether the call belongs to an instance cannot be told, and the values which stand above it in the body cannot be counted. Member: {0}, Method: {1}.";
+
+    /// <summary>
     /// The handle of a field or a property was held in a local and read for something other than the member which the
     /// handle stands for, which is a value which the weaving has no way to write. The placeholder is the name of the
     /// member.
