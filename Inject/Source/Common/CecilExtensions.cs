@@ -370,6 +370,15 @@ internal static class CecilExtensions
     {
         if (TypeName.HasSameName(type, wanted)) return true;
 
+        // An array is accepted for an array which holds the values of the same number of dimensions where the element of
+        // it is converted to the element of that one by a reference conversion, which is the covariance of the arrays.
+        if (wanted is ArrayType wantedArray && type is ArrayType givenArray)
+        {
+            if (givenArray.Rank != wantedArray.Rank) return false;
+
+            return IsConvertedByReference(givenArray.ElementType, wantedArray.ElementType);
+        }
+
         // A constraint which names no instance of a generic type names the type itself, which the name of the type
         // tells, and a type which is not an instance of one is named by no argument at all.
         if (wanted is not GenericInstanceType constraint) return false;
@@ -393,11 +402,11 @@ internal static class CecilExtensions
             bool? accepted;
             if ((variance & GenericParameterAttributes.Covariant) != 0)
             {
-                accepted = IsMadeOf(given, asked);
+                accepted = IsConvertedByReference(given, asked);
             }
             else if ((variance & GenericParameterAttributes.Contravariant) != 0)
             {
-                accepted = IsMadeOf(asked, given);
+                accepted = IsConvertedByReference(asked, given);
             }
             else
             {
@@ -412,6 +421,24 @@ internal static class CecilExtensions
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether a type is converted to another one by a reference conversion, which is the conversion which the variance
+    /// of a parameter of a declaration is read with: a value which is boxed is no reference of the type which the
+    /// argument of an instance names, so a value type is accepted for the very type it is alone, while a reference is
+    /// accepted for every type which the types it is made of hold.
+    /// </summary>
+    /// <param name="type">The type which is converted.</param>
+    /// <param name="wanted">The type which it is converted to.</param>
+    /// <returns>Whether the conversion is one of references, or null where this read does not tell.</returns>
+    private static bool? IsConvertedByReference(TypeReference type, TypeReference wanted)
+    {
+        if (TypeName.HasSameName(type, wanted)) return true;
+
+        return IsAValueType(type) is { } isAValue
+            ? isAValue ? false : IsMadeOf(type, wanted)
+            : null;
     }
 
     /// <summary>
@@ -453,6 +480,12 @@ internal static class CecilExtensions
             if (!walked.Add(current.FullName)) continue;
             made.Add(current);
 
+            // The definition which an array resolves to is the definition of the element which it holds, so an array is
+            // not read through it: what an array is made of is the types which the runtime gives it, which the walk
+            // holds already, and the array itself, which the walk of the constraint reads the covariance of the arrays
+            // with.
+            if (current is ArrayType) continue;
+
             var definition = DefinitionOf(current);
             if (definition == null)
             {
@@ -488,18 +521,17 @@ internal static class CecilExtensions
 
     /// <summary>
     /// The types which an array is made of, which the runtime gives to it rather than the metadata which declares it:
-    /// the type of every array and the collections and the sequences which name no element at all, and - where the array
-    /// is the one which the runtime calls a vector, which is one dimension and no lower bound, because the generic ones
-    /// are given to that shape alone - those same types naming the element which the array holds.
+    /// the array itself, the type of every array of the framework and the collections and the sequences which name no
+    /// element at all, and - where the array is the one which the runtime calls a vector, which is one dimension and no
+    /// lower bound, because the generic ones are given to that shape alone - those same types naming the element which
+    /// the array holds.
     /// </summary>
     /// <param name="array">The array which is read.</param>
-    /// <returns>The types which the array is given.</returns>
+    /// <returns>The types which the array is given, itself among them.</returns>
     private static IReadOnlyList<TypeReference> TypesWhichAnArrayIsGiven(ArrayType array)
     {
-        // The array itself is not among them, because the definition of an array is the definition of the values it
-        // holds: reading it would read the types which those values are made of as the types which the array is.
         var module = array.Module;
-        var given = new List<TypeReference>();
+        var given = new List<TypeReference> { array };
 
         foreach (var declaration in s_TheTypesWhichEveryArrayIsGiven)
         {

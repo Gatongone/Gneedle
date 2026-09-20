@@ -616,6 +616,16 @@ public class PointerTests
         public static List<string> Identity_OfAListOfString(List<string> value)
             => This.Method<Func<List<string>, List<string>>>("Identity")(value);
 
+        /// <inheritdoc cref="Identity_OfAnArrayOfInt"/>
+        public static List<int> Identity_OfAListOfAnInt(List<int> value) => This.Method<Func<List<int>, List<int>>>("Identity")(value);
+
+        /// <summary>
+        /// The same, of an array which stands among the arguments of an instance of a generic type rather than in the
+        /// place of one of them: the covariance of the arrays is what that argument is read with as well.
+        /// </summary>
+        public static List<string[]> Identity_OfAListOfAnArrayOfString(List<string[]> value)
+            => This.Method<Func<List<string[]>, List<string[]>>>("Identity")(value);
+
         /// <summary>
         /// The same, of a type which a constraint satisfied by another type accepts: the declaration of the interface
         /// marks that parameter contravariant, so a comparer of the values of the framework is a comparer of strings.
@@ -3420,6 +3430,83 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
                     "the member whose constraint names a type which accepts the argument was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_Another_Value_Than_The_Element_Of_An_Array_Is_Refused()
+    {
+        // The variance of an argument converts a reference of one type to a reference of another, and a value which is
+        // boxed is no reference of the type which the argument of the constraint names: an array of ints is no sequence
+        // of the values of the framework, which the runtime refuses the instantiation for.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABoxedElementOfAnArrayAssembly",
+                                                      typeof(IEnumerable<object>));
+        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with an array whose element is another value than the one the constraint names: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_Another_Value_Than_The_Element_Of_An_Instance_Is_Refused()
+    {
+        // The same read of an instance of a generic type, whose argument is a value which is boxed as well.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABoxedElementOfAnInstanceAssembly",
+                                                      typeof(IEnumerable<object>));
+        var method = host.AddMethod("Run", typeof(List<int>).ToGneedleType(), [], [new Parameter(typeof(List<int>).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfAnInt))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with an instance whose element is another value than the one the constraint names: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Value_Which_The_Argument_Is_Not_Converted_To_Is_Refused()
+    {
+        // And the other way of the same conversion, which a parameter the declaration marks contravariant is read with:
+        // a comparer of the values of the framework accepts the values which the argument of the constraint accepts,
+        // and an int is no such value.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABoxedArgumentAssembly",
+                                                      typeof(IComparer<int>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(Comparer<object>).ToGneedleType(),
+            [],
+            [new Parameter(typeof(Comparer<object>).ToGneedleType())],
+            MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with a comparer of a value which the constraint does not name: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Sequence_Of_An_Array_Is_Called()
+    {
+        // An array stands among the arguments of the instance as well, and the covariance of the arrays is what the
+        // argument of the constraint is read with: a list of arrays of strings is a sequence of arrays of the values of
+        // the framework.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToASequenceOfAnArrayAssembly",
+                                                      typeof(IEnumerable<object[]>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(List<string[]>).ToGneedleType(),
+            [],
+            [new Parameter(typeof(List<string[]>).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfAnArrayOfString)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new List<string[]> { new[] { "a" }, new[] { "b" } };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a sequence of an array was not called.");
     }
 
     [Test]
