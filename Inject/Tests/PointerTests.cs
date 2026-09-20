@@ -41,6 +41,12 @@ public class PointerTests
     }
 
     /// <summary>
+    /// A type which derives from the one the templates of <c>Instance</c> hold, which is what a constraint that names a
+    /// class is satisfied by through the base type of the type which the delegate names rather than by the type itself.
+    /// </summary>
+    public class DerivedOfAHelperClass : HelperClass;
+
+    /// <summary>
     /// The same, of a type which declares a parameter of its own: every member which a template reaches through an
     /// instance of it belongs to the definition of the type, which is what the body which is woven cannot name.
     /// </summary>
@@ -567,6 +573,27 @@ public class PointerTests
         /// from its kind, so both the one which names the kinds and the one which names the value types are read.
         /// </summary>
         public static int? Identity_OfANullable(int? value) => This.Method<Func<int?, int?>>("Identity")(value);
+
+        /// <summary>
+        /// The member which the name stands for declares a parameter of its own whose constraints name types, and the
+        /// delegate describes it with a type which satisfies none of them: a type satisfies a constraint which names
+        /// another type by being made of it, which neither a value of the framework nor the type of every value is.
+        /// </summary>
+        public static object Identity_OfAnObject(object value) => This.Method<Func<object, object>>("Identity")(value);
+
+        /// <summary>
+        /// The same, of a type which derives from the type a constraint names, which is what the walk of the base types
+        /// of the argument reaches the constraint through.
+        /// </summary>
+        public static DerivedOfAHelperClass Identity_OfADerived(DerivedOfAHelperClass value)
+            => This.Method<Func<DerivedOfAHelperClass, DerivedOfAHelperClass>>("Identity")(value);
+
+        /// <summary>
+        /// The same, of a type which implements an interface as an instantiation of it, which is what a constraint that
+        /// names the interface has to be satisfied by as the very same instantiation.
+        /// </summary>
+        public static CountedOfAnInstantiation Identity_OfACounted(CountedOfAnInstantiation value)
+            => This.Method<Func<CountedOfAnInstantiation, CountedOfAnInstantiation>>("Identity")(value);
 
         /// <summary>
         /// The member which the name stands for declares a parameter of its own which stands inside the value which the
@@ -2917,6 +2944,22 @@ public class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create the same host with a constraint which names a type rather than a kind, which the types the instantiation
+    /// is made of satisfy or do not.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    /// <param name="constraint">The type which the constraint of the parameter names.</param>
+    private static TypeHandler NewHostWhoseIdentityIsConstrainedTo(string assemblyName, Type constraint)
+    {
+        var host = NewHostWithIdentity(assemblyName);
+        host.Source.Methods.First(method => method.Name == "Identity")
+            .GenericParameters[0]
+            .SetConstraintFromType(host.AssemblyHandler, host.Source, Constraint.FromType(constraint));
+        return host;
+    }
+
     /// <summary>The name of the type which the call of a member of a woven body is instantiated with.</summary>
     /// <param name="method">The member which was woven.</param>
     /// <param name="name">The name of the member which the body calls.</param>
@@ -3143,6 +3186,105 @@ public class PointerTests
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
                     $"the member was called with a value which may be absent where its own parameter accepts the types of references: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Type_The_Argument_Is_Not_Made_Of_Is_Refused()
+    {
+        // A constraint which names a type is satisfied by a type which is made of that type, which the walk of the base
+        // types and the interfaces of the argument tells: the type of every value is made of neither an interface nor
+        // anything which implements one, so the instantiation the delegate names is one the runtime refuses and the
+        // delegate describes no member rather than one which cannot be called.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToATypeAssembly", typeof(IComparable));
+        var method = host.AddMethod("Run", typeof(object).ToGneedleType(), [], [new Parameter(typeof(object).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnObject))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with a type which is made of nothing the constraint names: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Type_Which_The_Argument_Is_Made_Of_Is_Called()
+    {
+        // The same host, woven with a delegate which names a type which is made of the interface the constraint names:
+        // the member is found, called on the instantiation, and the woven assembly runs.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToASatisfiedTypeAssembly", typeof(IComparable));
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
+
+        Assert.That(InstantiationOfTheCall(method, "Identity"), Is.EqualTo(typeof(int).FullName),
+                    "the member was not called one of the instantiation which satisfies the constraint of its parameter.");
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [5]), Is.EqualTo(5),
+                    "the member whose constraint the instantiation satisfies was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Base_Type_Of_The_Argument_Is_Called()
+    {
+        // The type which the delegate names is not the type the constraint names, and it is made of it through the base
+        // types it is declared with, which is what the walk reaches the constraint through.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABaseTypeAssembly", typeof(HelperClass));
+        var method = host.AddMethod(
+            "Run",
+            typeof(DerivedOfAHelperClass).ToGneedleType(),
+            [],
+            [new Parameter(typeof(DerivedOfAHelperClass).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfADerived)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new DerivedOfAHelperClass();
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a base type of the argument was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_An_Interface_Of_The_Argument_Is_Called()
+    {
+        // A type is made of the interfaces which are declared where it stands, which the walk reads as well: the
+        // interface which the constraint names is one of them, as the very instantiation which the constraint names.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAnInterfaceAssembly",
+                                                      typeof(ICountedOfAnInstantiation<int>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(CountedOfAnInstantiation).ToGneedleType(),
+            [],
+            [new Parameter(typeof(CountedOfAnInstantiation).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfACounted)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new CountedOfAnInstantiation();
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names an interface of the argument was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_An_Interface_Of_Another_Instantiation_Is_Refused()
+    {
+        // The type is made of the interface, and not of the instantiation of it which the constraint names: the two are
+        // different types, which is what the name of the interface holds, and the runtime refuses one for the other.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAnotherInstantiationAssembly",
+                                                      typeof(ICountedOfAnInstantiation<string>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(CountedOfAnInstantiation).ToGneedleType(),
+            [],
+            [new Parameter(typeof(CountedOfAnInstantiation).ToGneedleType())],
+            MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfACounted))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with a type which is made of another instantiation of the constraint: {thrown.Message}");
     }
 
     [Test]

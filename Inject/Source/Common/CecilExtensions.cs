@@ -251,20 +251,29 @@ internal static class CecilExtensions
     }
 
     /// <summary>
-    /// Whether the type which a parameter of a method is instantiated with fits the kind which the parameter itself
-    /// declares.<para/>
+    /// Whether the type which a parameter of a method is instantiated with fits the constraints which the parameter
+    /// itself declares.<para/>
     /// A parameter which declares that its type is a reference, or that it is a value which is not nullable, is one
     /// which the runtime accepts the types of that kind alone for: the instantiation which the signature names is the
     /// one which the woven assembly calls, so a type of the other kind is one the member is not called with, and a
     /// signature which names it describes no member rather than one which cannot run.<para/>
-    /// The kinds which the constraints of the parameter name are what is read here, and the types which they name are
-    /// left to the runtime: whether a type fits a constraint of a named type is told by the base types and the
-    /// interfaces of that type, which the assembly of the type is read for rather than the type itself.
+    /// A constraint which names a type is satisfied by the types which are made of that type, which the walk of the base
+    /// types and the interfaces of the argument tells, and everything that walk does not tell is left to the runtime.
+    /// </summary>
+    /// <param name="parameter">The parameter which the method declares.</param>
+    /// <param name="argument">The type which the parameter is instantiated with.</param>
+    /// <returns>Whether the argument is one which the parameter accepts.</returns>
+    private static bool Fits(GenericParameter parameter, TypeReference argument)
+        => FitsTheKindsOf(parameter, argument) && SatisfiesTheConstraintsOf(parameter, argument);
+
+    /// <summary>
+    /// Whether the type which a parameter of a method is instantiated with is of a kind which the parameter itself
+    /// declares, which is the kind the constraints of it name rather than the types which they name.
     /// </summary>
     /// <param name="parameter">The parameter which the method declares.</param>
     /// <param name="argument">The type which the parameter is instantiated with.</param>
     /// <returns>Whether the argument is of a kind which the parameter accepts.</returns>
-    private static bool Fits(GenericParameter parameter, TypeReference argument)
+    private static bool FitsTheKindsOf(GenericParameter parameter, TypeReference argument)
     {
         var kind = parameter.Attributes & TheKindsWhichAConstraintNames;
         if (kind == 0) return true;
@@ -283,6 +292,119 @@ internal static class CecilExtensions
         return kind == GenericParameterAttributes.ReferenceTypeConstraint
             ? !isValueType
             : isValueType && !IsANullableValueType(argument);
+    }
+
+    /// <summary>
+    /// Whether the type which a parameter of a method is instantiated with satisfies the types which the constraints of
+    /// that parameter name.<para/>
+    /// The constraint of a parameter is satisfied by a type which is the type it names, and by one which derives from
+    /// that type or which implements it, so the walk is of everything the type is made of: the type itself, the base
+    /// type which each type of the walk is declared with, and the interfaces which each of them declares.<para/>
+    /// Everything which the walk does not tell - a type which stands for another, the assembly of a type which is not
+    /// there to be read - is left to the runtime rather than refused, because the refusal here is a member which no
+    /// signature describes and the runtime is what refuses an instantiation which it does not accept.
+    /// </summary>
+    /// <param name="parameter">The parameter which the method declares.</param>
+    /// <param name="argument">The type which the parameter is instantiated with.</param>
+    /// <returns>Whether the argument satisfies every constraint which names a type.</returns>
+    private static bool SatisfiesTheConstraintsOf(GenericParameter parameter, TypeReference argument)
+    {
+        foreach (var constraint in parameter.Constraints)
+        {
+            if (!SatisfiesTheConstraint(constraint.ConstraintType, argument)) return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the type which a constraint names is one of the types which the argument is made of.
+    /// </summary>
+    /// <param name="constraint">The type which the constraint of the parameter names.</param>
+    /// <param name="argument">The type which the parameter is instantiated with.</param>
+    /// <returns>Whether the constraint is satisfied, or true where this read does not tell.</returns>
+    private static bool SatisfiesTheConstraint(TypeReference constraint, TypeReference argument)
+    {
+        // A constraint which names a type that stands for another - a parameter of the declaration, of the member or of
+        // the type which declares either - is one which only the instantiation of all of them tells.
+        if (HoldsAParameter(constraint)) return true;
+
+        // A parameter of a member or of a type stands for a type whose constraints tell in part alone what it is made
+        // of, and an array and a pointer are made of the interfaces which the runtime gives them rather than of the
+        // types which they hold: neither is read here.
+        if (argument is GenericParameter || IsAWrappedType(argument)) return true;
+
+        var walked = new HashSet<string>();
+        var pending = new Stack<TypeReference>();
+        pending.Push(argument);
+
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+
+            // A type which the walk reaches through another declaration is one whose types this read does not tell, as
+            // is a type which the assembly of it cannot be read for.
+            if (current is GenericParameter || IsAWrappedType(current)) return true;
+            if (!walked.Add(current.FullName)) continue;
+            if (TypeName.HasSameName(current, constraint)) return true;
+
+            var definition = DefinitionOf(current);
+            if (definition == null) return true;
+
+            foreach (var implemented in definition.Interfaces)
+            {
+                pending.Push(implemented.InterfaceType.WithTheArgumentsOf(definition, current));
+            }
+
+            if (definition.BaseType is { } baseType)
+            {
+                pending.Push(baseType.WithTheArgumentsOf(definition, current));
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether the type is one of the wrappers which this read does not walk through: an array, a pointer, an address,
+    /// a pinned and a sentinel type, and the two which carry a modifier beside the element.<para/>
+    /// An instance of a generic type is a wrapper as well and it is not one of these: the element of it is the
+    /// declaration whose base types and interfaces the arguments of the instance stand in, so it is walked.
+    /// </summary>
+    /// <param name="type">The type which is read.</param>
+    /// <returns>Whether the type is a wrapper which holds no declaration of its own.</returns>
+    private static bool IsAWrappedType(TypeReference type)
+        => type is not GenericInstanceType and TypeSpecification;
+
+    /// <summary>
+    /// Whether the type stands for another type anywhere among the types which it is written with.
+    /// </summary>
+    /// <param name="type">The type which is read.</param>
+    /// <returns>Whether a parameter of a declaration stands in the type at any depth.</returns>
+    private static bool HoldsAParameter(TypeReference type)
+        => type switch
+        {
+            GenericParameter => true,
+            GenericInstanceType genericInstance => genericInstance.GenericArguments.Any(HoldsAParameter),
+            TypeSpecification specification => HoldsAParameter(specification.ElementType),
+            _ => false
+        };
+
+    /// <summary>
+    /// The definition of the type which the assembly of it is read for, or null where that assembly is not there.
+    /// </summary>
+    /// <param name="type">The type which is read.</param>
+    /// <returns>The definition of the type, or null where the assembly of it was not read.</returns>
+    private static TypeDefinition? DefinitionOf(TypeReference type)
+    {
+        try
+        {
+            return type.Resolve();
+        }
+        catch (AssemblyResolutionException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
