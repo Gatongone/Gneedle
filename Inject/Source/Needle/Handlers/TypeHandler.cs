@@ -58,11 +58,11 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     /// <returns>The declaration of the type, and its members, each line indented by that many levels.</returns>
     internal string ToString(int level)
     {
-        var declaration = new string(' ', level * MethodHandler.Indentation);
-        var line        = new string(' ', (level + 1) * MethodHandler.Indentation);
+        var declaration = new string(' ', level * IlPrinter.Indentation);
+        var line        = new string(' ', (level + 1) * IlPrinter.Indentation);
         var text        = new StringBuilder();
 
-        text.Append(declaration).Append(".class ").Append(MethodHandler.TheAttributesOf(Source)).Append(' ').Append(Source.FullName);
+        text.Append(declaration).Append(".class ").Append(IlPrinter.TheAttributesOf(Source)).Append(' ').Append(Source.FullName);
 
         if (Source.BaseType != null)
         {
@@ -91,7 +91,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
 
         foreach (var method in Source.Methods)
         {
-            text.Append(new MethodHandler(method, this).ToString(level + 1));
+            text.Append(IlPrinter.Print(method, level + 1));
         }
 
         foreach (var nested in Source.NestedTypes)

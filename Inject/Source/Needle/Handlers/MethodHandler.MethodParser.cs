@@ -102,21 +102,21 @@ partial class MethodHandler
         // which no method of the declaring type could ever match.
         var invoked = delegateDef.Methods.First(method => method.Name.Equals("Invoke"));
         var parameters = invoked.Parameters
-                                 .Select(p => ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
+                                 .Select(p => StackWalk.ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
                                  .ToArray();
 
         // The delegate describes the member with the whole of its signature rather than with the types of its arguments
         // alone: what a member which declares parameters of its own hands back is what tells one instantiation of it
         // from another, and a parameter of it which no argument of the call stands in the place of is named by the value
         // which the delegate hands back, so that value is read where the member is looked up as well.
-        var returnType = ResolveDelegateParameterType(invoked.ReturnType, genericArguments).ParseGenericTokens(Source, Source.Module);
+        var returnType = StackWalk.ResolveDelegateParameterType(invoked.ReturnType, genericArguments).ParseGenericTokens(Source, Source.Module);
 
         // Detect Instance.Method with new Instance(param) syntax: need to skip the array init sequence.
         // The instance which the template reached the method through, which is the receiver of the call where the method
         // is not static: the sequence which builds the instance is dropped, so the value it holds has to stand where the
         // member takes a receiver.
         Instruction? receiverIns = null;
-        InstanceValue? instance = null;
+        StackWalk.InstanceValue? instance = null;
         var instanceName = -1;
         if (memberSymbol.HasFlag(MemberSymbols.Instance) && nameIndex is { } name && TryGetInstanceValue(filter, name, targetDef, out var value))
         {
@@ -192,11 +192,11 @@ partial class MethodHandler
             // member declares is read where the signature describes the parameters of the member alone as well, which is
             // the rule which a member that declares no parameter of its own is found by: the name of a type tells nothing
             // of the value which a call of it leaves, so the value is read here.
-            var memberHandsBack     = HandsAValueBack(methodDef.ReturnType);
-            var describedHandsBack  = HandsAValueBack(returnType);
+            var memberHandsBack     = StackWalk.HandsAValueBack(methodDef.ReturnType);
+            var describedHandsBack  = StackWalk.HandsAValueBack(returnType);
             if (memberHandsBack != describedHandsBack
                 || (memberHandsBack && methodDef.GenericParameters.Count == 0
-                    && !TheSameValueIsHandedBack(methodDef.ReturnType.WithTheArgumentsOf(methodDef.DeclaringType, declaringInstance), returnType)))
+                    && !StackWalk.TheSameValueIsHandedBack(Source.Module, methodDef.ReturnType.WithTheArgumentsOf(methodDef.DeclaringType, declaringInstance), returnType)))
             {
                 throw new ArgumentException(string.Format(ErrorMessages.INVALID_MEMBER_RETURN_TYPE, methodDef.FullName, Source.FullName));
             }
@@ -244,20 +244,20 @@ partial class MethodHandler
         // the instance was named by: a value which the template computed is one value in one place, so the local holds the
         // delegate where that is so, as it does for a local which stands for more than the invocation of it.
         var instanceIsComputed = instance is {Load: null};
-        var held = HeldLocal(filter.Target, callIndex);
+        var held = StackWalk.HeldLocal(filter.Target, callIndex);
 
         // The store which the local is written by holds the value which the symbol left only where every path of the body
         // goes through the symbol: the value which another path leaves there is the one the local holds just as well, and
         // the invocation of the local is then made on the member which that path names rather than on the one which the
         // symbol names. The delegate which each path built is what the local holds there, and neither symbol stands for
         // the invocation, so what each of them writes is the delegate of its own member.
-        if (held is { } store && !TheSymbolIsOnEveryPathTo(filter.Target, callIndex, store.Store, targetDef))
+        if (held is { } store && !StackWalk.TheSymbolIsOnEveryPathTo(filter, callIndex, store.Store, targetDef))
         {
             held = null;
         }
 
         var heldInvocations = held is { } stored && !instanceIsComputed
-            ? InvocationsOfTheHeldDelegate(filter.Target, stored.Local, delegateRef, targetDef)
+            ? InvocationsOfTheHeldDelegate(filter, stored.Local, delegateRef, targetDef)
             : null;
 
         if (held is { } heldStore && heldInvocations != null)
@@ -287,7 +287,7 @@ partial class MethodHandler
             }
         }
         // If there is `Invoke` method of the  target delegate is in following instructions, then replace it to the actual method calling.
-        else if (held == null && TryGetNextInvoke(filter.Target, callIndex, delegateRef, targetDef, out var callvirtIndex))
+        else if (held == null && TryGetNextInvoke(filter, callIndex, delegateRef, targetDef, out var callvirtIndex))
         {
             // The name of a symbol is dropped, and the receiver of a member of an instance is loaded in its place, which
             // is the instruction ahead of the call. A symbol which carries no name has no such instruction, so the load
@@ -666,7 +666,7 @@ partial class MethodHandler
             TypeReference? argType = null;
             if (TryGetInstanceValue(filter, currentIndex, targetDef, out var instance))
             {
-                argType = instance.Load is { } load ? GetArgType(load, targetDef) : GetValueType(filter, instance.Last, targetDef);
+                argType = instance.Load is { } load ? StackWalk.GetArgType(Context, load, targetDef) : GetValueType(filter, instance.Last, targetDef);
             }
 
             if (argType == null)
@@ -755,22 +755,24 @@ partial class MethodHandler
     /// is handed are pushed before it and by instructions of their own, so what the call reads can only be told by
     /// carrying the stack along from where it is empty.
     /// </summary>
-    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="filter">The filter which holds the instructions of the body which is parsed.</param>
     /// <param name="callIndex">Index of the instruction which loads the delegate.</param>
     /// <param name="delegateType">Type of the delegate which the symbol was parsed into.</param>
     /// <param name="targetDef">The template which the instructions belong to.</param>
     /// <param name="index">Index of the instruction which invokes the delegate.</param>
     /// <returns>Whether the instruction was found, which is false when the body invokes no such delegate after the symbol.</returns>
-    private bool TryGetNextInvoke(IReadOnlyList<Instruction> bodyInstructions, int callIndex, TypeReference delegateType, MethodDefinition targetDef, out int index)
+    private bool TryGetNextInvoke(InstructionFilter filter, int callIndex, TypeReference delegateType, MethodDefinition targetDef, out int index)
     {
+        var bodyInstructions = filter.Target;
+
         // This stack is used to ensure that the method parameters are of the same type as the method signature before they're all pushed to the stack.
-        var paramStack = new ParameterStack();
+        var paramStack = new StackWalk.ParameterStack();
         // This stack is used to cache the types of 'stloc' operand during scanning the method body.
-        var localStack = new TypeReference[bodyInstructions.Count];
+        var localStack = new TypeReference[bodyInstructions.Length];
 
         // TODO: Maybe we could cache all scanning results that wouldn't simulate parameter balance every time.
         // Scanning method body.
-        for (var i = 0; i < bodyInstructions.Count; i++)
+        for (var i = 0; i < bodyInstructions.Length; i++)
         {
             var ins = bodyInstructions[i];
             if (ins.OpCode == OpCodes.Nop) continue;
@@ -804,7 +806,7 @@ partial class MethodHandler
                 // The invocation is made on the value which the symbol left only where every path of the body goes
                 // through the symbol: the arms of a branch which each name a member of the same delegate type both
                 // leave a value for it, and the delegate which the arm which ran built is the one it is made on.
-                && TheSymbolIsOnEveryPathTo(bodyInstructions, callIndex, index, targetDef)
+                && StackWalk.TheSymbolIsOnEveryPathTo(filter, callIndex, index, targetDef)
                 && TopOfStackMatches(callMethod);                               // Make sure the top-of-stack types match the invoke parameters.
 
         // Whether the arguments of the invocation are exactly the values which stand above the one which the symbol left,
@@ -821,11 +823,6 @@ partial class MethodHandler
         bool TheSymbolLeftTheReceiver(MethodReference callMethod, int invocation)
         {
             if (invocation <= callIndex) return false;
-
-            // The instructions of the region, which the targets of the branches are read through: a branch which names
-            // an instruction of another place is one which leaves the region.
-            var region = new Dictionary<Instruction, int>(invocation - callIndex);
-            for (var i = callIndex + 1; i <= invocation; i++) region[bodyInstructions[i]] = i;
 
             // The number of values which stand above the one the symbol left when an instruction is reached, which is
             // held for every instruction of the region: two paths which reach one instruction with different numbers
@@ -859,14 +856,19 @@ partial class MethodHandler
                 // which the walk cannot count is one whose result cannot be told: either way the invocation is made on
                 // something other than the value which the symbol left.
                 var effect = ins.OpCode == OpCodes.Nop ? (Taken: 0, Left: 0)
-                           : BranchEffect(ins) ?? StackEffect(ins);
+                           : BranchEffect(ins) ?? StackWalk.StackEffect(ins);
                 if (effect is not { } counted) return false;
                 if (counted.Taken > above) return false;
                 var left = above + counted.Left - counted.Taken;
 
-                foreach (var successor in SuccessorsOf(ins))
+                // The instructions of the region are the ones which stand between the symbol and the invocation, which
+                // the index of an instruction tells: a branch which names an instruction before the symbol, after the
+                // invocation, or one of another body, is one which leaves the region.
+                foreach (var successor in StackWalk.SuccessorsOf(ins))
                 {
-                    if (!region.TryGetValue(successor, out var successorIndex)) return false;
+                    if (!filter.Index.TryGetValue(successor, out var successorIndex)
+                        || successorIndex <= callIndex || successorIndex > invocation) return false;
+
                     if (aboveAt[successorIndex - callIndex - 1] is { } seen)
                     {
                         if (seen != left) return false;
@@ -921,122 +923,12 @@ partial class MethodHandler
             {
                 // The token of a generic method is parsed here as well, so that the parameter of the delegate is compared
                 // as the generic parameter of the method which it stands for rather than as a type of Gneedle.Inject.
-                var expected = ResolveDelegateParameterType(invokeParameters[i].ParameterType, invokeGenericArguments).ParseGenericTokens(Source, Source.Module);
-                if (!StackTypeMatches(expected, paramStack.Types[offset + i], paramStack.Ins[offset + i])) return false;
+                var expected = StackWalk.ResolveDelegateParameterType(invokeParameters[i].ParameterType, invokeGenericArguments).ParseGenericTokens(Source, Source.Module);
+                if (!StackWalk.StackTypeMatches(Source.Module, expected, paramStack.Types[offset + i], paramStack.Ins[offset + i])) return false;
             }
 
             return true;
         }
-    }
-
-    /// <summary>
-    /// Whether every path which the body takes to an instruction passes through the one at <paramref name="callIndex"/>,
-    /// which is what the value which that instruction reads being the one which the symbol left means.<para/>
-    /// A path which reaches the instruction without going through the symbol is a path along which the value came from
-    /// somewhere else, which is what the arms of a branch leave where each of them names a member of the same delegate
-    /// type: the instruction after the join reads the value which the arm which ran left, which is the delegate of the
-    /// member of that arm, so neither symbol stands for it and each of them writes the delegate of its own member. The
-    /// walk starts where the runtime hands the control to the body, which is the instruction it begins with and the
-    /// beginning of each of its handlers, and it reads no instruction past one which ends the path it stands on.
-    /// </summary>
-    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
-    /// <param name="callIndex">Index of the instruction which the symbol stands for.</param>
-    /// <param name="target">Index of the instruction which reads the value.</param>
-    /// <param name="targetDef">The template which the instructions belong to.</param>
-    /// <returns>Whether the symbol stands on every path which reaches the instruction.</returns>
-    private static bool TheSymbolIsOnEveryPathTo(IReadOnlyList<Instruction> bodyInstructions, int callIndex, int target, MethodDefinition targetDef)
-    {
-        var at = new Dictionary<Instruction, int>(bodyInstructions.Count);
-        for (var i = 0; i < bodyInstructions.Count; i++) at[bodyInstructions[i]] = i;
-
-        var visited = new bool[bodyInstructions.Count];
-        var pending = new Stack<int>();
-
-        // The body is entered where it begins, and a handler of it is entered where it begins as well, because the
-        // runtime is what hands the control to both of them. An entry which is the instruction of the symbol itself is
-        // left out rather than pushed: a path which begins at the symbol is one which passes through it, so walking
-        // from there would ask whether the symbol stands on the paths which its own instruction leaves for, which is
-        // not the question the walk is asked.
-        void Enter(Instruction? entry)
-        {
-            if (entry != null && at.TryGetValue(entry, out var index) && index != callIndex) pending.Push(index);
-        }
-
-        if (bodyInstructions.Count > 0) Enter(bodyInstructions[0]);
-        foreach (var handler in targetDef.Body.ExceptionHandlers)
-        {
-            Enter(handler.TryStart);
-            Enter(handler.HandlerStart);
-            Enter(handler.FilterStart);
-        }
-
-        while (pending.Count > 0)
-        {
-            var index = pending.Pop();
-            if (visited[index]) continue;
-            visited[index] = true;
-
-            // The value which stands there was left by a path which the symbol stands on nowhere, so it is not the
-            // value which the symbol left.
-            if (index == target) return false;
-
-            foreach (var successor in SuccessorsOf(bodyInstructions[index]))
-            {
-                if (at.TryGetValue(successor, out var next) && next != callIndex && !visited[next]) pending.Push(next);
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// The instructions which an instruction hands a walk to: a branch leaves for the ones it names, and a branch which
-    /// is taken in one of two cases leaves for the instruction after it as well. The operand is what tells the two
-    /// apart, because an instruction which is not a branch carries an instruction as its operand nowhere.<para/>
-    /// An instruction which ends the path it stands on hands the control to no instruction of the body at all: what
-    /// stands after it is reached by nothing which runs, so a walk which read it would read a path the body never takes.
-    /// </summary>
-    /// <param name="ins">The instruction which is read.</param>
-    /// <returns>The instructions which it hands the control to.</returns>
-    private static IEnumerable<Instruction> SuccessorsOf(Instruction ins)
-    {
-        if (ins.Operand is Instruction target)
-        {
-            yield return target;
-            if (ins.OpCode.FlowControl == FlowControl.Cond_Branch && ins.Next != null) yield return ins.Next;
-            yield break;
-        }
-
-        if (ins.Operand is Instruction[] table)
-        {
-            foreach (var entry in table) yield return entry;
-            if (ins.Next != null) yield return ins.Next;
-            yield break;
-        }
-
-        if (ins.OpCode.Code is Code.Ret or Code.Throw or Code.Rethrow or Code.Jmp or Code.Endfinally or Code.Endfilter) yield break;
-
-        if (ins.Next != null) yield return ins.Next;
-    }
-
-    /// <summary>
-    /// The local which the value of a symbol is stored into, and the instruction which stores it, which is what a template
-    /// which holds the delegate or the handle of the symbol writes where it would otherwise use it.
-    /// </summary>
-    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
-    /// <param name="callIndex">Index of the instruction of the call which the symbol stands for.</param>
-    /// <returns>Index of the store and of the local which it writes, or null when the value is not stored into one.</returns>
-    private static (int Store, int Local)? HeldLocal(IList<Instruction> bodyInstructions, int callIndex)
-    {
-        for (var i = callIndex + 1; i < bodyInstructions.Count; i++)
-        {
-            var ins = bodyInstructions[i];
-            if (ins.OpCode == OpCodes.Nop) continue;
-
-            return ins.TryGetStlocIndex(out var local) ? (i, local) : null;
-        }
-
-        return null;
     }
 
     /// <summary>
@@ -1064,19 +956,20 @@ partial class MethodHandler
     /// which is read or written for anything else as well is one whose delegate stands for more than the invocation, and
     /// nothing is answered for it and the delegate is built into the local instead.
     /// </summary>
-    /// <param name="bodyInstructions">The instructions of the body which is parsed.</param>
+    /// <param name="filter">The filter which holds the instructions of the body which is parsed.</param>
     /// <param name="local">Index of the local which holds the delegate.</param>
     /// <param name="delegateType">Type of the delegate which the symbol was parsed into.</param>
     /// <param name="targetDef">The template which the instructions belong to.</param>
     /// <returns>Index of every read of the local and of the invocation which it is the receiver of, or null when the
     /// local stands for more than the invocation of its delegate.</returns>
-    private List<(int Read, int Invocation)>? InvocationsOfTheHeldDelegate(IReadOnlyList<Instruction> bodyInstructions, int local, TypeReference delegateType, MethodDefinition targetDef)
+    private List<(int Read, int Invocation)>? InvocationsOfTheHeldDelegate(InstructionFilter filter, int local, TypeReference delegateType, MethodDefinition targetDef)
     {
+        var bodyInstructions = filter.Target;
         var invocations = new List<(int Read, int Invocation)>();
         var reads = 0;
         var stores = 0;
 
-        for (var i = 0; i < bodyInstructions.Count; i++)
+        for (var i = 0; i < bodyInstructions.Length; i++)
         {
             var ins = bodyInstructions[i];
             if (ins.TryGetStlocIndex(out var written) && written == local) stores++;
@@ -1084,90 +977,13 @@ partial class MethodHandler
             if (!ins.TryGetLdlocIndex(out var read) || read != local) continue;
 
             reads++;
-            if (!TryGetNextInvoke(bodyInstructions, i, delegateType, targetDef, out var invocation)) continue;
+            if (!TryGetNextInvoke(filter, i, delegateType, targetDef, out var invocation)) continue;
 
             invocations.Add((i, invocation));
         }
 
         return stores == 1 && invocations.Count == reads ? invocations : null;
     }
-
-    /// <summary>
-    /// Compare an expected parameter type against a type inferred from the evaluation stack.
-    /// Integer-family types (bool/char/[s]byte/[u]short/int) are all loaded via <c>ldc.i4.*</c>
-    /// and therefore indistinguishable on the stack, so they are treated as compatible.
-    /// </summary>
-    /// <param name="expected">The type which the call expects the value to be.</param>
-    /// <param name="actual">The type of the value which the evaluation stack holds.</param>
-    /// <param name="pushedBy">The instruction which pushed the value.</param>
-    private bool StackTypeMatches(TypeReference expected, TypeReference actual, Instruction pushedBy)
-        => TypeName.HasSameName(expected, actual)
-            || (IsI4Compatible(expected) && IsI4Compatible(actual))
-            // An enumeration is carried as the value under it, which is what a template which computes one out of an
-            // integer leaves on the stack: there is no instruction which names the enumeration.
-            || (IsI4Compatible(actual) && HasAnI4UnderlyingType(expected))
-            // A value which was boxed is carried as the type it was boxed from, and it is the value which a call of a
-            // parameter of `object` is made with rather than a reference of a type which names `object`.
-            || (pushedBy.OpCode.Code == Code.Box && expected.MetadataType == MetadataType.Object);
-
-    /// <summary>
-    /// Whether the values of a type are carried by the stack as 4-byte integers, which is what an enumeration of an
-    /// integer under it is, while a structure of the same width is carried as a value of its own type.
-    /// </summary>
-    /// <param name="type">The type which is read.</param>
-    /// <returns>Whether the type is an enumeration which the stack carries as a 4-byte integer.</returns>
-    private bool HasAnI4UnderlyingType(TypeReference type)
-    {
-        try
-        {
-            return type.ResolveDefinition(Source.Module) is {IsEnum: true} definition
-                && definition.Fields.FirstOrDefault(field => field.Name == "value__") is { } value
-                && IsI4Compatible(value.FieldType);
-        }
-        catch (AssemblyResolutionException)
-        {
-            // A type of an assembly which is not there is not one which the value on the stack can be told to be, and
-            // the arguments are left to be compared by name, which the walk refuses rather than guesses.
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Whether the type of the value which a call hands back is that of a value at all, which is what tells a member
-    /// which hands a value back from one which hands nothing back: a call of a member which hands nothing back leaves
-    /// nothing where it stood, so no value which a delegate hands back names such a call.
-    /// </summary>
-    /// <param name="returnType">The type which the signature of the call hands back.</param>
-    /// <returns>Whether a value is handed back.</returns>
-    private static bool HandsAValueBack(TypeReference returnType) => returnType.MetadataType != MetadataType.Void;
-
-    /// <summary>
-    /// Whether the value which a member hands back is the value which the delegate describes it with: the values of the
-    /// integer family are carried by the stack as the same value whatever the width of the type which names them, so a
-    /// member which hands back an int32 is one which the delegate may describe with an int32 as well, and one which
-    /// hands back the value under an enumeration is one which it may describe with that enumeration.
-    /// </summary>
-    /// <param name="member">The type of the value which the member hands back.</param>
-    /// <param name="described">The type of the value which the delegate hands back.</param>
-    /// <returns>Whether the two name the same value.</returns>
-    private bool TheSameValueIsHandedBack(TypeReference member, TypeReference described)
-        => TypeName.HasSameName(member, described)
-           || (IsI4Compatible(member) && IsI4Compatible(described))
-           || (IsI4Compatible(described) && HasAnI4UnderlyingType(member));
-
-    /// <summary>
-    /// Whether the type is represented as a 4-byte integer on the CLR evaluation stack,
-    /// i.e. loaded via the <c>ldc.i4.*</c> opcodes and thus not distinguishable by opcode alone.
-    /// </summary>
-    private static bool IsI4Compatible(TypeReference type)
-        => type.MetadataType is MetadataType.Boolean
-                             or MetadataType.Char
-                             or MetadataType.SByte
-                             or MetadataType.Byte
-                             or MetadataType.Int16
-                             or MetadataType.UInt16
-                             or MetadataType.Int32
-                             or MetadataType.UInt32;
 
     /// <summary>
     /// Consider how the instruction should pop from or push into <c>paramStack</c>.
@@ -1177,7 +993,7 @@ partial class MethodHandler
     /// <param name="localStack"></param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
     /// <exception cref="ArgumentException"></exception>
-    private void BalanceStack(Instruction ins, ParameterStack paramStack, TypeReference[] localStack, MethodDefinition targetDef)
+    private void BalanceStack(Instruction ins, StackWalk.ParameterStack paramStack, TypeReference[] localStack, MethodDefinition targetDef)
     {
         // When any method call, the parameters stack should reduce by the same amount as the method parameters count.
         if ((ins.OpCode == OpCodes.Callvirt || ins.OpCode == OpCodes.Call) && ins.Operand is MethodReference callMethod)
@@ -1203,10 +1019,10 @@ partial class MethodHandler
         // stack: what a conversion converts, what a cast casts and what a read reads out of is not left under the value
         // which is left, and the arguments of a call are the values which were pushed last, so a value left under them
         // would be read in their place.
-        if (LeavesAValueInPlaceOfTheOneItIsHanded(ins) && paramStack.Types.Count > 0) paramStack.Pop(1);
+        if (StackWalk.LeavesAValueInPlaceOfTheOneItIsHanded(ins) && paramStack.Types.Count > 0) paramStack.Pop(1);
 
         // When the instruction push any variable to the method stack, it should be appended to the parameters stack.
-        if (TryGetStackType(ins, targetDef, out var type))
+        if (StackWalk.TryGetStackType(Context, ins, targetDef, out var type))
         {
             // Sanity check.
             if (type == null)
@@ -1232,217 +1048,6 @@ partial class MethodHandler
             {
                 paramStack.Push(ins, localType);
             }
-        }
-    }
-
-    /// <summary>
-    /// Whether an instruction leaves a value of a type which is not the type of the value it is handed, which is what
-    /// the conversions, the casts, the boxes and the reads do.
-    /// </summary>
-    /// <param name="ins">The instruction which is read.</param>
-    /// <returns>Whether the instruction leaves another value in place of the one it is handed.</returns>
-    private static bool LeavesAValueInPlaceOfTheOneItIsHanded(Instruction ins) => ins.OpCode.Code is
-        Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_I8 or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4
-     or Code.Conv_U8 or Code.Conv_I or Code.Conv_U or Code.Conv_R4 or Code.Conv_R8 or Code.Conv_R_Un
-     or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_I8 or Code.Conv_Ovf_U1
-     or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_U8 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un
-     or Code.Box or Code.Unbox or Code.Unbox_Any or Code.Castclass or Code.Isinst
-     or Code.Ldfld or Code.Ldflda or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8
-     or Code.Ldind_I or Code.Ldind_R4 or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2
-     or Code.Ldind_U4;
-
-    /// <summary>
-    /// The type of the value which an instruction leaves on the stack, which is read off the instruction itself where
-    /// the instruction writes that type into it, and off the member the instruction loads where it reads one.
-    /// </summary>
-    /// <param name="ins">The instruction which is read.</param>
-    /// <param name="targetDef">The template which the instruction belongs to.</param>
-    /// <param name="type">The type of the value which the instruction leaves, or null when it leaves none.</param>
-    /// <returns>Whether the instruction leaves a value on the stack, <see cref="void"/> being none.</returns>
-    private bool TryGetStackType(Instruction ins, MethodDefinition targetDef, out TypeReference? type)
-    {
-        var module = Source.Module;
-        var typeSystem = module.TypeSystem;
-        var code = ins.OpCode.Code;
-
-        type = code switch
-        {
-            Code.Ldc_I4_M1 => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_0  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_1  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_2  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_3  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_4  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_5  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_6  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_7  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_8  => typeSystem.Int32,  // Int32
-            Code.Ldc_I4_S  => typeSystem.Int32,  // Int32
-            Code.Ldc_I8    => typeSystem.Int64,  // Int64
-            Code.Ldstr     => typeSystem.String, // String
-            Code.Ldc_R4    => typeSystem.Single, // Single
-            Code.Ldc_R8    => typeSystem.Double, // Double
-            Code.Ldnull    => typeSystem.Object, // Null
-            // The conversions which an argument of a type other than the one which was computed is handed over
-            // through: the value is left of the type which was converted to, and the narrow ones are all carried as
-            // 4-byte integers whichever of them they are.
-            Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4
-             or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_U1
-             or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un => typeSystem.Int32, // Conv, narrow
-            Code.Conv_I8 or Code.Conv_Ovf_I8 => typeSystem.Int64,                                                     // Conv, Int64
-            Code.Conv_U8 or Code.Conv_Ovf_U8 => typeSystem.UInt64,                                                    // Conv, UInt64
-            Code.Conv_I                      => typeSystem.IntPtr,                                                    // Conv, native
-            Code.Conv_U                      => typeSystem.UIntPtr,                                                   // Conv, native
-            Code.Conv_R4                     => typeSystem.Single,                                                    // Conv, Single
-            Code.Conv_R8 or Code.Conv_R_Un   => typeSystem.Double,                                                    // Conv, Double
-            // The instructions which leave the type they name, which is the type of the value they leave: what is
-            // looked for when the argument is the value which a call hands over.
-            Code.Box or Code.Unbox_Any or Code.Castclass or Code.Isinst when ins.Operand is TypeReference cast => cast,            // Cast
-            Code.Ldfld or Code.Ldsfld when ins.Operand is FieldReference field                                 => field.FieldType, // Field
-            // The instructions which load the address of an argument or of a local rather than the value it holds, which
-            // is what a template writes where it hands one to a member by `ref` or `out`: what stands on the stack is an
-            // address of that type rather than a value of it, which is the type the delegate declares the argument as.
-            Code.Ldarga or Code.Ldarga_S or Code.Ldloca or Code.Ldloca_S                           => GetAddressType(ins, targetDef),     // Address
-            Code.Newobj when ins.Operand is MethodReference ctor                                   => ctor.DeclaringType,                 // Newobj
-            Code.Call or Code.Callvirt or Code.Ldftn when ins.Operand is MethodReference methodRef => ResolveMethodReturnType(methodRef), // Call
-            _                                                                                      => GetArgType(ins, targetDef)          // Args
-        };
-
-        return type != null && type != typeSystem.Void;
-    }
-
-    /// <summary>
-    /// The type of the argument which an instruction loads, which is the type of the parameter at the position it
-    /// loads, or the type which declares the template when it loads the receiver.
-    /// </summary>
-    /// <param name="instruction">The instruction which loads the argument.</param>
-    /// <param name="targetDef">The template which the instruction belongs to, whose parameters and staticness the position is read against.</param>
-    /// <returns>The type of the argument, or null when the instruction loads none.</returns>
-    private TypeReference? GetArgType(Instruction instruction, MethodDefinition targetDef)
-    {
-        var isStatic = targetDef.IsStatic;
-        if (!instruction.TryGetLdargIndex(!isStatic, out var slot)) return null;
-        if (!isStatic && slot == 0) return targetDef.DeclaringType;
-
-        // The parameter of a template is a token when it stands for a generic parameter of the method being woven, just
-        // as the parameter of a delegate is, so it is parsed to that parameter before the type is compared with anything.
-        // The load may name a slot which the template holds no parameter for, which is a body the weaving refuses with a
-        // message of its own rather than a type to compare against.
-        return ArgumentAt(slot, targetDef)?.ParseGenericTokens(Source, Source.Module);
-    }
-
-    /// <summary>
-    /// The type of the address which an instruction which reads the address of a value leaves on the stack, which is the
-    /// type of the value that the address is of, by reference.
-    /// </summary>
-    /// <param name="ins">The instruction which reads the address.</param>
-    /// <param name="targetDef">The template which the instruction belongs to, whose arguments and locals the operand names.</param>
-    /// <returns>The type of the address, or null when the operand names no argument and no local.</returns>
-    private TypeReference? GetAddressType(Instruction ins, MethodDefinition targetDef)
-    {
-        var readsAnArgument = ins.OpCode.Code is Code.Ldarga or Code.Ldarga_S;
-        var addressed = ins.Operand switch
-        {
-            VariableReference local                                          => local.VariableType,
-            ParameterReference argument                                      => argument.ParameterType,
-            int slot when readsAnArgument                                    => ArgumentAt(slot, targetDef),
-            int slot when slot >= 0 && slot < targetDef.Body.Variables.Count => targetDef.Body.Variables[slot].VariableType,
-            _                                                                => null
-        };
-
-        return addressed is { } type ? new ByReferenceType(type.ParseGenericTokens(Source, Source.Module)) : null;
-    }
-
-    /// <summary>
-    /// The type of the argument which a slot names, the receiver being the slot which is taken first where the template
-    /// belongs to an instance.
-    /// </summary>
-    /// <param name="slot">Slot of the argument.</param>
-    /// <param name="targetDef">The template whose arguments the slot is read against.</param>
-    /// <returns>The type of the argument, or null when the slot names none of them.</returns>
-    private static TypeReference? ArgumentAt(int slot, MethodDefinition targetDef)
-    {
-        var position = slot - (targetDef.IsStatic ? 0 : 1);
-        return position >= 0 && position < targetDef.Parameters.Count ? targetDef.Parameters[position].ParameterType : null;
-    }
-
-    /// <summary>
-    /// What a call hands back, with the generic return of a generic method, and of a method of a generic type, resolved
-    /// to the argument which the call was given.
-    /// </summary>
-    /// <param name="methodRef">The method which the call reads.</param>
-    /// <returns>The type of the value which the call leaves on the stack.</returns>
-    private static TypeReference ResolveMethodReturnType(MethodReference methodRef)
-    {
-        if (methodRef.ReturnType is not GenericParameter parameter) return methodRef.ReturnType;
-        if (methodRef is GenericInstanceMethod genericMethod)
-            return genericMethod.GenericArguments[parameter.Position];
-        if (methodRef.DeclaringType is GenericInstanceType genericType)
-            return genericType.GenericArguments[parameter.Position];
-        return methodRef.ReturnType;
-    }
-
-    /// <summary>
-    /// Resolve a delegate Invoke parameter type. When the delegate is a generic instance,
-    /// open generic parameters (e.g. T1) are mapped to the actual generic arguments (e.g. Int32).
-    /// </summary>
-    private static TypeReference ResolveDelegateParameterType(TypeReference parameterType, Mono.Collections.Generic.Collection<TypeReference>? genericArguments)
-        => parameterType is GenericParameter parameter && genericArguments != null && parameter.Position < genericArguments.Count
-            ? genericArguments[parameter.Position]
-            : parameterType;
-
-    /// <summary>
-    /// The stack which the body being parsed builds as it is walked, which holds the type of every value that is pushed
-    /// so that the arguments a call is made with can be compared with the parameters of the member it calls.<para/>
-    /// The values themselves are of no interest, and the instruction which pushed each of them is kept only so that a
-    /// value which is read out of the stack again can be told apart from one which was never on it.
-    /// </summary>
-    private class ParameterStack
-    {
-        /// <summary>
-        /// The instruction which pushed each of the values, in the order they were pushed.
-        /// </summary>
-        public readonly List<Instruction> Ins = [];
-
-        /// <summary>
-        /// The type of each of the values, in the order they were pushed, which is the order of <see cref="Ins"/>.
-        /// </summary>
-        public readonly List<TypeReference> Types = [];
-
-        /// <summary>
-        /// Put a value of a type on top of the stack.
-        /// </summary>
-        /// <param name="ins">The instruction which pushed it.</param>
-        /// <param name="type">The type of the value.</param>
-        public void Push(Instruction ins, TypeReference type)
-        {
-            Ins.Add(ins);
-            Types.Add(type);
-        }
-
-        /// <summary>
-        /// Take the values which were pushed last off the stack.
-        /// </summary>
-        /// <param name="count">How many values to take off.</param>
-        public void Pop(int count)
-        {
-            for (var i = 0; i < count; i++)
-            {
-                Ins.RemoveAt(Ins.Count - 1);
-                Types.RemoveAt(Types.Count - 1);
-            }
-        }
-
-        /// <summary>
-        /// Take the value which was pushed last off the stack.
-        /// </summary>
-        /// <returns>The instruction which pushed the value and the type of it.</returns>
-        public (Instruction Ins, TypeReference Type) Pop()
-        {
-            var result = (Ins[Ins.Count - 1], Types[Types.Count - 1]);
-            Ins.RemoveAt(Ins.Count - 1);
-            Types.RemoveAt(Types.Count - 1);
-            return result;
         }
     }
 }

@@ -42,7 +42,7 @@ partial class MethodHandler
     private void ParseField(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         // Can't convert 'callvirt' to `Ldstr {field_name}`, because it doesn't even exist.
-        if (!TryGetNextGetOrSet(filter.Target, currentIndex + 2, out var isGet, out var callvirtIndex))
+        if (!StackWalk.TryGetNextGetOrSet(filter.Target, currentIndex + 2, out var isGet, out var callvirtIndex))
         {
             throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, memberName));
         }
@@ -57,7 +57,7 @@ partial class MethodHandler
         // static: the sequence which builds the instance is dropped, so the value it holds has to stand where the member
         // takes a receiver.
         Instruction? receiverIns = null;
-        InstanceValue? instance = null;
+        StackWalk.InstanceValue? instance = null;
 
         if (memberSymbol.HasFlag(MemberSymbols.Instance) && TryGetInstanceValue(filter, currentIndex, targetDef, out var value))
         {
@@ -66,7 +66,7 @@ partial class MethodHandler
             // The type of the instance may stand for the type of another assembly, in which case the field is looked up on
             // the real one. A value whose type the walk cannot tell names no type to look one up on, which the lookup
             // below refuses in the same way as a sequence which was not read at all.
-            var instanceType = value.Load is { } load ? GetArgType(load, targetDef) : GetValueType(filter, value.Last, targetDef);
+            var instanceType = value.Load is { } load ? StackWalk.GetArgType(Context, load, targetDef) : GetValueType(filter, value.Last, targetDef);
             if (instanceType != null)
             {
                 declaringTypeFromPattern = instanceType.ResolveDefinition(Source.Module);
@@ -116,8 +116,8 @@ partial class MethodHandler
         // A handle which the template holds in a local is read and written through that local rather than where the
         // name stands, so what the name stands for is the handle itself: nothing of it is written, and every accessor
         // which a read of the local is the receiver of is written as the field instead.
-        var held          = HeldLocal(filter.Target, currentIndex + 1);
-        var heldAccessors = held is { } handle ? AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
+        var held          = StackWalk.HeldLocal(filter.Target, currentIndex + 1);
+        var heldAccessors = held is { } handle ? StackWalk.AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
         if (held != null && heldAccessors == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));

@@ -50,7 +50,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// <returns>The declaration of the assembly, and its types, with the IL of every method which they hold.</returns>
     public override string ToString()
     {
-        var line = new string(' ', MethodHandler.Indentation);
+        var line = new string(' ', IlPrinter.Indentation);
         var text = new StringBuilder();
 
         text.Append(".assembly ").Append(Assembly.Source.Name.Name).AppendLine();

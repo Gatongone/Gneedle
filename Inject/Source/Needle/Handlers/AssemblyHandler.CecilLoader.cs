@@ -19,7 +19,7 @@ partial class AssemblyHandler
                 // A token stands for a generic parameter of the target type or of the method, so it is parsed before
                 // GetCecilType. GetCecilType would append a Gneedle.Inject assembly reference to the target module,
                 // which leaves the produced assembly depending on the weaver even though the token itself is replaced.
-                if (CecilExtensions.TryResolveGenericParameter(nongenericType.Type, target as IMemberDefinition, methodGenericParameters,
+                if (TokenParsing.TryResolveGenericParameter(nongenericType.Type, target as IMemberDefinition, methodGenericParameters,
                     out var tokenParameter))
                 {
                     return tokenParameter!;
@@ -181,7 +181,7 @@ partial class AssemblyHandler
         // they share the cache entry as well.
         if (Attribute.GetCustomAttribute(type, typeof(FromAssemblyAttribute)) is FromAssemblyAttribute fromAssembly)
         {
-            var fromAssemblyDefinition = CecilExtensions.ResolveTypeFromAssembly(Assembly.Source.MainModule, fromAssembly.Name, type.FullName!);
+            var fromAssemblyDefinition = FromAssembly.ResolveTypeFromAssembly(Assembly.Source.MainModule, fromAssembly.Name, type.FullName!);
             cecilType                                  = new CecilType(fromAssemblyDefinition, Assembly.Source.MainModule.ImportReference(fromAssemblyDefinition));
             m_TypeCache[new TypeName(type).ToString()] = cecilType;
             return cecilType;
