@@ -1,7 +1,9 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// The flags which a handler reads back off the definition which it handles, which is the inverse of what the flags
@@ -13,7 +15,6 @@ namespace Gneedle.Inject.Test;
 [TestFixture]
 public class HandlerFlagsTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     /// <summary>
     /// The handler of a class of the attributes named, declared at the top of an assembly of its own. Every test asks

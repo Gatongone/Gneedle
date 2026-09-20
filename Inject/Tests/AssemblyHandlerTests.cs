@@ -1,12 +1,13 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
+using static Gneedle.Inject.Test.TestFixtures;
+
 [TestFixture]
 public class AssemblyHandlerTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     [Test]
     public void GetType_Returns_Outer_Type()

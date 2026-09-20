@@ -1,7 +1,9 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Mono.Cecil;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// Tests for the <see cref="Assembly"/> which is created, read and written back: the entry points which are backed by
@@ -10,7 +12,6 @@ namespace Gneedle.Inject.Test;
 [TestFixture]
 public class AssemblyTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     /// <summary>
     /// Add a type which the assembly holds, and hand back the handler of it.

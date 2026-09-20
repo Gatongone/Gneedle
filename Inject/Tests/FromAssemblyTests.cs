@@ -1,4 +1,4 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Gneedle.Inject;
 using Gneedle.Test.Generated;
@@ -68,6 +68,8 @@ namespace Gneedle.Test.Generated
 
 namespace Gneedle.Inject.Test
 {
+    using static Gneedle.Inject.Test.TestFixtures;
+
     /// <summary>
     /// Tests for <see cref="FromAssemblyAttribute"/>, which makes a stub declared in the template assembly stand for the
     /// type of the same full name which another assembly declares.
@@ -75,7 +77,6 @@ namespace Gneedle.Inject.Test
     [TestFixture]
     public class FromAssemblyTests
     {
-        private const string Ns = "Gneedle.Test.Generated";
 
         /// <summary>
         /// Template bodies live in the test assembly so Cecil can resolve them from disk.
@@ -147,11 +148,7 @@ namespace Gneedle.Inject.Test
             stub.Methods.Add(setter);
             stub.Properties.Add(new PropertyDefinition(nameof(Stub.Property), PropertyAttributes.None, module.TypeSystem.Int32) { GetMethod = getter, SetMethod = setter });
 
-            var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-            constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-            constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-            constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-            stub.Methods.Add(constructor);
+            AddAnInstanceConstructor(stub, module);
 
             module.Types.Add(stub);
 

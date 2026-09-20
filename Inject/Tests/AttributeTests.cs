@@ -1,6 +1,8 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// The attribute which the tests below put on the metadata which they build. It is declared by the test assembly rather
@@ -21,7 +23,6 @@ internal sealed class MarkerAttribute : Attribute
 [TestFixture]
 public class AttributeTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     private static TypeHandler NewHost(string assemblyName)
     {

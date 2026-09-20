@@ -12,6 +12,8 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
+using static Gneedle.Inject.Test.TestFixtures;
+
 /// <summary>
 /// Tests for the placeholders which a template reaches the members of the type it is woven into through: <c>This</c>,
 /// <c>Base</c>, <c>Instance</c> and <c>Static</c>. Each of them is a call which throws when it runs, and each of them is
@@ -20,7 +22,6 @@ namespace Gneedle.Inject.Test;
 [TestFixture]
 public class PointerTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     /// <summary>
     /// The type which the templates of <c>Instance</c> hold an instance of, and which the tests pass as the argument of a
@@ -1013,7 +1014,6 @@ public class PointerTests
         public static int InstanceMethod_OfAFieldOfAnInstance(HelperClass outer, int a) => new Instance(outer.Inner!).Method<IntOp>("Calc")(a);
     }
 
-    private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
 
     /// <summary>
     /// Assert that the assembly which was woven names nothing of the weaver: the weaving writes what the template asked
@@ -1053,11 +1053,7 @@ public class PointerTests
     private static Type LoadHostOf(Assembly assembly, TypeHandler host)
     {
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         return assembly.Load().GetType($"{Ns}.Host")!;
     }
@@ -1108,11 +1104,7 @@ public class PointerTests
 
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         var instance = Activator.CreateInstance(type);
@@ -2630,11 +2622,7 @@ public class PointerTests
 
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(64));
@@ -2665,11 +2653,7 @@ public class PointerTests
 
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(63));
@@ -2699,11 +2683,7 @@ public class PointerTests
 
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(63));
@@ -2734,11 +2714,7 @@ public class PointerTests
 
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(42));
@@ -2770,11 +2746,7 @@ public class PointerTests
 
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(42));
@@ -2806,11 +2778,7 @@ public class PointerTests
 
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{Ns}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(28));
@@ -4495,11 +4463,7 @@ public class PointerTests
         // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it,
         // which is what the tests below do to run the member which they wove.
         var module = assembly.Source.MainModule;
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         return (assembly, host, method);
     }

@@ -1,12 +1,13 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
+using static Gneedle.Inject.Test.TestFixtures;
+
 [TestFixture]
 public class MethodTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     private static IClassHandler NewClass()
     {

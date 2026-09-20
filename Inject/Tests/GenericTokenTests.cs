@@ -1,7 +1,9 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// Tests for the <c>Gneedle.Inject.T_[0-20]</c> / <c>Gneedle.Inject.M_[0-20]</c> tokens.
@@ -37,7 +39,6 @@ public class NamedSecondHelperBase
 [TestFixture]
 public class GenericTokenTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     /// <summary>
     /// Template bodies live in the test assembly so Cecil can resolve them from disk.

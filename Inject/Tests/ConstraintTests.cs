@@ -1,12 +1,13 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
 
 namespace Gneedle.Inject.Test;
 
+using static Gneedle.Inject.Test.TestFixtures;
+
 [TestFixture]
 public class ConstraintTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     private static TypeHandler NewClass()
     {

@@ -1,6 +1,8 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// Tests for adding a type of each kind to the assembly through the handler which adds it, which is a class, a struct and
@@ -9,7 +11,6 @@ namespace Gneedle.Inject.Test;
 [TestFixture]
 public class TypeInjectorTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     private static AssemblyHandler CreateHandler()
         => (AssemblyHandler) Assembly.Create("TestAssembly").Handler;

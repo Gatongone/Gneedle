@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Assembly = Gneedle.Inject.Assembly;
@@ -7,6 +7,8 @@ using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 using PropertyAttributes = Mono.Cecil.PropertyAttributes;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// Templates for the bodies of a property's accessors, which live top level in the test assembly so that Cecil can
@@ -68,7 +70,6 @@ public class AutoPropertyBase
 [TestFixture]
 public class PropertyTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     /// <summary>
     /// Create a host which carries a constructor, so that an instance of it could be created once it is loaded.
@@ -80,11 +81,7 @@ public class PropertyTests
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
 
         // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it.
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(object).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host);
 
         return (assembly, host);
     }
@@ -144,16 +141,11 @@ public class PropertyTests
         // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it. A
         // constructor of a type which derives from another one reaches the constructor of that one rather than the one
         // of the object at the root of the hierarchy, which is what a type without a base type reaches.
-        var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, module.ImportReference(typeof(AutoPropertyBase).GetConstructor(Type.EmptyTypes)!)));
-        constructor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-        host.Source.Methods.Add(constructor);
+        AddAnInstanceConstructor(host, typeof(AutoPropertyBase));
 
         return (assembly, host);
     }
 
-    private static MethodInfo Template(Type holder, string name) => holder.GetMethod(name)!;
 
     private static MethodDefinition GetterOf(TypeHandler host) => host.Source.Properties.Single().GetMethod!;
 

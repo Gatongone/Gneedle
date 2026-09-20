@@ -1,8 +1,10 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using MethodInfo = System.Reflection.MethodInfo;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 
 namespace Gneedle.Inject.Test;
+
+using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// A template of five arguments which belongs to an instance of its own type, so that its first argument is the slot
@@ -217,7 +219,6 @@ public sealed class DisposableElements(int value) : IEnumerable<int>
 [TestFixture]
 public class SetBodyTests
 {
-    private const string Ns = "Gneedle.Test.Generated";
 
     // Template method bodies copied by the injector. Kept in the test assembly so
     // Cecil can resolve them from disk via the default assembly resolver.
