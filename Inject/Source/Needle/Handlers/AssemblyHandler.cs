@@ -24,7 +24,9 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// The cecil types has imported.<para/>
     /// The types of the module are read through it while the weaving runs, and a decorator which describes a type holds
     /// the handler which holds this cache until the chain which describes it ends: the reads and the writes of it are
-    /// not one thread's.
+    /// not one thread's. A lookup which finds an entry writes nothing, and the one which misses is the one which
+    /// imports, which appends to the tables of the module: those are written under the lock of that module, which is
+    /// what makes the two of them safe together rather than the dictionary alone.
     /// </summary>
     private readonly ConcurrentDictionary<string, CecilType> m_TypeCache = new();
 
@@ -84,11 +86,17 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         // Check repeat.
         VerifyReferenceCycle(targetAssembly);
 
-        // Append target reference to collections.
-        var references = Assembly.Source.MainModule.AssemblyReferences;
-        if (!references.Any(nameRef => nameRef.FullName.Equals(targetAssembly.FullName)))
+        // Append target reference to collections. The reading which tells whether the reference is there and the writing
+        // of it are one step, which is what the lock of the module holds together: a lookup which ran between them would
+        // append a second reference of the same assembly, which nothing tells how to resolve.
+        var module = Assembly.Source.MainModule;
+        lock (ModuleLock.Of(module))
         {
-            references.Add(targetAssembly.Name);
+            var references = module.AssemblyReferences;
+            if (!references.Any(nameRef => nameRef.FullName.Equals(targetAssembly.FullName)))
+            {
+                references.Add(targetAssembly.Name);
+            }
         }
     }
 
@@ -112,24 +120,31 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     private void AddDefaultTypes()
     {
         var module = Assembly.Source.MainModule;
-        AddType(module.TypeSystem.Boolean);
-        AddType(module.TypeSystem.Int16);
-        AddType(module.TypeSystem.Int32);
-        AddType(module.TypeSystem.Int64);
-        AddType(module.TypeSystem.UInt16);
-        AddType(module.TypeSystem.UInt32);
-        AddType(module.TypeSystem.UInt64);
-        AddType(module.TypeSystem.Byte);
-        AddType(module.TypeSystem.SByte);
-        AddType(module.TypeSystem.Char);
-        AddType(module.TypeSystem.Double);
-        AddType(module.TypeSystem.Single);
-        AddType(module.TypeSystem.String);
-        AddType(module.TypeSystem.IntPtr);
-        AddType(module.TypeSystem.UIntPtr);
-        AddType(module.TypeSystem.Void);
-        AddType(module.TypeSystem.Object);
-        AddType(module.ImportReference(typeof(decimal)));
+
+        // The one import which this makes - the decimal, which the type system of a module does not carry - appends to
+        // the tables of the module, so the whole of the method is written under the lock of that module.
+        lock (ModuleLock.Of(module))
+        {
+            AddType(module.TypeSystem.Boolean);
+            AddType(module.TypeSystem.Int16);
+            AddType(module.TypeSystem.Int32);
+            AddType(module.TypeSystem.Int64);
+            AddType(module.TypeSystem.UInt16);
+            AddType(module.TypeSystem.UInt32);
+            AddType(module.TypeSystem.UInt64);
+            AddType(module.TypeSystem.Byte);
+            AddType(module.TypeSystem.SByte);
+            AddType(module.TypeSystem.Char);
+            AddType(module.TypeSystem.Double);
+            AddType(module.TypeSystem.Single);
+            AddType(module.TypeSystem.String);
+            AddType(module.TypeSystem.IntPtr);
+            AddType(module.TypeSystem.UIntPtr);
+            AddType(module.TypeSystem.Void);
+            AddType(module.TypeSystem.Object);
+            AddType(module.ImportReference(typeof(decimal)));
+        }
+
         return;
 
         // Cache a type of the type system of the module, which is the kind the weaver writes the most of.
