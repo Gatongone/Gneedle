@@ -56,11 +56,25 @@ public readonly struct TypeName : IEquatable<TypeName>
     /// Create type name from <see cref="Mono.Cecil.TypeReference"/>.
     /// </summary>
     /// <param name="typeRef">The name owner.</param>
-    public TypeName(TypeReference typeRef) => Name = typeRef is GenericInstanceType genericInstance
-        ? genericInstance.FullName
-            .Replace('<', '[')
-            .Replace('>', ']')
-        : typeRef.FullName;
+    public TypeName(TypeReference typeRef) => Name = TheNameOf(typeRef);
+
+    /// <summary>
+    /// The name which a type is written with here, which is the one a <see cref="Type"/> spells: the types which a type
+    /// is nested in are separated by a plus, where the metadata separates them by a slash, so that a name which came
+    /// from a type of the runtime and one which came from a reference of the metadata are one name.
+    /// </summary>
+    /// <param name="typeRef">The type whose name is written.</param>
+    /// <returns>The name of the type.</returns>
+    private static string TheNameOf(TypeReference typeRef)
+    {
+        var name = typeRef is GenericInstanceType genericInstance
+            ? genericInstance.FullName
+                .Replace('<', '[')
+                .Replace('>', ']')
+            : typeRef.FullName;
+
+        return name.Replace('/', '+');
+    }
 
     /// <inheritdoc cref="TypeName(IType,bool)"/>
     public TypeName(IType type) : this(type, true) { }
