@@ -2551,18 +2551,6 @@ public class PointerTests
     }
 
     /// <summary>
-    /// Create a host which declares a real instance method <c>T Identity&lt;T&gt;(T value)</c>, which hands its argument
-    /// back, so that a template which reaches a member declaring a parameter of its own has one to be rewritten to.
-    /// </summary>
-    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
-    /// because two assemblies of the name cannot be loaded into one run.</param>
-    /// <summary>
-    /// Create a host which holds <c>T[] Echo&lt;T&gt;(T[] value)</c>, whose parameter is an array of the parameter which
-    /// the member declares, so that the rank of that array is a type of its own rather than part of the element.
-    /// </summary>
-    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
-    /// because two assemblies of the name cannot be loaded into one run.</param>
-    /// <summary>
     /// Create a host which declares two members of one name, <c>T Filter&lt;T&gt;(T value)</c> first and
     /// <c>int Filter(int value)</c> after it, so that the order they are declared in is not what decides which of them
     /// a delegate of <c>Func&lt;int, int&gt;</c> names.
@@ -2645,6 +2633,12 @@ public class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create a host which holds <c>T[] Echo&lt;T&gt;(T[] value)</c>, whose parameter is an array of the parameter which
+    /// the member declares, so that the rank of that array is a type of its own rather than part of the element.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
     private static TypeHandler NewHostWithAnArrayEcho(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
@@ -2664,6 +2658,12 @@ public class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create a host which declares a real instance method <c>T Identity&lt;T&gt;(T value)</c>, which hands its argument
+    /// back, so that a template which reaches a member declaring a parameter of its own has one to be rewritten to.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
     private static TypeHandler NewHostWithIdentity(string assemblyName = "MethodInjectionIdentityAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
