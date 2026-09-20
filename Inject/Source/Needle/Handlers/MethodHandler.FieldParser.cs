@@ -73,19 +73,10 @@ partial class MethodHandler
                 namedInstance            = instanceType;
             }
         }
-        else if (memberSymbol.HasFlag(MemberSymbols.Static) && currentIndex >= 2)
+        else if (memberSymbol.HasFlag(MemberSymbols.Static) && TypeNamedByAStaticFrom(filter, currentIndex) is { } staticType)
         {
-            var callFromIns = filter.Target[currentIndex - 1];
-            if (callFromIns.OpCode == OpCodes.Call && callFromIns.Operand is MethodReference { Name: "From", DeclaringType: var declType }
-                && declType.FullName == Static.TYPE_NAME)
-            {
-                var ldstrIns = filter.Target[currentIndex - 2];
-                if (ldstrIns.OpCode == OpCodes.Ldstr && ldstrIns.Operand is string fullTypeName)
-                {
-                    skipStaticFromCount = 2;
-                    declaringTypeFromPattern = DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition;
-                }
-            }
+            skipStaticFromCount      = 2;
+            declaringTypeFromPattern = staticType;
         }
 
         // A field which the template reaches through `This` or `Base` belongs to the woven type or to a base type of it,
