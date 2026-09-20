@@ -42,7 +42,7 @@ The attribute that names an injector is only the way the build finds out what to
 > leaves a type of its own which is private to the assembly the template was compiled into. Such a template is refused
 > where the weaving runs, rather than written into a member which would reach for that type and fail when it is run.
 >
-> Two more constructs are refused where the weaving runs: a template which reads the instance it belongs to, and one which captures a value which has no form of its own.
+> The weaving refuses a body which it cannot carry, and names what it refused: a template which reads the instance it belongs to, one which captures a value which has no form of its own, one which calls a lambda or a local function written inside it, one which holds a `ValuableMember` in a local and reads it for anything other than the member it names, and one which reaches a member of an instance where the member being woven belongs to none. A delegate which names a member that it does not describe — one which hands back another value than the member hands back, or an instantiation which the constraints of the member's own parameter refuse — is refused as a member which the assembly does not hold.
 
 # Requirement
 
@@ -169,7 +169,7 @@ assembly.SaveTo("path/to/AnAssembly.dll");
 
 An assembly that does not exist yet is built the same way: `Assembly.Create("MyAssembly")` hands back one that holds nothing, whose types and members are described through the same handlers, and `Load()` loads it into the process once it is written. So the same library serves a generator that produces an assembly, a tool that rewrites one, and the build that the task drives.
 
-The injectors which an assembly declares are applied from an entry point of your own as well, without the aspect weaver: `Injections.Apply` reads them from the attributes of the assembly, applies each of them to the member it names, and hands back the image which holds the result. The assembly is given as the one which was loaded from those bytes, because how an assembly is loaded belongs to whoever loads it, and the types which an injector names are resolved against it:
+The injectors which an assembly declares are applied from an entry point of your own as well, without the aspect weaver: `Injections.Apply` reads them from the attributes of the assembly, applies each of them to the member it names, and hands back the image which holds the result — or, where an injector reported something, the image it was given, because a run which reported anything leaves an assembly woven in part, which no caller could tell from one which was woven whole. The assembly is given as the one which was loaded from those bytes, because how an assembly is loaded belongs to whoever loads it, and the types which an injector names are resolved against it:
 
 ```csharp
 var image = File.ReadAllBytes("path/to/AnAssembly.dll");
@@ -335,7 +335,7 @@ Which member an interface is read for: `IAssemblyInjector` for the assembly and 
 
 ### What is left in the assembly
 
-The attributes are read at build time and do nothing at run time, and the weaver is not a dependency of what you ship. The task takes both back out once the injectors have been applied: the attributes are removed with the types that declare them, and the reference to the weaver is dropped when nothing of the assembly names it any more.
+The attributes are read at build time and do nothing at run time, and the weaver is not a dependency of what you ship. The task takes both back out once the injectors have been applied: the attributes are taken off the members which carry them, by the full names which were read, whichever assembly declares the attribute type — a type which declares one is removed where nothing else names it, and where something does it keeps its place and gives up the interfaces which make it an injector, and the `Inject` method with them — and the reference to the weaver is dropped when nothing of the assembly names it any more.
 
 A type that your code still names — through `typeof`, a field, a signature — cannot be removed without taking those names with it, so it keeps its place and gives up what makes it an injector instead. Either way the assembly that was woven carries no weaver.
 
