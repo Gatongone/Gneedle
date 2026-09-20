@@ -329,22 +329,27 @@ internal static class CecilExtensions
         // the type which declares either - is one which only the instantiation of all of them tells.
         if (HoldsAParameter(constraint)) return true;
 
-        // A parameter of a member or of a type stands for a type whose constraints tell in part alone what it is made
-        // of, and an array and a pointer are made of the interfaces which the runtime gives them rather than of the
-        // types which they hold: neither is read here.
-        if (argument is GenericParameter || IsAWrappedType(argument)) return true;
-
         var walked = new HashSet<string>();
         var pending = new Stack<TypeReference>();
-        pending.Push(argument);
+
+        // The metadata of an array declares it no base type and no interface, and the runtime gives it the types which
+        // the values it holds are read as: an array is read as the types which it is given rather than as no type.
+        if (argument is ArrayType array)
+        {
+            foreach (var given in TypesWhichAnArrayIsGiven(array)) pending.Push(given);
+        }
+        else
+        {
+            pending.Push(argument);
+        }
 
         while (pending.Count > 0)
         {
             var current = pending.Pop();
 
-            // A type which the walk reaches through another declaration is one whose types this read does not tell, as
-            // is a type which the assembly of it cannot be read for.
-            if (current is GenericParameter || IsAWrappedType(current)) return true;
+            // A type which stands for another type anywhere in it is one whose types this read does not tell, as is a
+            // wrapper which names no declaration of its own and a type whose assembly cannot be read.
+            if (HoldsAParameter(current) || IsAWrappedType(current)) return true;
             if (!walked.Add(current.FullName)) continue;
             if (TypeName.HasSameName(current, constraint)) return true;
 
@@ -366,15 +371,77 @@ internal static class CecilExtensions
     }
 
     /// <summary>
-    /// Whether the type is one of the wrappers which this read does not walk through: an array, a pointer, an address,
-    /// a pinned and a sentinel type, and the two which carry a modifier beside the element.<para/>
-    /// An instance of a generic type is a wrapper as well and it is not one of these: the element of it is the
-    /// declaration whose base types and interfaces the arguments of the instance stand in, so it is walked.
+    /// Whether the type is one of the wrappers which this read does not walk through: a pointer, an address, a pinned
+    /// and a sentinel type, and the two which carry a modifier beside the element.<para/>
+    /// An instance of a generic type is a wrapper as well and it is not one of these, because the element of it is the
+    /// declaration whose base types and interfaces the arguments of the instance stand in, and an array is a wrapper
+    /// which is read as the types which the runtime gives it rather than by this walk.
     /// </summary>
     /// <param name="type">The type which is read.</param>
     /// <returns>Whether the type is a wrapper which holds no declaration of its own.</returns>
     private static bool IsAWrappedType(TypeReference type)
-        => type is not GenericInstanceType and TypeSpecification;
+        => type is not GenericInstanceType and not ArrayType and TypeSpecification;
+
+    /// <summary>
+    /// The types which an array is made of, which the runtime gives to it rather than the metadata which declares it:
+    /// the type of every array and the collections and the sequences which name no element at all, and - where the array
+    /// is the one which the runtime calls a vector, which is one dimension and no lower bound, because the generic ones
+    /// are given to that shape alone - those same types naming the element which the array holds.
+    /// </summary>
+    /// <param name="array">The array which is read.</param>
+    /// <returns>The types which the array is given.</returns>
+    private static IReadOnlyList<TypeReference> TypesWhichAnArrayIsGiven(ArrayType array)
+    {
+        // The array itself is not among them, because the definition of an array is the definition of the values it
+        // holds: reading it would read the types which those values are made of as the types which the array is.
+        var module = array.Module;
+        var given = new List<TypeReference>();
+
+        foreach (var declaration in s_TheTypesWhichEveryArrayIsGiven)
+        {
+            given.Add(module.ImportReference(declaration));
+        }
+
+        if (array.Rank != 1) return given;
+
+        foreach (var declaration in s_TheCollectionsWhichNameTheElement)
+        {
+            var instance = new GenericInstanceType(module.ImportReference(declaration));
+            instance.GenericArguments.Add(array.ElementType);
+            given.Add(instance);
+        }
+
+        return given;
+    }
+
+    /// <summary>
+    /// The types which the runtime gives to every array whatever the values are which it holds: the type of every array
+    /// of the framework, the collections and the sequences which name no element, and the two which tell two arrays
+    /// apart by the values which they hold.
+    /// </summary>
+    private static readonly Type[] s_TheTypesWhichEveryArrayIsGiven =
+    [
+        typeof(Array),
+        typeof(System.Collections.IList),
+        typeof(System.Collections.ICollection),
+        typeof(System.Collections.IEnumerable),
+        typeof(System.Collections.IStructuralComparable),
+        typeof(System.Collections.IStructuralEquatable),
+        typeof(ICloneable)
+    ];
+
+    /// <summary>
+    /// The collections and the sequences which the runtime gives to an array of one dimension alone, each of which names
+    /// the element which the array holds.
+    /// </summary>
+    private static readonly Type[] s_TheCollectionsWhichNameTheElement =
+    [
+        typeof(System.Collections.Generic.IList<>),
+        typeof(System.Collections.Generic.ICollection<>),
+        typeof(System.Collections.Generic.IEnumerable<>),
+        typeof(System.Collections.Generic.IReadOnlyList<>),
+        typeof(System.Collections.Generic.IReadOnlyCollection<>)
+    ];
 
     /// <summary>
     /// Whether the type stands for another type anywhere among the types which it is written with.

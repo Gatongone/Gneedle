@@ -596,6 +596,16 @@ public class PointerTests
             => This.Method<Func<CountedOfAnInstantiation, CountedOfAnInstantiation>>("Identity")(value);
 
         /// <summary>
+        /// The same, of an array, which the metadata declares no base type and no interface of: the types which an
+        /// array is made of are the ones which the runtime gives it, which is what a constraint is read against.
+        /// </summary>
+        public static int[] Identity_OfAnArrayOfInt(int[] value) => This.Method<Func<int[], int[]>>("Identity")(value);
+
+        /// <inheritdoc cref="Identity_OfAnArrayOfInt"/>
+        public static int[,] Identity_OfAnArrayOfTwoDimensions(int[,] value)
+            => This.Method<Func<int[,], int[,]>>("Identity")(value);
+
+        /// <summary>
         /// The member which the name stands for declares a parameter of its own which stands inside the value which the
         /// delegate hands back rather than in an argument of the call, so no argument names it.
         /// </summary>
@@ -3285,6 +3295,56 @@ public class PointerTests
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
                     $"the member was called with a type which is made of another instantiation of the constraint: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Type_Which_The_Array_Is_Not_Given_Is_Refused()
+    {
+        // An array is made of the types which the runtime gives it rather than of the types the metadata declares it
+        // with, and the type which the constraint names is none of them: the instantiation is one the runtime refuses
+        // and the delegate describes no member rather than one which cannot be called.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAnUnnamedTypeOfAnArrayAssembly",
+                                                      typeof(IComparable));
+        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with an array which the constraint of the parameter refuses: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Type_Which_The_Array_Is_Given_Is_Called()
+    {
+        // The same array read against a type which the runtime does give it, which is what tells the refusal of the
+        // types which no array is given from the refusal of an array which is given none of them.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAGivenTypeOfAnArrayAssembly",
+                                                      typeof(IEnumerable<int>));
+        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { 1, 2, 3 };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a type which the array is given was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Which_An_Array_Of_Two_Dimensions_Is_Not_Given_Is_Refused()
+    {
+        // The collections which name the element are given to an array of one dimension alone, which is the shape the
+        // runtime calls a vector: the element which the constraint names stands in a type which the array of two
+        // dimensions is not given, so the shape of the array is what the walk reads rather than the element alone.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAVectorOfAnArrayAssembly", typeof(IList<int>));
+        var method = host.AddMethod("Run", typeof(int[,]).ToGneedleType(), [], [new Parameter(typeof(int[,]).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTwoDimensions))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with an array of two dimensions where the constraint names a collection of one: {thrown.Message}");
     }
 
     [Test]
