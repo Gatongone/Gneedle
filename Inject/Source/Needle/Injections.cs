@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 
 namespace Gneedle.Inject;
 
@@ -101,8 +101,20 @@ public static class Injections
 
             var handler = new AssemblyHandler(target);
             var changed = ProcessAssembleInjector(handler);
-            foreach (var type in assembly.GetTypes())
+
+            // The types which an injector stands on are read out of the metadata of the image before the types of the
+            // runtime are asked for, because materializing every type of an assembly is the cost of this pass beside the
+            // weaving of it: a type which no attribute of an injector stands on, and none of whose members carries one,
+            // is one which no injector is applied to, and the metadata which is read here and the assembly which the
+            // injectors are read from are the same image.
+            foreach (var typeDefinition in InjectorInterfaces.AllTypes(target.Source.MainModule))
             {
+                if (!HoldsAnInjector(typeDefinition)) continue;
+
+                // The name of the type is written the way the runtime writes it, which separates the types a type is
+                // nested in with a plus where the metadata writes a slash.
+                if (assembly.GetType(new TypeName(typeDefinition).ToString()) is not { } type) continue;
+
                 // One type which cannot be woven does not take the rest of the assembly with it. What went wrong is
                 // reported, and whoever drives the library decides what a report is worth: a build reports it as an
                 // error and fails while the assembly it wove is discarded, and a driver which has an assembly to answer
@@ -304,6 +316,20 @@ public static class Injections
 
             return holds;
         }
+
+
+        /// <summary>
+        /// Whether any injector stands on the type or on a member of it, which is read from the metadata of the image
+        /// rather than from the types of the runtime: materializing every type of an assembly is the cost of a weaving
+        /// beside the weaving of it, and a type which no injector stands on is one which nothing is applied to.
+        /// </summary>
+        /// <param name="type">The definition of the type which is read.</param>
+        /// <returns>Whether the type declares an injector anywhere.</returns>
+        private bool HoldsAnInjector(TypeDefinition type)
+            => HoldsInjector(type.CustomAttributes, InjectorInterfaces.TypeInjectorNames)
+            || type.Methods.Any(method => HoldsInjector(method.CustomAttributes, InjectorInterfaces.MethodInjectorNames))
+            || type.Fields.Any(field => HoldsInjector(field.CustomAttributes, InjectorInterfaces.FieldInjectorNames))
+            || type.Properties.Any(property => HoldsInjector(property.CustomAttributes, InjectorInterfaces.PropertyInjectorNames));
 
         /// <summary>
         /// Apply the injectors of one type of the assembly.
