@@ -1,4 +1,4 @@
-﻿using Mono.Cecil;
+using Mono.Cecil;
 using MethodInfo = System.Reflection.MethodInfo;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 

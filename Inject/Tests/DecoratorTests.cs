@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;

@@ -1,4 +1,4 @@
-﻿using Mono.Cecil;
+using Mono.Cecil;
 using GenericParameterAttributes = System.Reflection.GenericParameterAttributes;
 
 namespace Gneedle.Inject.Test;

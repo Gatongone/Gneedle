@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Mono.Cecil;
 
 namespace Gneedle.Inject.Test;

@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
