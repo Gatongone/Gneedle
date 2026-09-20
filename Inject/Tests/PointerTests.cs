@@ -627,6 +627,14 @@ public class PointerTests
             => This.Method<Func<List<string[]>, List<string[]>>>("Identity")(value);
 
         /// <summary>
+        /// The same, of a sequence whose element is an interface: an interface is a reference of the type of every value
+        /// as a class is, which the walk of it reads through no base type, because the metadata declares it none.
+        /// </summary>
+        public static IEnumerable<ICountedOfAnInstantiation<int>> Identity_OfASequenceOfAnInterface(
+            IEnumerable<ICountedOfAnInstantiation<int>> value)
+            => This.Method<Func<IEnumerable<ICountedOfAnInstantiation<int>>, IEnumerable<ICountedOfAnInstantiation<int>>>>("Identity")(value);
+
+        /// <summary>
         /// The same, of a type which a constraint satisfied by another type accepts: the declaration of the interface
         /// marks that parameter contravariant, so a comparer of the values of the framework is a comparer of strings.
         /// </summary>
@@ -3507,6 +3515,47 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
                     "the member whose constraint names a sequence of an array was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Sequence_Of_The_Values_Of_The_Framework_Is_Called_For_An_Interface()
+    {
+        // An interface is a reference of the type of every value as a class is, and the metadata of it declares no base
+        // type: the walk of it reaches the type of every value through the declaration of the interface, and a sequence
+        // of the values of the framework is a sequence of an interface.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToASequenceOfAnInterfaceAssembly",
+                                                      typeof(IEnumerable<object>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(IEnumerable<ICountedOfAnInstantiation<int>>).ToGneedleType(),
+            [],
+            [new Parameter(typeof(IEnumerable<ICountedOfAnInstantiation<int>>).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfASequenceOfAnInterface)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new List<ICountedOfAnInstantiation<int>>();
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a sequence of the values of the framework was not called for an interface.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_The_Values_Of_The_Framework_Is_Called_For_An_Array()
+    {
+        // The collections which name the element are given to an array for every type which a reference conversion takes
+        // the element to, whatever the variance of the parameter which names the element is: an array of strings is a
+        // collection of the values of the framework, which the runtime accepts and the walk reads as well.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAnArrayAssembly",
+                                                      typeof(IList<object>));
+        var method = host.AddMethod("Run", typeof(string[]).ToGneedleType(), [], [new Parameter(typeof(string[]).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfString)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { "a", "b" };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a collection of the values of the framework was not called for an array.");
     }
 
     [Test]

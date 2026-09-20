@@ -460,7 +460,9 @@ internal static class CecilExtensions
 
         if (type is ArrayType array)
         {
-            foreach (var given in TypesWhichAnArrayIsGiven(array)) pending.Push(given);
+            var (given, givenTold) = TypesWhichAnArrayIsGiven(array);
+            foreach (var one in given) pending.Push(one);
+            told = givenTold;
         }
         else
         {
@@ -502,6 +504,12 @@ internal static class CecilExtensions
             {
                 pending.Push(baseType.WithTheArgumentsOf(definition, current));
             }
+            else if (definition.IsInterface)
+            {
+                // An interface is declared with no base type, and every interface is a reference of the type of every
+                // value, so the walk of one reaches that type as the walk of a class reaches it through its base types.
+                pending.Push(definition.Module.TypeSystem.Object);
+            }
         }
 
         return (made, told);
@@ -527,8 +535,8 @@ internal static class CecilExtensions
     /// the array holds.
     /// </summary>
     /// <param name="array">The array which is read.</param>
-    /// <returns>The types which the array is given, itself among them.</returns>
-    private static IReadOnlyList<TypeReference> TypesWhichAnArrayIsGiven(ArrayType array)
+    /// <returns>The types which the array is given, itself among them, and whether every element which they name was read.</returns>
+    private static (IReadOnlyList<TypeReference> Given, bool Told) TypesWhichAnArrayIsGiven(ArrayType array)
     {
         var module = array.Module;
         var given = new List<TypeReference> { array };
@@ -538,16 +546,39 @@ internal static class CecilExtensions
             given.Add(module.ImportReference(declaration));
         }
 
-        if (array.Rank != 1) return given;
+        if (array.Rank != 1) return (given, true);
 
-        foreach (var declaration in s_TheCollectionsWhichNameTheElement)
+        // The collections which name the element are given to a vector for every type which the element is converted to
+        // by a reference conversion, which is the conversion the runtime gives them by: a value is converted to the very
+        // type it is alone, while a reference is converted to every type which the types it is made of hold.
+        var element = array.ElementType;
+
+        if (IsAValueType(element) is not { } isAValue) return (given, false);
+
+        IReadOnlyList<TypeReference> elements;
+        bool told;
+
+        if (isAValue)
         {
-            var instance = new GenericInstanceType(module.ImportReference(declaration));
-            instance.GenericArguments.Add(array.ElementType);
-            given.Add(instance);
+            elements = [element];
+            told = true;
+        }
+        else
+        {
+            (elements, told) = TypesWhichTheTypeIsMadeOf(element);
         }
 
-        return given;
+        foreach (var named in elements)
+        {
+            foreach (var declaration in s_TheCollectionsWhichNameTheElement)
+            {
+                var instance = new GenericInstanceType(module.ImportReference(declaration));
+                instance.GenericArguments.Add(named);
+                given.Add(instance);
+            }
+        }
+
+        return (given, told);
     }
 
     /// <summary>
