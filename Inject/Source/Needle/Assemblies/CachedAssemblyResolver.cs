@@ -201,7 +201,11 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     /// end of the last section through the section table of its header tells how much of that memory is the file. An
     /// assembly which the runtime mapped from a file of the file system lies in the virtual layout instead, which cannot
     /// be read back this way, so only the former is covered. .NET Framework hands the bytes over through a method, which
-    /// is read first there because it covers both.
+    /// is read first there because it covers both.<para/>
+    /// The length which the section table names is a value of the image itself, and a malformed image names one which
+    /// stands past the memory it was mapped into: what is measured is held to the size of that memory, which the system
+    /// is asked for, so that the read of an image which names more than it holds is refused rather than made, since the
+    /// fault of a read which leaves the memory which is mapped cannot be caught.
     /// </remarks>
     /// <param name="assembly">The assembly which need to get raw bytes.</param>
     /// <param name="rawBytes">Bytes that is a COFF-based image containing the assembly, or null.</param>
@@ -242,23 +246,24 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
                 return false;
             }
 
-            var eLfanew = System.Runtime.InteropServices.Marshal.ReadInt32(basePtr, 0x3C);
-            var peHeader = eLfanew + 4; // skip the "PE\0\0" signature
-            int numberOfSections = System.Runtime.InteropServices.Marshal.ReadInt16(basePtr, peHeader + 2);
-            int sizeOfOptionalHeader = System.Runtime.InteropServices.Marshal.ReadInt16(basePtr, peHeader + 16);
-            var sectionTable = peHeader + 20 + sizeOfOptionalHeader;
-
-            // The on-disk size is the end of the last section's raw data.
-            var fileSize = 0;
-            for (var i = 0; i < numberOfSections; i++)
+            // How much of the memory at the pointer is mapped is the bound which the length measured below is held to,
+            // and the fields which name that length are read out of an array rather than out of the pointer: the header
+            // of the image is read into this memory first, and measured there. What stands past the window which is read
+            // in - a section table of an image which is not one - is refused rather than read, because a read which
+            // stands past the memory which is mapped faults the process in a way which cannot be caught.
+            var mapped = MappedSizeOf(basePtr);
+            var headerLength = (int) Math.Min(mapped, HeaderWindow);
+            if (headerLength < MinimumHeader)
             {
-                var section = sectionTable + i * 40;
-                var sizeOfRawData = System.Runtime.InteropServices.Marshal.ReadInt32(basePtr, section + 16);
-                var pointerToRawData = System.Runtime.InteropServices.Marshal.ReadInt32(basePtr, section + 20);
-                fileSize = Math.Max(fileSize, pointerToRawData + sizeOfRawData);
+                return false;
             }
 
-            if (fileSize <= 0)
+            var header = new byte[headerLength];
+            System.Runtime.InteropServices.Marshal.Copy(basePtr, header, 0, headerLength);
+
+            // The image takes the length which its own section table names, which a malformed image can name past the
+            // memory it was mapped into: the copy below is the read which that would fault on.
+            if (!TryMeasureImage(header, mapped, out var fileSize))
             {
                 return false;
             }
@@ -274,4 +279,187 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
         }
 #endif
     }
+
+#if !NETFRAMEWORK
+    /// <summary>
+    /// The most bytes of the beginning of an image which are read into this memory to be measured, which holds the
+    /// headers of every image and the section table of every one a compiler writes.
+    /// </summary>
+    private const int HeaderWindow = 0x4000;
+
+    /// <summary>
+    /// The fewest bytes of an image which can be measured: its DOS header, the signature of its PE header, its file
+    /// header, and the smallest optional header which a portable image declares.
+    /// </summary>
+    private const int MinimumHeader = 0x40 + SignatureSize + FileHeaderSize + OptionalHeader32;
+
+    /// <summary>
+    /// The sizes of the parts of the header of an image which name where its sections are: the signature which tells a
+    /// portable image from the VxD driver which shares the header, the file header whose fields hold the number of
+    /// sections and the size of the optional header, the optional header of a 32-bit image and of a 64-bit one - which
+    /// are the two sizes a portable image declares - and one entry of the section table.
+    /// </summary>
+    private const int SignatureSize = 4;
+    private const int FileHeaderSize = 20;
+    private const int OptionalHeader32 = 224;
+    private const int OptionalHeader64 = 240;
+    private const int SectionHeaderSize = 40;
+
+    /// <summary>
+    /// The most sections an image can declare, which is the number the loader of Windows accepts.
+    /// </summary>
+    private const int MaxSections = 96;
+
+    /// <summary>
+    /// How much of the memory at <paramref name="basePtr"/> is mapped, or zero when it cannot be asked about.
+    /// </summary>
+    /// <remarks>
+    /// The view of an image lies in one region, so the size of the region which the base of an image stands in is the
+    /// size of the whole of it, and it is a length which was measured by the runtime rather than read out of the image
+    /// itself - which is what makes it a bound a malformed image cannot name.
+    /// </remarks>
+    /// <param name="basePtr">Base of the memory which the image was mapped into.</param>
+    /// <returns>The number of bytes of it which are mapped.</returns>
+    private static long MappedSizeOf(IntPtr basePtr)
+    {
+        var information = new MEMORY_BASIC_INFORMATION();
+        var size = (IntPtr) System.Runtime.InteropServices.Marshal.SizeOf<MEMORY_BASIC_INFORMATION>();
+        return VirtualQuery(basePtr, ref information, size) == IntPtr.Zero ? 0 : information.RegionSize.ToInt64();
+    }
+
+    /// <summary>
+    /// The length which the image whose beginning is <paramref name="header"/> takes on disk, which is where the raw
+    /// data of its last section ends.<para/>
+    /// The window which is handed in is all of the image which was read out of the memory it was mapped into, and every
+    /// offset and length below is held to it: an image whose section table stands past it is refused rather than read
+    /// further. What the length itself stands in is held by the caller, which is the one which knows how much memory
+    /// the image was mapped into.
+    /// </summary>
+    /// <param name="header">The beginning of the image, which holds the headers naming its sections.</param>
+    /// <param name="mapped">Number of bytes of the memory which the image was mapped into, which is the bound every
+    /// section of it is held to.</param>
+    /// <param name="fileSize">The length of the image on disk.</param>
+    /// <returns>Whether the image could be measured, which is false when it is not a portable image at all, or when a
+    /// section of it names raw data which the memory it was mapped into does not hold.</returns>
+    internal static bool TryMeasureImage(byte[] header, long mapped, out int fileSize)
+    {
+        fileSize = 0;
+        if (header.Length < MinimumHeader)
+        {
+            return false;
+        }
+
+        // The offset of the PE header, which is the field the DOS header of every image ends with.
+        var eLfanew = BitConverter.ToInt32(header, 0x3C);
+        if (!Fits(eLfanew, SignatureSize, header.Length) || BitConverter.ToInt32(header, eLfanew) != 0x00004550) // "PE\0\0"
+        {
+            return false;
+        }
+
+        var fileHeader = eLfanew + SignatureSize;
+        if (!Fits(fileHeader, FileHeaderSize, header.Length))
+        {
+            return false;
+        }
+
+        int numberOfSections = BitConverter.ToUInt16(header, fileHeader + 2);
+        int sizeOfOptionalHeader = BitConverter.ToUInt16(header, fileHeader + 16);
+        if (numberOfSections == 0 || numberOfSections > MaxSections)
+        {
+            return false;
+        }
+
+        // The optional header stands between the file header and the section table, so a size of it which no portable
+        // image declares is one which names a section table which is not where the table of this image is.
+        if (sizeOfOptionalHeader != OptionalHeader32 && sizeOfOptionalHeader != OptionalHeader64)
+        {
+            return false;
+        }
+
+        var sectionTable = fileHeader + FileHeaderSize + sizeOfOptionalHeader;
+        if (!Fits(sectionTable, (long) numberOfSections * SectionHeaderSize, header.Length))
+        {
+            return false;
+        }
+
+        // The raw data of a section stands past the window which was read in, so what is measured here is where each of
+        // them ends rather than whether it was read: a section which names more than the memory the image was mapped
+        // into holds is refused, because the copy of it is what would fault the process on it.
+        var measured = 0L;
+        for (var index = 0; index < numberOfSections; index++)
+        {
+            var section = sectionTable + index * SectionHeaderSize;
+            int sizeOfRawData = BitConverter.ToInt32(header, section + 16);
+            int pointerToRawData = BitConverter.ToInt32(header, section + 20);
+            if (sizeOfRawData < 0 || pointerToRawData < 0)
+            {
+                return false;
+            }
+
+            var end = (long) pointerToRawData + sizeOfRawData;
+            if (end > mapped)
+            {
+                return false;
+            }
+
+            measured = Math.Max(measured, end);
+        }
+
+        if (measured <= 0 || measured > int.MaxValue)
+        {
+            return false;
+        }
+
+        fileSize = (int) measured;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="length"/> bytes which stand at <paramref name="offset"/> lie within
+    /// <paramref name="within"/> bytes.
+    /// </summary>
+    /// <param name="offset">Offset of the thing which is asked about.</param>
+    /// <param name="length">Length of it.</param>
+    /// <param name="within">Number of bytes it has to stand within.</param>
+    /// <returns>Whether it stands within them, which a negative offset or length does not.</returns>
+    private static bool Fits(long offset, long length, long within)
+        => offset >= 0 && length >= 0 && offset <= within - length;
+
+    /// <summary>
+    /// The description which the system keeps of the memory at an address, of which the size of the region is read.
+    /// </summary>
+    private struct MEMORY_BASIC_INFORMATION
+    {
+        /// <summary>Base of the region.</summary>
+        public IntPtr BaseAddress;
+
+        /// <summary>Base of the memory which was reserved for it.</summary>
+        public IntPtr AllocationBase;
+
+        /// <summary>The protection which the whole of it was reserved with.</summary>
+        public uint AllocationProtect;
+
+        /// <summary>Number of bytes of the region which share the state and the protection.</summary>
+        public IntPtr RegionSize;
+
+        /// <summary>Whether it is committed, reserved or free.</summary>
+        public uint State;
+
+        /// <summary>The protection of the pages of it.</summary>
+        public uint Protect;
+
+        /// <summary>Whether it is private, mapped or an image.</summary>
+        public uint Type;
+    }
+
+    /// <summary>
+    /// Ask the system about the memory at an address, which is what says how much of it is mapped.
+    /// </summary>
+    /// <param name="address">Address which is asked about.</param>
+    /// <param name="information">What was answered, which holds the size of the region.</param>
+    /// <param name="length">Size of the answer which was handed over.</param>
+    /// <returns>Number of bytes which were written to the answer, or zero when nothing was.</returns>
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr VirtualQuery(IntPtr address, ref MEMORY_BASIC_INFORMATION information, IntPtr length);
+#endif
 }
