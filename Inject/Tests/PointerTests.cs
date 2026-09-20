@@ -579,6 +579,37 @@ public class PointerTests
         /// parameter of the member either.
         /// </summary>
         public static void MakeOfNoValue(int value) => This.Method<Action<int>>("Make")(value);
+
+        /// <summary>
+        /// The member which the name stands for hands a value back, and the delegate hands nothing back: the value
+        /// which the call leaves where the symbol stood is one which the body hands nowhere.
+        /// </summary>
+        public static void CallAVoidDelegate(int value) => This.Method<Action<int>>("Echo")(value);
+
+        /// <summary>
+        /// The member which the name stands for hands nothing back, and the delegate hands a value back: the body
+        /// reads a value which no call of the member leaves.
+        /// </summary>
+        public static int CallAValueDelegate(int value) => This.Method<Func<int, int>>("Silent")(value);
+
+        /// <summary>
+        /// The member which the name stands for hands back a value of another type than the one which the delegate
+        /// hands back.
+        /// </summary>
+        public static string CallAStringDelegate(int value) => This.Method<Func<int, string>>("Echo")(value);
+
+        /// <summary>
+        /// The same, of two types of the integer family: the stack carries the values of that family as the same
+        /// 4-byte value whatever the width of the type which names them, so a member which hands back an int is one
+        /// which a delegate which hands back a char describes as well.
+        /// </summary>
+        public static char CallACharDelegate(int value) => This.Method<Func<int, char>>("Echo")(value);
+
+        /// <summary>
+        /// The same, of a member which hands back a value under an enumeration: the value which is carried is the one
+        /// under the enumeration, which is what the delegate names.
+        /// </summary>
+        public static int CallAnIntDelegateForAnEnumeration(int value) => (int) This.Method<Func<int, StringComparison>>("Kind")(value);
     }
 
     /// <summary>
@@ -700,6 +731,13 @@ public class PointerTests
         /// </summary>
         public static int InstanceMethod_OfAMemberWhoseSignatureNamesTheParameter(GenericHelper<int> helper, int value)
             => new Instance(helper).Method<Func<int, int>>("Echo")(value);
+
+        /// <summary>
+        /// The same member, reached through a delegate which hands back a value of another type than the one which the
+        /// parameter of the type stands for under the instantiation which the template named.
+        /// </summary>
+        public static string InstanceMethodOfAGenericTypeWhichHandsBackAnotherType(GenericHelper<int> helper, int value)
+            => new Instance(helper).Method<Func<int, string>>("Echo")(value);
 
         /// <summary>
         /// The instance of <c>Instance</c> is an element of an array, which names the type of what it reads nowhere, so
@@ -1905,6 +1943,56 @@ public class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create a host which declares a real instance method <c>int Echo(int)</c>, which hands a value back, and one
+    /// <c>void Silent(int)</c>, which hands none, so that a template which reaches a member of either kind through a
+    /// delegate of the other kind has one to be refused for.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAnEchoAndASilence(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var module = host.Source.Module;
+        AddAMember("Echo", module.TypeSystem.Int32);
+        AddAMember("Silent", module.TypeSystem.Void);
+        return host;
+
+        void AddAMember(string name, TypeReference returnType)
+        {
+            var member = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.HideBySig, returnType) { DeclaringType = host.Source };
+            member.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int32));
+            var il = member.Body.GetILProcessor();
+            if (returnType.MetadataType != MetadataType.Void) il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ret);
+            host.Source.Methods.Add(member);
+        }
+    }
+
+    /// <summary>
+    /// Create a host which declares a real instance method <c>StringComparison Kind(int)</c>, whose value the stack
+    /// carries as the value under an enumeration of the integer family rather than as a type of its own.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which loads its host gives one of its own
+    /// because two assemblies of the name cannot be loaded into one run.</param>
+    private static TypeHandler NewHostWithAValueOfAnEnumeration(string assemblyName)
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var module = host.Source.Module;
+        var kind = new MethodDefinition("Kind", MethodAttributes.Public | MethodAttributes.HideBySig, module.ImportReference(typeof(StringComparison)))
+        {
+            DeclaringType = host.Source,
+        };
+        kind.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int32));
+        var il = kind.Body.GetILProcessor();
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Ret);
+        host.Source.Methods.Add(kind);
+        return host;
+    }
+
     [Test]
     public void ThisMethod_Of_A_Name_Which_Is_A_Constant_Is_Read_Like_A_Literal()
     {
@@ -3064,6 +3152,101 @@ public class PointerTests
             () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeOfNoValue))));
 
         Assert.That(thrown!.Message, Does.Contain("Make"));
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Hands_A_Value_Back_Is_Refused_A_Delegate_Which_Hands_None()
+    {
+        // The value which the call of the member leaves where the symbol stood is one which the body hands nowhere
+        // where the delegate hands nothing back, so the body is one the runtime refuses to run rather than one which
+        // calls the member: the delegate describes no member here, just as it describes none where it names a type
+        // which no instantiation of the member stands for.
+        var host = NewHostWithAnEchoAndASilence("MethodInjectionVoidDelegateAssembly");
+        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAVoidDelegate))));
+
+        Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
+                    $"the member which hands a value back was called through a delegate which hands nothing back: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Hands_Nothing_Back_Is_Refused_A_Delegate_Which_Hands_A_Value()
+    {
+        // The other direction of the same mismatch: a delegate which hands a value back reads one which no call of the
+        // member leaves, and the woven body is one the runtime refuses to run for it as well.
+        var host = NewHostWithAnEchoAndASilence("MethodInjectionValueDelegateAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAValueDelegate))));
+
+        Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
+                    $"the member which hands nothing back was called through a delegate which hands a value back: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Hands_Back_A_Value_Of_Another_Type_Is_Refused()
+    {
+        // A member which declares no parameter of its own is found by the names of the types of its arguments, which
+        // say nothing of the value it hands back: a delegate which hands back a value of another name describes no
+        // member of the type either, and the value which the call of it leaves is read as one of another type.
+        var host = NewHostWithAnEchoAndASilence("MethodInjectionAnotherValueAssembly");
+        var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAStringDelegate))));
+
+        Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
+                    $"the member was called through a delegate which hands back a value of another type: {thrown.Message}");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Member_Of_A_Generic_Type_Which_Hands_Back_Another_Type_Is_Refused()
+    {
+        // The member belongs to a type which declares a parameter of its own, so the value it hands back is named by
+        // that parameter: the instantiation which the template named is what the parameter stands for here, which is
+        // the type of the argument of the call, and the delegate hands back a value of another type than that one.
+        var (_, _, method) = NewInstanceHost("InstanceMethodAnotherValueAssembly", [typeof(GenericHelper<int>), typeof(int)]);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethodOfAGenericTypeWhichHandsBackAnotherType))));
+
+        Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
+                    $"the member of the generic type was called through a delegate which hands back a value of another type: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Hands_Back_A_Value_Of_The_Integer_Family_Is_Called_Through_Another_Of_It()
+    {
+        // The stack carries the values of the integer family as the same 4-byte value whatever the width of the type
+        // which names them, so a member which hands back an int is one which a delegate which hands back a char
+        // describes: the tolerance is the one which the arguments of a call are read with as well.
+        var host = NewHostWithAnEchoAndASilence("MethodInjectionIntegerFamilyAssembly");
+        var method = host.AddMethod("Run", typeof(char).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallACharDelegate)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [65]), Is.EqualTo('A'),
+                    "the member which hands back a value of the integer family was not called through the delegate.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Which_Hands_Back_A_Value_Under_An_Enumeration_Is_Called_Through_An_Int()
+    {
+        // An enumeration of the integer family is carried as the value under it, which is the value which the member
+        // leaves and the value which the delegate hands back: there is no instruction which names the enumeration, so
+        // a member which hands back one is described by a delegate which hands back the value under it.
+        var host = NewHostWithAValueOfAnEnumeration("MethodInjectionEnumerationValueAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAnIntDelegateForAnEnumeration)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [0]), Is.EqualTo((int) StringComparison.Ordinal),
+                    "the member which hands back a value under an enumeration was not called through the delegate.");
     }
 
     [Test]

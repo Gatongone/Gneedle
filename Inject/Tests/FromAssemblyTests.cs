@@ -100,7 +100,7 @@ namespace Gneedle.Inject.Test
             public static Stub[] StubArray()          => new Stub[0];
             public static int    ReadNestedStubField() => OuterStub.Inner.Field;
 
-            public static string InstanceMethod_StubReceiver(Stub instance)   => new Instance(instance).Method<NameGetter>("Read")();
+            public static int    InstanceMethod_StubReceiver(Stub instance)   => new Instance(instance).Method<ReadGetter>("Read")();
             public static int    InstanceField_StubReceiver(Stub instance)    => new Instance(instance).Field<int>(nameof(Stub.Field)).Get();
             public static int    InstanceProperty_StubReceiver(Stub instance) => new Instance(instance).Property<int>(nameof(Stub.Property)).Get();
 
@@ -108,7 +108,11 @@ namespace Gneedle.Inject.Test
             public static int ReadUnresolvableStubField() => UnresolvableStub.Field;
         }
 
-        public delegate string NameGetter();
+        /// <summary>
+        /// The delegate which names the member <c>Read</c> of the stub, which hands back the value that member hands
+        /// back: the signature of a call is what the member is looked up by, so the value is read there as well.
+        /// </summary>
+        public delegate int ReadGetter();
 
         #region Target fixture
 

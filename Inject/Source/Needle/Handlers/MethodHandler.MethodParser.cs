@@ -183,6 +183,23 @@ partial class MethodHandler
             {
                 throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_SIGNATURE, methodDef.FullName, Source.FullName));
             }
+
+            // The value which the member hands back is the one which the call of it leaves where the symbol stood, so the
+            // value which the delegate hands back is the one which the member has to hand back: a delegate which hands
+            // nothing back where the member hands a value back names a call which leaves a value the body hands nowhere,
+            // and one which hands a value back where the member hands nothing back names a value which no call leaves, so
+            // the woven body is one the runtime refuses to run rather than one which calls the member. The value which a
+            // member declares is read where the signature describes the parameters of the member alone as well, which is
+            // the rule which a member that declares no parameter of its own is found by: the name of a type tells nothing
+            // of the value which a call of it leaves, so the value is read here.
+            var memberHandsBack     = HandsAValueBack(methodDef.ReturnType);
+            var describedHandsBack  = HandsAValueBack(returnType);
+            if (memberHandsBack != describedHandsBack
+                || (memberHandsBack && methodDef.GenericParameters.Count == 0
+                    && !TheSameValueIsHandedBack(methodDef.ReturnType.WithTheArgumentsOf(methodDef.DeclaringType, declaringInstance), returnType)))
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.INVALID_MEMBER_RETURN_TYPE, methodDef.FullName, Source.FullName));
+            }
         }
 
         // Skip the array init sequence if this is Instance.Method with new Instance(param), and the Static.From sequence if
@@ -1096,6 +1113,29 @@ partial class MethodHandler
             return false;
         }
     }
+
+    /// <summary>
+    /// Whether the type of the value which a call hands back is that of a value at all, which is what tells a member
+    /// which hands a value back from one which hands nothing back: a call of a member which hands nothing back leaves
+    /// nothing where it stood, so no value which a delegate hands back names such a call.
+    /// </summary>
+    /// <param name="returnType">The type which the signature of the call hands back.</param>
+    /// <returns>Whether a value is handed back.</returns>
+    private static bool HandsAValueBack(TypeReference returnType) => returnType.MetadataType != MetadataType.Void;
+
+    /// <summary>
+    /// Whether the value which a member hands back is the value which the delegate describes it with: the values of the
+    /// integer family are carried by the stack as the same value whatever the width of the type which names them, so a
+    /// member which hands back an int32 is one which the delegate may describe with an int32 as well, and one which
+    /// hands back the value under an enumeration is one which it may describe with that enumeration.
+    /// </summary>
+    /// <param name="member">The type of the value which the member hands back.</param>
+    /// <param name="described">The type of the value which the delegate hands back.</param>
+    /// <returns>Whether the two name the same value.</returns>
+    private bool TheSameValueIsHandedBack(TypeReference member, TypeReference described)
+        => TypeName.HasSameName(member, described)
+           || (IsI4Compatible(member) && IsI4Compatible(described))
+           || (IsI4Compatible(described) && HasAnI4UnderlyingType(member));
 
     /// <summary>
     /// Whether the type is represented as a 4-byte integer on the CLR evaluation stack,
