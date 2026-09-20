@@ -4974,7 +4974,7 @@ public class PointerTests
                 break;
 
             case StaticMember.PropertyGet or StaticMember.PropertySet:
-                var property = new PropertyDefinition(name[(name.IndexOf('_') + 1)..], PropertyAttributes.None, module.TypeSystem.Int32);
+                var property = new PropertyDefinition(name.Substring(name.IndexOf('_') + 1), PropertyAttributes.None, module.TypeSystem.Int32);
                 var accessor = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
                                                     member is StaticMember.PropertySet ? module.TypeSystem.Void : module.TypeSystem.Int32)
                 {
