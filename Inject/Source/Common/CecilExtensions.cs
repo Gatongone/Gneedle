@@ -324,37 +324,141 @@ internal static class CecilExtensions
     /// <param name="argument">The type which the parameter is instantiated with.</param>
     /// <returns>Whether the constraint is satisfied, or true where this read does not tell.</returns>
     private static bool SatisfiesTheConstraint(TypeReference constraint, TypeReference argument)
-    {
-        // A constraint which names a type that stands for another - a parameter of the declaration, of the member or of
-        // the type which declares either - is one which only the instantiation of all of them tells.
-        if (HoldsAParameter(constraint)) return true;
+        => IsMadeOf(argument, constraint) != false;
 
+    /// <summary>
+    /// Whether the types which a type is made of hold the type which is wanted, which is what tells that the type is one
+    /// which the wanted type accepts.<para/>
+    /// Everything which this read does not tell - a type which stands for another, the assembly of a type which is not
+    /// there to be read - is answered with null rather than with a refusal, because the refusal here is a member which no
+    /// signature describes and the runtime is what refuses an instantiation which it does not accept.
+    /// </summary>
+    /// <param name="argument">The type which the parameter is instantiated with.</param>
+    /// <param name="wanted">The type which the constraint names.</param>
+    /// <returns>True where the types hold the wanted type, false where they are read and hold it not, and null where this read does not tell.</returns>
+    private static bool? IsMadeOf(TypeReference argument, TypeReference wanted)
+    {
+        // A type which stands for another type anywhere in it is one whose types this read does not tell, which is so of
+        // the types the wanted one is written with as well.
+        if (HoldsAParameter(wanted)) return null;
+
+        var (made, told) = TypesWhichTheTypeIsMadeOf(argument);
+
+        foreach (var type in made)
+        {
+            switch (NamesTheTypeOfTheConstraint(type, wanted))
+            {
+                case true: return true;
+                case null: told = false; break;
+            }
+        }
+
+        return told ? false : null;
+    }
+
+    /// <summary>
+    /// Whether the type is the one which a constraint names, which is the name of the type itself and - where the
+    /// constraint names an instance of a generic type - the arguments of that instance read with the variance which the
+    /// declaration of them names: a type is accepted for a parameter which the declaration marks covariant where it is
+    /// accepted for the argument which the constraint names, and for one which it marks contravariant where that
+    /// argument is accepted for it, while an argument of a parameter which is marked neither way is read by its name.
+    /// </summary>
+    /// <param name="type">The type which the walk holds.</param>
+    /// <param name="wanted">The type which the constraint names.</param>
+    /// <returns>True where the type is the one which the constraint names, false where it is read and is not, and null where this read does not tell.</returns>
+    private static bool? NamesTheTypeOfTheConstraint(TypeReference type, TypeReference wanted)
+    {
+        if (TypeName.HasSameName(type, wanted)) return true;
+
+        // A constraint which names no instance of a generic type names the type itself, which the name of the type
+        // tells, and a type which is not an instance of one is named by no argument at all.
+        if (wanted is not GenericInstanceType constraint) return false;
+        if (type is not GenericInstanceType instance) return false;
+
+        if (!TypeName.HasSameName(instance.ElementType, constraint.ElementType)
+            || instance.GenericArguments.Count != constraint.GenericArguments.Count)
+        {
+            return false;
+        }
+
+        var declaration = DefinitionOf(constraint);
+        if (declaration == null) return null;
+
+        for (var index = 0; index < instance.GenericArguments.Count; index++)
+        {
+            var variance = declaration.GenericParameters[index].Attributes;
+            var given = instance.GenericArguments[index];
+            var asked = constraint.GenericArguments[index];
+
+            bool? accepted;
+            if ((variance & GenericParameterAttributes.Covariant) != 0)
+            {
+                accepted = IsMadeOf(given, asked);
+            }
+            else if ((variance & GenericParameterAttributes.Contravariant) != 0)
+            {
+                accepted = IsMadeOf(asked, given);
+            }
+            else
+            {
+                // An argument which the declaration marks neither way is read by its name alone, and one which stands
+                // for another type is named by nothing.
+                accepted = HoldsAParameter(given) || HoldsAParameter(asked)
+                    ? null
+                    : TypeName.HasSameName(given, asked);
+            }
+
+            if (accepted != true) return accepted;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The types which a type is made of: the type itself, the base type which each type of the walk is declared with,
+    /// and the interfaces which each of them declares, with the arguments of the instantiation which a type of the walk
+    /// was reached through put in the place of the parameters of the declaration which holds it.<para/>
+    /// The metadata of an array declares it no base type and no interface, so an array is made of the types which the
+    /// runtime gives it; a type which stands for another and a wrapper which names no declaration of its own are told of
+    /// nothing at all, which is what the second of the answers tells.
+    /// </summary>
+    /// <param name="type">The type which is read.</param>
+    /// <returns>The types which the type is made of, and whether every one of them was read.</returns>
+    private static (IReadOnlyList<TypeReference> Made, bool Told) TypesWhichTheTypeIsMadeOf(TypeReference type)
+    {
+        var told = true;
+        var made = new List<TypeReference>();
         var walked = new HashSet<string>();
         var pending = new Stack<TypeReference>();
 
-        // The metadata of an array declares it no base type and no interface, and the runtime gives it the types which
-        // the values it holds are read as: an array is read as the types which it is given rather than as no type.
-        if (argument is ArrayType array)
+        if (type is ArrayType array)
         {
             foreach (var given in TypesWhichAnArrayIsGiven(array)) pending.Push(given);
         }
         else
         {
-            pending.Push(argument);
+            pending.Push(type);
         }
 
         while (pending.Count > 0)
         {
             var current = pending.Pop();
 
-            // A type which stands for another type anywhere in it is one whose types this read does not tell, as is a
-            // wrapper which names no declaration of its own and a type whose assembly cannot be read.
-            if (HoldsAParameter(current) || IsAWrappedType(current)) return true;
+            if (HoldsAParameter(current) || IsAWrappedType(current))
+            {
+                told = false;
+                continue;
+            }
+
             if (!walked.Add(current.FullName)) continue;
-            if (TypeName.HasSameName(current, constraint)) return true;
+            made.Add(current);
 
             var definition = DefinitionOf(current);
-            if (definition == null) return true;
+            if (definition == null)
+            {
+                told = false;
+                continue;
+            }
 
             foreach (var implemented in definition.Interfaces)
             {
@@ -367,7 +471,7 @@ internal static class CecilExtensions
             }
         }
 
-        return false;
+        return (made, told);
     }
 
     /// <summary>

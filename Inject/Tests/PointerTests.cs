@@ -606,6 +606,24 @@ public class PointerTests
             => This.Method<Func<int[,], int[,]>>("Identity")(value);
 
         /// <summary>
+        /// The same, of an array whose element is another type than the one which the constraint names: the runtime
+        /// accepts an array for a collection of every type which the element of the array is accepted for, which is
+        /// what covariance comes to, and which the argument of the constraint is read with.
+        /// </summary>
+        public static string[] Identity_OfAnArrayOfString(string[] value) => This.Method<Func<string[], string[]>>("Identity")(value);
+
+        /// <inheritdoc cref="Identity_OfAnArrayOfString"/>
+        public static List<string> Identity_OfAListOfString(List<string> value)
+            => This.Method<Func<List<string>, List<string>>>("Identity")(value);
+
+        /// <summary>
+        /// The same, of a type which a constraint satisfied by another type accepts: the declaration of the interface
+        /// marks that parameter contravariant, so a comparer of the values of the framework is a comparer of strings.
+        /// </summary>
+        public static Comparer<object> Identity_OfAComparerOfTheValuesOfTheFramework(Comparer<object> value)
+            => This.Method<Func<Comparer<object>, Comparer<object>>>("Identity")(value);
+
+        /// <summary>
         /// The member which the name stands for declares a parameter of its own which stands inside the value which the
         /// delegate hands back rather than in an argument of the call, so no argument names it.
         /// </summary>
@@ -3345,6 +3363,63 @@ public class PointerTests
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
                     $"the member was called with an array of two dimensions where the constraint names a collection of one: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Type_Which_The_Array_Is_Given_Through_Its_Element_Is_Called()
+    {
+        // The runtime accepts an array for a collection of every type which the element of the array is accepted for,
+        // which is the covariance of the arrays and of the sequences which name the element: the walk reads the
+        // argument of the constraint with that variance rather than by its name alone.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACovariantTypeOfAnArrayAssembly",
+                                                      typeof(IEnumerable<object>));
+        var method = host.AddMethod("Run", typeof(string[]).ToGneedleType(), [], [new Parameter(typeof(string[]).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfString)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { "a", "b" };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a type which the array is given through its element was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Type_Which_The_Argument_Is_Given_Through_Its_Element_Is_Called()
+    {
+        // The same, of an instance of a generic type which implements the interface of the constraint as an instance of
+        // another element type: a list of strings is a sequence of the values of the framework.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACovariantTypeOfAnInstanceAssembly",
+                                                      typeof(IEnumerable<object>));
+        var method = host.AddMethod("Run", typeof(List<string>).ToGneedleType(), [], [new Parameter(typeof(List<string>).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfString)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new List<string> { "a", "b" };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a type which the argument is given through its element was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Type_Which_Accepts_The_Argument_Is_Called()
+    {
+        // A parameter which the declaration of an interface marks contravariant accepts the types of everything which
+        // the argument of the constraint accepts, which is the other way the arguments of an instance are read.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAContravariantTypeAssembly",
+                                                      typeof(IComparer<string>));
+        var method = host.AddMethod(
+            "Run",
+            typeof(Comparer<object>).ToGneedleType(),
+            [],
+            [new Parameter(typeof(Comparer<object>).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = Comparer<object>.Default;
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a type which accepts the argument was not called.");
     }
 
     [Test]
