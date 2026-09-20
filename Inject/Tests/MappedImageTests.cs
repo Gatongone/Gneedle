@@ -1,5 +1,9 @@
 namespace Gneedle.Inject.Test;
 
+// The image which the runtime mapped into memory is measured on the runtimes which read it back out of that memory: the
+// framework reads the bytes of an image it loaded through a method of its own, and measures nothing.
+#if !NETFRAMEWORK
+
 /// <summary>
 /// Tests for measuring the image which the runtime mapped into memory, which is read back through the section table of
 /// its header.<para/>
@@ -161,3 +165,5 @@ public class MappedImageTests
     /// <param name="value">Value of it.</param>
     private static void PutShort(byte[] header, int offset, short value) => BitConverter.GetBytes(value).CopyTo(header, offset);
 }
+
+#endif
