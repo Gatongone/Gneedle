@@ -79,22 +79,14 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
 
         foreach (var field in Source.Fields)
         {
-            text.Append(line).Append(".field ").Append(MethodHandler.TheAttributesOf(field)).Append(' ')
-                .Append(field.FieldType.FullName).Append(' ').Append(field.Name).AppendLine();
+            text.Append(new FieldHandler(field, this).ToString(level + 1));
         }
 
         // The accessors of a property are methods of the type like any other, so they are written with the methods
         // rather than beside the property which they read and write.
         foreach (var property in Source.Properties)
         {
-            text.Append(line).Append(".property ");
-
-            if (MethodHandler.TheAttributesOf(property) is { Length: > 0 } attributes)
-            {
-                text.Append(attributes).Append(' ');
-            }
-
-            text.Append(property.PropertyType.FullName).Append(' ').Append(property.Name).AppendLine();
+            text.Append(new PropertyHandler(property, this).ToString(level + 1));
         }
 
         foreach (var method in Source.Methods)

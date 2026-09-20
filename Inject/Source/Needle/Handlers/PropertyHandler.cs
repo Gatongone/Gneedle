@@ -27,6 +27,28 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     public string FullName => Source.FullName;
 
     /// <summary>
+    /// Get the string representation of the property, which is the declaration of it: the body of a property is the body
+    /// of the accessors of it, which are the members of the type which it names. The IL of an accessor is what the
+    /// handler of that member writes.
+    /// </summary>
+    /// <returns>The declaration of the property.</returns>
+    public override string ToString() => ToString(0);
+
+    /// <summary>
+    /// The same, written at the given number of levels of indentation, which is what a member of a type is written at.
+    /// </summary>
+    /// <param name="level">The number of levels of indentation which the declaration stands at.</param>
+    /// <returns>The declaration of the property, indented by that many levels.</returns>
+    internal string ToString(int level)
+    {
+        var attributes = MethodHandler.TheAttributesOf(Source);
+
+        return $"{new string(' ', level * MethodHandler.Indentation)}.property "
+               + (attributes is { Length: > 0 } ? $"{attributes} " : "")
+               + $"{Source.PropertyType.FullName} {Source.Name}\n";
+    }
+
+    /// <summary>
     /// The handler of the setter which was read or written, which is kept so that the accessor is read out of the
     /// metadata once rather than again at each ask.
     /// </summary>

@@ -21,6 +21,20 @@ internal class FieldHandler(FieldDefinition fieldDef, TypeHandler declaringTypeH
     /// <inheritdoc/>
     public string Name => Source.Name;
 
+    /// <summary>
+    /// Get the string representation of the field, which is the declaration of it.
+    /// </summary>
+    /// <returns>The declaration of the field.</returns>
+    public override string ToString() => ToString(0);
+
+    /// <summary>
+    /// The same, written at the given number of levels of indentation, which is what a member of a type is written at.
+    /// </summary>
+    /// <param name="level">The number of levels of indentation which the declaration stands at.</param>
+    /// <returns>The declaration of the field, indented by that many levels.</returns>
+    internal string ToString(int level)
+        => $"{new string(' ', level * MethodHandler.Indentation)}.field {MethodHandler.TheAttributesOf(Source)} {Source.FieldType.FullName} {Source.Name}\n";
+
     /// <inheritdoc/>
     ITypeHandler IFieldHandler.DeclaringTypeHandler => DeclaringTypeHandler;
 
