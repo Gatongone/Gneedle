@@ -48,6 +48,7 @@ internal static class StackWalk
 
         return TryGetFirstGetOrSet(bodyInstructions, startIndex, out isGet, out index);
     }
+
     /// <summary>
     /// Try to get the accessor which the value pushed ahead of the start index is the receiver of, which is the call of
     /// `ValuableMember.Get` or `ValuableMember.Set` that the value stands under.<para/>
@@ -92,6 +93,7 @@ internal static class StackWalk
         index = 0;
         return false;
     }
+
     /// <summary>
     /// Every accessor of the value member which a local holds the handle of, which is each read of the local together
     /// with the accessor which that read is the receiver of.<para/>
@@ -134,6 +136,7 @@ internal static class StackWalk
 
         return stores == 1 ? accessors : null;
     }
+
     /// <summary>
     /// The first accessor of the body after the start index, which is what the value of a placeholder stood for before
     /// the accessors were told apart from each other.
@@ -158,6 +161,7 @@ internal static class StackWalk
         index = 0;
         return false;
     }
+
     /// <summary>
     /// Whether an instruction is the call of an accessor of a value member, which is what reads or writes the field or
     /// the property which a placeholder stands for.
@@ -182,6 +186,7 @@ internal static class StackWalk
         isGet = method.Name.Equals(nameof(ValuableMember.Get));
         return true;
     }
+
     /// <summary>
     /// The values which an instruction takes off the stack and the values it leaves on it, or null when the walk cannot
     /// tell.<para/>
@@ -273,6 +278,7 @@ internal static class StackWalk
                 return null;
         }
     }
+
     /// <summary>
     /// The number of values which an instruction leaves on the stack, counted against the number it takes off it, or
     /// null when the walk cannot tell.<para/>
@@ -285,6 +291,7 @@ internal static class StackWalk
     /// <returns>The count, or null when the instruction is not one which the walk reads.</returns>
     internal static int? StackDelta(Instruction instruction)
         => StackEffect(instruction) is { } effect ? effect.Left - effect.Taken : null;
+
     /// <summary>
     /// The value which an instance of <see cref="Instance"/> was built around, which is what the member the placeholder
     /// names is reached through.
@@ -304,6 +311,7 @@ internal static class StackWalk
         /// <summary>The instruction which loads the value, or null where the template computed it.</summary>
         public readonly Instruction? Load = load;
     }
+
     /// <summary>
     /// Whether every path which the body takes to an instruction passes through the one at <paramref name="callIndex"/>,
     /// which is what the value which that instruction reads being the one which the symbol left means.<para/>
@@ -364,6 +372,7 @@ internal static class StackWalk
 
         return true;
     }
+
     /// <summary>
     /// The instructions which an instruction hands a walk to: a branch leaves for the ones it names, and a branch which
     /// is taken in one of two cases leaves for the instruction after it as well. The operand is what tells the two
@@ -393,6 +402,7 @@ internal static class StackWalk
 
         if (ins.Next != null) yield return ins.Next;
     }
+
     /// <summary>
     /// The local which the value of a symbol is stored into, and the instruction which stores it, which is what a template
     /// which holds the delegate or the handle of the symbol writes where it would otherwise use it.
@@ -412,6 +422,7 @@ internal static class StackWalk
 
         return null;
     }
+
     /// <summary>
     /// Compare an expected parameter type against a type inferred from the evaluation stack.
     /// Integer-family types (bool/char/[s]byte/[u]short/int) are all loaded via <c>ldc.i4.*</c>
@@ -430,6 +441,7 @@ internal static class StackWalk
             // A value which was boxed is carried as the type it was boxed from, and it is the value which a call of a
             // parameter of `object` is made with rather than a reference of a type which names `object`.
             || (pushedBy.OpCode.Code == Code.Box && expected.MetadataType == MetadataType.Object);
+
     /// <summary>
     /// Whether the values of a type are carried by the stack as 4-byte integers, which is what an enumeration of an
     /// integer under it is, while a structure of the same width is carried as a value of its own type.
@@ -452,6 +464,7 @@ internal static class StackWalk
             return false;
         }
     }
+
     /// <summary>
     /// Whether the type of the value which a call hands back is that of a value at all, which is what tells a member
     /// which hands a value back from one which hands nothing back: a call of a member which hands nothing back leaves
@@ -460,6 +473,7 @@ internal static class StackWalk
     /// <param name="returnType">The type which the signature of the call hands back.</param>
     /// <returns>Whether a value is handed back.</returns>
     internal static bool HandsAValueBack(TypeReference returnType) => returnType.MetadataType != MetadataType.Void;
+
     /// <summary>
     /// Whether the value which a member hands back is the value which the delegate describes it with: the values of the
     /// integer family are carried by the stack as the same value whatever the width of the type which names them, so a
@@ -474,6 +488,7 @@ internal static class StackWalk
         => TypeName.HasSameName(member, described)
            || (IsI4Compatible(member) && IsI4Compatible(described))
            || (IsI4Compatible(described) && HasAnI4UnderlyingType(module, member));
+
     /// <summary>
     /// Whether the type is represented as a 4-byte integer on the CLR evaluation stack,
     /// i.e. loaded via the <c>ldc.i4.*</c> opcodes and thus not distinguishable by opcode alone.
@@ -487,6 +502,7 @@ internal static class StackWalk
                              or MetadataType.UInt16
                              or MetadataType.Int32
                              or MetadataType.UInt32;
+
     /// <summary>
     /// Whether an instruction leaves a value of a type which is not the type of the value it is handed, which is what
     /// the conversions, the casts, the boxes and the reads do.
@@ -502,6 +518,7 @@ internal static class StackWalk
      or Code.Ldfld or Code.Ldflda or Code.Ldind_I1 or Code.Ldind_I2 or Code.Ldind_I4 or Code.Ldind_I8
      or Code.Ldind_I or Code.Ldind_R4 or Code.Ldind_R8 or Code.Ldind_Ref or Code.Ldind_U1 or Code.Ldind_U2
      or Code.Ldind_U4;
+
     /// <summary>
     /// The type of the value which an instruction leaves on the stack, which is read off the instruction itself where
     /// the instruction writes that type into it, and off the member the instruction loads where it reads one.
@@ -562,6 +579,7 @@ internal static class StackWalk
 
         return type != null && type != typeSystem.Void;
     }
+
     /// <summary>
     /// The type of the argument which an instruction loads, which is the type of the parameter at the position it
     /// loads, or the type which declares the template when it loads the receiver.
@@ -582,6 +600,7 @@ internal static class StackWalk
         // message of its own rather than a type to compare against.
         return ArgumentAt(slot, targetDef)?.ParseGenericTokens(context.Source, context.Module);
     }
+
     /// <summary>
     /// The type of the address which an instruction which reads the address of a value leaves on the stack, which is the
     /// type of the value that the address is of, by reference.
@@ -604,6 +623,7 @@ internal static class StackWalk
 
         return addressed is { } type ? new ByReferenceType(type.ParseGenericTokens(context.Source, context.Module)) : null;
     }
+
     /// <summary>
     /// The type of the argument which a slot names, the receiver being the slot which is taken first where the template
     /// belongs to an instance.
@@ -616,6 +636,7 @@ internal static class StackWalk
         var position = slot - (targetDef.IsStatic ? 0 : 1);
         return position >= 0 && position < targetDef.Parameters.Count ? targetDef.Parameters[position].ParameterType : null;
     }
+
     /// <summary>
     /// What a call hands back, with the generic return of a generic method, and of a method of a generic type, resolved
     /// to the argument which the call was given.
@@ -631,6 +652,7 @@ internal static class StackWalk
             return genericType.GenericArguments[parameter.Position];
         return methodRef.ReturnType;
     }
+
     /// <summary>
     /// Resolve a delegate Invoke parameter type. When the delegate is a generic instance,
     /// open generic parameters (e.g. T1) are mapped to the actual generic arguments (e.g. Int32).

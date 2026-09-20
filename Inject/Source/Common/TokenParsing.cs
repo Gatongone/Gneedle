@@ -271,8 +271,8 @@ internal static class TokenParsing
                     return importedType;
             }
         }
-
     }
+
     /// <param name="methodReference">The method reference which may hold tokens in the types of its declaring type, parameters or return value.</param>
     extension(MethodReference methodReference)
     {
