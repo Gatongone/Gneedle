@@ -562,6 +562,13 @@ public class PointerTests
         public static int Identity_OfAnIntWhichTheConstraintRefuses(int value) => This.Method<Func<int, int>>("Identity")(value);
 
         /// <summary>
+        /// The member which the name stands for declares a parameter of its own, and the delegate describes the member
+        /// with a value which may be absent: whether such a value fits the constraints of the parameter does not follow
+        /// from its kind, so both the one which names the kinds and the one which names the value types are read.
+        /// </summary>
+        public static int? Identity_OfANullable(int? value) => This.Method<Func<int?, int?>>("Identity")(value);
+
+        /// <summary>
         /// The member which the name stands for declares a parameter of its own which stands inside the value which the
         /// delegate hands back rather than in an argument of the call, so no argument names it.
         /// </summary>
@@ -606,10 +613,11 @@ public class PointerTests
         public static char CallACharDelegate(int value) => This.Method<Func<int, char>>("Echo")(value);
 
         /// <summary>
-        /// The same, of a member which hands back a value under an enumeration: the value which is carried is the one
-        /// under the enumeration, which is what the delegate names.
+        /// The same, of a member which hands back a value under an enumeration: the value which the member leaves is
+        /// the value under the enumeration rather than a value of the enumeration as a type of its own, which is the
+        /// value which the delegate hands back, because no instruction of a template names the enumeration.
         /// </summary>
-        public static int CallAnIntDelegateForAnEnumeration(int value) => (int) This.Method<Func<int, StringComparison>>("Kind")(value);
+        public static int CallAnIntDelegateForAnEnumeration(int value) => This.Method<Func<int, int>>("Kind")(value);
     }
 
     /// <summary>
@@ -3016,7 +3024,7 @@ public class PointerTests
             () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    "the member was found and refused by the rule of the call rather than as one which no candidate describes.");
+                    $"the member was not refused as one which no candidate of that name describes: {thrown.Message}");
     }
 
     [Test]
@@ -3102,6 +3110,39 @@ public class PointerTests
                     "the member was not called one of the instantiation which fits the constraint of its parameter.");
         Assert.That(type.GetMethod("RunInt")!.Invoke(Activator.CreateInstance(type), [5]), Is.EqualTo(5),
                     "the member whose parameter accepts the types of values was not called with one.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Parameter_Accepts_The_Types_Of_Values_Alone_Is_Refused_A_Value_Which_May_Be_Absent()
+    {
+        // A value which may be absent is a value type, so the kind of it is the kind the parameter accepts, and it is
+        // the one value of that kind which the constraint does not: the runtime refuses an instantiation of such a
+        // parameter with it, so a delegate which names it describes no member rather than one which cannot be called.
+        var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfANullableAssembly",
+                                                  GenericParameterAttributes.NotNullableValueTypeConstraint);
+        var method = host.AddMethod("Run", typeof(int?).ToGneedleType(), [], [new Parameter(typeof(int?).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with a value which may be absent where its own parameter accepts the types of values: {thrown.Message}");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Parameter_Accepts_The_Types_Of_References_Alone_Is_Refused_A_Value_Which_May_Be_Absent()
+    {
+        // The same value read against the other kind, which it is not: a value which may be absent is a value type
+        // whatever the constraint of the parameter says, so the read of the type which pairs a value with the absence
+        // of it may not turn that kind into the kind which the references are.
+        var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAReferenceFromANullableAssembly");
+        var method = host.AddMethod("Run", typeof(int?).ToGneedleType(), [], [new Parameter(typeof(int?).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with a value which may be absent where its own parameter accepts the types of references: {thrown.Message}");
     }
 
     [Test]

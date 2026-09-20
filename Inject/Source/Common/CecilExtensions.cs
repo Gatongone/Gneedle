@@ -277,7 +277,37 @@ internal static class CecilExtensions
         // which it accepts is one which this read would otherwise have refused.
         if (IsAValueType(argument) is not { } isValueType) return true;
 
-        return kind == GenericParameterAttributes.ReferenceTypeConstraint ? !isValueType : isValueType;
+        // A value is no reference, and a reference is no value: a value which may be absent is one the constraint that
+        // names the value types refuses as well, which the kind of the type alone does not tell it, because it is a
+        // value type: the type which pairs a value with the absence of it is read here.
+        return kind == GenericParameterAttributes.ReferenceTypeConstraint
+            ? !isValueType
+            : isValueType && !IsANullableValueType(argument);
+    }
+
+    /// <summary>
+    /// Whether the type is the type which pairs a value with the absence of it, which is the one type of the values
+    /// which the constraint that names the value types does not accept: the runtime refuses an instantiation of such a
+    /// parameter with it, while it accepts one of the values which may not be absent.
+    /// </summary>
+    /// <param name="type">The type which is read.</param>
+    /// <returns>Whether the type is a value which may be absent, or false where this read does not tell.</returns>
+    private static bool IsANullableValueType(TypeReference type)
+    {
+        // A parameter of a member or of a type stands for the type which the constraints of it name, and none of them
+        // tells whether that type is this one, so the runtime is what refuses such an instantiation.
+        if (type is GenericParameter) return false;
+
+        try
+        {
+            return type.Resolve()?.FullName == typeof(Nullable<>).FullName;
+        }
+        catch (AssemblyResolutionException)
+        {
+            // The assembly of the type is not there to be read, so the type is left to the runtime as it is where the
+            // kind of it is read.
+            return false;
+        }
     }
 
     /// <summary>
