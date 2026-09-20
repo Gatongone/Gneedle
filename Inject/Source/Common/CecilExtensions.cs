@@ -787,6 +787,27 @@ internal static class CecilExtensions
                     case ArrayType arrayType:
                         return new ArrayType(Replace(arrayType.ElementType), arrayType.Rank);
 
+                    // A parameter stands in a wrapper as well, just like Base<ref T> or Base<T*>: the wrapper names the
+                    // declaration where it is written around a parameter, so one which is left standing stands for no
+                    // signature of named types and the member it describes is refused rather than found.
+                    case ByReferenceType byReference:
+                        return new ByReferenceType(Replace(byReference.ElementType));
+
+                    case PointerType pointer:
+                        return new PointerType(Replace(pointer.ElementType));
+
+                    case PinnedType pinned:
+                        return new PinnedType(Replace(pinned.ElementType));
+
+                    case SentinelType sentinel:
+                        return new SentinelType(Replace(sentinel.ElementType));
+
+                    case OptionalModifierType optionalModifier:
+                        return new OptionalModifierType(optionalModifier.ModifierType, Replace(optionalModifier.ElementType));
+
+                    case RequiredModifierType requiredModifier:
+                        return new RequiredModifierType(requiredModifier.ModifierType, Replace(requiredModifier.ElementType));
+
                     default:
                         return type;
                 }

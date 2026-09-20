@@ -57,6 +57,18 @@ public class PointerTests
         /// instantiation of it is read.
         /// </summary>
         public T Echo(T value) => value;
+
+        /// <summary>
+        /// The same, of a parameter which stands in a wrapper: the delegate describes an address of the argument of
+        /// the instantiation, and the parameter of the declaring type stands in the wrapper of an address as well, so
+        /// the lookup describes the member only where the argument is written inside the wrapper.
+        /// </summary>
+        public void Set(ref T value) => Held = value;
+
+        /// <summary>
+        /// What <see cref="Set"/> was handed last, which is what tells that the member ran.
+        /// </summary>
+        public T Held = default!;
     }
 
     /// <summary>
@@ -712,6 +724,21 @@ public class PointerTests
         /// read rather than the parameter of the type, which is what the reference to it used to be built from.
         /// </summary>
         public static int InstanceField_OfAGenericType(GenericHelper<int> helper) => new Instance(helper).Field<int>("PublicField").Get();
+
+        /// <summary>
+        /// The member which the name stands for declares a parameter of the type which declares it, standing in a
+        /// wrapper: the delegate describes the argument of the instantiation by address, and the member is the one of
+        /// the definition which takes the parameter of the type by address.
+        /// </summary>
+        public delegate void RefOp(ref int value);
+
+        /// <inheritdoc cref="RefOp"/>
+        public static int InstanceMethod_OfAMemberWhoseParameterStandsInAWrapper(GenericHelper<int> helper, int wanted)
+        {
+            var value = wanted;
+            new Instance(helper).Method<RefOp>("Set")(ref value);
+            return helper.Held;
+        }
 
         /// <summary>
         /// The member belongs to a base type of the type which the instance is one of, and that base declares a parameter
@@ -3610,6 +3637,36 @@ public class PointerTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(42),
                     "the woven assembly does not run.");
+    }
+
+    [Test]
+    public void InstanceMethod_Of_A_Member_Whose_Parameter_Stands_In_A_Wrapper_Of_The_Parameter_Of_The_Type_Is_Called()
+    {
+        // The member belongs to the definition of a type which declares a parameter of its own, and its parameter
+        // stands in a wrapper: the delegate describes an address of an `int`, and the signature of the member holds an
+        // address of the parameter of the type, so the two describe one member only where the argument of the
+        // instantiation is written inside the wrapper as well.
+        var (assembly, _, method) = NewInstanceHost("InstanceGenericWrapperAssembly",
+            [typeof(GenericHelper<int>), typeof(int)]);
+
+        method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAMemberWhoseParameterStandsInAWrapper)));
+
+        var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
+                         .FirstOrDefault(reference => reference.Name == "Set");
+        Assert.That(call, Is.Not.Null, "the member whose parameter stands in a wrapper was not called.");
+        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                    "the member is called on the definition of the type which declares it rather than on the instantiation.");
+        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                    "the member is not called on the instantiation which the template named.");
+        Assert.That(call.Parameters.Single().ParameterType, Is.InstanceOf<ByReferenceType>(),
+                    "the member is not called with the argument by address.");
+
+        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var helper = new GenericHelper<int>();
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper, 42]), Is.EqualTo(42),
+                    "the woven assembly does not run the member whose parameter stands in a wrapper.");
+        Assert.That(helper.Held, Is.EqualTo(42), "the member was not handed the value which the template computed.");
     }
 
     [Test]
