@@ -47,6 +47,16 @@ public class PointerTests
     public class DerivedOfAHelperClass : HelperClass;
 
     /// <summary>
+    /// An enumeration whose values are of one byte, which is what tells the width of the values of an enumeration from
+    /// the width of the four bytes which the enumeration of the framework holds.
+    /// </summary>
+    public enum ByteEnumOfTheTests : byte
+    {
+        /// <summary>A value of the enumeration.</summary>
+        One = 1
+    }
+
+    /// <summary>
     /// The same, of a type which declares a parameter of its own: every member which a template reaches through an
     /// instance of it belongs to the definition of the type, which is what the body which is woven cannot name.
     /// </summary>
@@ -650,6 +660,17 @@ public class PointerTests
         /// </summary>
         public static uint[] Identity_OfAnArrayOfUnsignedValues(uint[] value)
             => This.Method<Func<uint[], uint[]>>("Identity")(value);
+
+        /// <inheritdoc cref="Identity_OfAnArrayOfUnsignedValues"/>
+        public static ulong[] Identity_OfAnArrayOfTheWidestUnsignedValues(ulong[] value)
+            => This.Method<Func<ulong[], ulong[]>>("Identity")(value);
+
+        /// <summary>
+        /// The same, of an array of the values under an enumeration of one byte, which is what tells the width of the
+        /// values of an enumeration from the width of the one which holds four bytes.
+        /// </summary>
+        public static byte[] Identity_OfAnArrayOfTheValuesUnderAByteEnumeration(byte[] value)
+            => This.Method<Func<byte[], byte[]>>("Identity")(value);
 
         /// <summary>
         /// The same, of a sequence whose element is an interface: an interface is a reference of the type of every value
@@ -3670,10 +3691,60 @@ public class PointerTests
     }
 
     [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_The_Values_Under_A_Byte_Of_An_Enumeration_Is_Called_For_An_Array_Of_Them()
+    {
+        // The width of the values of an enumeration is the width of the type under it, and it is read from the
+        // enumeration rather than from the type which stands under it alone.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAByteEnumerationAssembly",
+                                                      typeof(IList<ByteEnumOfTheTests>));
+        var method = host.AddMethod("Run", typeof(byte[]).ToGneedleType(), [], [new Parameter(typeof(byte[]).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheValuesUnderAByteEnumeration)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new byte[] { 1, 2 };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a collection of the values under an enumeration of a byte was not called.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_The_Widest_Signed_Values_Is_Called_For_An_Array_Of_The_Unsigned_Ones()
+    {
+        // The same of the values of eight bytes, which is the other end of the widths which the integer family holds.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfTheWidestValuesAssembly",
+                                                      typeof(IList<long>));
+        var method = host.AddMethod("Run", typeof(ulong[]).ToGneedleType(), [], [new Parameter(typeof(ulong[]).ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestUnsignedValues)));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+        var argument = new[] { 1ul, 2ul };
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
+                    "the member whose constraint names a collection of the widest signed values was not called for an array of the unsigned ones.");
+    }
+
+    [Test]
+    public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_Arrays_Of_An_Enumeration_Is_Refused_An_Array_Of_Values()
+    {
+        // An array is a type of its own rather than the enumeration which it holds, so the width of the values of it is
+        // told by nothing: the runtime refuses the instantiation for an array of the values alone, and the walk reads
+        // the array as the type it is.
+        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfArraysOfAnEnumerationAssembly",
+                                                      typeof(IList<DayOfWeek[]>));
+        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+
+        Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
+                    $"the member was called with an array of values where the constraint names an array of arrays of an enumeration: {thrown.Message}");
+    }
+
+    [Test]
     public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_Another_Width_Is_Refused_An_Array()
     {
         // The widths of the elements are what relates them, and the values of two widths are related by nothing: the
-        // runtime refuses the instantiation as well, whichever of the two the constraint names.
+        // runtime refuses the instantiation as well.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAnotherWidthAssembly",
                                                       typeof(IList<float>));
         var method = host.AddMethod(

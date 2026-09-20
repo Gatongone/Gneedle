@@ -472,6 +472,11 @@ internal static class CecilExtensions
     /// <returns>The type which the values are read as, or null where the assembly of the type is not there to be read.</returns>
     private static TypeReference? ElementTypeWhichTheValuesAreReadAs(TypeReference type)
     {
+        // The definition which an array and the other wrappers resolve to is the definition of the element which they
+        // hold, and none of them is an enumeration or any other of the types which have a width: the type itself is
+        // what is read of them.
+        if (type is TypeSpecification and not GenericInstanceType) return type;
+
         var definition = DefinitionOf(type);
 
         if (definition is not { IsEnum: true }) return definition is null ? null : type;
