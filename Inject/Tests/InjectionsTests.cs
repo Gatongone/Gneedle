@@ -199,6 +199,109 @@ public class ThroughAnInterfaceFixture
 }
 
 /// <summary>
+/// The variable of the process which the injectors below run for the type it names alone.<para/>
+/// Both of them are read by every test which weaves this assembly, and a fixture which was woven by them on every run
+/// would report on every run: the variable is what keeps the members which carry them from being woven by the tests
+/// which have nothing to do with them.
+/// </summary>
+public static class InjectorOrder
+{
+    /// <summary>
+    /// The environment variable which names the type the injectors below run for.
+    /// </summary>
+    public const string TypeVariable = "GneedleInjectorOrderType";
+
+    /// <summary>
+    /// Whether the injectors below run for the type which declares the member they were put on.
+    /// </summary>
+    public static bool RunsFor(MethodBase member) => Environment.GetEnvironmentVariable(TypeVariable) == member.DeclaringType!.FullName;
+}
+
+/// <summary>
+/// The bodies which the injectors below write into the members they are put on.
+/// </summary>
+public static class InjectorOrderBodies
+{
+    /// <summary>
+    /// Proceed into the body which the member held, which is what a member woven around holds.
+    /// </summary>
+    public static void ProceedOnly() => Proceed.Invoke();
+
+    /// <summary>
+    /// A body which calls nothing, so that a member which was woven around is told from one which was not by whether
+    /// the generated method is called anywhere in it.
+    /// </summary>
+    public static void Quiet() { }
+}
+
+/// <summary>
+/// An attribute which weaves the member it is put on around the body which the member holds.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+public sealed class AroundBodyInjectorAttribute : Attribute, IMethodInjector
+{
+    /// <inheritdoc/>
+    public void Inject(MethodInfo method, IMethodHandler handler)
+    {
+        if (!InjectorOrder.RunsFor(method)) return;
+        handler.AroundBody(typeof(InjectorOrderBodies).GetMethod(nameof(InjectorOrderBodies.ProceedOnly))!);
+    }
+}
+
+/// <summary>
+/// An attribute which replaces the body of the member it is put on.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+public sealed class ReplaceBodyInjectorAttribute : Attribute, IMethodInjector
+{
+    /// <inheritdoc/>
+    public void Inject(MethodInfo method, IMethodHandler handler)
+    {
+        if (!InjectorOrder.RunsFor(method)) return;
+        handler.SetBody(typeof(InjectorOrderBodies).GetMethod(nameof(InjectorOrderBodies.Quiet))!);
+    }
+}
+
+/// <summary>
+/// A type whose member carries two injectors which each weave around it.
+/// </summary>
+public class TwoAroundFixture
+{
+    /// <summary>
+    /// The member which both injectors above are put on.
+    /// </summary>
+    [AroundBodyInjector]
+    [AroundBodyInjector]
+    public static void Run() { }
+}
+
+/// <summary>
+/// A type whose member carries an injector which replaces the body and one which weaves around it.
+/// </summary>
+public class ReplaceThenAroundFixture
+{
+    /// <summary>
+    /// The member which the two injectors above are put on.
+    /// </summary>
+    [ReplaceBodyInjector]
+    [AroundBodyInjector]
+    public static void Run() { }
+}
+
+/// <summary>
+/// A type whose member carries the same two injectors as the type above, in the other order.
+/// </summary>
+public class AroundThenReplaceFixture
+{
+    /// <summary>
+    /// The member which the two injectors above are put on.
+    /// </summary>
+    [AroundBodyInjector]
+    [ReplaceBodyInjector]
+    public static void Run() { }
+}
+
+/// <summary>
 /// Tests for <see cref="Injections"/>, which applies the injectors which an assembly declares to the image it was loaded
 /// from, and for the taking of the weaver back out which that runs.
 /// </summary>
@@ -511,6 +614,116 @@ public class InjectionsTests
         // assembly which had nothing to be woven.
         Assert.That(Injections.Apply(assembly, image).Changed, Is.True, "the assembly of this test is woven by nothing.");
     }
+
+    #region Two injectors on one member
+
+    /// <summary>
+    /// The names of the types whose members carry two injectors, which are written out rather than taken from the types
+    /// for the reason which the names above are written out for.
+    /// </summary>
+    private const string TwoAroundType = "Gneedle.Inject.Test.TwoAroundFixture";
+
+    /// <inheritdoc cref="TwoAroundType"/>
+    private const string ReplaceThenAroundType = "Gneedle.Inject.Test.ReplaceThenAroundFixture";
+
+    /// <inheritdoc cref="TwoAroundType"/>
+    private const string AroundThenReplaceType = "Gneedle.Inject.Test.AroundThenReplaceFixture";
+
+    /// <summary>
+    /// Weave the assembly of these tests with the injectors of the two turned on for the one type which is named, and
+    /// answer with what the run reported and with the image it answered with.
+    /// </summary>
+    private static (bool Changed, byte[] Result, byte[] Given, List<string> Reported) WeaveWithTheInjectorsOf(string typeName)
+    {
+        var image = TestAssemblyImage();
+        var assembly = AssemblyLoader.LoadFromBytes(image);
+        var reported = new List<string>();
+        Environment.SetEnvironmentVariable(InjectorOrder.TypeVariable, typeName);
+
+        try
+        {
+            var (changed, result) = Injections.Apply(assembly, image, reportError: reported.Add);
+            return (changed, result, image, reported);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(InjectorOrder.TypeVariable, null);
+        }
+    }
+
+    /// <summary>
+    /// Whether the member calls the method which the weaving around it generated, which is what a member that kept the
+    /// body it held is told from one which gave it up.
+    /// </summary>
+    private static bool CallsTheProceedMethod(byte[] image, string typeName)
+    {
+        using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        var run = read.MainModule.GetType(typeName)!.Methods.Single(method => method.Name == "Run");
+        return run.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.Name == "<Run>k__Proceed");
+    }
+
+    /// <summary>
+    /// Whether the type declares the method which the weaving around the member above generated.
+    /// </summary>
+    private static bool DeclaresTheProceedMethod(byte[] image, string typeName)
+    {
+        using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(image));
+        return read.MainModule.GetType(typeName)!.Methods.Any(method => method.Name == "<Run>k__Proceed");
+    }
+
+    // The variable of the process is read by the injectors of every type which is woven while it is set, so these tests
+    // run on their own rather than beside the others.
+    [Test]
+    [NonParallelizable]
+    public void Apply_Of_Two_Injectors_Which_Weave_Around_One_Member_Reports_The_Second_And_Answers_With_The_Image_It_Was_Given()
+    {
+        // A member is woven around once: the second weave around it has nowhere to put the body which the first one
+        // took over, so it is refused rather than woven over the top of it.
+        var (changed, result, given, reported) = WeaveWithTheInjectorsOf(TwoAroundType);
+
+        Assert.That(reported, Is.Not.Empty, "the second weave around the member was not reported.");
+        Assert.That(reported.Single(), Does.Contain("already woven around"), string.Join(Environment.NewLine, reported));
+
+        // The refusal leaves the member of that type woven in part, which is what a build reports and discards: no image
+        // at all is handed back of the run.
+        Assert.That(changed, Is.False, "a run which reported a member answered with the image it wove.");
+        Assert.That(result, Is.SameAs(given), "the image of a run which reported is not the one which was given.");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void Apply_Of_A_Body_Which_Is_Replaced_And_Then_Woven_Around_Wraps_The_Replacement()
+    {
+        // The replacement writes the body the member holds, and the weave around it takes that body over: what the
+        // template proceeds into is the body which the injector before it wrote.
+        var (changed, result, _, reported) = WeaveWithTheInjectorsOf(ReplaceThenAroundType);
+
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+        Assert.That(changed, Is.True, "the member was woven by nothing.");
+        Assert.That(DeclaresTheProceedMethod(result, ReplaceThenAroundType), Is.True, "no body was taken over to proceed into.");
+        Assert.That(CallsTheProceedMethod(result, ReplaceThenAroundType), Is.True, "the member does not proceed into the body it was given.");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void Apply_Of_A_Body_Which_Is_Woven_Around_And_Then_Replaced_Leaves_The_Generated_Method_Uncalled()
+    {
+        // The replacement writes the body of the member and says nothing of the body it held, so the weave around the
+        // member is gone by the time the replacement is written. What is left of it is the method which holds the body
+        // which was taken over, which nothing calls by then.
+        var (changed, result, _, reported) = WeaveWithTheInjectorsOf(AroundThenReplaceType);
+
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+        Assert.That(changed, Is.True, "the member was woven by nothing.");
+        Assert.That(CallsTheProceedMethod(result, AroundThenReplaceType), Is.False, "the member proceeds into a body which the replacement gave up.");
+
+        // The method which the weave around generated is declared by the type and is added to it before the replacement
+        // runs, so the replacement leaves it behind: nothing calls it by then, and nothing takes it back out.
+        Assert.That(DeclaresTheProceedMethod(result, AroundThenReplaceType), Is.True,
+                    "the method which the weave around generated was not left in the type.");
+    }
+
+    #endregion
 
     [Test]
     public void Apply_Weaves_A_Member_Through_The_Signature_Which_Its_Injector_Was_Put_On()
