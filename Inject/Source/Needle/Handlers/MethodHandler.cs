@@ -1173,6 +1173,46 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
+    /// Whether the two instructions which stand ahead of the name of a member are the arrangement of
+    /// <c>Static.From("TypeName")</c>, which is the call of <c>From</c> on the placeholder with the text it reads ahead
+    /// of it. The two are consumed by the weaving rather than woven, and the name of the member stands after them.<para/>
+    /// What the text is is not read here, because what a caller wants of it differs: one which writes the name of the
+    /// member needs the name of the type, and one which reads the pattern alone needs only where the name stands.
+    /// </summary>
+    /// <param name="filter">The filter which holds the instructions of the template.</param>
+    /// <param name="nameIndex">Index of the instruction which loads the name of the member.</param>
+    /// <returns>Whether the name of the member stands after that arrangement.</returns>
+    private static bool IsAStaticFrom(InstructionFilter filter, int nameIndex)
+    {
+        if (nameIndex < 2) return false;
+
+        var callFrom = filter.Target[nameIndex - 1];
+        return callFrom.OpCode == OpCodes.Call
+            && callFrom.Operand is MethodReference {Name: "From", DeclaringType: var declaringType}
+            && declaringType.FullName == Static.TYPE_NAME
+            && filter.Target[nameIndex - 2].OpCode == OpCodes.Ldstr;
+    }
+
+    /// <summary>
+    /// The type which the arrangement of <c>Static.From("TypeName")</c> ahead of the name of a member names, which is
+    /// the type the member is reached on rather than the type which declares the placeholder.<para/>
+    /// The type is resolved from the text of the name, so a member of a type of another assembly is named the way that
+    /// assembly names it.
+    /// </summary>
+    /// <param name="filter">The filter which holds the instructions of the template.</param>
+    /// <param name="nameIndex">Index of the instruction which loads the name of the member.</param>
+    /// <returns>The definition of the type which was named, or null when the arrangement is not there or what it reads
+    /// is not the text of a name.</returns>
+    private TypeDefinition? TypeNamedByAStaticFrom(InstructionFilter filter, int nameIndex)
+    {
+        if (!IsAStaticFrom(filter, nameIndex)) return null;
+
+        return filter.Target[nameIndex - 2].Operand is string fullTypeName
+            ? DeclaringTypeHandler.AssemblyHandler.GetCecilType(fullTypeName).Definition
+            : null;
+    }
+
+    /// <summary>
     /// The value which an instance of <see cref="Instance"/> was built around, which the member that the name stands for
     /// is reached through.<para/>
     /// The placeholder is handed an array which holds the value as its only element, and the sequence which builds that

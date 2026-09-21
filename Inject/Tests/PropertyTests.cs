@@ -78,7 +78,7 @@ public class PropertyTests
     {
         var assembly = Assembly.Create(assemblyName);
         var module = assembly.Source.MainModule;
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
 
         // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it.
         AddAnInstanceConstructor(host);

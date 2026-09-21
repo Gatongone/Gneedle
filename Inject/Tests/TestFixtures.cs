@@ -2,6 +2,7 @@ using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
+using TypeAttributes = Mono.Cecil.TypeAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 
 namespace Gneedle.Inject.Test;
@@ -22,14 +23,47 @@ internal static class TestFixtures
     /// </summary>
     /// <param name="assemblyName">The name of the assembly to build, which a test which loads its host gives one of its
     /// own because two assemblies of one name cannot be loaded into one run.</param>
+    /// <param name="typeName">The name of the class to declare, which is <c>Host</c> for the tests which read the type
+    /// they build rather than the one they name.</param>
     /// <returns>The handler of the assembly, the handler of the host, and the module which declares it.</returns>
-    internal static (AssemblyHandler Handler, TypeHandler Host, ModuleDefinition Module) NewHost(string assemblyName)
+    internal static (AssemblyHandler Handler, TypeHandler Host, ModuleDefinition Module) NewHost(string assemblyName, string typeName = "Host")
     {
         var assembly = Assembly.Create(assemblyName);
         var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = (TypeHandler) handler.AddClass(typeName, Ns, ClassFlags.Public).GetHandler();
 
         return (handler, host, assembly.Source.MainModule);
+    }
+
+    /// <summary>
+    /// Create an assembly which declares a class named <c>Outer</c>, and hand back the handler of the assembly and the
+    /// definition of that class.
+    /// </summary>
+    /// <param name="assemblyName">The name of the assembly to build.</param>
+    /// <returns>The handler of the assembly, and the definition of the class it declares.</returns>
+    internal static (AssemblyHandler Handler, TypeDefinition Outer) NewOuter(string assemblyName)
+    {
+        var assembly = Assembly.Create(assemblyName);
+        var module = assembly.Source.MainModule;
+        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        module.Types.Add(outer);
+
+        return ((AssemblyHandler) assembly.Handler, outer);
+    }
+
+    /// <summary>
+    /// The same, with a class named <c>Inner</c> declared inside the one which was built, which is the shape a nested
+    /// type is read through.
+    /// </summary>
+    /// <param name="assemblyName">The name of the assembly to build.</param>
+    /// <returns>The handler of the assembly, the class it declares, and the class declared inside it.</returns>
+    internal static (AssemblyHandler Handler, TypeDefinition Outer, TypeDefinition Inner) NewOuterWithInner(string assemblyName)
+    {
+        var (handler, outer) = NewOuter(assemblyName);
+        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, outer.Module.TypeSystem.Object) { DeclaringType = outer };
+        outer.NestedTypes.Add(inner);
+
+        return (handler, outer, inner);
     }
 
     /// <summary>
@@ -65,4 +99,21 @@ internal static class TestFixtures
 
         type.Methods.Add(constructor);
     }
+
+    /// <summary>
+    /// Declare the class which a template is woven into in the assembly of a handler, and hand back the handler of it.
+    /// </summary>
+    /// <param name="handler">The handler of the assembly which the class is declared in.</param>
+    /// <param name="typeName">The name of the class, which is <c>Host</c> for the files which call it that.</param>
+    /// <returns>The handler of the class.</returns>
+    internal static TypeHandler AddAHost(AssemblyHandler handler, string typeName = "Host")
+        => (TypeHandler) handler.AddClass(typeName, Ns, ClassFlags.Public).GetHandler();
+
+    /// <summary>
+    /// The same, of the assembly a test built rather than of the handler it took out of it.
+    /// </summary>
+    /// <param name="assembly">The assembly which the class is declared in.</param>
+    /// <param name="typeName">The name of the class.</param>
+    /// <returns>The handler of the class.</returns>
+    internal static TypeHandler AddAHost(Assembly assembly, string typeName = "Host") => AddAHost((AssemblyHandler) assembly.Handler, typeName);
 }
