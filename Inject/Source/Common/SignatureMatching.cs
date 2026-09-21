@@ -608,7 +608,7 @@ internal static class SignatureMatching
 
         foreach (var declaration in s_TheTypesWhichEveryArrayIsGiven)
         {
-            given.Add(module.ImportReference(declaration));
+            given.Add(ModuleLock.Import(module, declaration));
         }
 
         // The collections and the sequences of the runtime which name the element are given to a vector, and they are

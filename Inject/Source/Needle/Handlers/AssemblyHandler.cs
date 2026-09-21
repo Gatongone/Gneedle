@@ -121,8 +121,9 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     {
         var module = Assembly.Source.MainModule;
 
-        // The one import which this makes - the decimal, which the type system of a module does not carry - appends to
-        // the tables of the module, so the whole of the method is written under the lock of that module.
+        // The one import which this makes - the decimal, which the type system of a module does not carry - takes the
+        // lock of the module itself. The whole of the method is written under that lock as well, because the definition
+        // which each type is cached with is resolved, and a resolution reads the module.
         lock (ModuleLock.Of(module))
         {
             AddType(module.TypeSystem.Boolean);
@@ -142,7 +143,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             AddType(module.TypeSystem.UIntPtr);
             AddType(module.TypeSystem.Void);
             AddType(module.TypeSystem.Object);
-            AddType(module.ImportReference(typeof(decimal)));
+            AddType(ModuleLock.Import(module, typeof(decimal)));
         }
 
         return;

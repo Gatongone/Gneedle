@@ -39,12 +39,9 @@ partial class AssemblyHandler
                 var arguments = genericType.GenericArguments
                                            .Select(argument => ResolveParameterType(target, argument, methodGenericParameters))
                                            .ToArray();
-                // Create generic instance. The import appends to the tables of the module, which are written under its lock.
+                // Create generic instance.
                 var module = Assembly.Source.MainModule;
-                lock (ModuleLock.Of(module))
-                {
-                    return module.ImportReference(parameterTypeDef.Definition).MakeGenericInstanceType(arguments);
-                }
+                return ModuleLock.Import(module, parameterTypeDef.Definition).MakeGenericInstanceType(arguments);
             default: throw new ArgumentOutOfRangeException(nameof(parameterType));
         }
     }
@@ -123,7 +120,7 @@ partial class AssemblyHandler
             // name, so they share the cache entry as well.
             if (typeRef.TryGetFromAssemblyDefinition(module, out var fromAssemblyType))
             {
-                cecilType         = new CecilType(fromAssemblyType!, module.ImportReference(fromAssemblyType));
+                cecilType         = new CecilType(fromAssemblyType!, ModuleLock.Import(module, fromAssemblyType!));
                 m_TypeCache[name] = cecilType;
                 return cecilType;
             }
@@ -150,7 +147,7 @@ partial class AssemblyHandler
             // reason of.
             var definition = typeRef.Resolve()
                 ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, typeRef.FullName));
-            cecilType         = new CecilType(definition, module.ImportReference(typeRef));
+            cecilType         = new CecilType(definition, ModuleLock.Import(module, typeRef));
             m_TypeCache[name] = cecilType;
             return cecilType;
         }
@@ -202,7 +199,7 @@ partial class AssemblyHandler
             if (Attribute.GetCustomAttribute(type, typeof(FromAssemblyAttribute)) is FromAssemblyAttribute fromAssembly)
             {
                 var fromAssemblyDefinition = FromAssembly.ResolveTypeFromAssembly(module, fromAssembly.Name, type.FullName!);
-                cecilType = new CecilType(fromAssemblyDefinition, module.ImportReference(fromAssemblyDefinition));
+                cecilType = new CecilType(fromAssemblyDefinition, ModuleLock.Import(module, fromAssemblyDefinition));
                 m_TypeCache[name] = cecilType;
                 return cecilType;
             }
@@ -210,7 +207,7 @@ partial class AssemblyHandler
             // Import type ref into the current assembly definition. The import registers the assembly reference which the
             // type is resolved through as well, and that one may differ from the assembly which declares the type,
             // because the reflection importer maps the corlib to another assembly.
-            var targetTypeRef = module.ImportReference(type);
+            var targetTypeRef = ModuleLock.Import(module, type);
 
             // The definition is the one for looking the members up, and a type which the assembly it was asked of does
             // not hold has none: the type is refused here rather than being carried about as a type of nothing.
@@ -239,13 +236,8 @@ partial class AssemblyHandler
     {
         if (template.DeclaringType == null || template.DeclaringType.Assembly.GetName().Name != Assembly.Source.Name.Name)
         {
-            // The import appends the assembly which declares the template to the tables of the module, which are written
-            // under its lock.
             var module = Assembly.Source.MainModule;
-            lock (ModuleLock.Of(module))
-            {
-                return module.ImportReference(template).Resolve();
-            }
+            return ModuleLock.Import(module, template).Resolve();
         }
 
         // The name of a method alone does not tell two of one name apart, so the signature is what the template is

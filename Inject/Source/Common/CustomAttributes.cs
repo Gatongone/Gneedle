@@ -48,10 +48,10 @@ internal static class CustomAttributes
             // Create custom attribute and append arguments. The constructor is imported rather than used as it is, because
             // the attribute is declared by another assembly whenever the type which carries it is not the one which
             // declares the attribute: Cecil writes a member of another module only through a reference to it.
-            var attribute = new CustomAttribute(module.ImportReference(method));
+            var attribute = new CustomAttribute(ModuleLock.Import(module, method));
             for (var index = 0; index < argTypes.Length; index++)
             {
-                var argument = new CustomAttributeArgument(module.ImportReference(argTypes[index]), arguments[index]);
+                var argument = new CustomAttributeArgument(ModuleLock.Import(module, argTypes[index]), arguments[index]);
                 attribute.ConstructorArguments.Add(argument);
             }
 

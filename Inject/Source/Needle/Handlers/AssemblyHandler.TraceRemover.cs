@@ -68,11 +68,17 @@ partial class AssemblyHandler
             changed |= attributes.Count > 0;
         }
 
-        var weaver = module.AssemblyReferences.FirstOrDefault(reference => reference.Name == typeof(IAssemblyInjector).Assembly.GetName().Name);
-        if (weaver != null && !NamesTheAssembly(module, weaver))
+        // The reading which tells whether the assembly still names the weaver and the writing which takes the reference
+        // out are one step, which is what the lock of the module holds together, as it does for the reference which is
+        // appended.
+        lock (ModuleLock.Of(module))
         {
-            module.AssemblyReferences.Remove(weaver);
-            changed = true;
+            var weaver = module.AssemblyReferences.FirstOrDefault(reference => reference.Name == typeof(IAssemblyInjector).Assembly.GetName().Name);
+            if (weaver != null && !NamesTheAssembly(module, weaver))
+            {
+                module.AssemblyReferences.Remove(weaver);
+                changed = true;
+            }
         }
 
         return changed;
@@ -158,8 +164,12 @@ partial class AssemblyHandler
     /// <param name="type">The type which is removed.</param>
     private static void Remove(ModuleDefinition module, TypeDefinition type)
     {
-        if (type.DeclaringType != null) type.DeclaringType.NestedTypes.Remove(type);
-        else module.Types.Remove(type);
+        // What the type is taken out of is a collection of the module, which is written under the lock of it.
+        lock (ModuleLock.Of(module))
+        {
+            if (type.DeclaringType != null) type.DeclaringType.NestedTypes.Remove(type);
+            else module.Types.Remove(type);
+        }
     }
 
     /// <summary>
