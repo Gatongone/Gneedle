@@ -34,7 +34,7 @@ public static class TheOrderOfTheInjectors
 /// <param name="name">The name which the record of this injector is written under.</param>
 /// <param name="priority">The order in which this injector is applied among the injectors of the member it stands on.</param>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public sealed class RecordsTheOrderAttribute(string name, int priority = 0) : Attribute, IMethodInjector, IOrderedInjector
+public sealed class RecordsTheOrderAttribute(string name, int priority = 0) : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
     public int Priority { get; } = priority;
@@ -51,6 +51,8 @@ public sealed class RecordsTheOrderAttribute(string name, int priority = 0) : At
 public sealed class AFirstOfItsPriorityAttribute : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+    /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler) => TheOrderOfTheInjectors.Record(nameof(AFirstOfItsPriorityAttribute));
 }
 
@@ -60,6 +62,8 @@ public sealed class AFirstOfItsPriorityAttribute : Attribute, IMethodInjector
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class ZLastOfItsPriorityAttribute : Attribute, IMethodInjector
 {
+    /// <inheritdoc/>
+    public int Priority => 0;
     /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler) => TheOrderOfTheInjectors.Record(nameof(ZLastOfItsPriorityAttribute));
 }
