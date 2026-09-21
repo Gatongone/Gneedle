@@ -253,6 +253,11 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
             // stands past the memory which is mapped faults the process in a way which cannot be caught.
             var mapped = MappedSizeOf(basePtr);
             var headerLength = (int) Math.Min(mapped, HeaderWindow);
+
+            // A window too short to hold a header is not read at all, which is what keeps the read of this memory to a
+            // mapping which could be an image: the measuring below refuses such a window as well, so a mapping this
+            // narrow is refused twice rather than once, and the copy which the refusal of it saves is one whose source
+            // is too short to be the header of anything.
             if (headerLength < MinimumHeader)
             {
                 return false;
@@ -312,20 +317,30 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     private const int MaxSections = 96;
 
     /// <summary>
-    /// How much of the memory at <paramref name="basePtr"/> is mapped, or zero when it cannot be asked about.
+    /// How many bytes of the memory at <paramref name="basePtr"/> are mapped from it onwards, or zero when it cannot be
+    /// asked about.
     /// </summary>
     /// <remarks>
-    /// The view of an image lies in one region, so the size of the region which the base of an image stands in is the
-    /// size of the whole of it, and it is a length which was measured by the runtime rather than read out of the image
-    /// itself - which is what makes it a bound a malformed image cannot name.
+    /// The region which is answered about is the one which holds the address rather than the one which begins at it, and
+    /// what is read are the bytes at the address and after it alone: the region is what is counted, so the part of it
+    /// which stands ahead of the address is taken off, and a region which begins below the image would otherwise bound
+    /// the read by bytes which the image does not stand in.<para/>
+    /// The size of the region was measured by the runtime rather than read out of the image itself, which is what makes
+    /// it a bound a malformed image cannot name.
     /// </remarks>
     /// <param name="basePtr">Base of the memory which the image was mapped into.</param>
-    /// <returns>The number of bytes of it which are mapped.</returns>
+    /// <returns>The number of bytes of the memory which are mapped from that address onwards.</returns>
     private static long MappedSizeOf(IntPtr basePtr)
     {
         var information = new MemoryBasicInformation();
         var size = (IntPtr) System.Runtime.InteropServices.Marshal.SizeOf<MemoryBasicInformation>();
-        return VirtualQuery(basePtr, ref information, size) == IntPtr.Zero ? 0 : information.RegionSize.ToInt64();
+        if (VirtualQuery(basePtr, ref information, size) == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        var mapped = information.RegionSize.ToInt64() - (basePtr.ToInt64() - information.BaseAddress.ToInt64());
+        return Math.Max(mapped, 0);
     }
 
     /// <summary>
