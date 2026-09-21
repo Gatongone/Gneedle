@@ -173,6 +173,31 @@ namespace Gneedle.Inject.Test
             return assembly;
         }
 
+        /// <summary>
+        /// Weave the template which the name stands for, and hand back the member which the woven body names, which is
+        /// what tells that the stub was replaced by the real type: a reference which stands in the module which was
+        /// woven is one of the type the module declares rather than of the stub which shares its name.<para/>
+        /// The member is looked for by name, so the test names the one its template reads.
+        /// </summary>
+        /// <typeparam name="T">The kind of the reference which the template reads the member through.</typeparam>
+        /// <param name="templateName">Name of the template which is woven.</param>
+        /// <param name="memberName">Name of the member which the woven body is expected to name.</param>
+        /// <param name="parameterTypes">The parameters of the member which is woven, or null for none.</param>
+        /// <returns>The member which the woven body names.</returns>
+        private static T TheMemberWhichWasWoven<T>(string templateName, string memberName, Parameter[]? parameterTypes = null)
+            where T : MemberReference
+        {
+            var method = Weave(templateName, parameterTypes);
+            var member = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<T>()
+                               .FirstOrDefault(reference => reference.Name == memberName);
+
+            Assert.That(member, Is.Not.Null, $"the woven body names no {typeof(T).Name} of the name '{memberName}'.");
+            Assert.That(member!.DeclaringType.Module, Is.SameAs(method.Source.Module),
+                        $"the {typeof(T).Name} which the woven body names is not of the module which was woven.");
+
+            return member;
+        }
+
         private static MethodHandler Weave(string templateName, Parameter[]? parameterTypes = null)
         {
             var assembly = NewTarget();
@@ -189,47 +214,19 @@ namespace Gneedle.Inject.Test
 
         [Test]
         public void SetBody_Replaces_The_Stub_Field()
-        {
-            var method = Weave(nameof(Templates.ReadStubField));
-            var field = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<FieldReference>()
-                              .FirstOrDefault(reference => reference.Name == nameof(Stub.Field));
-
-            Assert.That(field, Is.Not.Null);
-            Assert.That(field!.DeclaringType.Module, Is.SameAs(method.Source.Module));
-        }
+            => TheMemberWhichWasWoven<FieldReference>(nameof(Templates.ReadStubField), nameof(Stub.Field));
 
         [Test]
         public void SetBody_Replaces_The_Stub_Method_Call()
-        {
-            var method = Weave(nameof(Templates.CallStubMethod));
-            var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
-                             .FirstOrDefault(reference => reference.Name == nameof(Stub.Read));
-
-            Assert.That(call, Is.Not.Null);
-            Assert.That(call!.DeclaringType.Module, Is.SameAs(method.Source.Module));
-        }
+            => TheMemberWhichWasWoven<MethodReference>(nameof(Templates.CallStubMethod), nameof(Stub.Read));
 
         [Test]
         public void SetBody_Replaces_The_Stub_Constructor()
-        {
-            var method = Weave(nameof(Templates.CreateStub));
-            var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
-                             .FirstOrDefault(reference => reference.Name == ".ctor");
-
-            Assert.That(call, Is.Not.Null);
-            Assert.That(call!.DeclaringType.Module, Is.SameAs(method.Source.Module));
-        }
+            => TheMemberWhichWasWoven<MethodReference>(nameof(Templates.CreateStub), ".ctor");
 
         [Test]
         public void SetBody_Replaces_The_Stub_Property_Access()
-        {
-            var method = Weave(nameof(Templates.ReadStubProperty));
-            var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
-                             .FirstOrDefault(reference => reference.Name == "get_Property");
-
-            Assert.That(call, Is.Not.Null);
-            Assert.That(call!.DeclaringType.Module, Is.SameAs(method.Source.Module));
-        }
+            => TheMemberWhichWasWoven<MethodReference>(nameof(Templates.ReadStubProperty), "get_Property");
 
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Method()
@@ -336,36 +333,17 @@ namespace Gneedle.Inject.Test
 
         [Test]
         public void SetBody_Replaces_The_Nested_Stub()
-        {
-            var method = Weave(nameof(Templates.ReadNestedStubField));
-            var field = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<FieldReference>()
-                              .FirstOrDefault(reference => reference.Name == nameof(OuterStub.Inner.Field));
-
-            Assert.That(field, Is.Not.Null);
-            Assert.That(field!.DeclaringType.Module, Is.SameAs(method.Source.Module));
-        }
+            => TheMemberWhichWasWoven<FieldReference>(nameof(Templates.ReadNestedStubField), nameof(OuterStub.Inner.Field));
 
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Field()
-        {
-            var method = Weave(nameof(Templates.InstanceField_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
-            var field = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<FieldReference>()
-                              .FirstOrDefault(reference => reference.Name == nameof(Stub.Field));
-
-            Assert.That(field, Is.Not.Null);
-            Assert.That(field!.DeclaringType.Module, Is.SameAs(method.Source.Module));
-        }
+            => TheMemberWhichWasWoven<FieldReference>(nameof(Templates.InstanceField_StubReceiver), nameof(Stub.Field),
+                                                     [new Parameter(typeof(Stub).ToGneedleType())]);
 
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Property()
-        {
-            var method = Weave(nameof(Templates.InstanceProperty_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
-            var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
-                             .FirstOrDefault(reference => reference.Name == "get_Property");
-
-            Assert.That(call, Is.Not.Null);
-            Assert.That(call!.DeclaringType.Module, Is.SameAs(method.Source.Module));
-        }
+            => TheMemberWhichWasWoven<MethodReference>(nameof(Templates.InstanceProperty_StubReceiver), "get_Property",
+                                                        [new Parameter(typeof(Stub).ToGneedleType())]);
 
         #endregion
 
