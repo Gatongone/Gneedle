@@ -302,6 +302,15 @@ internal static class ErrorMessages
     internal const string TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN = "The template captures a variable whose value cannot be written into the member being woven, where a string, a number, a character, a boolean, an enumeration, a null of a reference type can. Field: {0}, Type: {1}, Method: {2}.";
 
     /// <summary>
+    /// The template captured a type which the weaver itself declares, which the assembly being woven must not name: the
+    /// attributes which the injectors are read from, and the reference to the weaver which they name, are taken out of
+    /// the assembly once they have been applied, and the token of one of the types of the weaver would name it again.
+    /// The placeholders are the name of the field which holds the value, the name of the type which was captured, and
+    /// the member.
+    /// </summary>
+    internal const string TEMPLATE_CAPTURE_NAMES_THE_WEAVER = "The template captured a type of the weaver itself, which the assembly being woven does not name: the weaving takes the reference to the weaver out of the member, and a token of one of its types would name it again. Field: {0}, Type: {1}, Method: {2}.";
+
+    /// <summary>
     /// The array which the image of an assembly was to be written to is smaller than the image. The placeholder is the
     /// number of bytes which the image takes.
     /// </summary>
