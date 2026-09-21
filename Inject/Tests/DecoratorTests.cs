@@ -353,11 +353,11 @@ public class DecoratorTests
     public void PropertyDecorator_WithFieldOperation_Creates_Backing_Field()
     {
         var host = NewClass();
-        var property = host.AddProperty("Value", PropertyFlags.Public)
-                           .WithType(typeof(int))
-                           .WithGetter(DefaultPropertyBody.WithFieldOperation)
-                           .WithSetter(DefaultPropertyBody.WithFieldOperation)
-                           .GetHandler();
+        host.AddProperty("Value", PropertyFlags.Public)
+            .WithType(typeof(int))
+            .WithGetter(DefaultPropertyBody.WithFieldOperation)
+            .WithSetter(DefaultPropertyBody.WithFieldOperation)
+            .GetHandler();
 
         // Backing field should be created: <Value>k__BackingField
         var backingField = host.Source.Fields.FirstOrDefault(f => f.Name == "<Value>k__BackingField");

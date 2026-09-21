@@ -59,7 +59,6 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     internal string ToString(int level)
     {
         var declaration = new string(' ', level * IlPrinter.INDENTATION);
-        var line = new string(' ', (level + 1) * IlPrinter.INDENTATION);
         var text = new StringBuilder();
 
         text.Append(declaration).Append(".class ").Append(IlPrinter.TheAttributesOf(Source)).Append(' ').Append(Source.FullName);
