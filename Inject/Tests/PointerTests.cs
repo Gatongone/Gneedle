@@ -354,10 +354,10 @@ public partial class PointerTests
         // does: the member is looked up by the types of the parameters of the delegate, which are compared by name
         // rather than by position, so what names the parameter of the member is the name of the token and not where it
         // stands among the parameters of the body.
-        public delegate M1 LaterOp(M1 value);
+        public delegate M_1 LaterOp(M_1 value);
 
         /// <inheritdoc cref="LaterOp"/>
-        public static M1 InvokeAMemberWhichTheNameOfAParameterNames(M0 key, M1 value) => This.Method<LaterOp>("IdentityOfTheLater")(value);
+        public static M_1 InvokeAMemberWhichTheNameOfAParameterNames(M_0 key, M_1 value) => This.Method<LaterOp>("IdentityOfTheLater")(value);
 
         // The member which the symbol names declares a parameter of its own which its own signature names, and the token
         // of the template stands for the parameter of the type which the body is a member of, which bears the name of
@@ -539,10 +539,10 @@ public partial class PointerTests
         /// The same of a member whose parameter no delegate of the framework could describe: the token stands for the
         /// parameter of the member which is woven, which is what the readme writes such a signature with.
         /// </summary>
-        public delegate M0 IdentityOfTheMethod(M0 value);
+        public delegate M_0 IdentityOfTheMethod(M_0 value);
 
         /// <inheritdoc cref="Identity_OfAnInt"/>
-        public static M0 Identity_OfTheMethod(M0 value) => This.Method<IdentityOfTheMethod>("Identity")(value);
+        public static M_0 Identity_OfTheMethod(M_0 value) => This.Method<IdentityOfTheMethod>("Identity")(value);
 
         /// <summary>
         /// The delegate describes the member whole, so the type which it hands back is what tells one instantiation of
@@ -556,7 +556,7 @@ public partial class PointerTests
         /// of the member, and the value which the member hands back is described with a type of its own: the two
         /// disagree, so the delegate describes no instantiation of the member.
         /// </summary>
-        public static int IdentityOfTheTokenWithAValueOfAnotherType(M0 value) => This.Method<Func<M0, int>>("Identity")(value);
+        public static int IdentityOfTheTokenWithAValueOfAnotherType(M_0 value) => This.Method<Func<M_0, int>>("Identity")(value);
 
         /// <summary>
         /// The member which the name stands for declares a parameter of its own which accepts only the types of
@@ -970,7 +970,7 @@ public partial class PointerTests
         /// instantiation rather than on the definition of the constraint, which names no type of the body, and the call
         /// names that instantiation.
         /// </summary>
-        public static int InstanceMethod_OfAConstraintWhichIsAnInstantiation(M0 box, int a)
+        public static int InstanceMethod_OfAConstraintWhichIsAnInstantiation(M_0 box, int a)
             => new Instance(box).Method<IntOp>("Echo")(a);
 
         /// <summary>
@@ -979,10 +979,10 @@ public partial class PointerTests
         /// which declares a parameter as well is matched by it, and the call is one of the instantiation of the member
         /// which reaches the body.
         /// </summary>
-        public delegate M0 IdentityOfTheMethod(M0 value);
+        public delegate M_0 IdentityOfTheMethod(M_0 value);
 
         /// <inheritdoc cref="IdentityOfTheMethod"/>
-        public static M0 InstanceMethodOfAGenericMemberOfAGenericType(GenericHelper<int> helper, M0 value)
+        public static M_0 InstanceMethodOfAGenericMemberOfAGenericType(GenericHelper<int> helper, M_0 value)
             => new Instance(helper).Method<IdentityOfTheMethod>("Identity")(value);
 
         /// <summary>
@@ -990,7 +990,7 @@ public partial class PointerTests
         /// member which is reached declares fewer parameters than the body does, so the arguments of the instantiation
         /// are the ones which the delegate names rather than every parameter of the body.
         /// </summary>
-        public static M0 InstanceMethodOfAGenericMemberOfABodyOfAGreaterArity(GenericHelper<int> helper, M0 value)
+        public static M_0 InstanceMethodOfAGenericMemberOfABodyOfAGreaterArity(GenericHelper<int> helper, M_0 value)
             => new Instance(helper).Method<IdentityOfTheMethod>("Identity")(value);
 
         /// <summary>

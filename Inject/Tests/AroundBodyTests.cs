@@ -117,7 +117,7 @@ public static class WideAroundTemplates
 /// It names the first generic parameter of the method which is woven around through the
 /// <c>Gneedle.Inject.M_0</c> token rather than declaring a generic parameter of its own, because a delegate cannot.
 /// </summary>
-public delegate M0 PassthroughOp(M0 value);
+public delegate M_0 PassthroughOp(M_0 value);
 
 /// <summary>
 /// Templates for a generic target.<para/>
@@ -128,14 +128,14 @@ public static class GenericAroundTemplates
     /// <summary>
     /// Proceed with the value as it is.
     /// </summary>
-    public static M0 Passthrough(M0 value) => Proceed.Method<PassthroughOp>()(value);
+    public static M_0 Passthrough(M_0 value) => Proceed.Method<PassthroughOp>()(value);
 
     /// <summary>
     /// Proceed with the value which this template was given, where neither that argument nor the value which is handed
     /// back has a type of its own: the call names the token which the weaving turns into the parameter of the member,
     /// and the signature of the delegate which the template above needs is written nowhere.
     /// </summary>
-    public static M0 PassthroughWithItsOwnArguments(M0 value) => Proceed.Invoke<M0>();
+    public static M_0 PassthroughWithItsOwnArguments(M_0 value) => Proceed.Invoke<M_0>();
 }
 
 /// <summary>

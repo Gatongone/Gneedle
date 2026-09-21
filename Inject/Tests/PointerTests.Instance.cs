@@ -187,7 +187,7 @@ public partial class PointerTests
             "Run",
             typeof(int).ToGneedleType(),
             [new GenericParameterType("T", Constraint.FromType(typeof(ICountedOfAnInstantiation<int>)))],
-            [new Parameter(typeof(M0).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(M_0).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAConstraintWhichIsAnInstantiation)));
 
@@ -397,9 +397,9 @@ public partial class PointerTests
         var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(M0).ToGneedleType(),
+            typeof(M_0).ToGneedleType(),
             [new GenericParameterType("U")],
-            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M0).ToGneedleType())],
+            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M_0).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
 
         return (assembly, host, method);
@@ -418,9 +418,9 @@ public partial class PointerTests
         var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(M0).ToGneedleType(),
+            typeof(M_0).ToGneedleType(),
             [new GenericParameterType("U"), new GenericParameterType("V")],
-            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M0).ToGneedleType())],
+            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M_0).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
 
         return (assembly, host, method);
