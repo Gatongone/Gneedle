@@ -49,7 +49,7 @@ public partial class PointerTests
         // that way, and no operand of the body names the placeholder afterwards.
         var asm = Assembly.Create("StaticMemberAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         BuildTheMember(member, asm, handler, name);
 
@@ -93,7 +93,7 @@ public partial class PointerTests
         if (member is StaticMember.MethodOfAFramework) return;
 
         var module = asm.Source.MainModule;
-        var staticClass = (TypeHandler) handler.AddClass("LocalStatic", Ns, ClassFlags.Public).GetHandler();
+        var staticClass = AddAHost(handler, "LocalStatic");
 
         switch (member)
         {

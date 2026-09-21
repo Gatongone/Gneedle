@@ -67,6 +67,26 @@ public class AddProjectsPostBuildTests
     }
 
     /// <summary>
+    /// Write a project which declares <paramref name="projectText"/>, scan the solution which holds it, and assert that
+    /// the weaving was written into the project or was not.<para/>
+    /// What every test of a name which the build reads says is one of the two, and what tells them apart is the text of
+    /// the project alone.
+    /// </summary>
+    /// <param name="projectText">What the project declares.</param>
+    /// <param name="woven">Whether the weaving is expected in the project.</param>
+    /// <param name="message">What is reported when the project holds what it does not expect to.</param>
+    private void ScanAProject(string projectText, bool woven, string message)
+    {
+        var project = WriteProjectDeclaring("App", projectText);
+        var solution = WriteSolution(withFolder: false, "App");
+
+        var (result, engine) = Scan(solution);
+
+        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+        Assert.That(File.ReadAllText(project), woven ? Does.Contain("GneedleTarget") : Does.Not.Contain("GneedleTarget"), message);
+    }
+
+    /// <summary>
     /// Write a project of the declaration given into a directory of its own, and return the path of it.<para/>
     /// The declaration is what the project element of an SDK project wraps, so that a test writes the groups it is
     /// about and nothing else.
@@ -271,7 +291,7 @@ public class AddProjectsPostBuildTests
     {
         // A project is read from its first line to its last, and a property holds the value of the last group which
         // sets it: a project which turns the aspect off and on again is woven.
-        var project = WriteProjectDeclaring("App", """
+        ScanAProject("""
             <PropertyGroup>
               <TargetFramework>net5.0</TargetFramework>
               <Aspect>disable</Aspect>
@@ -283,14 +303,8 @@ public class AddProjectsPostBuildTests
               <Aspect>enable</Aspect>
             </PropertyGroup>
 
-            """);
-        var solution = WriteSolution(withFolder: false, "App");
-
-        var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
-                    "a project which set the property back was left out of the weaving.");
+            """, woven: true,
+                     "a project which set the property back was left out of the weaving.");
     }
 
     [Test]
@@ -298,7 +312,7 @@ public class AddProjectsPostBuildTests
     {
         // The same the other way round, which is the order a project that was woven once and turns the aspect off
         // again is written in.
-        var project = WriteProjectDeclaring("App", """
+        ScanAProject("""
             <PropertyGroup>
               <TargetFramework>net5.0</TargetFramework>
               <Aspect>enable</Aspect>
@@ -310,14 +324,8 @@ public class AddProjectsPostBuildTests
               <Aspect>disable</Aspect>
             </PropertyGroup>
 
-            """);
-        var solution = WriteSolution(withFolder: false, "App");
-
-        var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), Does.Not.Contain("GneedleTarget"),
-                    "a project which turned the aspect off last was woven.");
+            """, woven: false,
+                     "a project which turned the aspect off last was woven.");
     }
 
     [Test]
@@ -325,7 +333,7 @@ public class AddProjectsPostBuildTests
     {
         // The build reads the name of a property without regard to case, so the property which the package reads is
         // set by a project which spells it another way.
-        var project = WriteProjectDeclaring("App", """
+        ScanAProject("""
             <PropertyGroup>
               <TargetFramework>net5.0</TargetFramework>
               <aspect>disable</aspect>
@@ -334,14 +342,8 @@ public class AddProjectsPostBuildTests
               <ProjectReference Include="..\Gneedle.Aspect.csproj" />
             </ItemGroup>
 
-            """);
-        var solution = WriteSolution(withFolder: false, "App");
-
-        var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), Does.Not.Contain("GneedleTarget"),
-                    "a project which turned the aspect off was woven.");
+            """, woven: false,
+                     "a project which turned the aspect off was woven.");
     }
 
     [Test]
@@ -349,7 +351,7 @@ public class AddProjectsPostBuildTests
     {
         // A project reference names a file, and a file is the one its path names whatever the case of the letters in
         // it, which is how the build reads the reference.
-        var project = WriteProjectDeclaring("App", """
+        ScanAProject("""
             <PropertyGroup>
               <TargetFramework>net5.0</TargetFramework>
             </PropertyGroup>
@@ -357,21 +359,15 @@ public class AddProjectsPostBuildTests
               <ProjectReference Include="..\gneedle.aspect.csproj" />
             </ItemGroup>
 
-            """);
-        var solution = WriteSolution(withFolder: false, "App");
-
-        var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
-                    "a project which refers to the weaver was not woven.");
+            """, woven: true,
+                     "a project which refers to the weaver was not woven.");
     }
 
     [Test]
     public void A_Package_Reference_Which_Is_Spelled_In_Another_Case_Is_Read()
     {
         // A package is named by its id, which the registry it was published to holds without regard to case.
-        var project = WriteProjectDeclaring("App", """
+        ScanAProject("""
             <PropertyGroup>
               <TargetFramework>net5.0</TargetFramework>
             </PropertyGroup>
@@ -379,14 +375,8 @@ public class AddProjectsPostBuildTests
               <PackageReference Include="gneedle.aspect" />
             </ItemGroup>
 
-            """);
-        var solution = WriteSolution(withFolder: false, "App");
-
-        var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
-                    "a project which refers to the weaver was not woven.");
+            """, woven: true,
+                     "a project which refers to the weaver was not woven.");
     }
 
     [Test]
@@ -394,7 +384,7 @@ public class AddProjectsPostBuildTests
     {
         // The name of an item is read by the build without regard to case as well, so a project which writes the
         // reference of the weaver another way is a project which refers to it.
-        var project = WriteProjectDeclaring("App", """
+        ScanAProject("""
             <PropertyGroup>
               <TargetFramework>net5.0</TargetFramework>
             </PropertyGroup>
@@ -402,14 +392,8 @@ public class AddProjectsPostBuildTests
               <projectreference Include="..\Gneedle.Aspect.csproj" />
             </ItemGroup>
 
-            """);
-        var solution = WriteSolution(withFolder: false, "App");
-
-        var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"),
-                    "a project which refers to the weaver was not woven.");
+            """, woven: true,
+                     "a project which refers to the weaver was not woven.");
     }
 
     [Test]
@@ -455,7 +439,7 @@ public class AddProjectsPostBuildTests
     {
         // The target is taken back out of a project which stopped referring to the weaver, and it is found by its name
         // the way the build reads that name, whatever case the letters of it are written in.
-        var project = WriteProjectDeclaring("App", """
+        ScanAProject("""
             <PropertyGroup>
               <TargetFramework>net5.0</TargetFramework>
             </PropertyGroup>
@@ -464,14 +448,8 @@ public class AddProjectsPostBuildTests
             </Target>
             <UsingTask TaskName="Gneedle.Aspect.AssemblyInject" AssemblyFile="C:\packages\Gneedle.Aspect\tools\netstandard2.1\Gneedle.Aspect.dll" />
 
-            """);
-        var solution = WriteSolution(withFolder: false, "App");
-
-        var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), Does.Not.Contain("gneedletarget"),
-                    "the target which the package wrote was left in a project which no longer refers to the weaver.");
+            """, woven: false,
+                     "the target which the package wrote was left in a project which no longer refers to the weaver.");
     }
 
     #endregion

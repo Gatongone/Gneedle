@@ -31,7 +31,7 @@ public partial class PointerTests
         addBaseMembers(baseDef, mod);
         mod.Types.Add(baseDef);
 
-        var host = (TypeHandler) ((AssemblyHandler) asm.Handler).AddClass("Derived", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(asm, "Derived");
         host.Source.BaseType = baseDef;
         return host;
     }
@@ -45,7 +45,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWhichDerivesFromAnInstantiationOfAGenericType(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.Source.BaseType = host.Source.Module.ImportReference(typeof(GenericBaseOfAnInstance<int>));
         return host;
     }
@@ -110,7 +110,7 @@ public partial class PointerTests
         // names cannot be resolved, and what the caller is left with is the reason: the error names the member which was
         // looked for rather than being one which the lookup of the base type itself failed over.
         var asm = Assembly.Create("NoBasePointerAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) asm.Handler).AddClass("Derived", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(asm, "Derived");
         // A class which is added derives from the object of the target framework unless the decorator is given another
         // base type, so the one which derives from nothing is the root of a hierarchy which is written out here.
         host.Source.BaseType = null;

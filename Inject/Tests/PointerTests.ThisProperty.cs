@@ -31,7 +31,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithProperty(string propertyName, bool withGetter, bool withSetter, bool isVirtual, bool isStatic = false)
     {
         var handler = (AssemblyHandler) Assembly.Create("MemberInjectionPropAssembly").Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var propertyType = module.TypeSystem.Int32;
         var property = new PropertyDefinition(propertyName, PropertyAttributes.None, propertyType);

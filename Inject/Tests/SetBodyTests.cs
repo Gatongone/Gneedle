@@ -252,7 +252,7 @@ public class SetBodyTests
     private static (AssemblyHandler handler, TypeHandler host) NewCalc()
     {
         var handler = (AssemblyHandler) Assembly.Create("SetBodyTestAssembly").Handler;
-        var host = (TypeHandler) handler.AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler, "Calc");
         return (handler, host);
     }
 
@@ -260,11 +260,7 @@ public class SetBodyTests
     /// Create the assembly which the tests of the default bodies build, and hand back the handler of the type which was
     /// added to it.
     /// </summary>
-    private static TypeHandler NewHost()
-    {
-        var handler = (AssemblyHandler) Assembly.Create("DefaultBodyAssembly").Handler;
-        return (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
-    }
+    private static TypeHandler NewHost() => AddAHost((AssemblyHandler) Assembly.Create("DefaultBodyAssembly").Handler);
 
     private static MethodDefinition SourceOf(IMethodHandler method) => ((MethodHandler) method).Source;
 
@@ -294,7 +290,7 @@ public class SetBodyTests
     {
         var assembly = Assembly.Create("SetBodyValidAssembly");
         var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler, "Calc");
 
         var method = host.AddMethod(
             "Add",
@@ -326,7 +322,7 @@ public class SetBodyTests
         // position it holds, which is the only thing the two sets share. A body which is copied by name alone leaves
         // the operand null where the names differ, which Cecil rejects while the instruction is built.
         var assembly = Assembly.Create("SetBodyParameterOperandAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly, "Calc");
         var intType = typeof(int).ToGneedleType();
         var method = host.AddMethod("Sum", intType, [], [new Parameter(intType), new Parameter(intType), new Parameter(intType),
                                                          new Parameter(intType), new Parameter(intType)],
@@ -379,7 +375,7 @@ public class SetBodyTests
         // ahead of all of them, so every load of an argument is written one slot after the one which the template
         // names, whichever form of the opcode carries the slot.
         var assembly = Assembly.Create("SetBodyShiftedArgumentsAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly, "Calc");
         var intType = typeof(int).ToGneedleType();
         host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
 
@@ -408,7 +404,7 @@ public class SetBodyTests
         // of them at the slot which it holds there, which is the slot of the template shifted by the receivers of the
         // two: none of them moves where both belong to an instance.
         var assembly = Assembly.Create("SetBodyInstanceTemplateAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly, "Calc");
         var intType = typeof(int).ToGneedleType();
         host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
 
@@ -607,7 +603,7 @@ public class SetBodyTests
     private static MethodInfo NewProbe(string templateName)
     {
         var assembly = Assembly.Create($"SetBody{templateName}Assembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly, "Calc");
         var intType = typeof(int).ToGneedleType();
         var method = host.AddMethod("Probe", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
@@ -628,7 +624,7 @@ public class SetBodyTests
     private static (MethodInfo Woven, MethodHandler Handler) NewProbeOf(string assemblyName, Type holder, string templateName)
     {
         var assembly = Assembly.Create(assemblyName);
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly, "Calc");
         var intType = typeof(int).ToGneedleType();
         var method = host.AddMethod("Probe", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
@@ -744,7 +740,7 @@ public class SetBodyTests
         mod.Types.Add(baseDef);
 
         // derived host extends base
-        var host = (TypeHandler) handler.AddClass("Derived", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler, "Derived");
         host.Source.BaseType = baseDef;
 
         var method = host.AddMethod("Method", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
@@ -763,7 +759,7 @@ public class SetBodyTests
         // no parameter of the member holds it, so a body which loads the parameters alone hands the base member the
         // first of them where it expects the instance and leaves it one short at the end.
         var assembly = Assembly.Create("CallFromBaseInstanceAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Calc", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly, "Calc");
 
         // The constructor is a call from base of its own, which is the first thing which an instance of the type runs.
         host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);

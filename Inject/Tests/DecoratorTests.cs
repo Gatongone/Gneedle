@@ -231,7 +231,7 @@ public class DecoratorTests
         // The delegate is what the chain is given and what it holds until the method is appended, so what the lambda
         // captured is read while the chain ends and written into the body which the method copies.
         var assembly = Assembly.Create("MethodDecoratorCaptureAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var captured = 41;
 
         var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
@@ -412,7 +412,7 @@ public class DecoratorTests
         var assembly = Assembly.Create("DecoratorBuiltOnceAssembly");
         var handler = (AssemblyHandler) assembly.Handler;
         var module = assembly.Source.MainModule;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         var classChain = handler.AddClass("Class", Ns, ClassFlags.Public);
         var structChain = handler.AddStruct("Struct", Ns, StructFlags.Public);
@@ -453,7 +453,7 @@ public class DecoratorTests
         // does not hold what it was described by is a member which is woven and does not say what the description says.
         var assembly = Assembly.Create("DecoratorDescribedAfterBuildAssembly");
         var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         var classChain = handler.AddClass("Class", Ns, ClassFlags.Public);
         var structChain = handler.AddStruct("Struct", Ns, StructFlags.Public);
