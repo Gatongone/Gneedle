@@ -235,6 +235,10 @@ public class SetBodyTests
         public static int Add(int a, int b) => a + b;
         public static int Echo(int x) => x;
 
+        // A call which names the method through an instantiation of it, which is a reference of the specification of
+        // that method rather than of the method itself.
+        public static int First(int[] values) => Enumerable.First<int>(values);
+
         // Five parameters, so the fifth is addressed by ldarg.s with a parameter as its operand rather than by one of the
         // macro opcodes, which carry no operand at all.
         public static int Sum(int a, int b, int c, int d, int e) => a + b + c + d + e;
@@ -283,6 +287,23 @@ public class SetBodyTests
         Assert.That(body.Instructions, Is.Not.Empty);
         Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Add), Is.True);
         Assert.That(body.Instructions.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Calls_A_Generic_Method_Is_Woven()
+    {
+        // The declaring type of an instantiation of a method belongs to the method which it instantiates rather than to
+        // the reference: reading the tokens of the reference wrote the declaring type of it, which the setter of a
+        // specification refuses, so a call of one was refused before the tokens of its arguments were read.
+        var (handler, host) = NewCalc();
+        var method = host.AddMethod("First", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())],
+                                    MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.First))!);
+
+        var loaded = handler.Assembly.Load();
+        var woven = loaded.GetType($"{Ns}.Calc")!.GetMethod("First")!;
+
+        Assert.That(woven.Invoke(null, [new[] {7, 8}]), Is.EqualTo(7), "the first of the values was not handed back.");
     }
 
     [Test]
