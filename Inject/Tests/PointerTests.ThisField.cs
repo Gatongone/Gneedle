@@ -36,7 +36,6 @@ public partial class PointerTests
     /// <returns>The type of the host, as the runtime read it.</returns>
     private static Type LoadHostOf(Assembly assembly, TypeHandler host)
     {
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         return assembly.Load().GetType($"{NS}.Host")!;
@@ -93,7 +92,6 @@ public partial class PointerTests
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
         });
         var assembly = host.AssemblyHandler.Assembly;
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{NS}.Host")!;

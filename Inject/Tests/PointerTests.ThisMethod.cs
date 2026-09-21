@@ -628,7 +628,6 @@ public partial class PointerTests
             Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
         });
         var assembly = host.AssemblyHandler.Assembly;
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{NS}.Host")!;
@@ -660,7 +659,6 @@ public partial class PointerTests
             Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
         });
         var assembly = host.AssemblyHandler.Assembly;
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{NS}.Host")!;
@@ -691,7 +689,6 @@ public partial class PointerTests
                 "an invocation of the delegate was left standing rather than folded.");
         });
         var assembly = host.AssemblyHandler.Assembly;
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{NS}.Host")!;
@@ -723,7 +720,6 @@ public partial class PointerTests
                 "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
         });
         var assembly = host.AssemblyHandler.Assembly;
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{NS}.Host")!;
@@ -756,7 +752,6 @@ public partial class PointerTests
                 "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
         });
         var assembly = host.AssemblyHandler.Assembly;
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{NS}.Host")!;
@@ -792,7 +787,6 @@ public partial class PointerTests
                 "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
         });
         var assembly = host.AssemblyHandler.Assembly;
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         var type = assembly.Load().GetType($"{NS}.Host")!;

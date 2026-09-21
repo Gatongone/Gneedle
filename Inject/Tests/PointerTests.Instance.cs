@@ -113,7 +113,7 @@ public partial class PointerTests
         // The instance which the template holds in a local stands where the template stored it, which is not where the
         // name of the field stands: the load of the local is what the field is read off, and the sequence which built the
         // array around the instance goes with the name.
-        var (assembly, host, method) = NewInstanceHost("InstanceFieldInALocalAssembly", [typeof(HelperClass)]);
+        var (assembly, _, method) = NewInstanceHost("InstanceFieldInALocalAssembly", [typeof(HelperClass)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnInstanceInALocal)));
 
         var ins = method.Source.Body.Instructions.ToArray();
@@ -259,7 +259,7 @@ public partial class PointerTests
         // instruction which leaves it takes one value as well: the walk which counts the values of the value read the
         // field as leaving one more than it does, so the sequence which the placeholder was built around was never
         // recognized and the template was refused rather than woven.
-        var (assembly, host, method) = NewInstanceHost("InstanceFieldValueAssembly", [typeof(HelperClass), typeof(int)]);
+        var (assembly, _, method) = NewInstanceHost("InstanceFieldValueAssembly", [typeof(HelperClass), typeof(int)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAFieldOfAnInstance)));
 
         var ins = method.Source.Body.Instructions.ToArray();
@@ -375,7 +375,6 @@ public partial class PointerTests
 
         // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it,
         // which is what the tests below do to run the member which they wove.
-        var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
         return (assembly, host, method);

@@ -129,7 +129,6 @@ public class PropertyTests
     private static (Assembly Assembly, TypeHandler Host) NewDerivedHost(string assemblyName)
     {
         var assembly = Assembly.Create(assemblyName);
-        var module = assembly.Source.MainModule;
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler)
                                  .AddClass("Host", NS, ClassFlags.Public)
                                  .WithBaseType(typeof(AutoPropertyBase))

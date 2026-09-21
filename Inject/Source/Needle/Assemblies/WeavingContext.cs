@@ -21,7 +21,7 @@ namespace Gneedle.Inject;
 /// which the earlier compilation loaded.<para/>
 /// A runtime which holds no context at all, which .NET Framework and Mono are, loads the image the way it always did.
 /// </remarks>
-internal sealed class WeavingContext
+internal static class WeavingContext
 {
     /// <summary>
     /// The type of a context of the runtime, or null where the runtime holds none.<para/>
@@ -40,24 +40,6 @@ internal sealed class WeavingContext
     /// The property which answers the assemblies which a context holds.
     /// </summary>
     private static readonly PropertyInfo? s_Assemblies = s_Type?.GetProperty("Assemblies");
-
-    /// <summary>
-    /// The context which the image was loaded into, which is an object of the type above.
-    /// </summary>
-    private readonly object m_Context;
-
-    /// <summary>
-    /// The method which loads an image into a context, as the type above declares it.
-    /// </summary>
-    private readonly MethodInfo m_LoadFromStream;
-
-    /// <param name="context">The context which the image was loaded into.</param>
-    /// <param name="loadFromStream">The method which loaded the image into it.</param>
-    private WeavingContext(object context, MethodInfo loadFromStream)
-    {
-        m_Context        = context;
-        m_LoadFromStream = loadFromStream;
-    }
 
     /// <summary>
     /// Load the image of <paramref name="rawBytes"/> into a context of its own, or answer null where the runtime holds
