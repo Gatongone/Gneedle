@@ -128,7 +128,7 @@ partial class MethodHandler
                 // Related to issue: https://github.com/jbevain/cecil/issues/954
                 ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType([.. declaringType.GenericParameters.Select(static p => (TypeReference) p)]))
                 // Otherwise we can directly import the field definition as reference.
-                : Source.Module.ImportReference(field);
+                : ModuleLock.Import(Source.Module, field);
         var isStatic = field.Resolve().IsStatic;
 
         // A read of the local stands where it stands and is written as the receiver of the field, which is the load of the

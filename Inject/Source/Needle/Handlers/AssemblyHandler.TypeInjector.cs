@@ -96,7 +96,7 @@ partial class AssemblyHandler
             type.BaseType = baseType;
 
             // Add type to module.
-            Assembly.Source.MainModule.Types.Add(type);
+            ModuleLock.Declare(Assembly.Source.MainModule, type);
 
             return new ClassHandler(this, type);
         }
@@ -160,7 +160,7 @@ partial class AssemblyHandler
             type.BaseType = baseType;
 
             // Add type to module.
-            Assembly.Source.MainModule.Types.Add(type);
+            ModuleLock.Declare(Assembly.Source.MainModule, type);
 
             return new StructHandler(this, type);
         }

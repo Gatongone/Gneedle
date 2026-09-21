@@ -194,13 +194,13 @@ internal static class TokenParsing
                     // assembly declares, so the real type replaces it. The reference ownership is not a criterion here: the
                     // reference of a member operand was imported to the module before it is parsed, even though the type it
                     // denotes is the stub of the template assembly.
-                    ? module.ImportReference(fromAssemblyType) :
+                    ? ModuleLock.Import(module, fromAssemblyType!) :
                     // Import the type reference, so that it could be used in the module even if it comes from another assembly.
-                    module.ImportReference(typeReference);
+                    ModuleLock.Import(module, typeReference);
             }
 
             // Import the type reference, so that it could be used in the module even if it comes from another assembly.
-            var importedType = module.ImportReference(typeReference);
+            var importedType = ModuleLock.Import(module, typeReference);
             switch (importedType)
             {
                 // Parse the tokens nested in the generic arguments, just like List<Gneedle.Inject.T_0>.
@@ -210,7 +210,7 @@ internal static class TokenParsing
                     // to be replaced as well.
                     if (genericInstanceType.ElementType.TryGetFromAssemblyDefinition(module, out var realElement))
                     {
-                        var replacement = new GenericInstanceType(module.ImportReference(realElement));
+                        var replacement = new GenericInstanceType(ModuleLock.Import(module, realElement!));
                         foreach (var argument in genericInstanceType.GenericArguments)
                         {
                             replacement.GenericArguments.Add(argument);

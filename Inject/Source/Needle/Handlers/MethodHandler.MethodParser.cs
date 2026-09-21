@@ -310,7 +310,7 @@ partial class MethodHandler
             // The delegate which is built is the one which the template named rather than the definition which that one
             // is an instantiation of: the constructor of the definition takes the arguments of the open type, and a body
             // which named the definition of a generic delegate could not be loaded at all.
-            var delegateType = Source.Module.ImportReference(delegateRef);
+            var delegateType = ModuleLock.Import(Source.Module, delegateRef);
             var constructor = delegateDef.GetConstructors().First();
             var delegateCtor = new MethodReference(constructor.Name, Source.Module.TypeSystem.Void, delegateType)
             {
@@ -320,7 +320,7 @@ partial class MethodHandler
             };
             foreach (var parameter in constructor.Parameters)
             {
-                delegateCtor.Parameters.Add(new ParameterDefinition(Source.Module.ImportReference(parameter.ParameterType)));
+                delegateCtor.Parameters.Add(new ParameterDefinition(ModuleLock.Import(Source.Module, parameter.ParameterType)));
             }
 
             // The name of the symbol is dropped, and the receiver of a member of an instance is loaded in its place: a
@@ -444,9 +444,9 @@ partial class MethodHandler
     /// <returns>The reference which the call instruction holds.</returns>
     private MethodReference GetMethodReference(MethodDefinition methodDef, TypeReference? namedInstance = null)
     {
-        if (methodDef.DeclaringType is not {HasGenericParameters: true} declaringType) return Source.Module.ImportReference(methodDef);
+        if (methodDef.DeclaringType is not {HasGenericParameters: true} declaringType) return ModuleLock.Import(Source.Module, methodDef);
 
-        if (InstantiationOf(declaringType, namedInstance) is not { } declaringInstance) return Source.Module.ImportReference(methodDef);
+        if (InstantiationOf(declaringType, namedInstance) is not { } declaringInstance) return ModuleLock.Import(Source.Module, methodDef);
 
         var reference = new MethodReference(methodDef.Name, methodDef.ReturnType, declaringInstance)
         {

@@ -167,7 +167,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             // Related to issue: https://github.com/jbevain/cecil/issues/954
             ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType([.. declaringType.GenericParameters.Select(static p => (TypeReference) p)]))
             // Otherwise we can directly import the field definition as reference.
-            : Source.Module.ImportReference(field);
+            : ModuleLock.Import(Source.Module, field);
         // A static accessor reaches the field through the type alone, where an instance one reaches it through `this`,
         // which is the slot before the parameters.
         m_Getter.Source.Body.Instructions.Clear();
@@ -243,7 +243,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             // Related to issue: https://github.com/jbevain/cecil/issues/954
             ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType([.. declaringType.GenericParameters.Select(static p => (TypeReference) p)]))
             // Otherwise we can directly import the field definition as reference.
-            : Source.Module.ImportReference(field);
+            : ModuleLock.Import(Source.Module, field);
         // A static setter holds the value in the slot zero, where an instance one holds `this` there and the value in the
         // slot after it.
         var setterBody = m_Setter.Source.Body.Instructions;
