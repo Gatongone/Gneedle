@@ -3,6 +3,31 @@ using System.Reflection;
 namespace Gneedle.Inject;
 
 /// <summary>
+/// What an injector may also be, whichever member it is put on: the order in which the injectors of one member are
+/// applied is read off the priorities of those which declare one.<para/>
+/// The order of a member's injectors is not the order in which they are written where the member is declared: the
+/// specification of the language says that the attribute specifications of a member are equivalent in every order, so
+/// what the runtime hands back is no order of the source at all. An injector which has to be applied before another -
+/// which is the case of two which both write the body of a member, one of which proceeds into what the other wrote -
+/// declares a priority rather than relying on where it stands.<para/>
+/// This is not an interface which every injector is of, because a member of an interface which hands a body over is not
+/// supported by every framework the weaver is built for: what every injector is of is the interface of the kind it
+/// injects into, and an injector which wants an order implements this beside that one.
+/// </summary>
+public interface IOrderedInjector
+{
+    /// <summary>
+    /// The order in which this injector is applied among the injectors of the member which carries it: an injector of a
+    /// greater priority is applied before one of a lesser priority, and two injectors of one priority are applied in
+    /// the order of the names of their types.<para/>
+    /// An injector which takes over the body of a member is applied before the one which proceeds into the body which
+    /// the member holds, because what the one which proceeds reaches is what the one before it left: an around body
+    /// wraps the body which is there when it is applied.
+    /// </summary>
+    int Priority { get; }
+}
+
+/// <summary>
 /// Injects assemblies into a project using the provided assembly handler.
 /// </summary>
 public interface IAssemblyInjector
