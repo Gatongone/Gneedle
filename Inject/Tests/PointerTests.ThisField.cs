@@ -22,6 +22,8 @@ public partial class PointerTests
     /// <summary>
     /// Create a host which declares a field of the given name, which is static when it is asked for.
     /// </summary>
+    /// <param name="fieldName">Name of the field which the host declares.</param>
+    /// <param name="isStatic">Whether the field is declared static.</param>
     /// <param name="assemblyName">Name of the assembly to build, which a test which runs its host gives one of its own.</param>
     private static TypeHandler NewHostWithField(string fieldName, bool isStatic, string assemblyName = "MemberInjectionAssembly")
     {

@@ -5,11 +5,8 @@
     <Import Project="..\..\Build\Package.props"/>
 
     <PropertyGroup>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
         <RootNamespace>Gneedle.Aspect</RootNamespace>
         <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
-        <LangVersion>12</LangVersion>
 
         <!-- A package is made by `dotnet pack`, which builds the frameworks which it packs. The property which makes a
              build pack as well is not set, because it works the other way round: a `dotnet pack` of a project which

@@ -323,13 +323,11 @@ public partial class PointerTests
     /// <summary>
     /// Add the method which the templates of the tests below call to the generic base type.
     /// </summary>
-    /// <param name="baseDef">The generic base type which the host derives from through a middle type.</param>
-    /// <param name="mod">The module which the type is declared in.</param>
     /// <summary>
     /// Add the member <c>T Echo(T value)</c> to the type which the chain of base types ends at, which names the
     /// parameter that the type declares rather than a type.
     /// </summary>
-    /// <param name="baseDef">The definition of the base type.</param>
+    /// <param name="baseDef">The definition of the base type which the host derives from through a middle type.</param>
     /// <param name="mod">The module which the type belongs to.</param>
     private static void AddEchoToTheGenericBase(TypeDefinition baseDef, ModuleDefinition mod)
     {

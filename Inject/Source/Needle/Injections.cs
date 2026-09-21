@@ -328,7 +328,6 @@ public static class Injections
             return holds;
         }
 
-
         /// <summary>
         /// Whether any injector stands on the type or on a member of it, which is read from the metadata of the image
         /// rather than from the types of the runtime: materializing every type of an assembly is the cost of a weaving
