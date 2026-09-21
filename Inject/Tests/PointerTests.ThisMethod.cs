@@ -28,7 +28,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAdd(bool isVirtual, string assemblyName = "MethodInjectionAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var attrs = MethodAttributes.Public | MethodAttributes.HideBySig
                     | (isVirtual ? MethodAttributes.Virtual | MethodAttributes.NewSlot : 0);
@@ -48,7 +48,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithEcho(Type echoType)
     {
         var handler = (AssemblyHandler) Assembly.Create("MethodInjectionEchoAssembly").Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var t = host.Source.Module.ImportReference(host.AssemblyHandler.GetCecilType(echoType).Reference);
         var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, t) { DeclaringType = host.Source };
         echo.Parameters.Add(new ParameterDefinition("c", ParameterAttributes.None, t));
@@ -67,7 +67,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAnEchoAndASilence(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         AddAMember("Echo", module.TypeSystem.Int32);
         AddAMember("Silent", module.TypeSystem.Void);
@@ -93,7 +93,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAValueOfAnEnumeration(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var kind = new MethodDefinition("Kind", MethodAttributes.Public | MethodAttributes.HideBySig, module.ImportReference(typeof(StringComparison)))
         {
@@ -176,7 +176,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAnArgumentTakenByAddress(string assemblyName = "MethodInjectionByRefAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var tryHalf = new MethodDefinition("TryHalf", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Boolean)
         {
@@ -211,7 +211,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMemberWhichDeclaresAParameterOfItsOwn(string assemblyName = "MethodInjectionUnnamedParameterAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.AddMethod(
             "Touch",
             typeof(M_0).ToGneedleType(),
@@ -232,7 +232,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMemberWhoseParameterStandsNowhere(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.AddMethod(
             "Touch",
             typeof(int).ToGneedleType(),
@@ -333,7 +333,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMemberNamedByTheLaterParameter(string assemblyName = "MethodInjectionNamedParameterAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var identity = new MethodDefinition("IdentityOfTheLater", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -488,7 +488,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithWiden(string assemblyName = "MethodInjectionConversionAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var widen = new MethodDefinition("Widen", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, module.TypeSystem.Int64)
         {
@@ -859,7 +859,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithTwoMembersOfOneName(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.AddMethod(
             "Filter",
             typeof(int).ToGneedleType(),
@@ -885,7 +885,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMake(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var make = new MethodDefinition("Make", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -912,7 +912,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAListReturn(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var make = new MethodDefinition("Make", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -941,7 +941,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAnArrayEcho(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -966,7 +966,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithIdentity(string assemblyName = "MethodInjectionIdentityAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var identity = new MethodDefinition("Identity", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {

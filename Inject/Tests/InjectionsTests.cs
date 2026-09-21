@@ -365,7 +365,7 @@ public class InjectionsTests
         // attribute is taken off the member which carries it: the type of it is declared by the other assembly, which
         // keeps it, so the attribute is the trace of a weaving which crossed the boundary of the assemblies.
         var built = Assembly.Create("HostOfAnInjectorOfAnotherAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) built.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(built, "Host");
         var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
         run.AddAttribute(typeof(RunBodyAttribute).ToGneedleType());
 
@@ -397,7 +397,7 @@ public class InjectionsTests
         // an attribute which nobody reads any more.
         var assembly = Assembly.Create("ForeignInjectorAssembly");
         var module = assembly.Source.MainModule;
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
 
         // The names are those of a real injector of this assembly, and the references name them as types of another one:
         // what is reached for is a name which the module does not hold, and the assembly which holds it is not asked.
@@ -808,7 +808,7 @@ public class InjectionsTests
 
         // A field which holds the attribute is what the assembly names it by, which is what a type cannot be removed
         // out from under without leaving the field naming what is not there.
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         host.Source.Fields.Add(new FieldDefinition("Injector", FieldAttributes.Public, injector.Source));
 
         ((AssemblyHandler) assembly.Handler).RemoveTheWeaver();
@@ -829,7 +829,7 @@ public class InjectionsTests
     public void RemoveTheWeaver_Of_An_Assembly_Which_Declares_No_Injector_Changes_Nothing()
     {
         var assembly = Assembly.Create("UntracedAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         host.AddMethod("Ping", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
         Assert.That(((AssemblyHandler) assembly.Handler).RemoveTheWeaver(), Is.False);

@@ -176,7 +176,7 @@ namespace Gneedle.Inject.Test
         private static MethodHandler Weave(string templateName, Parameter[]? parameterTypes = null)
         {
             var assembly = NewTarget();
-            var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+            var host = AddAHost(assembly);
             var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], parameterTypes ?? [],
                                                         MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(templateName)!);
@@ -296,7 +296,7 @@ namespace Gneedle.Inject.Test
             // the leak the whole attribute exists to prevent. Asserting on the assembly reference instead would not tell
             // them apart: importing the template method references the template assembly either way.
             var assembly = NewTarget();
-            var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+            var host = AddAHost(assembly);
             var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(nameof(Templates.CallStubMethod))!);
 
@@ -314,7 +314,7 @@ namespace Gneedle.Inject.Test
             // The real Read returns 41 where the stub returns 0, so the value tells the two apart even though they share
             // a full name. Executing the produced method is the strongest form of that check.
             var assembly = NewTarget();
-            var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+            var host = AddAHost(assembly);
             var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(nameof(Templates.CallStubMethod))!);
 
@@ -398,7 +398,7 @@ namespace Gneedle.Inject.Test
         public void AddMethod_Replaces_The_Stub_Parameter_Type()
         {
             var assembly = NewTarget();
-            var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+            var host = AddAHost(assembly);
             var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(Stub).ToGneedleType())],
                                                         MethodFlags.Public | MethodFlags.Static);
 
@@ -440,7 +440,7 @@ namespace Gneedle.Inject.Test
             // The dependency is never written to the file system, so the resolver of the module could not find it: that
             // one searches the file system alone. It is reachable because the handler read it.
             var dependency = Assembly.Create("InMemoryDependencyAssembly");
-            var dependencyType = (TypeHandler) ((AssemblyHandler) dependency.Handler).AddClass("Dependency", Ns, ClassFlags.Public).GetHandler();
+            var dependencyType = AddAHost(dependency, "Dependency");
 
             var assembly = NewTarget();
             ((AssemblyHandler) assembly.Handler).GetCecilType(dependencyType.Source);

@@ -12,12 +12,7 @@ public class AssemblyHandlerTests
     [Test]
     public void GetType_Returns_Outer_Type()
     {
-        var asm = Assembly.Create("NestedAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var module = asm.Source.MainModule;
-
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        module.Types.Add(outer);
+        var (handler, _) = NewOuter("NestedAssembly");
 
         var result = handler.GetType($"{Ns}.Outer");
 
@@ -28,14 +23,7 @@ public class AssemblyHandlerTests
     [Test]
     public void GetType_Returns_Nested_Type()
     {
-        var asm = Assembly.Create("NestedAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var module = asm.Source.MainModule;
-
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
-        outer.NestedTypes.Add(inner);
-        module.Types.Add(outer);
+        var (handler, _, _) = NewOuterWithInner("NestedAssembly");
 
         // Nested type FullName format: "Namespace.Outer/Namespace.Inner"
         var result = handler.GetType($"{Ns}.Outer/{Ns}.Inner");
@@ -97,14 +85,7 @@ public class AssemblyHandlerTests
     [Test]
     public void GetTypes_Includes_Nested_Types()
     {
-        var asm = Assembly.Create("NestedAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var module = asm.Source.MainModule;
-
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
-        outer.NestedTypes.Add(inner);
-        module.Types.Add(outer);
+        var (handler, _, _) = NewOuterWithInner("NestedAssembly");
 
         var results = handler.GetTypes();
 
@@ -116,14 +97,7 @@ public class AssemblyHandlerTests
     [Test]
     public void GetTypes_With_Filter_Includes_Nested_Types()
     {
-        var asm = Assembly.Create("NestedAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
-        var module = asm.Source.MainModule;
-
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
-        outer.NestedTypes.Add(inner);
-        module.Types.Add(outer);
+        var (handler, _, _) = NewOuterWithInner("NestedAssembly");
 
         var results = handler.GetTypes(t => t.Namespace == Ns);
 
@@ -359,7 +333,7 @@ public class AssemblyHandlerTests
     {
         var asm = Assembly.Create("HandlerInterfaceAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         host.AddInterface<ITestInterface>();
 
@@ -372,7 +346,7 @@ public class AssemblyHandlerTests
     {
         var asm = Assembly.Create("HandlerInterfaceITypeAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         host.AddInterface(typeof(ITestInterface).ToGneedleType());
 
@@ -384,7 +358,7 @@ public class AssemblyHandlerTests
     {
         var asm = Assembly.Create("HandlerInterfaceContainsAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         Assert.That(host.ContainsInterface<ITestInterface>(), Is.False);
         host.AddInterface(typeof(ITestInterface));
@@ -398,7 +372,7 @@ public class AssemblyHandlerTests
         // rather than where the assembly which holds it is loaded.
         var asm = Assembly.Create("HandlerInterfaceRefusedAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         Assert.Throws<ArgumentException>(() => host.AddInterface(typeof(TestBaseClass)));
     }
@@ -411,7 +385,7 @@ public class AssemblyHandlerTests
         // another module is written through a reference to it alone.
         var asm = Assembly.Create("HandlerInterfaceReadableAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.AddInterface<ITestInterface>();
 
         using var stream = new MemoryStream();
