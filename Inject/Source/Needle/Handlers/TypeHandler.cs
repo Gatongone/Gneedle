@@ -58,9 +58,9 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
     /// <returns>The declaration of the type, and its members, each line indented by that many levels.</returns>
     internal string ToString(int level)
     {
-        var declaration = new string(' ', level * IlPrinter.Indentation);
-        var line        = new string(' ', (level + 1) * IlPrinter.Indentation);
-        var text        = new StringBuilder();
+        var declaration = new string(' ', level * IlPrinter.INDENTATION);
+        var line = new string(' ', (level + 1) * IlPrinter.INDENTATION);
+        var text = new StringBuilder();
 
         text.Append(declaration).Append(".class ").Append(IlPrinter.TheAttributesOf(Source)).Append(' ').Append(Source.FullName);
 
@@ -154,10 +154,12 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
 
     /// <inheritdoc cref="IMethodQuery.GetMethods(MethodFlags)"/>
     public IMethodHandler[] GetMethods(MethodFlags methodFlags)
-        => Source.Methods
-            .Where(method => method.ToMethodFlags().HasFlag(methodFlags))
-            .Select(method => (IMethodHandler) new MethodHandler(method, this))
-            .ToArray();
+        =>
+        [
+            .. Source.Methods
+                     .Where(method => method.ToMethodFlags().HasFlag(methodFlags))
+                     .Select(method => (IMethodHandler) new MethodHandler(method, this))
+        ];
 
     /// <inheritdoc/>
     public MethodDecorator.IGenericParameterDecorator AddMethod(string methodName, MethodFlags methodFlags)
@@ -182,10 +184,12 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
 
     /// <inheritdoc cref="IFieldQuery.GetFields(FieldFlags)" />
     public IFieldHandler[] GetFields(FieldFlags fieldFlags)
-        => Source.Fields
-            .Where(field => field.ToFieldFlags().HasFlag(fieldFlags))
-            .Select(IFieldHandler (field) => new FieldHandler(field, this))
-            .ToArray();
+        =>
+        [
+            .. Source.Fields
+                     .Where(field => field.ToFieldFlags().HasFlag(fieldFlags))
+                     .Select(IFieldHandler (field) => new FieldHandler(field, this))
+        ];
 
     /// <inheritdoc cref="IPropertyQuery.GetProperty" />
     public IPropertyHandler? GetProperty(string propertyName)
@@ -199,10 +203,12 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
 
     /// <inheritdoc cref="IPropertyQuery.GetProperties(PropertyFlags)"/>
     public IPropertyHandler[] GetProperties(PropertyFlags propertyFlags)
-        => Source.Properties
-            .Where(property => property.ToPropertyFlags().HasFlag(propertyFlags))
-            .Select(property => (IPropertyHandler) new PropertyHandler(property, this))
-            .ToArray();
+        =>
+        [
+            .. Source.Properties
+                     .Where(property => property.ToPropertyFlags().HasFlag(propertyFlags))
+                     .Select(property => (IPropertyHandler) new PropertyHandler(property, this))
+        ];
 
     /// <inheritdoc cref="IMethodContainer.AddMethod"/>
     public IMethodHandler AddMethod(string methodName, IType returnType, GenericParameterType[] genericParameters, Parameter[] parameters, MethodFlags methodFlags)

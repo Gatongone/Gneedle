@@ -11,7 +11,7 @@ internal static class IlPrinter
     /// <summary>
     /// The width of one level of the indentation which the text of a handler is written with.
     /// </summary>
-    internal const int Indentation = 4;
+    internal const int INDENTATION = 4;
 
     /// <summary>
     /// Get the string representation of the method, which is the declaration of it and the IL of the body which it
@@ -29,9 +29,9 @@ internal static class IlPrinter
     /// <returns>The declaration of the method, and the IL of its body, each line indented by that many levels.</returns>
     internal static string Print(MethodDefinition method, int level)
     {
-        var declaration = new string(' ', level * Indentation);
-        var line        = new string(' ', (level + 1) * Indentation);
-        var text        = new StringBuilder();
+        var declaration = new string(' ', level * INDENTATION);
+        var line = new string(' ', (level + 1) * INDENTATION);
+        var text = new StringBuilder();
 
         text.Append(declaration).Append(".method ").Append(TheAttributesOf(method)).Append(' ')
             .Append(method.ReturnType.FullName).Append(' ')
@@ -235,11 +235,11 @@ internal static class IlPrinter
             OperandType.ShortInlineI or OperandType.ShortInlineBrTarget or OperandType.ShortInlineVar => size + 1,
             OperandType.InlineVar                                                                     => size + 2,
             OperandType.InlineI or OperandType.ShortInlineR or OperandType.InlineBrTarget or OperandType.InlineString
-                or OperandType.InlineType or OperandType.InlineField or OperandType.InlineMethod
-                or OperandType.InlineTok or OperandType.InlineSig                                      => size + 4,
-            OperandType.InlineI8 or OperandType.InlineR                                               => size + 8,
-            OperandType.InlineSwitch                                                                  => size + 4 + (4 * ((Instruction[]) instruction.Operand!).Length),
-            _                                                                                         => size + 4
+             or OperandType.InlineType or OperandType.InlineField or OperandType.InlineMethod
+             or OperandType.InlineTok or OperandType.InlineSig => size + 4,
+            OperandType.InlineI8 or OperandType.InlineR => size + 8,
+            OperandType.InlineSwitch                    => size + 4 + (4 * ((Instruction[]) instruction.Operand!).Length),
+            _                                           => size + 4
         };
     }
 

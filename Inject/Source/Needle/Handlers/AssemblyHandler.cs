@@ -39,7 +39,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
         // finds the assemblies which the cache holds. It is created with the module, which is why it is taken from there
         // rather than made here, and it is seeded with the target assembly before anything is resolved.
         m_AssemblyCache = (assembly.Source.MainModule.AssemblyResolver as CachedAssemblyResolver)?.Assemblies
-                       ?? new ConcurrentDictionary<string, AssemblyDefinition>();
+            ?? new ConcurrentDictionary<string, AssemblyDefinition>();
         m_AssemblyCache[assembly.Source.FullName] = assembly.Source;
 
         AddDefaultTypes();
@@ -52,7 +52,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// <returns>The declaration of the assembly, and its types, with the IL of every method which they hold.</returns>
     public override string ToString()
     {
-        var line = new string(' ', IlPrinter.Indentation);
+        var line = new string(' ', IlPrinter.INDENTATION);
         var text = new StringBuilder();
 
         text.Append(".assembly ").Append(Assembly.Source.Name.Name).AppendLine();
@@ -234,7 +234,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             // types name, which is what finds a member whose own parameters stand nowhere in its signature - the call of
             // that one is refused by the rule of the call rather than here, where the member it names is the one it names.
             methodDef = candidates.FirstOrDefault(method => method.DescribedBy(parameters, curInstance))
-                     ?? candidates.FirstOrDefault(method => method.SameWith(parameters, returnType, out _, curInstance));
+                ?? candidates.FirstOrDefault(method => method.SameWith(parameters, returnType, out _, curInstance));
 
             if (curType.BaseType == null)
             {

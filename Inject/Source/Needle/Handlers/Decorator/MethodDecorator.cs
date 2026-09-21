@@ -169,8 +169,8 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
         var handler = m_TypeHandler.AddMethod(
             m_MethodName,
             m_ReturnType,
-            m_GenericParameters.ToArray(),
-            m_Parameters.ToArray(),
+            [.. m_GenericParameters],
+            [.. m_Parameters],
             m_MethodFlags);
 
         // The method is added with a body which throws, so that a method which is added without a body is still

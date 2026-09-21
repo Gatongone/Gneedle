@@ -1,18 +1,11 @@
-using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
-using MethodAttributes = Mono.Cecil.MethodAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
-using ParameterAttributes = Mono.Cecil.ParameterAttributes;
-using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for the member which the template names through `Instance`, which are the tests of <see cref="PointerTests"/> for that one placeholder.
@@ -31,11 +24,13 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_NewSyntax)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        // Should rewrite to call/callvirt HelperClass::Calc, not call Instance::Method
-        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && i.Operand is MethodReference mr && mr.Name == "Calc"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MethodReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        Assert.Multiple(() =>
+        {
+            // Should rewrite to call/callvirt HelperClass::Calc, not call Instance::Method
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                && i.Operand is MethodReference mr && mr.Name == "Calc"), Is.True);
+            Assert.That(ins.Any(i => i.Operand is MethodReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        });
     }
 
     [Test]
@@ -49,9 +44,11 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld && i.Operand is FieldReference fr && fr.Name == "PublicField"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld && i.Operand is FieldReference fr && fr.Name == "PublicField"), Is.True);
+            Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        });
     }
 
     [Test]
@@ -65,9 +62,11 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld && i.Operand is FieldReference fr && fr.Name == "PublicField"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld && i.Operand is FieldReference fr && fr.Name == "PublicField"), Is.True);
+            Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        });
     }
 
     [Test]
@@ -81,10 +80,12 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_Get)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && i.Operand is MethodReference mr && mr.Name == "get_PublicProperty"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                && i.Operand is MethodReference mr && mr.Name == "get_PublicProperty"), Is.True);
+            Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        });
     }
 
     [Test]
@@ -98,10 +99,12 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_Set)));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && i.Operand is MethodReference mr && mr.Name == "set_PublicProperty"), Is.True);
-        Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                && i.Operand is MethodReference mr && mr.Name == "set_PublicProperty"), Is.True);
+            Assert.That(ins.Any(i => i.Operand is MemberReference mr && mr.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        });
     }
 
     [Test]
@@ -115,14 +118,14 @@ public partial class PointerTests
 
         var ins = method.Source.Body.Instructions.ToArray();
         Assert.That(ins.Any(instruction => instruction.Operand is MemberReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False,
-                    "the array which built the instance of `Instance` was left in the body.");
+            "the array which built the instance of `Instance` was left in the body.");
 
         var receiver = ReceiverOf(ins, "PublicField");
         Assert.That(receiver.TryGetLdlocIndex(out _), Is.True,
-                    "the field is read off `this` rather than off the local which holds the instance.");
+            "the field is read off `this` rather than off the local which holds the instance.");
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
-        var helper = new HelperClass { PublicField = 21 };
+        var type = assembly.Load().GetType($"{NS}.Host")!;
+        var helper = new HelperClass {PublicField = 21};
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(21));
     }
@@ -158,15 +161,17 @@ public partial class PointerTests
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                          .FirstOrDefault(reference => reference.Name == "Echo");
         Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
-        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the type which declares it rather than on the instantiation.");
-        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
-                    "the member is not called on the instantiation which the template named.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                "the member is called on the definition of the type which declares it rather than on the instantiation.");
+            Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                "the member is not called on the instantiation which the template named.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new GenericHelper<int>(), 41]), Is.EqualTo(41),
-                    "the woven assembly does not run the member which the signature names the parameter of the type with.");
+            "the woven assembly does not run the member which the signature names the parameter of the type with.");
     }
 
     [Test]
@@ -182,23 +187,25 @@ public partial class PointerTests
             "Run",
             typeof(int).ToGneedleType(),
             [new GenericParameterType("T", Constraint.FromType(typeof(ICountedOfAnInstantiation<int>)))],
-            [new Parameter(typeof(M_0).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(M0).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAConstraintWhichIsAnInstantiation)));
 
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                          .FirstOrDefault(reference => reference.Name == "Echo");
         Assert.That(call, Is.Not.Null, "the member of the constraint was not called.");
-        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the constraint rather than on the instantiation which it names.");
-        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
-                    "the member is not called on the instantiation which the constraint names.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                "the member is called on the definition of the constraint rather than on the instantiation which it names.");
+            Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                "the member is not called on the instantiation which the constraint names.");
+        });
         var type = LoadHostOf(assembly, host);
 
         Assert.That(type.GetMethod("Run")!.MakeGenericMethod(typeof(CountedOfAnInstantiation))
                         .Invoke(Activator.CreateInstance(type), [new CountedOfAnInstantiation(), 41]), Is.EqualTo(41),
-                    "the woven assembly does not run the member of the constraint which names the parameter of it.");
+            "the woven assembly does not run the member of the constraint which names the parameter of it.");
     }
 
     [Test]
@@ -210,11 +217,12 @@ public partial class PointerTests
         // name which is woven into another member than the one it names is worse than a name which is refused.
         var host = NewHostWithField("PublicField", isStatic: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [],
-                                    [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(HelperClass).ToGneedleType()),
-                                     new Parameter(typeof(bool).ToGneedleType())], MethodFlags.Public);
+        [
+            new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(HelperClass).ToGneedleType()),
+            new Parameter(typeof(bool).ToGneedleType())
+        ], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAValueWhichAConditionComputed))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAValueWhichAConditionComputed))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
     }
@@ -230,14 +238,16 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAValueWhichAMemberHandedBack)));
 
         var ins = method.Source.Body.Instructions.ToArray();
-        Assert.That(ins.Any(instruction => instruction.Operand is MemberReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False,
-                    "the array which built the instance of `Instance` was left in the body.");
-        Assert.That(ReceiverOf(ins, "PublicField"), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference { Name: "Helper" })),
-                    "the field is read off `this` rather than off the value which the template computed.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(instruction => instruction.Operand is MemberReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False,
+                "the array which built the instance of `Instance` was left in the body.");
+            Assert.That(ReceiverOf(ins, "PublicField"), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference {Name: "Helper"})),
+                "the field is read off `this` rather than off the value which the template computed.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = Activator.CreateInstance(type)!;
-        type.GetField("Helper")!.SetValue(instance, new HelperClass { PublicField = 21 });
+        type.GetField("Helper")!.SetValue(instance, new HelperClass {PublicField = 21});
 
         Assert.That(type.GetMethod("Run")!.Invoke(instance, null), Is.EqualTo(21));
     }
@@ -253,13 +263,15 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAFieldOfAnInstance)));
 
         var ins = method.Source.Body.Instructions.ToArray();
-        Assert.That(ins.Any(instruction => instruction.Operand is MemberReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False,
-                    "the array which built the instance of `Instance` was left in the body.");
-        Assert.That(ReceiverOf(ins, "Calc", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldfld),
-                    "the member is called on a value which the template did not name.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
-        var outer = new HelperClass { Inner = new HelperClass() };
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(instruction => instruction.Operand is MemberReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False,
+                "the array which built the instance of `Instance` was left in the body.");
+            Assert.That(ReceiverOf(ins, "Calc", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldfld),
+                "the member is called on a value which the template did not name.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
+        var outer = new HelperClass {Inner = new HelperClass()};
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [outer, 21]), Is.EqualTo(42));
     }
@@ -275,13 +287,15 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceStaticField_OfAValueWhichAMemberHandedBack)));
 
         var ins = method.Source.Body.Instructions.ToArray();
-        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && field.Name == "StaticField"), Is.True,
-                    "the static field was not read through the type which the template named.");
-        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
-                    "a receiver was written where the member being woven holds none.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && field.Name == "StaticField"), Is.True,
+                "the static field was not read through the type which the template named.");
+            Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
+                "a receiver was written where the member being woven holds none.");
+        });
         HelperClass.StaticField = 7;
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), null), Is.EqualTo(7));
     }
@@ -294,13 +308,15 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_OfAValueWhichAMemberHandedBack)));
 
         var ins = method.Source.Body.Instructions.ToArray();
-        Assert.That(ins.Count(instruction => instruction.Operand is MethodReference { Name: "get_PublicProperty" }), Is.EqualTo(1), "the getter was not called exactly once.");
-        Assert.That(ReceiverOf(ins, "get_PublicProperty"), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference { Name: "Helper" })),
-                    "the property is read off `this` rather than off the value which the template computed.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Count(instruction => instruction.Operand is MethodReference {Name: "get_PublicProperty"}), Is.EqualTo(1), "the getter was not called exactly once.");
+            Assert.That(ReceiverOf(ins, "get_PublicProperty"), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference {Name: "Helper"})),
+                "the property is read off `this` rather than off the value which the template computed.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = Activator.CreateInstance(type)!;
-        type.GetField("Helper")!.SetValue(instance, new HelperClass { PublicProperty = 5 });
+        type.GetField("Helper")!.SetValue(instance, new HelperClass {PublicProperty = 5});
 
         Assert.That(type.GetMethod("Run")!.Invoke(instance, null), Is.EqualTo(5));
     }
@@ -313,10 +329,10 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAValueWhichAMemberHandedBack)));
 
         var ins = method.Source.Body.Instructions.ToArray();
-        Assert.That(ReceiverOf(ins, "Calc", arguments: 1), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference { Name: "Helper" })),
-                    "the method is called on `this` rather than on the value which the template computed.");
+        Assert.That(ReceiverOf(ins, "Calc", arguments: 1), Is.SameAs(ins.First(instruction => instruction.Operand is FieldReference {Name: "Helper"})),
+            "the method is called on `this` rather than on the value which the template computed.");
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = Activator.CreateInstance(type)!;
         type.GetField("Helper")!.SetValue(instance, new HelperClass());
 
@@ -332,7 +348,7 @@ public partial class PointerTests
         AddHelperField(host);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAValueWhichAMemberHandedBackAsADelegate)));
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = Activator.CreateInstance(type)!;
         type.GetField("Helper")!.SetValue(instance, new HelperClass());
         var calc = (InstanceStaticTemplates.IntOp) type.GetMethod("Run")!.Invoke(instance, null)!;
@@ -352,7 +368,7 @@ public partial class PointerTests
         var assembly = Assembly.Create(assemblyName);
         var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            parameters.Select(type => new Parameter(type.ToGneedleType())).ToArray(),
+            [.. parameters.Select(type => new Parameter(type.ToGneedleType()))],
             MethodFlags.Public | (isStatic ? MethodFlags.Static : 0));
 
         if (isStatic) return (assembly, host, method);
@@ -382,9 +398,9 @@ public partial class PointerTests
         var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(M_0).ToGneedleType(),
+            typeof(M0).ToGneedleType(),
             [new GenericParameterType("U")],
-            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M_0).ToGneedleType())],
+            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M0).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
 
         return (assembly, host, method);
@@ -403,9 +419,9 @@ public partial class PointerTests
         var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(M_0).ToGneedleType(),
+            typeof(M0).ToGneedleType(),
             [new GenericParameterType("U"), new GenericParameterType("V")],
-            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M_0).ToGneedleType())],
+            [new Parameter(typeof(GenericHelper<int>).ToGneedleType()), new Parameter(typeof(M0).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
 
         return (assembly, host, method);
@@ -450,8 +466,8 @@ public partial class PointerTests
         var (_, _, method) = NewInstanceHost("InstanceFieldReceiverAssembly", [typeof(HelperClass)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get)));
 
-        Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "PublicField").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
-                    "the field is reached through `this` rather than through the instance which the template named.");
+        Assert.That(ReceiverOf([.. method.Source.Body.Instructions], "PublicField").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
+            "the field is reached through `this` rather than through the instance which the template named.");
     }
 
     [Test]
@@ -462,10 +478,13 @@ public partial class PointerTests
         var (_, _, method) = NewInstanceHost("InstanceLaterParameterAssembly", [typeof(object), typeof(object), typeof(object), typeof(object), typeof(HelperClass)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get_OfALaterParameter)));
 
-        var receiver = ReceiverOf(method.Source.Body.Instructions.ToArray(), "PublicField");
-        Assert.That(receiver.OpCode, Is.EqualTo(OpCodes.Ldarg));
-        Assert.That(((ParameterReference) receiver.Operand).Index, Is.EqualTo(4),
-                    "the argument was loaded from the slot of another parameter.");
+        var receiver = ReceiverOf([.. method.Source.Body.Instructions], "PublicField");
+        Assert.Multiple(() =>
+        {
+            Assert.That(receiver.OpCode, Is.EqualTo(OpCodes.Ldarg));
+            Assert.That(((ParameterReference) receiver.Operand).Index, Is.EqualTo(4),
+                "the argument was loaded from the slot of another parameter.");
+        });
     }
 
     [Test]
@@ -474,8 +493,8 @@ public partial class PointerTests
         var (_, _, method) = NewInstanceHost("InstancePropertyReceiverAssembly", [typeof(HelperClass)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_Get)));
 
-        Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "get_PublicProperty").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
-                    "the property is reached through `this` rather than through the instance which the template named.");
+        Assert.That(ReceiverOf([.. method.Source.Body.Instructions], "get_PublicProperty").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
+            "the property is reached through `this` rather than through the instance which the template named.");
     }
 
     [Test]
@@ -484,8 +503,8 @@ public partial class PointerTests
         var (_, _, method) = NewInstanceHost("InstanceMethodReceiverAssembly", [typeof(HelperClass), typeof(int)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_NewSyntax)));
 
-        Assert.That(ReceiverOf(method.Source.Body.Instructions.ToArray(), "Calc", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldarg_1),
-                    "the method is called on `this` rather than on the instance which the template named.");
+        Assert.That(ReceiverOf([.. method.Source.Body.Instructions], "Calc", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldarg_1),
+            "the method is called on `this` rather than on the instance which the template named.");
     }
 
     [Test]
@@ -498,10 +517,13 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceStaticField_Get)));
 
         var ins = method.Source.Body.Instructions.ToArray();
-        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && field.Name == "StaticField"), Is.True,
-                    "the static field was not read through the type which the template named.");
-        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
-                    "a receiver was written where the member being woven holds none.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && field.Name == "StaticField"), Is.True,
+                "the static field was not read through the type which the template named.");
+            Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
+                "a receiver was written where the member being woven holds none.");
+        });
     }
 
     [Test]
@@ -512,8 +534,8 @@ public partial class PointerTests
         var (_, host, method) = NewInstanceHost("InstanceFieldReceiverRunAssembly", [typeof(HelperClass)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get)));
 
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
-        var helper = new HelperClass { PublicField = 21 };
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
+        var helper = new HelperClass {PublicField = 21};
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(21));
     }
@@ -528,12 +550,14 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_AsADelegate)));
 
         var ins = method.Source.Body.Instructions.ToArray();
-        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Newarr), Is.False,
-                    "the array which built the instance of `Instance` was left in the body.");
-        Assert.That(ReceiverOf(ins, "Calc").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
-                    "the pointer of the method was taken ahead of `this` rather than of the instance which the template named.");
-
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Newarr), Is.False,
+                "the array which built the instance of `Instance` was left in the body.");
+            Assert.That(ReceiverOf(ins, "Calc").OpCode, Is.EqualTo(OpCodes.Ldarg_1),
+                "the pointer of the method was taken ahead of `this` rather than of the instance which the template named.");
+        });
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
         var calc = (InstanceStaticTemplates.IntOp) type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new HelperClass()])!;
 
         Assert.That(calc(21), Is.EqualTo(42));
@@ -549,16 +573,18 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfABodyWhichHoldsManyLocals)));
 
         var ins = method.Source.Body.Instructions.ToArray();
-        Assert.That(ins.Any(instruction => instruction.Operand is MethodReference { Name: "Calc" }), Is.True,
-                    "the member which the template named was not called.");
-        Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
-                    "the method is called on `this` rather than on the instance which the template named.");
-
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(instruction => instruction.Operand is MethodReference {Name: "Calc"}), Is.True,
+                "the member which the template named was not called.");
+            Assert.That(ins.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False,
+                "the method is called on `this` rather than on the instance which the template named.");
+        });
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
         var helper = new HelperClass();
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper, 16]), Is.EqualTo(42),
-                    "the body which held the locals was not woven into the member which runs.");
+            "the body which held the locals was not woven into the member which runs.");
     }
 
     [Test]
@@ -570,7 +596,7 @@ public partial class PointerTests
         var (_, host, method) = NewInstanceHost("InstanceGenericTypeAssembly", [typeof(GenericHelper<int>), typeof(int)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethod_OfAGenericType)));
 
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new GenericHelper<int>(), 21]), Is.EqualTo(42));
     }
@@ -581,7 +607,7 @@ public partial class PointerTests
         var (_, host, method) = NewInstanceHost("InstanceGenericPropertyAssembly", [typeof(GenericHelper<int>)]);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_OfAGenericType)));
 
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new GenericHelper<int>()]), Is.EqualTo(42));
     }
@@ -596,15 +622,17 @@ public partial class PointerTests
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAGenericType)));
 
         var ldfld = method.Source.Body.Instructions.FirstOrDefault(instruction => instruction.OpCode == OpCodes.Ldfld);
-        Assert.That(ldfld, Is.Not.Null, "the field was not read.");
-        Assert.That(((FieldReference) ldfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the field was read off the definition of the type rather than off the instantiation which was named.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
-        var helper = new GenericHelper<int> { PublicField = 42 };
+        Assert.Multiple(() =>
+        {
+            Assert.That(ldfld, Is.Not.Null, "the field was not read.");
+            Assert.That(((FieldReference) ldfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                "the field was read off the definition of the type rather than off the instantiation which was named.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
+        var helper = new GenericHelper<int> {PublicField = 42};
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper]), Is.EqualTo(42),
-                    "the woven assembly does not run.");
+            "the woven assembly does not run.");
     }
 
     [Test]
@@ -622,19 +650,23 @@ public partial class PointerTests
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                          .FirstOrDefault(reference => reference.Name == "Set");
         Assert.That(call, Is.Not.Null, "the member whose parameter stands in a wrapper was not called.");
-        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the type which declares it rather than on the instantiation.");
-        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
-                    "the member is not called on the instantiation which the template named.");
-        Assert.That(call.Parameters.Single().ParameterType, Is.InstanceOf<ByReferenceType>(),
-                    "the member is not called with the argument by address.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                "the member is called on the definition of the type which declares it rather than on the instantiation.");
+            Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                "the member is not called on the instantiation which the template named.");
+            Assert.That(call.Parameters.Single().ParameterType, Is.InstanceOf<ByReferenceType>(),
+                "the member is not called with the argument by address.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var helper = new GenericHelper<int>();
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper, 42]), Is.EqualTo(42),
-                    "the woven assembly does not run the member whose parameter stands in a wrapper.");
-        Assert.That(helper.Held, Is.EqualTo(42), "the member was not handed the value which the template computed.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [helper, 42]), Is.EqualTo(42),
+                "the woven assembly does not run the member whose parameter stands in a wrapper.");
+            Assert.That(helper.Held, Is.EqualTo(42), "the member was not handed the value which the template computed.");
+        });
     }
 
     [Test]
@@ -651,17 +683,19 @@ public partial class PointerTests
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                          .FirstOrDefault(reference => reference.Name == "EchoBoth");
         Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
-        Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
-                    "the member which declares a parameter of its own was not called through an instantiation of it.");
-        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single().FullName, Is.EqualTo(typeof(string).FullName),
-                    "the member is not called with the type which the delegate binds the parameter it declares to.");
-        Assert.That(((GenericInstanceType) call!.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
-                    "the member is not called on the instantiation which the chain of base types names.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
+                "the member which declares a parameter of its own was not called through an instantiation of it.");
+            Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single().FullName, Is.EqualTo(typeof(string).FullName),
+                "the member is not called with the type which the delegate binds the parameter it declares to.");
+            Assert.That(((GenericInstanceType) call!.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                "the member is not called on the instantiation which the chain of base types names.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAGenericBase(), 41, "seed"]), Is.EqualTo("seed"),
-                    "the woven assembly does not run the member of the base.");
+            "the woven assembly does not run the member of the base.");
     }
 
     [Test]
@@ -677,15 +711,17 @@ public partial class PointerTests
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                          .FirstOrDefault(reference => reference.Name == "Echo");
         Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
-        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the base rather than on the instantiation of it.");
-        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
-                    "the member is not called on the instantiation which the chain of base types names.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                "the member is called on the definition of the base rather than on the instantiation of it.");
+            Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                "the member is not called on the instantiation which the chain of base types names.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAGenericBase(), 41]), Is.EqualTo(41),
-                    "the woven assembly does not run the member which the signature of the base names the parameter of it with.");
+            "the woven assembly does not run the member which the signature of the base names the parameter of it with.");
     }
 
     [Test]
@@ -701,12 +737,12 @@ public partial class PointerTests
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().FirstOrDefault(reference => reference.Name == "Calc");
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
         Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the call names the definition of the base rather than the instantiation which the type was handed.");
+            "the call names the definition of the base rather than the instantiation which the type was handed.");
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAGenericBase(), 14]), Is.EqualTo(42),
-                    "the woven assembly does not run.");
+            "the woven assembly does not run.");
     }
 
     [Test]
@@ -720,16 +756,18 @@ public partial class PointerTests
 
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().FirstOrDefault(reference => reference.Name == "Calc");
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
-        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the call names the definition of the base rather than an instantiation of it.");
-        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Select(argument => argument.FullName),
-                    Is.EqualTo(new[] { method.Source.Module.TypeSystem.Int32.FullName }),
-                    "the call names the parameter which the base is written with rather than the argument which the chain handed down.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                "the call names the definition of the base rather than an instantiation of it.");
+            Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Select(argument => argument.FullName),
+                Is.EqualTo(new[] {method.Source.Module.TypeSystem.Int32.FullName}),
+                "the call names the parameter which the base is written with rather than the argument which the chain handed down.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [new DerivedOfAMiddleOfAGenericBase(), 14]), Is.EqualTo(42),
-                    "the woven assembly does not run.");
+            "the woven assembly does not run.");
     }
 
     [Test]
@@ -745,12 +783,12 @@ public partial class PointerTests
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().FirstOrDefault(reference => reference.Name == "Identity");
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
         Assert.That(call!.GetElementMethod().GenericParameters.Count, Is.EqualTo(1),
-                    "the reference which the call stands on does not declare the parameter of the member.");
+            "the reference which the call stands on does not declare the parameter of the member.");
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.MakeGenericMethod(typeof(int)).Invoke(null, [new GenericHelper<int>(), 42]), Is.EqualTo(42),
-                    "the woven assembly does not run.");
+            "the woven assembly does not run.");
     }
 
     [Test]
@@ -766,15 +804,17 @@ public partial class PointerTests
 
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>().FirstOrDefault(reference => reference.Name == "Identity");
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
-        Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
-                    "the call stands on the definition of the member rather than on an instantiation of it.");
-        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(method.Source.GenericParameters[0]),
-                    "the call does not name the parameter of the body which the token of the delegate stands for, which is "
-                    + "the one it stands at the position of rather than the one beyond it.");
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
+                "the call stands on the definition of the member rather than on an instantiation of it.");
+            Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(method.Source.GenericParameters[0]),
+                "the call does not name the parameter of the body which the token of the delegate stands for, which is "
+                + "the one it stands at the position of rather than the one beyond it.");
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.MakeGenericMethod(typeof(int), typeof(string)).Invoke(null, [new GenericHelper<int>(), 42]), Is.EqualTo(42),
-                    "the woven assembly does not run.");
+            "the woven assembly does not run.");
     }
 }

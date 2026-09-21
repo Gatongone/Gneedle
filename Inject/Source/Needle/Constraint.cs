@@ -53,8 +53,8 @@ public struct Constraint
     /// <param name="genericParameterAttributes">Generic parameter attributes.</param>
     public Constraint(string name, GenericParameterAttributes genericParameterAttributes)
     {
-        Type = null;
-        Name = name;
+        Type                       = null;
+        Name                       = name;
         GenericParameterAttributes = genericParameterAttributes;
     }
 
@@ -66,8 +66,8 @@ public struct Constraint
     /// <param name="genericParameterAttributes">Generic parameter attributes.</param>
     private Constraint(string name, IType type, GenericParameterAttributes genericParameterAttributes)
     {
-        Type = type;
-        Name = name;
+        Type                       = type;
+        Name                       = name;
         GenericParameterAttributes = genericParameterAttributes;
     }
 

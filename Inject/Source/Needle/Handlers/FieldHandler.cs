@@ -33,7 +33,7 @@ internal class FieldHandler(FieldDefinition fieldDef, TypeHandler declaringTypeH
     /// <param name="level">The number of levels of indentation which the declaration stands at.</param>
     /// <returns>The declaration of the field, indented by that many levels.</returns>
     internal string ToString(int level)
-        => $"{new string(' ', level * IlPrinter.Indentation)}.field {IlPrinter.TheAttributesOf(Source)} {Source.FieldType.FullName} {Source.Name}\n";
+        => $"{new string(' ', level * IlPrinter.INDENTATION)}.field {IlPrinter.TheAttributesOf(Source)} {Source.FieldType.FullName} {Source.Name}\n";
 
     /// <inheritdoc/>
     ITypeHandler IFieldHandler.DeclaringTypeHandler => DeclaringTypeHandler;

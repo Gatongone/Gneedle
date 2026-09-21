@@ -38,7 +38,7 @@ public interface IAssemblyInjector : IInjector
     /// </summary>
     /// <param name="assembly">The assembly to be injected.</param>
     /// <param name="handler">The assembly handler that defines how the assembly should be injected.</param>
-    void Inject(System.Reflection.Assembly assembly,IAssemblyHandler handler);
+    void Inject(System.Reflection.Assembly assembly, IAssemblyHandler handler);
 }
 
 /// <summary>

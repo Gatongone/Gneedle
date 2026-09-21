@@ -121,7 +121,7 @@ internal static class InjectorInterfaces
         if (!visited.Add(reference.FullName)) return false;
 
         return Declared(module, reference) is { } declared
-               && declared.Interfaces.Any(implementation => ImplementsAnInjector(module, implementation.InterfaceType, injectorInterfaces, visited));
+            && declared.Interfaces.Any(implementation => ImplementsAnInjector(module, implementation.InterfaceType, injectorInterfaces, visited));
     }
 
     /// <summary>

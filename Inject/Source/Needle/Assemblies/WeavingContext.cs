@@ -71,8 +71,8 @@ internal sealed class WeavingContext
 
         try
         {
-            var resolving      = type.GetEvent("Resolving");
-            var constructor    = type.GetConstructor([typeof(string), typeof(bool)]);
+            var resolving = type.GetEvent("Resolving");
+            var constructor = type.GetConstructor([typeof(string), typeof(bool)]);
             var loadFromStream = type.GetMethod("LoadFromStream", [typeof(Stream)]);
             if (constructor == null || resolving?.AddMethod == null || loadFromStream == null) return null;
 
@@ -95,7 +95,7 @@ internal sealed class WeavingContext
     /// </summary>
     private static Type? FindTheType()
     {
-        foreach (var name in new[] { "System.Runtime.Loader.AssemblyLoadContext, System.Runtime.Loader", "System.Runtime.Loader.AssemblyLoadContext" })
+        foreach (var name in new[] {"System.Runtime.Loader.AssemblyLoadContext, System.Runtime.Loader", "System.Runtime.Loader.AssemblyLoadContext"})
         {
             if (Type.GetType(name, false) is { } type) return type;
         }
@@ -114,9 +114,9 @@ internal sealed class WeavingContext
         // for it: the sender is a context, which this library cannot name where it is built, and neither can the method
         // of this class which answers the request read it.
         var parameters = handler.GetMethod("Invoke")!.GetParameters();
-        var sender     = Expression.Parameter(parameters[0].ParameterType, "sender");
-        var name       = Expression.Parameter(parameters[1].ParameterType, "name");
-        var body       = Expression.Call(typeof(WeavingContext).GetMethod(nameof(Resolve), BindingFlags.NonPublic | BindingFlags.Static)!, name);
+        var sender = Expression.Parameter(parameters[0].ParameterType, "sender");
+        var name = Expression.Parameter(parameters[1].ParameterType, "name");
+        var body = Expression.Call(typeof(WeavingContext).GetMethod(nameof(Resolve), BindingFlags.NonPublic | BindingFlags.Static)!, name);
         return Expression.Lambda(handler, body, sender, name).Compile();
     }
 

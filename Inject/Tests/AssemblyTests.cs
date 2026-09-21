@@ -3,7 +3,7 @@ using Mono.Cecil;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for the <see cref="Assembly"/> which is created, read and written back: the entry points which are backed by
@@ -12,12 +12,11 @@ using static Gneedle.Inject.Test.TestFixtures;
 [TestFixture]
 public class AssemblyTests
 {
-
     /// <summary>
     /// Add a type which the assembly holds, and hand back the handler of it.
     /// </summary>
     private static TypeHandler NewHost(Assembly assembly)
-        => (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        => (TypeHandler)((AssemblyHandler)assembly.Handler).AddClass("Host", NS, ClassFlags.Public).GetHandler();
 
     #region In memory
 
@@ -28,9 +27,11 @@ public class AssemblyTests
         NewHost(assembly);
 
         var loaded = assembly.Load();
-
-        Assert.That(loaded.GetName().Name, Is.EqualTo("LoadableAssembly"));
-        Assert.That(loaded.GetType($"{Ns}.Host"), Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(loaded.GetName().Name, Is.EqualTo("LoadableAssembly"));
+            Assert.That(loaded.GetType($"{NS}.Host"), Is.Not.Null);
+        });
     }
 
     [Test]
@@ -41,7 +42,7 @@ public class AssemblyTests
 
         var loaded = assembly.Load();
 
-        Assert.That(loaded.GetType($"{Ns}.Host")!.GetMethod("Ping"), Is.Not.Null);
+        Assert.That(loaded.GetType($"{NS}.Host")!.GetMethod("Ping"), Is.Not.Null);
     }
 
     [Test]
@@ -51,7 +52,7 @@ public class AssemblyTests
         var assembly = Assembly.Create("ExecutableAssembly");
         NewHost(assembly).AddMethod("Ping", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
-        var ping = assembly.Load().GetType($"{Ns}.Host")!.GetMethod("Ping")!;
+        var ping = assembly.Load().GetType($"{NS}.Host")!.GetMethod("Ping")!;
 
         var thrown = Assert.Throws<TargetInvocationException>(() => ping.Invoke(null, null));
         Assert.That(thrown!.InnerException, Is.InstanceOf<NotSupportedException>());
@@ -63,7 +64,7 @@ public class AssemblyTests
         var assembly = Assembly.Create("ConstructibleAssembly");
         NewHost(assembly).AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         var thrown = Assert.Throws<TargetInvocationException>(() => Activator.CreateInstance(type));
         Assert.That(thrown!.InnerException, Is.InstanceOf<NotSupportedException>());
@@ -97,9 +98,11 @@ public class AssemblyTests
 
         using var assembly = Assembly.Read(image);
         var loaded = assembly.Load();
-
-        Assert.That(loaded.GetName().Name, Is.EqualTo(name));
-        Assert.That(loaded.GetType($"{Ns}.Host"), Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(loaded.GetName().Name, Is.EqualTo(name));
+            Assert.That(loaded.GetType($"{NS}.Host"), Is.Not.Null);
+        });
     }
 
     [Test]
@@ -123,7 +126,7 @@ public class AssemblyTests
         using var imageOwner = image;
 
         using var assembly = Assembly.Read(image);
-        var ping = assembly.Load().GetType($"{Ns}.Host")!.GetMethod("Ping")!;
+        var ping = assembly.Load().GetType($"{NS}.Host")!.GetMethod("Ping")!;
 
         var thrown = Assert.Throws<TargetInvocationException>(() => ping.Invoke(null, null));
         Assert.That(thrown!.InnerException, Is.InstanceOf<NotSupportedException>());
@@ -164,10 +167,12 @@ public class AssemblyTests
             // The module is read rather than the image loaded, because an image which was loaded from a path holds the
             // file until the process ends, and the file of this test is one which the test removes afterwards.
             using var assembly = Assembly.Read(path);
-            var type = assembly.Source.MainModule.GetType($"{Ns}.Host");
-
-            Assert.That(assembly.Source.MainModule.Assembly.Name.Name, Is.EqualTo("FileReadAssembly"));
-            Assert.That(type, Is.Not.Null, "the type which the file holds is not in the assembly which was read from it.");
+            var type = assembly.Source.MainModule.GetType($"{NS}.Host");
+            Assert.Multiple(() =>
+            {
+                Assert.That(assembly.Source.MainModule.Assembly.Name.Name, Is.EqualTo("FileReadAssembly"));
+                Assert.That(type, Is.Not.Null, "the type which the file holds is not in the assembly which was read from it.");
+            });
         }
         finally
         {
@@ -188,17 +193,20 @@ public class AssemblyTests
         {
             using (var assembly = Assembly.Read(path))
             {
-                ((AssemblyHandler) assembly.Handler).AddClass("Added", Ns, ClassFlags.Public).GetHandler();
+                ((AssemblyHandler)assembly.Handler).AddClass("Added", NS, ClassFlags.Public).GetHandler();
                 assembly.SaveTo(path);
             }
 
             // The file is read back with Cecil rather than loaded, because an image which was loaded from a path holds
             // the file until the process ends, and the file of this test is one which the test removes afterwards.
             using var reread = AssemblyDefinition.ReadAssembly(path);
-            Assert.That(reread.MainModule.GetType($"{Ns}.Added"), Is.Not.Null,
-                "the type which was described is not in the file which the assembly was written back to.");
-            Assert.That(reread.MainModule.GetType($"{Ns}.Host"), Is.Not.Null,
-                "the type which the file held is not in it after the assembly was written back over it.");
+            Assert.Multiple(() =>
+            {
+                Assert.That(reread.MainModule.GetType($"{NS}.Added"), Is.Not.Null,
+                            "the type which was described is not in the file which the assembly was written back to.");
+                Assert.That(reread.MainModule.GetType($"{NS}.Host"), Is.Not.Null,
+                    "the type which the file held is not in it after the assembly was written back over it.");
+            });
         }
         finally
         {
@@ -227,18 +235,18 @@ public class AssemblyTests
 
             using (var assembly = Assembly.Read(path))
             {
-                ((AssemblyHandler) assembly.Handler).AddClass("Added", Ns, ClassFlags.Public).GetHandler();
+                ((AssemblyHandler)assembly.Handler).AddClass("Added", NS, ClassFlags.Public).GetHandler();
                 assembly.SaveTo(path);
             }
 
-            using var reread = AssemblyDefinition.ReadAssembly(path, new ReaderParameters {ReadSymbols = false});
-            Assert.That(reread.MainModule.GetType($"{Ns}.Added"), Is.Not.Null,
-                        "the type which was described is not in the file which the assembly was written back to.");
+            using var reread = AssemblyDefinition.ReadAssembly(path, new ReaderParameters { ReadSymbols = false });
+            Assert.That(reread.MainModule.GetType($"{NS}.Added"), Is.Not.Null,
+                "the type which was described is not in the file which the assembly was written back to.");
 
             var after = Bodies(path);
             var changed = before.Where(body => !after.TryGetValue(body.Key, out var written) || written != body.Value).Select(body => body.Key).ToArray();
             Assert.That(changed, Is.Empty,
-                        "the bodies of the methods which were not woven were read out of the file after the write took it to nothing.");
+                "the bodies of the methods which were not woven were read out of the file after the write took it to nothing.");
         }
         finally
         {
@@ -255,7 +263,7 @@ public class AssemblyTests
     private static Dictionary<string, string> Bodies(string path)
     {
         var bodies = new Dictionary<string, string>();
-        using var assembly = AssemblyDefinition.ReadAssembly(path, new ReaderParameters {ReadSymbols = false});
+        using var assembly = AssemblyDefinition.ReadAssembly(path, new ReaderParameters { ReadSymbols = false });
         foreach (var type in assembly.MainModule.GetTypes())
         {
             foreach (var method in type.Methods.Where(method => method.HasBody))

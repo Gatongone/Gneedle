@@ -1,18 +1,12 @@
-using System.Reflection;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
-using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for the property of the type which the template is woven into, which are the tests of <see cref="PointerTests"/> for that one placeholder.
@@ -22,7 +16,7 @@ public partial class PointerTests
     /// <summary>
     /// The value which the getter of a property of a host hands back, which a weave of it is run to read.
     /// </summary>
-    private const int PropertyValue = 4242;
+    private const int PROPERTY_VALUE = 4242;
 
     /// <summary>
     /// Create a host which declares a property of the given name, with the accessors which are asked for, which are
@@ -36,17 +30,17 @@ public partial class PointerTests
         var propertyType = module.TypeSystem.Int32;
         var property = new PropertyDefinition(propertyName, PropertyAttributes.None, propertyType);
         var methodAttrs = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig
-                          | (isStatic ? MethodAttributes.Static : 0)
-                          | (isVirtual ? MethodAttributes.Virtual | MethodAttributes.NewSlot : 0);
+            | (isStatic ? MethodAttributes.Static : 0)
+            | (isVirtual ? MethodAttributes.Virtual | MethodAttributes.NewSlot : 0);
 
         if (withGetter)
         {
-            var getter = new MethodDefinition($"get_{propertyName}", methodAttrs, propertyType) { DeclaringType = host.Source };
+            var getter = new MethodDefinition($"get_{propertyName}", methodAttrs, propertyType) {DeclaringType = host.Source};
             // The getter hands back a value of its own rather than reading a field, so that a weave which calls it can
             // be run and not only read: a body which returns from a member which hands back an int without leaving one
             // on the stack is not IL which the runtime accepts.
             var il = getter.Body.GetILProcessor();
-            il.Emit(OpCodes.Ldc_I4, PropertyValue);
+            il.Emit(OpCodes.Ldc_I4, PROPERTY_VALUE);
             il.Emit(OpCodes.Ret);
             property.GetMethod = getter;
             host.Source.Methods.Add(getter);
@@ -54,7 +48,7 @@ public partial class PointerTests
 
         if (withSetter)
         {
-            var setter = new MethodDefinition($"set_{propertyName}", methodAttrs, module.TypeSystem.Void) { DeclaringType = host.Source };
+            var setter = new MethodDefinition($"set_{propertyName}", methodAttrs, module.TypeSystem.Void) {DeclaringType = host.Source};
             setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, propertyType));
             setter.Body.GetILProcessor().Emit(OpCodes.Ret);
             property.SetMethod = setter;
@@ -95,11 +89,13 @@ public partial class PointerTests
         // the accessor which the value member of that read stands for.
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: true, isVirtual: false);
         var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleOfAProperty), MethodFlags.Public);
-
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "get_Prop"), Is.EqualTo(2), "the getter was not called exactly twice.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "set_Prop"), Is.EqualTo(1), "the setter was not called exactly once.");
-        Assert.That(ins.Any(i => i.Operand is MemberReference { DeclaringType.Namespace: "Gneedle.Inject" }), Is.False,
-                    "the handle which the template holds was left in the body.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "get_Prop"), Is.EqualTo(2), "the getter was not called exactly twice.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "set_Prop"), Is.EqualTo(1), "the setter was not called exactly once.");
+            Assert.That(ins.Any(i => i.Operand is MemberReference { DeclaringType.Namespace: "Gneedle.Inject" }), Is.False,
+                "the handle which the template holds was left in the body.");
+        });
         DoesNotReferToTheWeaver(host);
     }
 
@@ -139,7 +135,7 @@ public partial class PointerTests
     private static TypeHandler NewGenericHostWithProperty(string propertyName, bool withGetter, bool withSetter)
     {
         var handler = (AssemblyHandler) Assembly.Create("MemberInjectionGenericPropAssembly").Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
+        var host = (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public)
                                         .WithGenericParameter("T")
                                         .GetHandler();
         var gp = host.Source.GenericParameters[0];
@@ -149,7 +145,7 @@ public partial class PointerTests
 
         if (withGetter)
         {
-            var getter = new MethodDefinition($"get_{propertyName}", methodAttrs, gp) { DeclaringType = host.Source };
+            var getter = new MethodDefinition($"get_{propertyName}", methodAttrs, gp) {DeclaringType = host.Source};
             getter.Body.GetILProcessor().Emit(OpCodes.Ret);
             prop.GetMethod = getter;
             host.Source.Methods.Add(getter);
@@ -157,7 +153,7 @@ public partial class PointerTests
 
         if (withSetter)
         {
-            var setter = new MethodDefinition($"set_{propertyName}", methodAttrs, module.TypeSystem.Void) { DeclaringType = host.Source };
+            var setter = new MethodDefinition($"set_{propertyName}", methodAttrs, module.TypeSystem.Void) {DeclaringType = host.Source};
             setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, gp));
             setter.Body.GetILProcessor().Emit(OpCodes.Ret);
             prop.SetMethod = setter;
@@ -177,10 +173,13 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         var call = ins.FirstOrDefault(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                            && ((MethodReference) i.Operand).Name == "get_Prop");
-        Assert.That(call, Is.Not.Null);
-        // The getter's return type should be the generic parameter T.
-        Assert.That(((MethodReference) call!.Operand).ReturnType, Is.InstanceOf<GenericParameter>());
+            && ((MethodReference) i.Operand).Name == "get_Prop");
+        Assert.Multiple(() =>
+        {
+            Assert.That(call, Is.Not.Null);
+            // The getter's return type should be the generic parameter T.
+            Assert.That(((MethodReference) call!.Operand).ReturnType, Is.InstanceOf<GenericParameter>());
+        });
     }
 
     [Test]
@@ -192,7 +191,7 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         var call = ins.FirstOrDefault(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                            && ((MethodReference) i.Operand).Name == "set_Prop");
+            && ((MethodReference) i.Operand).Name == "set_Prop");
         Assert.That(call, Is.Not.Null);
         // The setter's parameter type should be the generic parameter T.
         var param = ((MethodReference) call!.Operand).Parameters[0];

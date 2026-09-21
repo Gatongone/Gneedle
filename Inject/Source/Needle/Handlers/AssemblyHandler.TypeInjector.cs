@@ -10,11 +10,13 @@ partial class AssemblyHandler
     /// <param name="filter">The filter to apply to the type definitions.</param>
     /// <returns>An array of type handlers that match the given filter.</returns>
     internal ITypeHandler[] GetTypes(Func<TypeDefinition, bool> filter)
-        => Assembly.Source.Modules
-            .SelectMany(InjectorInterfaces.AllTypes)
-            .Where(filter)
-            .Select(GetType)
-            .ToArray<ITypeHandler>();
+        =>
+        [
+            .. Assembly.Source.Modules
+                       .SelectMany(InjectorInterfaces.AllTypes)
+                       .Where(filter)
+                       .Select(GetType)
+        ];
 
     /// <summary>
     /// Get the type handler for the given type definition.
@@ -40,7 +42,7 @@ partial class AssemblyHandler
     /// <exception cref="ArgumentException">Thrown when the enum declares no field which holds the value of a member.</exception>
     private static TypeReference ValueFieldTypeOf(TypeDefinition typeDefinition)
         => typeDefinition.Fields.FirstOrDefault(field => field.Name == "value__")?.FieldType
-           ?? throw new ArgumentException(string.Format(ErrorMessages.ENUM_DECLARES_NO_VALUE_FIELD, typeDefinition.FullName));
+            ?? throw new ArgumentException(string.Format(ErrorMessages.ENUM_DECLARES_NO_VALUE_FIELD, typeDefinition.FullName));
 
     /// <inheritdoc/>
     public ITypeHandler? GetType(string typeFullName)
@@ -48,8 +50,8 @@ partial class AssemblyHandler
         // A type which a nested type declares is a type which the assembly declares, and its name is as long as the
         // nesting is deep, so the types of a module are read with the ones which the types themselves declare.
         var typeDefinition = Assembly.Source.Modules
-            .SelectMany(InjectorInterfaces.AllTypes)
-            .FirstOrDefault(type => type.FullName.Equals(typeFullName));
+                                     .SelectMany(InjectorInterfaces.AllTypes)
+                                     .FirstOrDefault(type => type.FullName.Equals(typeFullName));
 
         return typeDefinition == null ? null : GetType(typeDefinition);
     }

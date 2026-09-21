@@ -43,9 +43,9 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     {
         var attributes = IlPrinter.TheAttributesOf(Source);
 
-        return $"{new string(' ', level * IlPrinter.Indentation)}.property "
-               + (attributes is { Length: > 0 } ? $"{attributes} " : "")
-               + $"{Source.PropertyType.FullName} {Source.Name}\n";
+        return $"{new string(' ', level * IlPrinter.INDENTATION)}.property "
+            + (attributes is {Length: > 0} ? $"{attributes} " : "")
+            + $"{Source.PropertyType.FullName} {Source.Name}\n";
     }
 
     /// <summary>
@@ -71,17 +71,18 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// name which an accessor needs, see <see cref="PropertyFlagExtensions.ToMethodAttributes"/>.
     /// </remarks>
     private readonly MethodAttributes m_AccessorAttributes = accessorAttributes
-                                                          ?? MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+        ?? MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
 
     /// <summary>
     /// The property definition which is handled.
     /// </summary>
-    internal readonly PropertyDefinition Source               = methodDef;
+    internal readonly PropertyDefinition Source = methodDef;
 
     /// <summary>
     /// Handler of the type which declares the property.
     /// </summary>
-    internal readonly TypeHandler        DeclaringTypeHandler = declaringTypeHandler;
+    internal readonly TypeHandler DeclaringTypeHandler = declaringTypeHandler;
+
     ITypeHandler IPropertyHandler.DeclaringTypeHandler => DeclaringTypeHandler;
 
     /// <summary>
@@ -164,7 +165,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         var fieldRef = field.ContainsGenericParameter
             // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
             // Related to issue: https://github.com/jbevain/cecil/issues/954
-            ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
+            ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType([.. declaringType.GenericParameters.Select(static p => (TypeReference) p)]))
             // Otherwise we can directly import the field definition as reference.
             : Source.Module.ImportReference(field);
         // A static accessor reaches the field through the type alone, where an instance one reaches it through `this`,
@@ -240,7 +241,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         var fieldRef = field.ContainsGenericParameter
             // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
             // Related to issue: https://github.com/jbevain/cecil/issues/954
-            ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
+            ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType([.. declaringType.GenericParameters.Select(static p => (TypeReference) p)]))
             // Otherwise we can directly import the field definition as reference.
             : Source.Module.ImportReference(field);
         // A static setter holds the value in the slot zero, where an instance one holds `this` there and the value in the

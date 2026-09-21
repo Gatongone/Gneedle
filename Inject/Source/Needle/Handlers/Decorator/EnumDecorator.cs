@@ -54,7 +54,7 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
         m_UnderlyingType = underlyingType switch
         {
             NongenericType nongeneric => m_AssemblyHandler.GetCecilType(nongeneric.Type).Reference,
-            _ => m_UnderlyingType
+            _                         => m_UnderlyingType
         };
         return this;
     }

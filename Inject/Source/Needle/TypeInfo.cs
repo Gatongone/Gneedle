@@ -29,7 +29,7 @@ public sealed class GenericParameterType(string name, params Constraint[] constr
     /// Create a generic parameter type from name.
     /// </summary>
     /// <param name="name">The generic parameter type name.</param>
-    public GenericParameterType(string name) : this(name, Array.Empty<Constraint>()) { }
+    public GenericParameterType(string name) : this(name, []) { }
 
     /// <summary>
     /// Get type name.
@@ -115,7 +115,7 @@ public sealed class GenericType : IType
     /// </remarks>
     /// <param name="type">Generic type definition, or a generic type which holds the arguments of it.</param>
     /// <exception cref="ArgumentException">Thrown when the <c>type</c> is not generic type.</exception>
-    public GenericType(Type type) : this(type, type.GetGenericArguments().Select(argument => argument.ToGneedleType()).ToArray()) { }
+    public GenericType(Type type) : this(type, [.. type.GetGenericArguments().Select(argument => argument.ToGneedleType())]) { }
 
     /// <summary>
     /// Create generic type with generic parameter type arguments.
@@ -126,7 +126,7 @@ public sealed class GenericType : IType
     /// </summary>
     /// <param name="type">Generic type definition.</param>
     /// <param name="argumentNames">Generic parameter type arguments</param>
-    public GenericType(Type type, params string[] argumentNames) : this(type, argumentNames.Select<string, IType>(str => new GenericParameterType(str)).ToArray()) { }
+    public GenericType(Type type, params string[] argumentNames) : this(type, [.. argumentNames.Select<string, IType>(str => new GenericParameterType(str))]) { }
 
     /// <summary>
     /// Create generic type with any generic arguments.
@@ -137,12 +137,14 @@ public sealed class GenericType : IType
     /// </summary>
     /// <param name="type">Generic type definition.</param>
     /// <param name="argumentTypes">Generic argument Types.</param>
-    public GenericType(Type type, params Type[] argumentTypes) : this(type, argumentTypes.Select(p => p switch
-    {
-        {ContainsGenericParameters: false} and {GenericTypeArguments.Length: 0} => new NongenericType(p),
-        {IsGenericParameter: true}                                              => new GenericParameterType(p.Name),
-        _                                                                       => new GenericType(p, p.GetGenericArguments()) as IType
-    }).ToArray()) { }
+    public GenericType(Type type, params Type[] argumentTypes) : this(type, [
+        .. argumentTypes.Select(p => p switch
+        {
+            {ContainsGenericParameters: false} and {GenericTypeArguments.Length: 0} => new NongenericType(p),
+            {IsGenericParameter: true}                                              => new GenericParameterType(p.Name),
+            _                                                                       => new GenericType(p, p.GetGenericArguments()) as IType
+        })
+    ]) { }
 
     /// <summary>
     /// Create generic type with any generic arguments.
@@ -186,25 +188,25 @@ internal sealed class SelfType : IType
     /// <summary>
     /// Create self type without generic arguments.
     /// </summary>
-    internal SelfType() => GenericArguments = Array.Empty<IType>();
+    internal SelfType() => GenericArguments = [];
 
     /// <summary>
     /// Create self type with generic arguments.
     /// </summary>
     /// <param name="genericArguments">Generic argument types.</param>
-    internal SelfType(IEnumerable<IType> genericArguments) => GenericArguments = genericArguments.ToArray();
+    internal SelfType(IEnumerable<IType> genericArguments) => GenericArguments = [.. genericArguments];
 
     /// <summary>
     /// Create self type with generic parameters.
     /// </summary>
     /// <param name="genericParameterNames">Generic parameter names.</param>
-    internal SelfType(IEnumerable<string> genericParameterNames) => GenericArguments = genericParameterNames.Select<string, IType>(name => new GenericParameterType(name)).ToArray();
+    internal SelfType(IEnumerable<string> genericParameterNames) => GenericArguments = [.. genericParameterNames.Select<string, IType>(name => new GenericParameterType(name))];
 
     /// <summary>
     /// Create self type with generic arguments.
     /// </summary>
     /// <param name="genericArguments">Generic argument types.</param>
-    internal SelfType(IEnumerable<Type> genericArguments) => GenericArguments = genericArguments.Select<Type, IType>(arg => new NongenericType(arg)).ToArray();
+    internal SelfType(IEnumerable<Type> genericArguments) => GenericArguments = [.. genericArguments.Select<Type, IType>(arg => new NongenericType(arg))];
 }
 
 /// <summary>
@@ -220,7 +222,7 @@ public static class TypeInfoExtensions
     {
         {IsGenericParameter: true}  => new GenericParameterType(type.Name),
         {IsGenericType     : false} => new NongenericType(type),
-        _                           => new GenericType(type, type.GetGenericArguments().Select(ToGneedleType).ToArray())
+        _                           => new GenericType(type, [.. type.GetGenericArguments().Select(ToGneedleType)])
     };
 
     /// <summary>
@@ -228,7 +230,7 @@ public static class TypeInfoExtensions
     /// </summary>
     /// <param name="parameters">The parameter info array.</param>
     /// <returns>An array of <see cref="IType"/> representing the parameter types.</returns>
-    public static IType[] GetITypes(this ParameterInfo[] parameters) => parameters.Select(p => p.ParameterType.ToGneedleType()).ToArray();
+    public static IType[] GetITypes(this ParameterInfo[] parameters) => [.. parameters.Select(p => p.ParameterType.ToGneedleType())];
 
     /// <summary>
     /// Create Generic type definition from generic parameters.

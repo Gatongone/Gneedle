@@ -1,18 +1,6 @@
 using System.Reflection;
-using Mono.Cecil;
-using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
-using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
-using MethodAttributes = Mono.Cecil.MethodAttributes;
-using OpCodes = Mono.Cecil.Cil.OpCodes;
-using ParameterAttributes = Mono.Cecil.ParameterAttributes;
-using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
-
-using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// Tests for the name which the placeholder of the instance is declared under, which are the tests of <see cref="PointerTests"/> for that one placeholder.
@@ -37,9 +25,12 @@ public partial class PointerTests
         Assert.That(placeholder, Is.Not.Null, "the placeholder of the instance is not declared under a name which says what it holds.");
 
         var typeName = placeholder!.GetField("TYPE_NAME", BindingFlags.NonPublic | BindingFlags.Static)?.GetRawConstantValue() as string;
-        Assert.That(typeName, Is.EqualTo("Gneedle.Inject.Instance"), "the name which the weaving knows the placeholder by is not the full name of the class.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(typeName, Is.EqualTo("Gneedle.Inject.Instance"), "the name which the weaving knows the placeholder by is not the full name of the class.");
 
-        Assert.That(typeof(This).Assembly.GetType("Gneedle.Inject.Object"), Is.Null,
-            "a class of this library is declared under a name which shadows the type of the framework.");
+            Assert.That(typeof(This).Assembly.GetType("Gneedle.Inject.Object"), Is.Null,
+                "a class of this library is declared under a name which shadows the type of the framework.");
+        });
     }
 }

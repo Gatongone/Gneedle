@@ -15,7 +15,7 @@ internal static class Constraints
         /// </summary>
         /// <returns>Mono cecil generic parameter attributes.</returns>
         internal GenericParameterAttributes ToCecilAttribute()
-            => (GenericParameterAttributes) attributes;
+            => (GenericParameterAttributes)attributes;
     }
 
     /// <param name="genericParameter">Constraint provider.</param>

@@ -4,7 +4,7 @@ using OpCodes = Mono.Cecil.Cil.OpCodes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// A template of five arguments which belongs to an instance of its own type, so that its first argument is the slot
@@ -29,8 +29,14 @@ public static class ConstructTemplates
     /// </summary>
     public static int Catch(int value)
     {
-        try { throw new InvalidOperationException("thrown by the template"); }
-        catch (InvalidOperationException) { return 42; }
+        try
+        {
+            throw new InvalidOperationException("thrown by the template");
+        }
+        catch (InvalidOperationException)
+        {
+            return 42;
+        }
     }
 
     /// <summary>
@@ -39,8 +45,15 @@ public static class ConstructTemplates
     public static int Finally(int value)
     {
         var result = value;
-        try { result += 1; }
-        finally { result += 10; }
+        try
+        {
+            result += 1;
+        }
+        finally
+        {
+            result += 10;
+        }
+
         return result;
     }
 
@@ -50,6 +63,7 @@ public static class ConstructTemplates
     public static int Using(int value)
     {
         using (new DisposableThing()) { }
+
         return DisposableThing.Disposed ? 42 : 0;
     }
 
@@ -59,7 +73,11 @@ public static class ConstructTemplates
     public static int Lock(int value)
     {
         var gate = new object();
-        lock (gate) { value += 1; }
+        lock (gate)
+        {
+            value += 1;
+        }
+
         return Monitor.IsEntered(gate) ? 0 : 42;
     }
 
@@ -69,7 +87,11 @@ public static class ConstructTemplates
     public static int Foreach(int value)
     {
         var total = 0;
-        foreach (var item in new DisposableElements(value)) { total += item; }
+        foreach (var item in new DisposableElements(value))
+        {
+            total += item;
+        }
+
         return DisposableElements.Disposed ? total + 42 : 0;
     }
 
@@ -128,7 +150,7 @@ public static class ConstructTemplates
     /// <summary>
     /// A template which writes the <c>with</c> expression that the call of <c>&lt;Clone&gt;$</c> belongs to.
     /// </summary>
-    public static int CloneARecord(int value) => (new Cloneable { Value = value } with { Value = value + 1 }).Value;
+    public static int CloneARecord(int value) => (new Cloneable {Value = value} with {Value = value + 1}).Value;
 
     /// <summary>
     /// A record which declares the template itself, so that the <c>&lt;Clone&gt;$</c> which a <c>with</c> expression
@@ -144,7 +166,7 @@ public static class ConstructTemplates
         /// <summary>
         /// A template which clones the record it is declared in.
         /// </summary>
-        public static int CloneItself(int value) => (new Cloner { Value = value } with { Value = value + 1 }).Value;
+        public static int CloneItself(int value) => (new Cloner {Value = value} with {Value = value + 1}).Value;
     }
 
     /// <summary>
@@ -227,7 +249,6 @@ public sealed class DisposableElements(int value) : IEnumerable<int>
 [TestFixture]
 public class SetBodyTests
 {
-
     // Template method bodies copied by the injector. Kept in the test assembly so
     // Cecil can resolve them from disk via the default assembly resolver.
     public static class BodyTemplates
@@ -237,7 +258,7 @@ public class SetBodyTests
 
         // A call which names the method through an instantiation of it, which is a reference of the specification of
         // that method rather than of the method itself.
-        public static int First(int[] values) => Enumerable.First<int>(values);
+        public static int First(int[] values) => values.First();
 
         // Five parameters, so the fifth is addressed by ldarg.s with a parameter as its operand rather than by one of the
         // macro opcodes, which carry no operand at all.
@@ -285,8 +306,11 @@ public class SetBodyTests
 
         var body = SourceOf(method).Body;
         Assert.That(body.Instructions, Is.Not.Empty);
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Add), Is.True);
-        Assert.That(body.Instructions.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Add), Is.True);
+            Assert.That(body.Instructions.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        });
     }
 
     [Test]
@@ -297,11 +321,11 @@ public class SetBodyTests
         // specification refuses, so a call of one was refused before the tokens of its arguments were read.
         var (handler, host) = NewCalc();
         var method = host.AddMethod("First", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.First))!);
 
         var loaded = handler.Assembly.Load();
-        var woven = loaded.GetType($"{Ns}.Calc")!.GetMethod("First")!;
+        var woven = loaded.GetType($"{NS}.Calc")!.GetMethod("First")!;
 
         Assert.That(woven.Invoke(null, [new[] {7, 8}]), Is.EqualTo(7), "the first of the values was not handed back.");
     }
@@ -321,7 +345,7 @@ public class SetBodyTests
 
         method.SetBody(() => captured);
 
-        var woven = handler.Assembly.Load().GetType($"{Ns}.Host")!.GetMethod("TypeOf")!;
+        var woven = handler.Assembly.Load().GetType($"{NS}.Host")!.GetMethod("TypeOf")!;
 
         Assert.That(woven.Invoke(null, null), Is.EqualTo(captured), "the type which the template captured was not handed back.");
     }
@@ -334,7 +358,7 @@ public class SetBodyTests
         // type of the weaver would name it again.
         var (_, host) = NewCalc();
         var method = host.AddMethod("TypeOf", typeof(Type).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        var captured = typeof(Gneedle.Inject.This);
+        var captured = typeof(This);
 
         var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(() => captured));
 
@@ -364,7 +388,7 @@ public class SetBodyTests
         stream.Position = 0;
 
         var reread = AssemblyDefinition.ReadAssembly(stream);
-        var type = reread.MainModule.GetType($"{Ns}.Calc");
+        var type = reread.MainModule.GetType($"{NS}.Calc");
         Assert.That(type, Is.Not.Null);
         var emitted = type.Methods.First(m => m.Name == "Add");
         Assert.That(emitted.Body.Instructions.Any(i => i.OpCode == OpCodes.Add), Is.True);
@@ -380,14 +404,16 @@ public class SetBodyTests
         var assembly = Assembly.Create("SetBodyParameterOperandAssembly");
         var host = AddAHost(assembly, "Calc");
         var intType = typeof(int).ToGneedleType();
-        var method = host.AddMethod("Sum", intType, [], [new Parameter(intType), new Parameter(intType), new Parameter(intType),
-                                                         new Parameter(intType), new Parameter(intType)],
-                                    MethodFlags.Public | MethodFlags.Static);
+        var method = host.AddMethod("Sum", intType, [], [
+                new Parameter(intType), new Parameter(intType), new Parameter(intType),
+                new Parameter(intType), new Parameter(intType)
+            ],
+            MethodFlags.Public | MethodFlags.Static);
 
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Sum))!);
 
         // 15 rather than 1, 5 or 10 tells the arguments apart from a body which reached the wrong parameters.
-        var sum = assembly.Load().GetType($"{Ns}.Calc")!.GetMethod("Sum")!;
+        var sum = assembly.Load().GetType($"{NS}.Calc")!.GetMethod("Sum")!;
         Assert.That(sum.Invoke(null, [1, 2, 3, 4, 5]), Is.EqualTo(15));
     }
 
@@ -396,7 +422,7 @@ public class SetBodyTests
     {
         var (_, host) = NewCalc();
         var method = host.AddMethod("Echo", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
 
         var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Sum))!));
 
@@ -418,10 +444,13 @@ public class SetBodyTests
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Echo))!);
 
         var body = SourceOf(method).Body;
-        Assert.That(SourceOf(method).IsStatic, Is.False);
-        // The single load must target ldarg.1 (the real parameter), not ldarg.0 (this).
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldarg_1), Is.True);
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(SourceOf(method).IsStatic, Is.False);
+            // The single load must target ldarg.1 (the real parameter), not ldarg.0 (this).
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldarg_1), Is.True);
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.False);
+        });
     }
 
     [Test]
@@ -436,9 +465,11 @@ public class SetBodyTests
         host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
 
         var method = host.AddMethod("Number", intType, [],
-                                    [new Parameter(intType), new Parameter(intType), new Parameter(intType),
-                                     new Parameter(intType), new Parameter(intType), new Parameter(intType)],
-                                    MethodFlags.Public);
+            [
+                new Parameter(intType), new Parameter(intType), new Parameter(intType),
+                new Parameter(intType), new Parameter(intType), new Parameter(intType)
+            ],
+            MethodFlags.Public);
 
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Number))!);
 
@@ -447,7 +478,7 @@ public class SetBodyTests
 
         // 123456 rather than 112345 tells a body which read every argument of the member from one which kept the slots
         // of the template, where the load of the second argument reaches into the first.
-        var type = assembly.Load().GetType($"{Ns}.Calc")!;
+        var type = assembly.Load().GetType($"{NS}.Calc")!;
         var number = type.GetMethod("Number")!;
         Assert.That(number.Invoke(Activator.CreateInstance(type), [1, 2, 3, 4, 5, 6]), Is.EqualTo(123456));
     }
@@ -465,9 +496,11 @@ public class SetBodyTests
         host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
 
         var method = host.AddMethod("Number", intType, [],
-                                    [new Parameter(intType), new Parameter(intType), new Parameter(intType),
-                                     new Parameter(intType), new Parameter(intType)],
-                                    MethodFlags.Public);
+            [
+                new Parameter(intType), new Parameter(intType), new Parameter(intType),
+                new Parameter(intType), new Parameter(intType)
+            ],
+            MethodFlags.Public);
 
         method.SetBody(typeof(WideBodyTemplates).GetMethod(nameof(WideBodyTemplates.Number))!);
 
@@ -475,7 +508,7 @@ public class SetBodyTests
         // which it holds among the parameters, where it reaches the argument before it. A template written as a lambda
         // which captures a variable cannot be used here, because reading the capture reads the receiver, which the
         // weaving refuses.
-        var type = assembly.Load().GetType($"{Ns}.Calc")!;
+        var type = assembly.Load().GetType($"{NS}.Calc")!;
         var number = type.GetMethod("Number")!;
         Assert.That(number.Invoke(Activator.CreateInstance(type), [1, 2, 3, 4, 5]), Is.EqualTo(12345));
     }
@@ -532,10 +565,9 @@ public class SetBodyTests
         // when it is run.
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Lambda))!));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Lambda))!));
 
         Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
     }
@@ -545,10 +577,9 @@ public class SetBodyTests
     {
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
 
-        Assert.Throws<ArgumentException>(
-            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LambdaWhichCaptured))!));
+        Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LambdaWhichCaptured))!));
     }
 
     [Test]
@@ -559,14 +590,13 @@ public class SetBodyTests
         // the compiler wrote: it is refused by the name of the member rather than by the name of the type which holds it.
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunction))!));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunction))!));
 
         Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
         Assert.That(thrown!.Message, Does.Contain("calls a member"),
-                    "the refusal did not name the member which the template calls rather than the type which holds it.");
+            "the refusal did not name the member which the template calls rather than the type which holds it.");
     }
 
     [Test]
@@ -577,14 +607,13 @@ public class SetBodyTests
         // which declares the template.
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunctionWhichCaptured))!));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunctionWhichCaptured))!));
 
         Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
         Assert.That(thrown!.Message, Does.Contain("names a type"),
-                    "the refusal did not name the type which the compiler wrote for the body.");
+            "the refusal did not name the type which the compiler wrote for the body.");
     }
 
     [Test]
@@ -595,10 +624,12 @@ public class SetBodyTests
         // call of it is carried the way a call of any other member of the assembly the template was compiled into is.
         var (woven, handler) =
             NewProbeOf("SetBodyCloneARecordAssembly", typeof(ConstructTemplates), nameof(ConstructTemplates.CloneARecord));
-
-        Assert.That(handler.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference {Name: "<Clone>$"}),
-                    Is.True, "the call of the member which the with expression names was not carried.");
-        Assert.That(woven.Invoke(null, [1]), Is.EqualTo(2), "the woven assembly does not clone the record.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference { Name: "<Clone>$" }),
+                Is.True, "the call of the member which the with expression names was not carried.");
+            Assert.That(woven.Invoke(null, [1]), Is.EqualTo(2), "the woven assembly does not clone the record.");
+        });
     }
 
     [Test]
@@ -609,11 +640,13 @@ public class SetBodyTests
         // does is the name of the member, because the name of a body carries the method it was written in.
         var (woven, handler) =
             NewProbeOf("SetBodyCloneItselfAssembly", typeof(ConstructTemplates.Cloner),
-                       nameof(ConstructTemplates.Cloner.CloneItself));
-
-        Assert.That(handler.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference {Name: "<Clone>$"}),
-                    Is.True, "the call of the member which the with expression names was not carried.");
-        Assert.That(woven.Invoke(null, [1]), Is.EqualTo(2), "the woven assembly does not clone the record.");
+                nameof(ConstructTemplates.Cloner.CloneItself));
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference { Name: "<Clone>$" }),
+                Is.True, "the call of the member which the with expression names was not carried.");
+            Assert.That(woven.Invoke(null, [1]), Is.EqualTo(2), "the woven assembly does not clone the record.");
+        });
     }
 
     [Test]
@@ -624,13 +657,12 @@ public class SetBodyTests
         // refusal names the type of the machine which the stub calls, which is a type of the compiler's own.
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Async))!));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Async))!));
 
         Assert.That(thrown!.Message, Does.Contain("names a type"),
-                    $"the refusal does not name the type which the stub of the state machine calls: {thrown.Message}");
+            $"the refusal does not name the type which the stub of the state machine calls: {thrown.Message}");
     }
 
     [Test]
@@ -641,13 +673,12 @@ public class SetBodyTests
         // what the weaving would carry is the stub rather than the body which the template was written with.
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Iterator))!));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Iterator))!));
 
         Assert.That(thrown!.Message, Does.Contain("names a type"),
-                    $"the refusal does not name the type which the stub of the state machine calls: {thrown.Message}");
+            $"the refusal does not name the type which the stub of the state machine calls: {thrown.Message}");
     }
 
     /// <summary>
@@ -665,7 +696,7 @@ public class SetBodyTests
 
         method.SetBody(typeof(ConstructTemplates).GetMethod(templateName)!);
 
-        return assembly.Load().GetType($"{Ns}.Calc")!.GetMethod("Probe")!;
+        return assembly.Load().GetType($"{NS}.Calc")!.GetMethod("Probe")!;
     }
 
     /// <summary>
@@ -686,7 +717,7 @@ public class SetBodyTests
 
         method.SetBody(holder.GetMethod(templateName)!);
 
-        return (assembly.Load().GetType($"{Ns}.Calc")!.GetMethod("Probe")!, (MethodHandler) method);
+        return (assembly.Load().GetType($"{NS}.Calc")!.GetMethod("Probe")!, (MethodHandler) method);
     }
 
     /// <summary>
@@ -694,7 +725,7 @@ public class SetBodyTests
     /// </summary>
     private static void ConstructTemplatesReset()
     {
-        DisposableThing.Disposed = false;
+        DisposableThing.Disposed    = false;
         DisposableElements.Disposed = false;
     }
 
@@ -706,7 +737,7 @@ public class SetBodyTests
         // template is refused is what tells whether the refusal left the member as it was.
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public | MethodFlags.Static);
+            MethodFlags.Public | MethodFlags.Static);
         var source = SourceOf(method);
         var body = source.Body;
         var instructions = body.Instructions.ToArray();
@@ -716,9 +747,12 @@ public class SetBodyTests
         // The body is the one the member held rather than a new one which the template wrote what it could into, and
         // nothing of the template is in it: no variable and no handler of it is left where the body was replaced.
         Assert.That(source.Body, Is.SameAs(body));
-        Assert.That(source.Body.Instructions, Is.EqualTo(instructions));
-        Assert.That(source.Body.Variables, Is.Empty);
-        Assert.That(source.Body.ExceptionHandlers, Is.Empty);
+        Assert.Multiple(() =>
+        {
+            Assert.That(source.Body.Instructions, Is.EqualTo(instructions));
+            Assert.That(source.Body.Variables, Is.Empty);
+            Assert.That(source.Body.ExceptionHandlers, Is.Empty);
+        });
     }
 
     #endregion
@@ -733,8 +767,11 @@ public class SetBodyTests
         method.SetBody(DefaultMethodBody.ThrowException);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.True);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Throw), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.True);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Throw), Is.True);
+        });
     }
 
     #endregion
@@ -749,8 +786,11 @@ public class SetBodyTests
         method.SetBody(DefaultMethodBody.WithDefaultReturn);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldnull), Is.True);
-        Assert.That(ins.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldnull), Is.True);
+            Assert.That(ins.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        });
     }
 
     [Test]
@@ -761,8 +801,11 @@ public class SetBodyTests
         method.SetBody(DefaultMethodBody.WithDefaultReturn);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Initobj), Is.True);
-        Assert.That(ins.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Initobj), Is.True);
+            Assert.That(ins.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        });
     }
 
     [Test]
@@ -789,8 +832,8 @@ public class SetBodyTests
         var mod = asm.Source.MainModule;
 
         // base class with virtual Method
-        var baseDef = new TypeDefinition(Ns, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
-        var baseMethod = new MethodDefinition("Method", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+        var baseDef = new TypeDefinition(NS, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
+        var baseMethod = new MethodDefinition("Method", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig, mod.TypeSystem.Int32) {DeclaringType = baseDef};
         baseMethod.Body.GetILProcessor().Emit(OpCodes.Ret);
         baseDef.Methods.Add(baseMethod);
         mod.Types.Add(baseDef);
@@ -803,9 +846,12 @@ public class SetBodyTests
         method.SetBody(DefaultMethodBody.CallFromBase);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
-        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && i.Operand is MethodReference mr && mr.Name == "Method"), Is.True);
-        Assert.That(ins.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                    && i.Operand is MethodReference mr && mr.Name == "Method"), Is.True);
+            Assert.That(ins.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        });
     }
 
     [Test]
@@ -822,14 +868,17 @@ public class SetBodyTests
         host.AddMethod("Equals", typeof(bool).ToGneedleType(), [], [new Parameter(typeof(object).ToGneedleType())], MethodFlags.Public)
             .SetBody(DefaultMethodBody.CallFromBase);
 
-        var type = assembly.Load().GetType($"{Ns}.Calc")!;
+        var type = assembly.Load().GetType($"{NS}.Calc")!;
         var instance = Activator.CreateInstance(type);
         var equals = type.GetMethod("Equals", [typeof(object)])!;
+        Assert.Multiple(() =>
+        {
 
-        // The base implementation answers whether the reference is the one it was given, which it can only answer
-        // about the instance the call was made on.
-        Assert.That(equals.Invoke(instance, [instance]), Is.True);
-        Assert.That(equals.Invoke(instance, [new object()]), Is.False);
+            // The base implementation answers whether the reference is the one it was given, which it can only answer
+            // about the instance the call was made on.
+            Assert.That(equals.Invoke(instance, [instance]), Is.True);
+            Assert.That(equals.Invoke(instance, [new object()]), Is.False);
+        });
     }
 
     [Test]

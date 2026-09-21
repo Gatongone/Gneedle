@@ -1,9 +1,5 @@
-using System.Reflection;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -12,7 +8,7 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for a member of a generic type, woven and run, which are the tests of <see cref="PointerTests"/> for that one placeholder.
@@ -31,34 +27,42 @@ public partial class PointerTests
     private static TypeHandler NewRunnableGenericHost(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
+        var host = (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public)
                                         .WithGenericParameter("T")
                                         .GetHandler();
         var module = host.Source.Module;
 
-        var add = new MethodDefinition("Add", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Int32) { DeclaringType = host.Source };
+        var add = new MethodDefinition("Add", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Int32) {DeclaringType = host.Source};
         add.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, module.TypeSystem.Int32));
         add.Parameters.Add(new ParameterDefinition("b", ParameterAttributes.None, module.TypeSystem.Int32));
         var addIl = add.Body.GetILProcessor();
-        addIl.Emit(OpCodes.Ldarg_1); addIl.Emit(OpCodes.Ldarg_2); addIl.Emit(OpCodes.Add); addIl.Emit(OpCodes.Ret);
+        addIl.Emit(OpCodes.Ldarg_1);
+        addIl.Emit(OpCodes.Ldarg_2);
+        addIl.Emit(OpCodes.Add);
+        addIl.Emit(OpCodes.Ret);
         host.Source.Methods.Add(add);
 
         var value = new FieldDefinition("m_Value", FieldAttributes.Private, module.TypeSystem.Int32);
         host.Source.Fields.Add(value);
 
         var accessorAttributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
-        var getter = new MethodDefinition("get_Prop", accessorAttributes, module.TypeSystem.Int32) { DeclaringType = host.Source };
+        var getter = new MethodDefinition("get_Prop", accessorAttributes, module.TypeSystem.Int32) {DeclaringType = host.Source};
         var getterIl = getter.Body.GetILProcessor();
-        getterIl.Emit(OpCodes.Ldarg_0); getterIl.Emit(OpCodes.Ldfld, value); getterIl.Emit(OpCodes.Ret);
+        getterIl.Emit(OpCodes.Ldarg_0);
+        getterIl.Emit(OpCodes.Ldfld, value);
+        getterIl.Emit(OpCodes.Ret);
 
-        var setter = new MethodDefinition("set_Prop", accessorAttributes, module.TypeSystem.Void) { DeclaringType = host.Source };
+        var setter = new MethodDefinition("set_Prop", accessorAttributes, module.TypeSystem.Void) {DeclaringType = host.Source};
         setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int32));
         var setterIl = setter.Body.GetILProcessor();
-        setterIl.Emit(OpCodes.Ldarg_0); setterIl.Emit(OpCodes.Ldarg_1); setterIl.Emit(OpCodes.Stfld, value); setterIl.Emit(OpCodes.Ret);
+        setterIl.Emit(OpCodes.Ldarg_0);
+        setterIl.Emit(OpCodes.Ldarg_1);
+        setterIl.Emit(OpCodes.Stfld, value);
+        setterIl.Emit(OpCodes.Ret);
 
         host.Source.Methods.Add(getter);
         host.Source.Methods.Add(setter);
-        host.Source.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, module.TypeSystem.Int32) { GetMethod = getter, SetMethod = setter });
+        host.Source.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, module.TypeSystem.Int32) {GetMethod = getter, SetMethod = setter});
         return host;
     }
 
@@ -67,8 +71,8 @@ public partial class PointerTests
     {
         var host = NewRunnableGenericHost("GenericMemberCallAssembly");
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeInstanceMethod)));
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
@@ -85,20 +89,21 @@ public partial class PointerTests
         // the one which the symbol stands for, and the call of the member is written in its place.
         var host = NewRunnableGenericHost("GenericMemberConditionalArgumentAssembly");
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
-                                    MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+            MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAConditionalArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
-                    "the member is not called where the delegate was invoked.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
-                    "the member was built into a delegate rather than called.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+                "the member is not called where the delegate was invoked.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
+                "the member was built into a delegate rather than called.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4, false]), Is.EqualTo(7),
-                    "the woven assembly does not run the member which the symbol stands for.");
+            "the woven assembly does not run the member which the symbol stands for.");
     }
 
     [Test]
@@ -110,21 +115,23 @@ public partial class PointerTests
         // way, so the call of the member stands where the delegate was invoked rather than a delegate being built.
         var host = NewRunnableGenericHost("GenericMemberInsideAProtectedRegionAssembly");
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInsideAProtectedRegion)));
 
         var body = ((MethodHandler) method).Source.Body;
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
                     "the member is not called where the delegate was invoked.");
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
-                    "the member was built into a delegate rather than called.");
-        Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
-
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
+                "the member was built into a delegate rather than called.");
+            Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4]), Is.EqualTo(7),
-                    "the woven assembly does not run the member which the symbol stands for.");
+            "the woven assembly does not run the member which the symbol stands for.");
     }
 
     [Test]
@@ -135,21 +142,23 @@ public partial class PointerTests
         // passes through the symbol, so the call of the member stands where the delegate was invoked.
         var host = NewRunnableGenericHost("GenericMemberInTheHandlerAssembly");
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
-                                    MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInTheHandler)));
 
         var body = ((MethodHandler) method).Source.Body;
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
                     "the member is not called where the delegate was invoked.");
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
-                    "the member was built into a delegate rather than called.");
-        Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
-
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
+                "the member was built into a delegate rather than called.");
+            Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [3, 4]), Is.EqualTo(7),
-                    "the woven assembly does not run the member which the symbol stands for.");
+            "the woven assembly does not run the member which the symbol stands for.");
     }
 
     [Test]
@@ -162,17 +171,19 @@ public partial class PointerTests
         var host = NewRunnableGenericHost("GenericMemberConditionalNameAssembly");
         AddASubtract(host);
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
-                                    MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+            MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichAConditionNames)));
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
         var instance = Activator.CreateInstance(type);
-
-        Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, true]), Is.EqualTo(7),
-                    "the woven assembly does not run the member which the arm which ran names.");
-        Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, false]), Is.EqualTo(-1),
-                    "the woven assembly does not run the member which the arm which ran names.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, true]), Is.EqualTo(7),
+                "the woven assembly does not run the member which the arm which ran names.");
+            Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, false]), Is.EqualTo(-1),
+                "the woven assembly does not run the member which the arm which ran names.");
+        });
     }
 
     [Test]
@@ -184,17 +195,19 @@ public partial class PointerTests
         var host = NewRunnableGenericHost("GenericMemberConditionalNameWhereItStandsAssembly");
         AddASubtract(host);
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-                                    [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
-                                    MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+            MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichAConditionNamesWhereItStands)));
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
         var instance = Activator.CreateInstance(type);
-
-        Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, true]), Is.EqualTo(7),
-                    "the woven assembly does not run the member which the arm which ran names.");
-        Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, false]), Is.EqualTo(-1),
-                    "the woven assembly does not run the member which the arm which ran names.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, true]), Is.EqualTo(7),
+                "the woven assembly does not run the member which the arm which ran names.");
+            Assert.That(type.GetMethod("Run")!.Invoke(instance, [3, 4, false]), Is.EqualTo(-1),
+                "the woven assembly does not run the member which the arm which ran names.");
+        });
     }
 
     /// <summary>
@@ -205,11 +218,14 @@ public partial class PointerTests
     private static void AddASubtract(TypeHandler host)
     {
         var module = host.Source.Module;
-        var subtract = new MethodDefinition("Subtract", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Int32) { DeclaringType = host.Source };
+        var subtract = new MethodDefinition("Subtract", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Int32) {DeclaringType = host.Source};
         subtract.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, module.TypeSystem.Int32));
         subtract.Parameters.Add(new ParameterDefinition("b", ParameterAttributes.None, module.TypeSystem.Int32));
         var il = subtract.Body.GetILProcessor();
-        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Sub); il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ret);
         host.Source.Methods.Add(subtract);
     }
 
@@ -233,9 +249,9 @@ public partial class PointerTests
         var read = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
         read.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty)));
 
-        var call = ((MethodHandler) read).Source.Body.Instructions.First(instruction => instruction.Operand is MethodReference { Name: "get_Prop" });
+        var call = ((MethodHandler) read).Source.Body.Instructions.First(instruction => instruction.Operand is MethodReference {Name: "get_Prop"});
         Assert.That(((MethodReference) call.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the accessor is called on the definition of the generic type rather than on the instantiation of it.");
+            "the accessor is called on the definition of the generic type rather than on the instantiation of it.");
 
         var write = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         write.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty)));
@@ -252,16 +268,17 @@ public partial class PointerTests
     {
         var asm = Assembly.Create("GenericBaseMemberAssembly");
         var mod = asm.Source.MainModule;
-        var baseDef = new TypeDefinition(Ns, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
+        var baseDef = new TypeDefinition(NS, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
         baseDef.GenericParameters.Add(new GenericParameter("T", baseDef));
-        var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+        var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) {DeclaringType = baseDef};
         calc.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, mod.TypeSystem.Int32));
         var calcIl = calc.Body.GetILProcessor();
-        calcIl.Emit(OpCodes.Ldarg_1); calcIl.Emit(OpCodes.Ret);
+        calcIl.Emit(OpCodes.Ldarg_1);
+        calcIl.Emit(OpCodes.Ret);
         baseDef.Methods.Add(calc);
         mod.Types.Add(baseDef);
 
-        var host = (TypeHandler) ((AssemblyHandler) asm.Handler).AddClass("Host", Ns, ClassFlags.Public)
+        var host = (TypeHandler) ((AssemblyHandler) asm.Handler).AddClass("Host", NS, ClassFlags.Public)
                                                                 .WithGenericParameter("T")
                                                                 .GetHandler();
         // The host hands the parameter which it declares itself down to its base, which is what the body of a member of
@@ -295,12 +312,12 @@ public partial class PointerTests
     {
         var asm = Assembly.Create(assemblyName);
         var mod = asm.Source.MainModule;
-        var baseDef = new TypeDefinition(Ns, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
+        var baseDef = new TypeDefinition(NS, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
         baseDef.GenericParameters.Add(new GenericParameter("T", baseDef));
         addBaseMembers(baseDef, mod);
         mod.Types.Add(baseDef);
 
-        var middleDef = new TypeDefinition(Ns, "MiddleType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
+        var middleDef = new TypeDefinition(NS, "MiddleType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
         var middleParameter = new GenericParameter("T", middleDef);
         middleDef.GenericParameters.Add(middleParameter);
         var baseOfTheMiddle = new GenericInstanceType(baseDef);
@@ -310,8 +327,8 @@ public partial class PointerTests
 
         var handler = (AssemblyHandler) asm.Handler;
         var host = (TypeHandler) (theHostDeclaresTheParameter
-            ? handler.AddClass("Host", Ns, ClassFlags.Public).WithGenericParameter("T").GetHandler()
-            : handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler());
+            ? handler.AddClass("Host", NS, ClassFlags.Public).WithGenericParameter("T").GetHandler()
+            : handler.AddClass("Host", NS, ClassFlags.Public).GetHandler());
         // The middle type hands the argument over to its own base, so the base of the base of the host is reached through
         // an instantiation which is written where the middle type is declared rather than where the host is.
         var middleOfTheHost = new GenericInstanceType(middleDef);
@@ -334,7 +351,7 @@ public partial class PointerTests
     private static void AddEchoToTheGenericBase(TypeDefinition baseDef, ModuleDefinition mod)
     {
         var parameter = baseDef.GenericParameters[0];
-        var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, parameter) { DeclaringType = baseDef };
+        var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, parameter) {DeclaringType = baseDef};
         echo.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, parameter));
         echo.Body.GetILProcessor().Emit(OpCodes.Ldarg_1);
         echo.Body.GetILProcessor().Emit(OpCodes.Ret);
@@ -343,10 +360,11 @@ public partial class PointerTests
 
     private static void AddCalcToTheGenericBase(TypeDefinition baseDef, ModuleDefinition mod)
     {
-        var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+        var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) {DeclaringType = baseDef};
         calc.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, mod.TypeSystem.Int32));
         var calcIl = calc.Body.GetILProcessor();
-        calcIl.Emit(OpCodes.Ldarg_1); calcIl.Emit(OpCodes.Ret);
+        calcIl.Emit(OpCodes.Ldarg_1);
+        calcIl.Emit(OpCodes.Ret);
         baseDef.Methods.Add(calc);
     }
 
@@ -359,14 +377,15 @@ public partial class PointerTests
 
         var call = ((MethodHandler) method).Source.Body.Instructions
                                            .First(instruction => (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
-                                                                 && ((MethodReference) instruction.Operand).Name == "Calc");
+                                               && ((MethodReference) instruction.Operand).Name == "Calc");
         var declaring = ((MethodReference) call.Operand).DeclaringType;
-
-        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
-        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
-                    "the instantiation which the call names is not the one which the chain of base types hands down.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                "the member is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+                "the instantiation which the call names is not the one which the chain of base types hands down.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
     }
@@ -380,15 +399,16 @@ public partial class PointerTests
 
         var call = ((MethodHandler) method).Source.Body.Instructions
                                            .First(instruction => (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
-                                                                 && ((MethodReference) instruction.Operand).Name == "Calc");
+                                               && ((MethodReference) instruction.Operand).Name == "Calc");
         var declaring = ((MethodReference) call.Operand).DeclaringType;
-
-        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the type which declares it, which stands open where the chain of base types hands the parameter of the body down to it.");
-        Assert.That(((GenericInstanceType) declaring).GenericArguments.Single(), Is.SameAs(host.Source.GenericParameters[0]),
-                    "the instantiation which the call names does not stand for the parameter of the type which is woven, "
-                    + "which is the one the chain of base types hands down to the definition which declares the member.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                "the member is called on the definition of the type which declares it, which stands open where the chain of base types hands the parameter of the body down to it.");
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Single(), Is.SameAs(host.Source.GenericParameters[0]),
+                "the instantiation which the call names does not stand for the parameter of the type which is woven, "
+                + "which is the one the chain of base types hands down to the definition which declares the member.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
     }
@@ -407,14 +427,16 @@ public partial class PointerTests
         var call = ((MethodHandler) method).Source.Body.Instructions
                                            .Select(instruction => instruction.Operand).OfType<MethodReference>()
                                            .FirstOrDefault(reference => reference.Name == "Echo");
-        Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
-        Assert.That(((GenericInstanceType) call!.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
-                    "the member is not called on the instantiation which the chain of base types names.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
+            Assert.That(((GenericInstanceType) call!.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                "the member is not called on the instantiation which the chain of base types names.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
-                    "the woven assembly does not run the member of the base.");
+            "the woven assembly does not run the member of the base.");
     }
 
     [Test]
@@ -432,15 +454,17 @@ public partial class PointerTests
                                            .Select(instruction => instruction.Operand).OfType<MethodReference>()
                                            .FirstOrDefault(reference => reference.Name == "Echo");
         Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
-        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+        Assert.Multiple(() =>
+        {
+            Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
                     "the member is called on the definition of the base rather than on the instantiation which the body's own type derives from.");
-        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
-                    "the member is not called on the instantiation which the base was declared with.");
-
+            Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                "the member is not called on the instantiation which the base was declared with.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
-                    "the woven assembly does not run the member of the base which names the parameter of it.");
+            "the woven assembly does not run the member of the base which names the parameter of it.");
     }
 
     [Test]
@@ -457,15 +481,17 @@ public partial class PointerTests
         var call = ((MethodHandler) method).Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                                            .FirstOrDefault(reference => reference.Name == "Echo");
         Assert.That(call, Is.Not.Null, "the member of the base was not called.");
-        Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+        Assert.Multiple(() =>
+        {
+            Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
                     "the member is called on the definition of the base rather than on the instantiation which the type derives from.");
-        Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
-                    "the member is not called on the instantiation which the base was declared with.");
-
+            Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
+                "the member is not called on the instantiation which the base was declared with.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
 
         Assert.That(type.GetMethod("Echo")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
-                    "the woven assembly does not run the member of the base which the body calls.");
+            "the woven assembly does not run the member of the base which the body calls.");
     }
 
     [Test]
@@ -477,14 +503,15 @@ public partial class PointerTests
 
         var call = ((MethodHandler) method).Source.Body.Instructions
                                            .First(instruction => (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
-                                                                 && ((MethodReference) instruction.Operand).Name == "Calc");
+                                               && ((MethodReference) instruction.Operand).Name == "Calc");
         var declaring = ((MethodReference) call.Operand).DeclaringType;
-
-        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
-        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
-                    "the instantiation which the call names is not the one which the chain of base types hands down.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                "the member is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+                "the instantiation which the call names is not the one which the chain of base types hands down.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41));
     }
@@ -493,18 +520,19 @@ public partial class PointerTests
     public void A_Field_Of_A_Generic_Base_Of_A_Generic_Base_Is_Read_Off_The_Instantiation_Which_The_Chain_Names()
     {
         var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleFieldAssembly",
-                                                                    (baseDef, mod) => baseDef.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, mod.TypeSystem.Int32)));
+            (baseDef, mod) => baseDef.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, mod.TypeSystem.Int32)));
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseFieldGet)));
 
         var read = ((MethodHandler) method).Source.Body.Instructions.First(instruction => instruction.OpCode == OpCodes.Ldfld);
         var declaring = ((FieldReference) read.Operand).DeclaringType;
-
-        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
-                    "the field is read off the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
-        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
-                    "the instantiation which the read names is not the one which the chain of base types hands down.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                "the field is read off the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+                "the instantiation which the read names is not the one which the chain of base types hands down.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), null), Is.EqualTo(0));
     }
@@ -514,11 +542,12 @@ public partial class PointerTests
     {
         var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddlePropertyAssembly", (baseDef, mod) =>
         {
-            var getter = new MethodDefinition("get_Prop", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+            var getter = new MethodDefinition("get_Prop", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, mod.TypeSystem.Int32) {DeclaringType = baseDef};
             var getterIl = getter.Body.GetILProcessor();
-            getterIl.Emit(OpCodes.Ldc_I4_1); getterIl.Emit(OpCodes.Ret);
+            getterIl.Emit(OpCodes.Ldc_I4_1);
+            getterIl.Emit(OpCodes.Ret);
             baseDef.Methods.Add(getter);
-            baseDef.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, mod.TypeSystem.Int32) { GetMethod = getter });
+            baseDef.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, mod.TypeSystem.Int32) {GetMethod = getter});
         });
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
@@ -526,14 +555,15 @@ public partial class PointerTests
 
         var call = ((MethodHandler) method).Source.Body.Instructions
                                            .First(instruction => (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
-                                                                 && ((MethodReference) instruction.Operand).Name == "get_Prop");
+                                               && ((MethodReference) instruction.Operand).Name == "get_Prop");
         var declaring = ((MethodReference) call.Operand).DeclaringType;
-
-        Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
-                    "the accessor is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
-        Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
-                    "the instantiation which the call names is not the one which the chain of base types hands down.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
+                "the accessor is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+                "the instantiation which the call names is not the one which the chain of base types hands down.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), null), Is.EqualTo(1));
     }

@@ -1,5 +1,3 @@
-using System.Threading.Tasks;
-
 namespace Gneedle.Inject.Test;
 
 /// <summary>
@@ -14,7 +12,7 @@ public class ConcurrentTests
     /// The number of weavings which are asked of at the same time, which is more than the threads of a test host so that
     /// the weavings stand at the caches beside each other rather than one after another.
     /// </summary>
-    private const int Count = 4;
+    private const int COUNT = 4;
 
     [Test]
     public void The_Assemblies_Woven_At_The_Same_Time_Are_Woven_As_The_One_Woven_Alone()
@@ -26,11 +24,11 @@ public class ConcurrentTests
         var image = File.ReadAllBytes(typeof(ConcurrentTests).Assembly.Location);
 
         var alone = Weave(image);
-        var together = new byte[Count][];
+        var together = new byte[COUNT][];
 
-        Parallel.For(0, Count, index => together[index] = Weave(image));
+        Parallel.For(0, COUNT, index => together[index] = Weave(image));
 
-        for (var index = 0; index < Count; index++)
+        for (var index = 0; index < COUNT; index++)
         {
             Assert.That(together[index], Is.EqualTo(alone), $"the image of the weaving {index} is not the image of the one woven alone.");
         }
@@ -46,17 +44,19 @@ public class ConcurrentTests
         const string assemblyName = "ConcurrentImports";
         var (handler, _, module) = TestFixtures.NewHost(assemblyName);
 
-        var asked = new Type[Count * 8];
+        var asked = new Type[COUNT * 8];
         for (var index = 0; index < asked.Length; index++) asked[index] = typeof(List<int>);
 
         var answered = new CecilType[asked.Length];
         Parallel.For(0, asked.Length, index => answered[index] = handler.GetCecilType(asked[index]));
-
-        Assert.That(answered.Distinct().Count(), Is.EqualTo(1),
-            "the threads which asked for one type were answered with more than one, so each of them imported it.");
-        Assert.That(module.AssemblyReferences.Select(reference => reference.Name).Distinct().Count(),
-            Is.EqualTo(module.AssemblyReferences.Count),
-            "a reference was appended more than once, so the module names an assembly twice.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(answered.Distinct().Count(), Is.EqualTo(1),
+                "the threads which asked for one type were answered with more than one, so each of them imported it.");
+            Assert.That(module.AssemblyReferences.Select(reference => reference.Name).Distinct().Count(),
+                Is.EqualTo(module.AssemblyReferences.Count),
+                "a reference was appended more than once, so the module names an assembly twice.");
+        });
     }
 
     private static byte[] Weave(byte[] image)

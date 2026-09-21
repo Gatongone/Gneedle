@@ -8,10 +8,10 @@ namespace Gneedle.Inject.Test;
 [TestFixture]
 public class TempFilesTests
 {
-    private const string Prefix       = "gneedle-sweep-probe";
-    private const string OtherPrefix  = "gneedle-sweep-other";
-    private const string Extension    = ".dll";
-    private const string OtherSuffix  = ".pdb";
+    private const string PREFIX       = "gneedle-sweep-probe";
+    private const string OTHER_PREFIX = "gneedle-sweep-other";
+    private const string EXTENSION    = ".dll";
+    private const string OTHER_SUFFIX = ".pdb";
 
     /// <summary>
     /// The name of a file is one which no other call names, which is what keeps a run from writing over the file of
@@ -20,14 +20,16 @@ public class TempFilesTests
     [Test]
     public void NewPath_Names_A_File_Which_No_Other_Call_Names()
     {
-        var first  = TempFiles.NewPath(Prefix, Extension);
-        var second = TempFiles.NewPath(Prefix, Extension);
-
-        Assert.That(first, Is.Not.EqualTo(second));
-        Assert.That(Path.GetDirectoryName(first), Is.EqualTo(Path.GetDirectoryName(second)));
-        Assert.That(Path.GetFileName(first), Does.StartWith(Prefix).And.EndWith(Extension));
-        Assert.That(File.Exists(first), Is.False, "the name which was handed back is one of a file which is already written.");
-        Assert.That(File.Exists(second), Is.False, "the name which was handed back is one of a file which is already written.");
+        var first = TempFiles.NewPath(PREFIX, EXTENSION);
+        var second = TempFiles.NewPath(PREFIX, EXTENSION);
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Is.Not.EqualTo(second));
+            Assert.That(Path.GetDirectoryName(first), Is.EqualTo(Path.GetDirectoryName(second)));
+            Assert.That(Path.GetFileName(first), Does.StartWith(PREFIX).And.EndWith(EXTENSION));
+            Assert.That(File.Exists(first), Is.False, "the name which was handed back is one of a file which is already written.");
+            Assert.That(File.Exists(second), Is.False, "the name which was handed back is one of a file which is already written.");
+        });
     }
 
     /// <summary>
@@ -37,12 +39,14 @@ public class TempFilesTests
     [Test]
     public void NewPath_Removes_The_File_Which_A_Run_Before_It_Left()
     {
-        var left = Write(Path.GetTempPath(), Prefix, Extension);
+        var left = Write(Path.GetTempPath(), PREFIX, EXTENSION);
 
-        var path = TempFiles.NewPath(Prefix, Extension);
-
-        Assert.That(File.Exists(left), Is.False, "the file which a run before this one left was not removed.");
-        Assert.That(path, Is.Not.EqualTo(left));
+        var path = TempFiles.NewPath(PREFIX, EXTENSION);
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.Exists(left), Is.False, "the file which a run before this one left was not removed.");
+            Assert.That(path, Is.Not.EqualTo(left));
+        });
     }
 
     /// <summary>
@@ -52,15 +56,17 @@ public class TempFilesTests
     [Test]
     public void Sweep_Leaves_The_Files_Of_Another_Kind_Alone()
     {
-        var otherName      = Write(Path.GetTempPath(), OtherPrefix, Extension);
-        var otherExtension = Write(Path.GetTempPath(), Prefix, OtherSuffix);
+        var otherName = Write(Path.GetTempPath(), OTHER_PREFIX, EXTENSION);
+        var otherExtension = Write(Path.GetTempPath(), PREFIX, OTHER_SUFFIX);
 
         try
         {
-            TempFiles.Sweep(Prefix, Extension);
-
-            Assert.That(File.Exists(otherName), Is.True, "a file of another name was removed by the sweep.");
-            Assert.That(File.Exists(otherExtension), Is.True, "a file of another extension was removed by the sweep.");
+            TempFiles.Sweep(PREFIX, EXTENSION);
+            Assert.Multiple(() =>
+            {
+                Assert.That(File.Exists(otherName), Is.True, "a file of another name was removed by the sweep.");
+                Assert.That(File.Exists(otherExtension), Is.True, "a file of another extension was removed by the sweep.");
+            });
         }
         finally
         {
@@ -76,12 +82,12 @@ public class TempFilesTests
     [Test]
     public void Sweep_Leaves_A_File_Which_Is_Held_Where_It_Is()
     {
-        var path = Write(Path.GetTempPath(), Prefix, Extension);
+        var path = Write(Path.GetTempPath(), PREFIX, EXTENSION);
 
         using (var held = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
-            Assert.DoesNotThrow(() => TempFiles.Sweep(Prefix, Extension),
-                                "the sweep answered a file which a run holds with a report rather than with the file that it is.");
+            Assert.DoesNotThrow(() => TempFiles.Sweep(PREFIX, EXTENSION),
+                "the sweep answered a file which a run holds with a report rather than with the file that it is.");
 
             // The file is read and written by the run which holds it, which a sweep of another run is not to disturb.
             held.WriteByte(0);

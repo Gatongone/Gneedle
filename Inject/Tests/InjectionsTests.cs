@@ -1,7 +1,6 @@
 using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -9,7 +8,7 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// An attribute which marks the type it is put on as obsolete, so that the injection is visible in the image which was
@@ -20,6 +19,7 @@ public class MarkTypeAttribute : Attribute, ITypeInjector
 {
     /// <inheritdoc/>
     public int Priority => 0;
+
     /// <inheritdoc/>
     public void Inject(Type type, ITypeHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "marked");
 }
@@ -57,15 +57,16 @@ public sealed class ThrowTypeAttribute : Attribute, ITypeInjector
 {
     /// <inheritdoc/>
     public int Priority => 0;
+
     /// <summary>
     /// The environment variable which names the type the injector throws for.
     /// </summary>
-    public const string TypeVariable = "GneedleThrowType";
+    public const string TYPE_VARIABLE = "GneedleThrowType";
 
     /// <inheritdoc/>
     public void Inject(Type type, ITypeHandler handler)
     {
-        if (Environment.GetEnvironmentVariable(TypeVariable) != type.FullName) return;
+        if (Environment.GetEnvironmentVariable(TYPE_VARIABLE) != type.FullName) return;
         throw new InvalidOperationException($"The injector of '{type.FullName}' cannot weave it.");
     }
 }
@@ -86,6 +87,7 @@ public sealed class MarkClassAttribute : Attribute, IClassInjector
 {
     /// <inheritdoc/>
     public int Priority => 0;
+
     /// <inheritdoc/>
     public void Inject(Type type, IClassHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "class");
 }
@@ -96,6 +98,7 @@ public sealed class MarkStructAttribute : Attribute, IStructInjector
 {
     /// <inheritdoc/>
     public int Priority => 0;
+
     /// <inheritdoc/>
     public void Inject(Type type, IStructHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "struct");
 }
@@ -106,6 +109,7 @@ public sealed class MarkEnumAttribute : Attribute, IEnumInjector
 {
     /// <inheritdoc/>
     public int Priority => 0;
+
     /// <inheritdoc/>
     public void Inject(Type type, IEnumHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "enum");
 }
@@ -162,6 +166,7 @@ public sealed class RunBodyAttribute : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
     public int Priority => 0;
+
     /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler)
         => handler.SetBody(typeof(OverloadBodies).GetMethod(method.GetParameters().Length == 0 ? nameof(OverloadBodies.None) : nameof(OverloadBodies.One))!);
@@ -196,6 +201,7 @@ public sealed class RunBodyThroughAnInterfaceAttribute : Attribute, IRunBodyInje
 {
     /// <inheritdoc/>
     public int Priority => 0;
+
     /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler) => handler.SetBody(typeof(OverloadBodies).GetMethod(nameof(OverloadBodies.None))!);
 }
@@ -223,12 +229,12 @@ public static class InjectorOrder
     /// <summary>
     /// The environment variable which names the type the injectors below run for.
     /// </summary>
-    public const string TypeVariable = "GneedleInjectorOrderType";
+    public const string TYPE_VARIABLE = "GneedleInjectorOrderType";
 
     /// <summary>
     /// Whether the injectors below run for the type which declares the member they were put on.
     /// </summary>
-    public static bool RunsFor(MethodBase member) => Environment.GetEnvironmentVariable(TypeVariable) == member.DeclaringType!.FullName;
+    public static bool RunsFor(MethodBase member) => Environment.GetEnvironmentVariable(TYPE_VARIABLE) == member.DeclaringType!.FullName;
 }
 
 /// <summary>
@@ -336,8 +342,7 @@ public class AroundThenReplaceFixture
 [TestFixture]
 public class InjectionsTests
 {
-
-    private const string MarkedType = "Gneedle.Inject.Test.MarkedFixture";
+    private const string MARKED_TYPE = "Gneedle.Inject.Test.MarkedFixture";
 
     /// <summary>
     /// The name of the attribute which the injector of <see cref="MarkedFixture"/> is read from.<para/>
@@ -345,51 +350,51 @@ public class InjectionsTests
     /// the type in the assembly which is woven: a type which the code names cannot be removed without taking the name
     /// with it, so an assertion which named it would hold it in place and then fail on its own doing.
     /// </summary>
-    private const string MarkerAttributeName = "Gneedle.Inject.Test.MarkTypeAttribute";
+    private const string MARKER_ATTRIBUTE_NAME = "Gneedle.Inject.Test.MarkTypeAttribute";
 
     /// <summary>
     /// The name of the attribute which derives from the one above, which is written out for the same reason as the name
     /// above.
     /// </summary>
-    private const string DerivedMarkerAttributeName = "Gneedle.Inject.Test.DerivedMarkAttribute";
+    private const string DERIVED_MARKER_ATTRIBUTE_NAME = "Gneedle.Inject.Test.DerivedMarkAttribute";
 
     /// <summary>
     /// The name of the type which carries the derived marker above, which is written out for the same reason as the
     /// names above.
     /// </summary>
-    private const string DerivedMarkedType = "Gneedle.Inject.Test.DerivedMarkedFixture";
+    private const string DERIVED_MARKED_TYPE = "Gneedle.Inject.Test.DerivedMarkedFixture";
 
     /// <summary>
     /// The names of the interface which reaches the weaver and of the type whose member carries the attribute which
     /// implements it, which are written out for the same reason as the names above.
     /// </summary>
-    private const string InterfaceInjectorName = "Gneedle.Inject.Test.IRunBodyInjector";
+    private const string INTERFACE_INJECTOR_NAME = "Gneedle.Inject.Test.IRunBodyInjector";
 
-    /// <inheritdoc cref="InterfaceInjectorName"/>
-    private const string ThroughAnInterfaceType = "Gneedle.Inject.Test.ThroughAnInterfaceFixture";
+    /// <inheritdoc cref="INTERFACE_INJECTOR_NAME"/>
+    private const string THROUGH_AN_INTERFACE_TYPE = "Gneedle.Inject.Test.ThroughAnInterfaceFixture";
 
     /// <summary>
     /// The name of the type whose injector throws, which is written out for the same reason as the name above.
     /// </summary>
-    private const string ThrowingType = "Gneedle.Inject.Test.ThrowingFixture";
+    private const string THROWING_TYPE = "Gneedle.Inject.Test.ThrowingFixture";
 
     /// <summary>
     /// The name of the type which declares the two members of one name, which is written out for the same reason as the
     /// names above.
     /// </summary>
-    private const string OverloadedType = "Gneedle.Inject.Test.OverloadedFixture";
+    private const string OVERLOADED_TYPE = "Gneedle.Inject.Test.OverloadedFixture";
 
     /// <summary>
     /// The names of the types which carry the markers of their kind, which are written out for the same reason as the
     /// names above.
     /// </summary>
-    private const string MarkedClassType = "Gneedle.Inject.Test.MarkedClassFixture";
+    private const string MARKED_CLASS_TYPE = "Gneedle.Inject.Test.MarkedClassFixture";
 
-    /// <inheritdoc cref="MarkedClassType"/>
-    private const string MarkedStructType = "Gneedle.Inject.Test.MarkedStructFixture";
+    /// <inheritdoc cref="MARKED_CLASS_TYPE"/>
+    private const string MARKED_STRUCT_TYPE = "Gneedle.Inject.Test.MarkedStructFixture";
 
-    /// <inheritdoc cref="MarkedClassType"/>
-    private const string MarkedEnumType = "Gneedle.Inject.Test.MarkedEnumFixture";
+    /// <inheritdoc cref="MARKED_CLASS_TYPE"/>
+    private const string MARKED_ENUM_TYPE = "Gneedle.Inject.Test.MarkedEnumFixture";
 
     /// <summary>
     /// The image of the assembly which holds these tests, which holds the fixtures as well.
@@ -408,22 +413,25 @@ public class InjectionsTests
 
         Assert.That(changed, Is.True);
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
-        var type = read.MainModule.GetType(MarkedType)!;
+        var type = read.MainModule.GetType(MARKED_TYPE)!;
+        Assert.Multiple(() =>
+        {
 
-        // The injector ran, and what it wrote is on the type which the attribute named.
-        Assert.That(type.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == typeof(ObsoleteAttribute).FullName), Is.True,
-                    "the injector of the type did not run.");
+            // The injector ran, and what it wrote is on the type which the attribute named.
+            Assert.That(type.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == typeof(ObsoleteAttribute).FullName), Is.True,
+                "the injector of the type did not run.");
 
-        // The attribute has done its work by now, so it is gone from the member and from the assembly which declares it.
-        Assert.That(type.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == MarkerAttributeName), Is.False,
-                    "the mark was left on the member.");
+            // The attribute has done its work by now, so it is gone from the member and from the assembly which declares it.
+            Assert.That(type.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == MARKER_ATTRIBUTE_NAME), Is.False,
+                "the mark was left on the member.");
 
-        // An assembly which names itself cannot be read back, so the assembly which was produced names no assembly of its
-        // own name, the one it is written to included.
-        Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == read.Name.Name), Is.False,
-                    "the woven assembly refers to itself.");
-        Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == MarkerAttributeName), Is.False,
-                    "the attribute which the injector was read from was left in the assembly.");
+            // An assembly which names itself cannot be read back, so the assembly which was produced names no assembly of its
+            // own name, the one it is written to included.
+            Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == read.Name.Name), Is.False,
+                "the woven assembly refers to itself.");
+            Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == MARKER_ATTRIBUTE_NAME), Is.False,
+                "the attribute which the injector was read from was left in the assembly.");
+        });
     }
 
     [Test]
@@ -443,7 +451,7 @@ public class InjectionsTests
         Assert.That(changed, Is.True);
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
         Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "System.Private.CoreLib"), Is.False,
-                    "the image names the corlib of the runtime which wove it.");
+            "the image names the corlib of the runtime which wove it.");
     }
 
     [Test]
@@ -460,12 +468,14 @@ public class InjectionsTests
 
         Assert.That(changed, Is.True);
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
-        AssertMarked(read, DerivedMarkedType, "type");
-
-        Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == DerivedMarkerAttributeName), Is.False,
-                    "the attribute which the injector was read from was left in the assembly.");
-        Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == MarkerAttributeName), Is.False,
-                    "the attribute which the derived one derives from was left in the assembly.");
+        AssertMarked(read, DERIVED_MARKED_TYPE, "type");
+        Assert.Multiple(() =>
+        {
+            Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == DERIVED_MARKER_ATTRIBUTE_NAME), Is.False,
+                "the attribute which the injector was read from was left in the assembly.");
+            Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == MARKER_ATTRIBUTE_NAME), Is.False,
+                "the attribute which the derived one derives from was left in the assembly.");
+        });
     }
 
     [Test]
@@ -480,12 +490,14 @@ public class InjectionsTests
 
         Assert.That(changed, Is.True);
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
-        var run = read.MainModule.GetType(ThroughAnInterfaceType)!.Methods.Single(method => method.Name == "Run");
-
-        Assert.That(run.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] {OpCodes.Ldc_I4_1, OpCodes.Ret}),
-                    "the injector which an interface of the weaver was implemented for did not run.");
-        Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == InterfaceInjectorName), Is.False,
-                    "the interface which reaches the weaver was left in the assembly.");
+        var run = read.MainModule.GetType(THROUGH_AN_INTERFACE_TYPE)!.Methods.Single(method => method.Name == "Run");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] { OpCodes.Ldc_I4_1, OpCodes.Ret }),
+                "the injector which an interface of the weaver was implemented for did not run.");
+            Assert.That(read.MainModule.Types.Any(candidate => candidate.FullName == INTERFACE_INJECTOR_NAME), Is.False,
+                "the interface which reaches the weaver was left in the assembly.");
+        });
     }
 
     [Test]
@@ -508,14 +520,17 @@ public class InjectionsTests
 
         Assert.That(changed, Is.True, "the injector which another assembly declares was not applied.");
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
-        var woven = read.MainModule.GetType($"{Ns}.Host")!.Methods.Single(method => method.Name == "Run");
+        var woven = read.MainModule.GetType($"{NS}.Host")!.Methods.Single(method => method.Name == "Run");
+        Assert.Multiple(() =>
+        {
 
-        // The body which the injector names is declared by that assembly as well, so a member which was woven is one
-        // whose weaving read the injector and the body of its template both across the boundary of the assemblies.
-        Assert.That(woven.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] {OpCodes.Ldc_I4_1, OpCodes.Ret}),
-                    "the body which the injector of the other assembly names was not woven.");
-        Assert.That(woven.CustomAttributes.Any(attribute => attribute.AttributeType.Name == nameof(RunBodyAttribute)), Is.False,
-                    "the attribute which the injector was read from was left on the member.");
+            // The body which the injector names is declared by that assembly as well, so a member which was woven is one
+            // whose weaving read the injector and the body of its template both across the boundary of the assemblies.
+            Assert.That(woven.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] { OpCodes.Ldc_I4_1, OpCodes.Ret }),
+                "the body which the injector of the other assembly names was not woven.");
+            Assert.That(woven.CustomAttributes.Any(attribute => attribute.AttributeType.Name == nameof(RunBodyAttribute)), Is.False,
+                "the attribute which the injector was read from was left on the member.");
+        });
     }
 
     [Test]
@@ -537,7 +552,7 @@ public class InjectionsTests
         host.Source.Interfaces.Add(new InterfaceImplementation(new TypeReference("Gneedle.Inject.Test", nameof(IRunBodyInjector), module, foreign)));
 
         Assert.That(InjectorInterfaces.IsAnInjector(host.Source, InjectorInterfaces.AllNames), Is.False,
-                    "a base type or an interface of another assembly was followed.");
+            "a base type or an interface of another assembly was followed.");
 
         // The same name is read once the module declares it, which is what tells the answer above apart from a reading
         // which follows no base type at all.
@@ -547,7 +562,7 @@ public class InjectionsTests
         host.Source.BaseType = new TypeReference("Gneedle.Inject.Test", declared.Name, module, module);
 
         Assert.That(InjectorInterfaces.IsAnInjector(host.Source, InjectorInterfaces.AllNames), Is.True,
-                    "the base type of a type which the module declares was not followed.");
+            "the base type of a type which the module declares was not followed.");
     }
 
     [Test]
@@ -559,26 +574,28 @@ public class InjectionsTests
         var (_, result) = Injections.Apply(assembly, image, removesTheWeaver: false);
 
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
-        var type = read.MainModule.GetType(MarkedType)!;
-        Assert.That(type.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == MarkerAttributeName), Is.True,
-                    "the mark was taken off although the weaver was asked for.");
+        var type = read.MainModule.GetType(MARKED_TYPE)!;
+        Assert.That(type.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == MARKER_ATTRIBUTE_NAME), Is.True,
+            "the mark was taken off although the weaver was asked for.");
     }
 
     [Test]
     public void Apply_Changes_Nothing_When_The_Assembly_Holds_No_Injector()
     {
         var built = Assembly.Create("UninjectedAssembly");
-        built.Handler.AddClass("Host", Ns, ClassFlags.Public);
+        built.Handler.AddClass("Host", NS, ClassFlags.Public);
         using var written = new MemoryStream();
         built.SaveTo(written);
         var image = written.ToArray();
 
         var reported = new List<string>();
         var (changed, result) = Injections.Apply(AssemblyLoader.LoadFromBytes(image), image, reportError: reported.Add);
-
-        Assert.That(changed, Is.False);
-        Assert.That(reported, Is.Empty);
-        Assert.That(result, Is.SameAs(image), "an image which was not changed is not the one which was given.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(changed, Is.False);
+            Assert.That(reported, Is.Empty);
+            Assert.That(result, Is.SameAs(image), "an image which was not changed is not the one which was given.");
+        });
     }
 
     // The variable of the process is read by the injector of every type which is woven while it is set, so this test
@@ -593,7 +610,7 @@ public class InjectionsTests
         var image = TestAssemblyImage();
         var assembly = AssemblyLoader.LoadFromBytes(image);
         var reported = new List<string>();
-        Environment.SetEnvironmentVariable(ThrowTypeAttribute.TypeVariable, ThrowingType);
+        Environment.SetEnvironmentVariable(ThrowTypeAttribute.TYPE_VARIABLE, THROWING_TYPE);
 
         try
         {
@@ -601,13 +618,13 @@ public class InjectionsTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable(ThrowTypeAttribute.TypeVariable, null);
+            Environment.SetEnvironmentVariable(ThrowTypeAttribute.TYPE_VARIABLE, null);
         }
 
-        var report = reported.Single(message => message.Contains(ThrowingType));
+        var report = reported.Single(message => message.Contains(THROWING_TYPE));
         Assert.That(report, Does.Contain(nameof(InvalidOperationException)), $"the report does not name the kind of the fault: {report}");
         Assert.That(report, Does.Contain($"{nameof(ThrowTypeAttribute)}.{nameof(ThrowTypeAttribute.Inject)}"),
-                    $"the report does not name the frame which the fault stands at: {report}");
+            $"the report does not name the frame which the fault stands at: {report}");
     }
 
     // The variable of the process is read by the injector of every type which is woven while it is set, so this test
@@ -623,19 +640,21 @@ public class InjectionsTests
         var image = TestAssemblyImage();
         var assembly = AssemblyLoader.LoadFromBytes(image);
         var reported = new List<string>();
-        Environment.SetEnvironmentVariable(ThrowTypeAttribute.TypeVariable, ThrowingType);
+        Environment.SetEnvironmentVariable(ThrowTypeAttribute.TYPE_VARIABLE, THROWING_TYPE);
 
         try
         {
             var (changed, result) = Injections.Apply(assembly, image, reportError: reported.Add);
-
-            Assert.That(reported.Any(message => message.Contains(ThrowingType)), Is.True, string.Join(Environment.NewLine, reported));
-            Assert.That(changed, Is.False, "a run which reported a type answered with the image it wove.");
-            Assert.That(result, Is.SameAs(image), "the image of a run which reported a type is not the one which was given.");
+            Assert.Multiple(() =>
+            {
+                Assert.That(reported.Any(message => message.Contains(THROWING_TYPE)), Is.True, string.Join(Environment.NewLine, reported));
+                Assert.That(changed, Is.False, "a run which reported a type answered with the image it wove.");
+                Assert.That(result, Is.SameAs(image), "the image of a run which reported a type is not the one which was given.");
+            });
         }
         finally
         {
-            Environment.SetEnvironmentVariable(ThrowTypeAttribute.TypeVariable, null);
+            Environment.SetEnvironmentVariable(ThrowTypeAttribute.TYPE_VARIABLE, null);
         }
 
         // The same assembly is woven by a run which reports nothing, which is what tells the answer above apart from an
@@ -649,13 +668,13 @@ public class InjectionsTests
     /// The names of the types whose members carry two injectors, which are written out rather than taken from the types
     /// for the reason which the names above are written out for.
     /// </summary>
-    private const string TwoAroundType = "Gneedle.Inject.Test.TwoAroundFixture";
+    private const string TWO_AROUND_TYPE = "Gneedle.Inject.Test.TwoAroundFixture";
 
-    /// <inheritdoc cref="TwoAroundType"/>
-    private const string ReplaceThenAroundType = "Gneedle.Inject.Test.ReplaceThenAroundFixture";
+    /// <inheritdoc cref="TWO_AROUND_TYPE"/>
+    private const string REPLACE_THEN_AROUND_TYPE = "Gneedle.Inject.Test.ReplaceThenAroundFixture";
 
-    /// <inheritdoc cref="TwoAroundType"/>
-    private const string AroundThenReplaceType = "Gneedle.Inject.Test.AroundThenReplaceFixture";
+    /// <inheritdoc cref="TWO_AROUND_TYPE"/>
+    private const string AROUND_THEN_REPLACE_TYPE = "Gneedle.Inject.Test.AroundThenReplaceFixture";
 
     /// <summary>
     /// Weave the assembly of these tests with the injectors of the two turned on for the one type which is named, and
@@ -666,7 +685,7 @@ public class InjectionsTests
         var image = TestAssemblyImage();
         var assembly = AssemblyLoader.LoadFromBytes(image);
         var reported = new List<string>();
-        Environment.SetEnvironmentVariable(InjectorOrder.TypeVariable, typeName);
+        Environment.SetEnvironmentVariable(InjectorOrder.TYPE_VARIABLE, typeName);
 
         try
         {
@@ -675,7 +694,7 @@ public class InjectionsTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable(InjectorOrder.TypeVariable, null);
+            Environment.SetEnvironmentVariable(InjectorOrder.TYPE_VARIABLE, null);
         }
     }
 
@@ -707,15 +726,18 @@ public class InjectionsTests
     {
         // A member is woven around once: the second weave around it has nowhere to put the body which the first one
         // took over, so it is refused rather than woven over the top of it.
-        var (changed, result, given, reported) = WeaveWithTheInjectorsOf(TwoAroundType);
+        var (changed, result, given, reported) = WeaveWithTheInjectorsOf(TWO_AROUND_TYPE);
 
         Assert.That(reported, Is.Not.Empty, "the second weave around the member was not reported.");
-        Assert.That(reported.Single(), Does.Contain("already woven around"), string.Join(Environment.NewLine, reported));
+        Assert.Multiple(() =>
+        {
+            Assert.That(reported.Single(), Does.Contain("already woven around"), string.Join(Environment.NewLine, reported));
 
-        // The refusal leaves the member of that type woven in part, which is what a build reports and discards: no image
-        // at all is handed back of the run.
-        Assert.That(changed, Is.False, "a run which reported a member answered with the image it wove.");
-        Assert.That(result, Is.SameAs(given), "the image of a run which reported is not the one which was given.");
+            // The refusal leaves the member of that type woven in part, which is what a build reports and discards: no image
+            // at all is handed back of the run.
+            Assert.That(changed, Is.False, "a run which reported a member answered with the image it wove.");
+            Assert.That(result, Is.SameAs(given), "the image of a run which reported is not the one which was given.");
+        });
     }
 
     [Test]
@@ -724,12 +746,14 @@ public class InjectionsTests
     {
         // The replacement writes the body the member holds, and the weave around it takes that body over: what the
         // template proceeds into is the body which the injector before it wrote.
-        var (changed, result, _, reported) = WeaveWithTheInjectorsOf(ReplaceThenAroundType);
-
-        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
-        Assert.That(changed, Is.True, "the member was woven by nothing.");
-        Assert.That(DeclaresTheProceedMethod(result, ReplaceThenAroundType), Is.True, "no body was taken over to proceed into.");
-        Assert.That(CallsTheProceedMethod(result, ReplaceThenAroundType), Is.True, "the member does not proceed into the body it was given.");
+        var (changed, result, _, reported) = WeaveWithTheInjectorsOf(REPLACE_THEN_AROUND_TYPE);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+            Assert.That(changed, Is.True, "the member was woven by nothing.");
+            Assert.That(DeclaresTheProceedMethod(result, REPLACE_THEN_AROUND_TYPE), Is.True, "no body was taken over to proceed into.");
+            Assert.That(CallsTheProceedMethod(result, REPLACE_THEN_AROUND_TYPE), Is.True, "the member does not proceed into the body it was given.");
+        });
     }
 
     [Test]
@@ -739,16 +763,18 @@ public class InjectionsTests
         // The replacement writes the body of the member and says nothing of the body it held, so the weave around the
         // member is gone by the time the replacement is written. What is left of it is the method which holds the body
         // which was taken over, which nothing calls by then.
-        var (changed, result, _, reported) = WeaveWithTheInjectorsOf(AroundThenReplaceType);
+        var (changed, result, _, reported) = WeaveWithTheInjectorsOf(AROUND_THEN_REPLACE_TYPE);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+            Assert.That(changed, Is.True, "the member was woven by nothing.");
+            Assert.That(CallsTheProceedMethod(result, AROUND_THEN_REPLACE_TYPE), Is.False, "the member proceeds into a body which the replacement gave up.");
 
-        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
-        Assert.That(changed, Is.True, "the member was woven by nothing.");
-        Assert.That(CallsTheProceedMethod(result, AroundThenReplaceType), Is.False, "the member proceeds into a body which the replacement gave up.");
-
-        // The method which the weave around generated is declared by the type and is added to it before the replacement
-        // runs, so the replacement leaves it behind: nothing calls it by then, and nothing takes it back out.
-        Assert.That(DeclaresTheProceedMethod(result, AroundThenReplaceType), Is.True,
-                    "the method which the weave around generated was not left in the type.");
+            // The method which the weave around generated is declared by the type and is added to it before the replacement
+            // runs, so the replacement leaves it behind: nothing calls it by then, and nothing takes it back out.
+            Assert.That(DeclaresTheProceedMethod(result, AROUND_THEN_REPLACE_TYPE), Is.True,
+                "the method which the weave around generated was not left in the type.");
+        });
     }
 
     #endregion
@@ -767,15 +793,15 @@ public class InjectionsTests
 
         Assert.That(changed, Is.True);
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
-        var type = read.MainModule.GetType(OverloadedType)!;
+        var type = read.MainModule.GetType(OVERLOADED_TYPE)!;
 
         var none = type.Methods.Single(method => method.Name == "Run" && method.Parameters.Count == 0);
-        Assert.That(none.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] {OpCodes.Ldc_I4_1, OpCodes.Ret}),
-                    "the member which takes no parameter was woven into other than the body which its injector names.");
+        Assert.That(none.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] { OpCodes.Ldc_I4_1, OpCodes.Ret }),
+            "the member which takes no parameter was woven into other than the body which its injector names.");
 
         var one = type.Methods.Single(method => method.Name == "Run" && method.Parameters.Count == 1);
-        Assert.That(one.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] {OpCodes.Ldc_I4_2, OpCodes.Ret}),
-                    "the member which takes a parameter was woven into other than the body which its injector names.");
+        Assert.That(one.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] { OpCodes.Ldc_I4_2, OpCodes.Ret }),
+            "the member which takes a parameter was woven into other than the body which its injector names.");
     }
 
     [Test]
@@ -786,15 +812,17 @@ public class InjectionsTests
         // for a type of every kind there is.
         using var stream = new MemoryStream(TestAssemblyImage());
         using var target = Assembly.Read(stream);
-        var handler = (AssemblyHandler) target.Handler;
+        var handler = (AssemblyHandler)target.Handler;
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.GetType(typeof(MarkedClassFixture)), Is.InstanceOf<IClassHandler>(), "a class is not answered with the handler of a class.");
+            Assert.That(handler.GetType(typeof(MarkedStructFixture)), Is.InstanceOf<IStructHandler>(), "a struct is not answered with the handler of a struct.");
+            Assert.That(handler.GetType(typeof(MarkedEnumFixture)), Is.InstanceOf<IEnumHandler>(), "an enum is not answered with the handler of an enum.");
 
-        Assert.That(handler.GetType(typeof(MarkedClassFixture)), Is.InstanceOf<IClassHandler>(), "a class is not answered with the handler of a class.");
-        Assert.That(handler.GetType(typeof(MarkedStructFixture)), Is.InstanceOf<IStructHandler>(), "a struct is not answered with the handler of a struct.");
-        Assert.That(handler.GetType(typeof(MarkedEnumFixture)), Is.InstanceOf<IEnumHandler>(), "an enum is not answered with the handler of an enum.");
-
-        // An interface is of none of those kinds, so the handler of it names none either: an injector which names a
-        // kind of type is refused for it rather than applied to it as the kind it is nearest to.
-        Assert.That(handler.GetType(typeof(IDisposable)), Is.Not.InstanceOf<IClassHandler>(), "an interface is answered with the handler of a class.");
+            // An interface is of none of those kinds, so the handler of it names none either: an injector which names a
+            // kind of type is refused for it rather than applied to it as the kind it is nearest to.
+            Assert.That(handler.GetType(typeof(IDisposable)), Is.Not.InstanceOf<IClassHandler>(), "an interface is answered with the handler of a class.");
+        });
         Assert.That(handler.GetType(typeof(IDisposable)), Is.Not.InstanceOf<IStructHandler>(), "an interface is answered with the handler of a struct.");
     }
 
@@ -808,9 +836,9 @@ public class InjectionsTests
 
         Assert.That(changed, Is.True, "the assembly of this test is woven by nothing.");
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
-        AssertMarked(read, MarkedClassType, "class");
-        AssertMarked(read, MarkedStructType, "struct");
-        AssertMarked(read, MarkedEnumType, "enum");
+        AssertMarked(read, MARKED_CLASS_TYPE, "class");
+        AssertMarked(read, MARKED_STRUCT_TYPE, "struct");
+        AssertMarked(read, MARKED_ENUM_TYPE, "enum");
     }
 
     /// <summary>
@@ -824,7 +852,7 @@ public class InjectionsTests
     {
         var type = read.MainModule.GetType(typeName)!;
         Assert.That(type.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == typeof(ObsoleteAttribute).FullName), Is.True,
-                    $"the injector which names a {kind} did not run for the {kind} it was put on.");
+            $"the injector which names a {kind} did not run for the {kind} it was put on.");
     }
 
     #endregion
@@ -842,17 +870,20 @@ public class InjectionsTests
         var image = TestAssemblyImage();
         using var stream = new MemoryStream(image);
         using var target = Assembly.Read(stream);
-        var host = (TypeHandler) ((AssemblyHandler) target.Handler).GetType(typeof(OverloadedFixture));
-        var run = (MethodHandler) host.GetMethodBySignature(nameof(OverloadedFixture.Run), [])!;
+        var host = (TypeHandler)((AssemblyHandler)target.Handler).GetType(typeof(OverloadedFixture));
+        var run = (MethodHandler)host.GetMethodBySignature(nameof(OverloadedFixture.Run), [])!;
 
         run.SetBody(typeof(OverloadBodies).GetMethod(nameof(OverloadBodies.None))!);
+        Assert.Multiple(() =>
+        {
 
-        // The template was read, which is what tells an assembly which was not woven at all from one which was woven
-        // without leaving the name of itself behind.
-        Assert.That(run.Source.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] {OpCodes.Ldc_I4_1, OpCodes.Ret}),
-                    "the template of the assembly itself was not woven.");
-        Assert.That(target.Source.MainModule.AssemblyReferences.Any(reference => reference.Name == target.Source.Name.Name), Is.False,
-                    "the woven assembly refers to itself.");
+            // The template was read, which is what tells an assembly which was not woven at all from one which was woven
+            // without leaving the name of itself behind.
+            Assert.That(run.Source.Body.Instructions.Select(instruction => instruction.OpCode), Is.EqualTo(new[] { OpCodes.Ldc_I4_1, OpCodes.Ret }),
+                "the template of the assembly itself was not woven.");
+            Assert.That(target.Source.MainModule.AssemblyReferences.Any(reference => reference.Name == target.Source.Name.Name), Is.False,
+                "the woven assembly refers to itself.");
+        });
     }
 
     [Test]
@@ -865,19 +896,19 @@ public class InjectionsTests
         var image = TestAssemblyImage();
         using var stream = new MemoryStream(image);
         using var target = Assembly.Read(stream);
-        var handler = (AssemblyHandler) target.Handler;
+        var handler = (AssemblyHandler)target.Handler;
         var first = SwitchHost(handler, "SwitchHostFirst");
         var second = SwitchHost(handler, "SwitchHostSecond");
         var template = typeof(PointerTests.ThisMemberTemplates).GetMethod(nameof(PointerTests.ThisMemberTemplates.ReadAFieldPerCase))!;
 
         var firstMethod = first.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         firstMethod.SetBody(template);
-        var firstBody = ((MethodHandler) firstMethod).Source.Body;
+        var firstBody = ((MethodHandler)firstMethod).Source.Body;
 
         var secondMethod = second.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         Assert.DoesNotThrow(() => secondMethod.SetBody(template),
-                            "the second weave of a template of the assembly itself was refused rather than carried.");
-        var secondBody = ((MethodHandler) secondMethod).Source.Body;
+            "the second weave of a template of the assembly itself was refused rather than carried.");
+        var secondBody = ((MethodHandler)secondMethod).Source.Body;
 
         AssertTableOf(firstBody);
         AssertTableOf(secondBody);
@@ -893,7 +924,7 @@ public class InjectionsTests
 
         Assert.That(table, Is.Not.Empty, "the switch table of the template was not written.");
         Assert.That(table.All(body.Instructions.Contains), Is.True,
-                    "an entry of the switch table named an instruction which the body does not hold.");
+            "an entry of the switch table named an instruction which the body does not hold.");
     }
 
     /// <summary>
@@ -903,7 +934,7 @@ public class InjectionsTests
     /// <param name="name">The name of the class, which a test runs one of its own so that the two weaves are told apart.</param>
     private static TypeHandler SwitchHost(AssemblyHandler handler, string name)
     {
-        var host = (TypeHandler) handler.AddClass(name, Ns, ClassFlags.Public).GetHandler();
+        var host = (TypeHandler)handler.AddClass(name, NS, ClassFlags.Public).GetHandler();
         host.Source.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
         host.Source.Fields.Add(new FieldDefinition("Other", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
         return host;
@@ -921,10 +952,10 @@ public class InjectionsTests
 
         var assembly = resolver.Resolve(new AssemblyNameReference(name.Name!, name.Version!));
         var template = assembly.MainModule.GetType(typeof(OverloadBodies).FullName!)!
-                                .Methods.Single(method => method.Name == nameof(OverloadBodies.None));
+                               .Methods.Single(method => method.Name == nameof(OverloadBodies.None));
 
         Assert.That(template.Body.Instructions.Select(instruction => instruction.OpCode), Does.Contain(OpCodes.Ldc_I4_1),
-                    "the body of a method of an assembly which is loaded in the process was not read.");
+            "the body of a method of an assembly which is loaded in the process was not read.");
     }
 
     [Test]
@@ -941,7 +972,7 @@ public class InjectionsTests
         try
         {
             var beside = Assembly.Create("BesideOfTheImage");
-            ((AssemblyHandler) beside.Handler).AddClass("Marker", Ns, ClassFlags.Public).GetHandler();
+            ((AssemblyHandler)beside.Handler).AddClass("Marker", NS, ClassFlags.Public).GetHandler();
             using (var file = File.Create(Path.Combine(directory, "BesideOfTheImage.dll"))) beside.SaveTo(file);
 
             var name = new AssemblyNameReference("BesideOfTheImage", new Version(1, 0));
@@ -949,7 +980,7 @@ public class InjectionsTests
             // The resolver which finds nothing stands for the process of a build, which holds neither a folder of the
             // project which was built nor an assembly of it: what is read here is read from the folder which is given.
             Assert.Throws<AssemblyResolutionException>(() => new CachedAssemblyResolver(new ResolverWhichFindsNothing()).Resolve(name),
-                                                       "an assembly which lies nowhere was resolved.");
+                "an assembly which lies nowhere was resolved.");
 
             // The image names the assembly of the other project, which is what the project that carries the attributes
             // of another one is: the weaving reads them through that name.
@@ -962,8 +993,8 @@ public class InjectionsTests
             using var assembly = Assembly.Read(stream, AssemblySymbol.None, directory);
             var resolved = assembly.Source.MainModule.AssemblyResolver.Resolve(name);
 
-            Assert.That(resolved.MainModule.GetType($"{Ns}.Marker"), Is.Not.Null,
-                        "the assembly which the image refers to was not read from the directory which the image lies in.");
+            Assert.That(resolved.MainModule.GetType($"{NS}.Marker"), Is.Not.Null,
+                "the assembly which the image refers to was not read from the directory which the image lies in.");
         }
         finally
         {
@@ -998,10 +1029,10 @@ public class InjectionsTests
     /// </summary>
     private static TypeHandler AddInjector(Assembly assembly)
     {
-        var handler = (AssemblyHandler) assembly.Handler;
-        var injector = (TypeHandler) handler.AddClass("Injector", Ns, ClassFlags.Public)
-                                          .WithInterface(typeof(IMethodInjector).ToGneedleType())
-                                          .GetHandler();
+        var handler = (AssemblyHandler)assembly.Handler;
+        var injector = (TypeHandler)handler.AddClass("Injector", NS, ClassFlags.Public)
+                                            .WithInterface(typeof(IMethodInjector).ToGneedleType())
+                                            .GetHandler();
 
         var module = assembly.Source.MainModule;
         var method = new MethodDefinition("Inject", MethodAttributes.Public, module.TypeSystem.Void) { DeclaringType = injector.Source };
@@ -1030,13 +1061,16 @@ public class InjectionsTests
     {
         var assembly = Assembly.Create("TraceOnlyInjectorAssembly");
         AddInjector(assembly);
+        Assert.Multiple(() =>
+        {
 
-        // The interface and the parameter of the method are what name the weaver, and the class is what holds them.
-        Assert.That(NamesTheWeaver(assembly), Is.True);
+            // The interface and the parameter of the method are what name the weaver, and the class is what holds them.
+            Assert.That(NamesTheWeaver(assembly), Is.True);
 
-        Assert.That(((AssemblyHandler) assembly.Handler).RemoveTheWeaver(), Is.True);
+            Assert.That(((AssemblyHandler) assembly.Handler).RemoveTheWeaver(), Is.True);
 
-        Assert.That(assembly.Source.MainModule.Types.Any(type => type.Name == "Injector"), Is.False);
+            Assert.That(assembly.Source.MainModule.Types.Any(type => type.Name == "Injector"), Is.False);
+        });
         Assert.That(NamesTheWeaver(assembly), Is.False);
         VerifyWritable(assembly);
     }
@@ -1052,17 +1086,20 @@ public class InjectionsTests
         var host = AddAHost(assembly);
         host.Source.Fields.Add(new FieldDefinition("Injector", FieldAttributes.Public, injector.Source));
 
-        ((AssemblyHandler) assembly.Handler).RemoveTheWeaver();
+        ((AssemblyHandler)assembly.Handler).RemoveTheWeaver();
 
-        var kept = assembly.Source.MainModule.GetType($"{Ns}.Injector");
+        var kept = assembly.Source.MainModule.GetType($"{NS}.Injector");
         Assert.That(kept, Is.Not.Null, "the type which the field names was removed.");
-        Assert.That(kept!.Interfaces.Any(implementation => implementation.InterfaceType.FullName == typeof(IMethodInjector).FullName), Is.False);
-        Assert.That(kept.Methods.Any(method => method.Name == "Inject"), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(kept!.Interfaces.Any(implementation => implementation.InterfaceType.FullName == typeof(IMethodInjector).FullName), Is.False);
+            Assert.That(kept.Methods.Any(method => method.Name == "Inject"), Is.False);
 
-        // The interface and the method which reached for the weaver went with the strip, so the class which the field
-        // holds names the weaver no longer, and the reference goes with them: the field keeps its type and the assembly
-        // keeps no weaver.
-        Assert.That(NamesTheWeaver(assembly), Is.False);
+            // The interface and the method which reached for the weaver went with the strip, so the class which the field
+            // holds names the weaver no longer, and the reference goes with them: the field keeps its type and the assembly
+            // keeps no weaver.
+            Assert.That(NamesTheWeaver(assembly), Is.False);
+        });
         VerifyWritable(assembly);
     }
 
@@ -1072,9 +1109,11 @@ public class InjectionsTests
         var assembly = Assembly.Create("UntracedAssembly");
         var host = AddAHost(assembly);
         host.AddMethod("Ping", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-
-        Assert.That(((AssemblyHandler) assembly.Handler).RemoveTheWeaver(), Is.False);
-        Assert.That(assembly.Source.MainModule.Types.Any(type => type.Name == "Host"), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(((AssemblyHandler) assembly.Handler).RemoveTheWeaver(), Is.False);
+            Assert.That(assembly.Source.MainModule.Types.Any(type => type.Name == "Host"), Is.True);
+        });
     }
 
     #endregion

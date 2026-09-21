@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for the <c>Gneedle.Inject.T_[0-20]</c> / <c>Gneedle.Inject.M_[0-20]</c> tokens.
@@ -39,7 +39,6 @@ public class NamedSecondHelperBase
 [TestFixture]
 public class GenericTokenTests
 {
-
     /// <summary>
     /// Template bodies live in the test assembly so Cecil can resolve them from disk.
     /// </summary>
@@ -50,9 +49,9 @@ public class GenericTokenTests
         public static T_1 ReturnSecondTypeGeneric() => null!;
         public static T_10 ReturnTenthTypeGeneric() => null!;
         public static T_11 ReturnEleventhTypeGeneric() => null!;
-        public static M_0 ReturnFirstMethodGeneric() => null!;
-        public static M_10 ReturnTenthMethodGeneric() => null!;
-        public static M_1 ReturnSecondMethodGeneric() => null!;
+        public static M0 ReturnFirstMethodGeneric() => null!;
+        public static M10 ReturnTenthMethodGeneric() => null!;
+        public static M1 ReturnSecondMethodGeneric() => null!;
 
         // Local variable templates. The local is kept alive with GC.KeepAlive so that the
         // compiler cannot fold it away and the stloc/ldloc instructions survive.
@@ -72,7 +71,7 @@ public class GenericTokenTests
 
         public static bool LocalFirstMethodGeneric()
         {
-            M_0 local = null!;
+            M0 local = null!;
             GC.KeepAlive(local);
             return true;
         }
@@ -82,7 +81,7 @@ public class GenericTokenTests
 
         public static bool LocalOfGenericInstance()
         {
-            List<T_0> local = new();
+            List<T_0> local = [];
             GC.KeepAlive(local);
             return true;
         }
@@ -133,7 +132,7 @@ public class GenericTokenTests
     private static TypeHandler NewHost(params string[] genericParameterNames)
     {
         var handler = (AssemblyHandler) Assembly.Create("GenericTokenAssembly").Handler;
-        ClassDecorator.IGenericParametersDecorator decorator = handler.AddClass("Host", Ns, ClassFlags.Public);
+        ClassDecorator.IGenericParametersDecorator decorator = handler.AddClass("Host", NS, ClassFlags.Public);
         foreach (var name in genericParameterNames) decorator = decorator.WithGenericParameter(name);
         return (TypeHandler) decorator.GetHandler();
     }
@@ -248,7 +247,7 @@ public class GenericTokenTests
     {
         var host = NewHost();
         var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [new GenericParameterType("V"), new GenericParameterType("U")],
-                               nameof(Templates.ReturnSecondMethodGeneric));
+            nameof(Templates.ReturnSecondMethodGeneric));
 
         Assert.That(method.Source.ReturnType, Is.SameAs(method.Source.GenericParameters[1]));
         Assert.That(method.Source.ReturnType.Name, Is.EqualTo("U"));
@@ -259,7 +258,7 @@ public class GenericTokenTests
     {
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
-        var token = host.Source.Module.ImportReference(typeof(M_0));
+        var token = host.Source.Module.ImportReference(typeof(M0));
 
         var thrown = Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
         Assert.That(thrown.Message, Does.Contain("M_0"), "the message does not name the token which was read.");
@@ -284,7 +283,7 @@ public class GenericTokenTests
         // An unparsed token would be imported as an ordinary type and set as the return type without any complaint.
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], [], MethodFlags.Public);
-        var token = host.Source.Module.ImportReference(typeof(M_10));
+        var token = host.Source.Module.ImportReference(typeof(M10));
 
         Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
     }
@@ -368,10 +367,13 @@ public class GenericTokenTests
     {
         var host = NewHost("T0");
         var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalFifthTypeGeneric));
+        Assert.Multiple(() =>
+        {
 
-        // The fifth local is the token typed one, and is addressed by ldloc.s/stloc.s with an operand.
-        Assert.That(method.Source.Body.Variables[4].VariableType, Is.SameAs(host.Source.GenericParameters[0]));
-        Assert.That(method.Source.Body.Instructions.Any(i => ReferenceEquals(i.Operand, method.Source.Body.Variables[4])), Is.True);
+            // The fifth local is the token typed one, and is addressed by ldloc.s/stloc.s with an operand.
+            Assert.That(method.Source.Body.Variables[4].VariableType, Is.SameAs(host.Source.GenericParameters[0]));
+            Assert.That(method.Source.Body.Instructions.Any(i => ReferenceEquals(i.Operand, method.Source.Body.Variables[4])), Is.True);
+        });
 
         // No instruction may still refer to a variable of the template body.
         var sourceVariables = method.Source.Body.Variables.Cast<object>().ToArray();
@@ -390,7 +392,7 @@ public class GenericTokenTests
         var branches = body.Instructions.Where(i => i.Operand is Instruction).ToArray();
         Assert.That(branches, Is.Not.Empty, "The template must contain at least one branch.");
         Assert.That(branches.All(i => body.Instructions.Contains((Instruction) i.Operand)), Is.True,
-                    "Every branch target must be an instruction of the injected body.");
+            "Every branch target must be an instruction of the injected body.");
     }
 
     #endregion
@@ -404,8 +406,11 @@ public class GenericTokenTests
         var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [], nameof(Templates.ReturnGenericInstance));
 
         var returnType = method.Source.ReturnType;
-        Assert.That(returnType, Is.InstanceOf<GenericInstanceType>());
-        Assert.That(((GenericInstanceType) returnType).GenericArguments[0], Is.SameAs(host.Source.GenericParameters[0]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(returnType, Is.InstanceOf<GenericInstanceType>());
+            Assert.That(((GenericInstanceType) returnType).GenericArguments[0], Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     [Test]
@@ -415,8 +420,11 @@ public class GenericTokenTests
         var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalOfGenericInstance));
 
         var variableType = method.Source.Body.Variables[0].VariableType;
-        Assert.That(variableType, Is.InstanceOf<GenericInstanceType>());
-        Assert.That(((GenericInstanceType) variableType).GenericArguments[0], Is.SameAs(host.Source.GenericParameters[0]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(variableType, Is.InstanceOf<GenericInstanceType>());
+            Assert.That(((GenericInstanceType) variableType).GenericArguments[0], Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     [Test]
@@ -424,7 +432,7 @@ public class GenericTokenTests
     {
         var assembly = Assembly.Create("GenericTokenNestedAssembly");
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler)
-                                 .AddClass("Host", Ns, ClassFlags.Public)
+                                 .AddClass("Host", NS, ClassFlags.Public)
                                  .WithGenericParameter("T0")
                                  .GetHandler();
         AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalOfGenericInstance));
@@ -436,12 +444,15 @@ public class GenericTokenTests
         stream.Position = 0;
 
         var reread = AssemblyDefinition.ReadAssembly(stream);
-        var emitted = reread.MainModule.GetType($"{Ns}.Host")!.Methods.First(m => m.Name == "Get");
-        Assert.That(emitted.Body.Variables[0].VariableType.FullName, Is.EqualTo("System.Collections.Generic.List`1<T0>"));
+        var emitted = reread.MainModule.GetType($"{NS}.Host")!.Methods.First(m => m.Name == "Get");
+        Assert.Multiple(() =>
+        {
+            Assert.That(emitted.Body.Variables[0].VariableType.FullName, Is.EqualTo("System.Collections.Generic.List`1<T0>"));
 
-        // The token types themselves must not be referenced by the produced assembly at all.
-        Assert.That(reread.MainModule.GetTypeReferences().Any(type => type.FullName.Contains("Gneedle.Inject.T_")), Is.False);
-        Assert.That(reread.MainModule.GetTypeReferences().Any(type => type.FullName.Contains("Gneedle.Inject.M_")), Is.False);
+            // The token types themselves must not be referenced by the produced assembly at all.
+            Assert.That(reread.MainModule.GetTypeReferences().Any(type => type.FullName.Contains("Gneedle.Inject.T_")), Is.False);
+            Assert.That(reread.MainModule.GetTypeReferences().Any(type => type.FullName.Contains("Gneedle.Inject.M_")), Is.False);
+        });
     }
 
     [Test]
@@ -468,14 +479,17 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var module = host.Source.Module;
 
-        var pointer = new FunctionPointerType { ReturnType = module.TypeSystem.Void };
+        var pointer = new FunctionPointerType {ReturnType = module.TypeSystem.Void};
         pointer.Parameters.Add(new ParameterDefinition(module.ImportReference(typeof(T_0))));
 
         method.ParseReturnType(pointer);
 
         var returnType = method.Source.ReturnType;
-        Assert.That(returnType, Is.InstanceOf<FunctionPointerType>());
-        Assert.That(((FunctionPointerType) returnType).Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(returnType, Is.InstanceOf<FunctionPointerType>());
+            Assert.That(((FunctionPointerType) returnType).Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     [Test]
@@ -492,12 +506,18 @@ public class GenericTokenTests
         method.ParseReturnType(modified);
 
         var returnType = method.Source.ReturnType;
-        Assert.That(returnType, Is.InstanceOf<RequiredModifierType>());
-        // The modifier itself must survive the parsing, otherwise the `in` semantic of the parameter is lost.
-        Assert.That(((RequiredModifierType) returnType).ModifierType.FullName, Is.EqualTo(inAttribute.FullName));
+        Assert.Multiple(() =>
+        {
+            Assert.That(returnType, Is.InstanceOf<RequiredModifierType>());
+            // The modifier itself must survive the parsing, otherwise the `in` semantic of the parameter is lost.
+            Assert.That(((RequiredModifierType) returnType).ModifierType.FullName, Is.EqualTo(inAttribute.FullName));
+        });
         var byReference = ((RequiredModifierType) returnType).ElementType;
-        Assert.That(byReference, Is.InstanceOf<ByReferenceType>());
-        Assert.That(((ByReferenceType) byReference).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(byReference, Is.InstanceOf<ByReferenceType>());
+            Assert.That(((ByReferenceType) byReference).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     [Test]
@@ -513,9 +533,12 @@ public class GenericTokenTests
         method.ParseReturnType(modified);
 
         var returnType = method.Source.ReturnType;
-        Assert.That(returnType, Is.InstanceOf<OptionalModifierType>());
-        Assert.That(((OptionalModifierType) returnType).ModifierType.FullName, Is.EqualTo(outAttribute.FullName));
-        Assert.That(((OptionalModifierType) returnType).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(returnType, Is.InstanceOf<OptionalModifierType>());
+            Assert.That(((OptionalModifierType) returnType).ModifierType.FullName, Is.EqualTo(outAttribute.FullName));
+            Assert.That(((OptionalModifierType) returnType).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     [Test]
@@ -528,8 +551,11 @@ public class GenericTokenTests
         method.ParseReturnType(pinned);
 
         var returnType = method.Source.ReturnType;
-        Assert.That(returnType, Is.InstanceOf<PinnedType>());
-        Assert.That(((PinnedType) returnType).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(returnType, Is.InstanceOf<PinnedType>());
+            Assert.That(((PinnedType) returnType).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     [Test]
@@ -542,8 +568,11 @@ public class GenericTokenTests
         method.ParseReturnType(sentinel);
 
         var returnType = method.Source.ReturnType;
-        Assert.That(returnType, Is.InstanceOf<SentinelType>());
-        Assert.That(((SentinelType) returnType).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(returnType, Is.InstanceOf<SentinelType>());
+            Assert.That(((SentinelType) returnType).ElementType, Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     #endregion
@@ -556,10 +585,10 @@ public class GenericTokenTests
     private static TypeHandler NewConstrainedHost()
     {
         var handler = (AssemblyHandler) Assembly.Create("InstanceTokenAssembly").Handler;
-        return (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
-                                       .WithGenericParameter("T0", Constraint.FromType<NamedHelperBase>())
-                                       .WithGenericParameter("T1", Constraint.FromType<NamedSecondHelperBase>())
-                                       .GetHandler();
+        return (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public)
+                                    .WithGenericParameter("T0", Constraint.FromType<NamedHelperBase>())
+                                    .WithGenericParameter("T1", Constraint.FromType<NamedSecondHelperBase>())
+                                    .GetHandler();
     }
 
     [Test]
@@ -575,8 +604,11 @@ public class GenericTokenTests
         var call = instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                                .FirstOrDefault(reference => reference.Name == nameof(NamedHelperBase.Name));
         Assert.That(call, Is.Not.Null);
-        Assert.That(call!.DeclaringType.Name, Is.EqualTo(nameof(NamedHelperBase)));
-        Assert.That(instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(call!.DeclaringType.Name, Is.EqualTo(nameof(NamedHelperBase)));
+            Assert.That(instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.DeclaringType.FullName == Instance.TYPE_NAME), Is.False);
+        });
         foreach (var instruction in instructions) AssertNoTokenType(instruction);
     }
 
@@ -590,7 +622,7 @@ public class GenericTokenTests
 
         // The very same method name is held by both constraints, so the declaring type tells which one was used.
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
-                             .FirstOrDefault(reference => reference.Name == nameof(NamedSecondHelperBase.Name));
+                         .FirstOrDefault(reference => reference.Name == nameof(NamedSecondHelperBase.Name));
         Assert.That(call, Is.Not.Null);
         Assert.That(call!.DeclaringType.Name, Is.EqualTo(nameof(NamedSecondHelperBase)));
     }
@@ -607,8 +639,7 @@ public class GenericTokenTests
         var host = NewConstrainedHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiverUnwrapped))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiverUnwrapped))));
 
         Assert.That(thrown!.Message, Does.Contain("Name"));
     }
@@ -616,6 +647,7 @@ public class GenericTokenTests
     #endregion
 
     #region Tokens on the public API path
+
     //
     // A token passed to the public API stands for a generic parameter just like it does in a template, even though the
     // parameter is a System.Type there. Parsing it must happen before the type is imported, because importing a token
@@ -637,7 +669,7 @@ public class GenericTokenTests
     {
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [new GenericParameterType("U")],
-                                                    [new Parameter(typeof(M_0).ToGneedleType())], MethodFlags.Public);
+            [new Parameter(typeof(M0).ToGneedleType())], MethodFlags.Public);
 
         Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(method.Source.GenericParameters[0]));
     }
@@ -647,11 +679,14 @@ public class GenericTokenTests
     {
         var host = NewHost("T0");
         var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(new GenericType(typeof(List<>), typeof(T_0)))],
-                                                    MethodFlags.Public);
+            MethodFlags.Public);
 
         var parameterType = method.Source.Parameters[0].ParameterType;
-        Assert.That(parameterType, Is.InstanceOf<GenericInstanceType>());
-        Assert.That(((GenericInstanceType) parameterType).GenericArguments[0], Is.SameAs(host.Source.GenericParameters[0]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(parameterType, Is.InstanceOf<GenericInstanceType>());
+            Assert.That(((GenericInstanceType) parameterType).GenericArguments[0], Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     [Test]
@@ -660,7 +695,7 @@ public class GenericTokenTests
         var host = NewHost("T0");
 
         Assert.Throws<ArgumentException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
-                                                                    MethodFlags.Public));
+            MethodFlags.Public));
     }
 
     [Test]
@@ -668,16 +703,19 @@ public class GenericTokenTests
     {
         var assembly = Assembly.Create("GenericTokenParameterAssembly");
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler)
-                                 .AddClass("Host", Ns, ClassFlags.Public)
+                                 .AddClass("Host", NS, ClassFlags.Public)
                                  .WithGenericParameter("T0")
                                  .GetHandler();
         var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_0).ToGneedleType())], MethodFlags.Public);
+        Assert.Multiple(() =>
+        {
 
-        // Resolving the token through GetCecilType would load the assembly which declares Gneedle.Inject.T_0, and
-        // hence append a Gneedle.Inject reference to the target module. The produced assembly would then depend on
-        // the weaver at runtime even though the token itself is replaced.
-        Assert.That(host.Source.Module.AssemblyReferences.Any(reference => reference.Name.StartsWith(nameof(Gneedle))), Is.False);
-        Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
+            // Resolving the token through GetCecilType would load the assembly which declares Gneedle.Inject.T_0, and
+            // hence append a Gneedle.Inject reference to the target module. The produced assembly would then depend on
+            // the weaver at runtime even though the token itself is replaced.
+            Assert.That(host.Source.Module.AssemblyReferences.Any(reference => reference.Name.StartsWith(nameof(Gneedle))), Is.False);
+            Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
+        });
     }
 
     #endregion
@@ -693,14 +731,16 @@ public class GenericTokenTests
     private static int[] DeclaredTokenIndexes(string token)
     {
         var prefix = $"{nameof(Gneedle)}.{nameof(Inject)}.{token}_";
-        return typeof(T_0).Assembly
+        return
+        [
+            .. typeof(T_0).Assembly
                           .GetTypes()
                           .Select(type => type.FullName)
                           .OfType<string>()
                           .Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
                           .Select(name => int.Parse(name.Substring(prefix.Length)))
                           .OrderBy(index => index)
-                          .ToArray();
+        ];
     }
 
     [Test]
@@ -711,7 +751,7 @@ public class GenericTokenTests
         // a template compiles against and the weaving reads as an ordinary type of the library, which is a body that is
         // written and does not stand for what it says. This test is what holds the two together, because a class which
         // is added to the file without the bound being moved is a mistake which nothing else reports.
-        var bound = Enumerable.Range(0, GenericTokens.HighestIndex + 1).ToArray();
+        var bound = Enumerable.Range(0, GenericTokens.HIGHEST_INDEX + 1).ToArray();
 
         Assert.Multiple(() =>
         {

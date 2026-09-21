@@ -1,17 +1,13 @@
 using System.Reflection;
-using System.Linq;
-using Mono.Cecil;
-using Mono.Cecil.Cil;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 [TestFixture]
 public class DecoratorTests
 {
-
     /// <summary>
     /// Template bodies live in the test assembly so Cecil can resolve them from disk.
     /// </summary>
@@ -25,7 +21,7 @@ public class DecoratorTests
     private static TypeHandler NewClass()
     {
         var handler = (AssemblyHandler) Assembly.Create("DecoratorTestsAssembly").Handler;
-        return (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        return (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public).GetHandler();
     }
 
     #region ClassDecorator
@@ -36,7 +32,7 @@ public class DecoratorTests
         var asm = Assembly.Create("DecoratorAssembly");
         var handler = (AssemblyHandler) asm.Handler;
 
-        var classHandler = (ClassHandler) handler.AddClass("GenericClass", Ns, ClassFlags.Public)
+        var classHandler = (ClassHandler) handler.AddClass("GenericClass", NS, ClassFlags.Public)
                                                  .WithGenericParameter("T")
                                                  .GetHandler();
 
@@ -50,7 +46,7 @@ public class DecoratorTests
         var asm = Assembly.Create("DecoratorAssembly");
         var handler = (AssemblyHandler) asm.Handler;
 
-        var classHandler = (ClassHandler) handler.AddClass("DerivedClass", Ns, ClassFlags.Public)
+        var classHandler = (ClassHandler) handler.AddClass("DerivedClass", NS, ClassFlags.Public)
                                                  .WithBaseType(typeof(TestBaseClass))
                                                  .GetHandler();
 
@@ -63,7 +59,7 @@ public class DecoratorTests
         var asm = Assembly.Create("DecoratorAssembly");
         var handler = (AssemblyHandler) asm.Handler;
 
-        var classHandler = (ClassHandler) handler.AddClass("ImplClass", Ns, ClassFlags.Public)
+        var classHandler = (ClassHandler) handler.AddClass("ImplClass", NS, ClassFlags.Public)
                                                  .WithInterface(typeof(ITestInterface))
                                                  .GetHandler();
 
@@ -77,13 +73,15 @@ public class DecoratorTests
         var asm = Assembly.Create("DecoratorAssembly");
         var handler = (AssemblyHandler) asm.Handler;
 
-        var classHandler = (ClassHandler) handler.AddClass("GenericDerived", Ns, ClassFlags.Public)
+        var classHandler = (ClassHandler) handler.AddClass("GenericDerived", NS, ClassFlags.Public)
                                                  .WithGenericParameter("T")
                                                  .WithBaseType(typeof(TestBaseClass))
                                                  .GetHandler();
-
-        Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(1));
-        Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
+        Assert.Multiple(() =>
+        {
+            Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(1));
+            Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
+        });
     }
 
     [Test]
@@ -92,13 +90,15 @@ public class DecoratorTests
         var asm = Assembly.Create("DecoratorAssembly");
         var handler = (AssemblyHandler) asm.Handler;
 
-        var classHandler = (ClassHandler) handler.AddClass("GenericImpl", Ns, ClassFlags.Public)
+        var classHandler = (ClassHandler) handler.AddClass("GenericImpl", NS, ClassFlags.Public)
                                                  .WithGenericParameter("T")
                                                  .WithInterface(typeof(ITestInterface))
                                                  .GetHandler();
-
-        Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(1));
-        Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(1));
+            Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+        });
     }
 
     [Test]
@@ -107,13 +107,15 @@ public class DecoratorTests
         var asm = Assembly.Create("DecoratorAssembly");
         var handler = (AssemblyHandler) asm.Handler;
 
-        var classHandler = (ClassHandler) handler.AddClass("DerivedImpl", Ns, ClassFlags.Public)
+        var classHandler = (ClassHandler) handler.AddClass("DerivedImpl", NS, ClassFlags.Public)
                                                  .WithBaseType(typeof(TestBaseClass))
                                                  .WithInterface(typeof(ITestInterface))
                                                  .GetHandler();
-
-        Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
-        Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
+            Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+        });
     }
 
     [Test]
@@ -122,17 +124,20 @@ public class DecoratorTests
         var asm = Assembly.Create("DecoratorAssembly");
         var handler = (AssemblyHandler) asm.Handler;
 
-        var classHandler = (ClassHandler) handler.AddClass("FullyDecoratedClass", Ns, ClassFlags.Public)
+        var classHandler = (ClassHandler) handler.AddClass("FullyDecoratedClass", NS, ClassFlags.Public)
                                                  .WithGenericParameter("T")
                                                  .WithGenericParameter("U")
                                                  .WithBaseType(typeof(TestBaseClass))
                                                  .WithInterface(typeof(ITestInterface))
                                                  .GetHandler();
-
-        Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(2));
-        Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
-        Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(classHandler.Source.GenericParameters.Count, Is.EqualTo(2));
+            Assert.That(classHandler.Source.BaseType.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
+            Assert.That(classHandler.Source.Interfaces.Any(i => i.InterfaceType.FullName == typeof(ITestInterface).FullName), Is.True);
+        });
     }
+
     #endregion
 
     #region MethodDecorator
@@ -148,10 +153,13 @@ public class DecoratorTests
                          .GetHandler();
 
         Assert.That(method, Is.Not.Null);
-        Assert.That(method.Name, Is.EqualTo("Compute"));
-        Assert.That(((MethodHandler) method).Source.IsStatic, Is.True);
-        Assert.That(((MethodHandler) method).Source.ReturnType.FullName, Is.EqualTo(typeof(int).FullName));
-        Assert.That(((MethodHandler) method).Source.Parameters.Count, Is.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            Assert.That(method.Name, Is.EqualTo("Compute"));
+            Assert.That(((MethodHandler) method).Source.IsStatic, Is.True);
+            Assert.That(((MethodHandler) method).Source.ReturnType.FullName, Is.EqualTo(typeof(int).FullName));
+            Assert.That(((MethodHandler) method).Source.Parameters.Count, Is.EqualTo(2));
+        });
     }
 
     [Test]
@@ -165,9 +173,12 @@ public class DecoratorTests
                          .GetHandler();
 
         var parameters = ((MethodHandler) method).Source.Parameters;
-        Assert.That(parameters[0].Name, Is.EqualTo("left"));
-        Assert.That(parameters[1].Name, Is.EqualTo("right"));
-        Assert.That(parameters[0].ParameterType.FullName, Is.EqualTo(typeof(int).FullName));
+        Assert.Multiple(() =>
+        {
+            Assert.That(parameters[0].Name, Is.EqualTo("left"));
+            Assert.That(parameters[1].Name, Is.EqualTo("right"));
+            Assert.That(parameters[0].ParameterType.FullName, Is.EqualTo(typeof(int).FullName));
+        });
     }
 
     [Test]
@@ -211,7 +222,7 @@ public class DecoratorTests
     [Test]
     public void MethodDecorator_WithBody_From_Delegate_Copies_The_Body()
     {
-        Func<int, int, int> template = Templates.Add;
+        var template = Templates.Add;
 
         var host = NewClass();
         var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
@@ -240,10 +251,12 @@ public class DecoratorTests
                          .GetHandler();
 
         var body = ((MethodHandler) method).Source.Body;
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Compute")!.Invoke(null, null), Is.EqualTo(41));
     }
 
@@ -261,8 +274,11 @@ public class DecoratorTests
                            .GetHandler();
 
         var body = ((MethodHandler) property.GetGetter()!).Source.Body;
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+        });
     }
 
     [Test]
@@ -279,8 +295,11 @@ public class DecoratorTests
         // The setter reads the value which it was given off its own receiver, which is not what the template loaded, so
         // nothing of the body reads the instance the delegate held.
         var body = ((MethodHandler) property.GetSetter()!).Source.Body;
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+        });
     }
 
     #endregion
@@ -298,9 +317,12 @@ public class DecoratorTests
         Assert.That(field, Is.Not.Null);
         Assert.That(field.Name, Is.EqualTo("Counter"));
         var source = ((FieldHandler) field).Source;
-        Assert.That(source.IsStatic, Is.True);
-        Assert.That(source.FieldType.FullName, Is.EqualTo(typeof(int).FullName));
-        Assert.That(host.Source.Fields.Contains(source), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(source.IsStatic, Is.True);
+            Assert.That(source.FieldType.FullName, Is.EqualTo(typeof(int).FullName));
+            Assert.That(host.Source.Fields.Contains(source), Is.True);
+        });
     }
 
     #endregion
@@ -318,10 +340,13 @@ public class DecoratorTests
                            .GetHandler();
 
         Assert.That(property, Is.Not.Null);
-        Assert.That(property.Name, Is.EqualTo("Value"));
-        Assert.That(property.GetGetter(), Is.Not.Null);
-        Assert.That(property.GetSetter(), Is.Not.Null);
-        Assert.That(host.Source.Properties.Any(p => p.Name == "Value"), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(property.Name, Is.EqualTo("Value"));
+            Assert.That(property.GetGetter(), Is.Not.Null);
+            Assert.That(property.GetSetter(), Is.Not.Null);
+            Assert.That(host.Source.Properties.Any(p => p.Name == "Value"), Is.True);
+        });
     }
 
     [Test]
@@ -348,24 +373,28 @@ public class DecoratorTests
     /// The names of the parts which a level of a chain asks for by itself, which is what that level declares.
     /// </summary>
     private static string[] DeclaredParts(Type level)
-        => level.GetMethods()
-                .Where(method => method.DeclaringType == level)
-                .Select(method => method.Name)
-                .Distinct()
-                .OrderBy(name => name)
-                .ToArray();
+        =>
+        [
+            .. level.GetMethods()
+                    .Where(method => method.DeclaringType == level)
+                    .Select(method => method.Name)
+                    .Distinct()
+                    .OrderBy(name => name)
+        ];
 
     /// <summary>
     /// The names of the parts which a level of a chain reaches, which is what it declares together with what the levels
     /// after it declare.
     /// </summary>
     private static string[] ReachableParts(Type level)
-        => level.GetInterfaces()
-                .Append(level)
-                .SelectMany(DeclaredParts)
-                .Distinct()
-                .OrderBy(name => name)
-                .ToArray();
+        =>
+        [
+            .. level.GetInterfaces()
+                    .Append(level)
+                    .SelectMany(DeclaredParts)
+                    .Distinct()
+                    .OrderBy(name => name)
+        ];
 
     [Test]
     public void The_Chain_Of_A_Method_Holds_A_Part_Per_Level_And_Reaches_Only_The_Parts_After_It()
@@ -381,10 +410,10 @@ public class DecoratorTests
         var chain = new (Type Level, string Part)[]
         {
             (typeof(MethodDecorator.IGenericParameterDecorator), nameof(MethodDecorator.IGenericParameterDecorator.WithGenericParameter)),
-            (typeof(MethodDecorator.IParameterDecorator),        nameof(MethodDecorator.IParameterDecorator.WithParameter)),
-            (typeof(MethodDecorator.IReturnTypeDecorator),       nameof(MethodDecorator.IReturnTypeDecorator.WithReturnType)),
-            (typeof(MethodDecorator.IBodyDecorator),             nameof(MethodDecorator.IBodyDecorator.WithBody)),
-            (typeof(MethodDecorator.ITypeDecorator),             nameof(MethodDecorator.ITypeDecorator.GetHandler)),
+            (typeof(MethodDecorator.IParameterDecorator), nameof(MethodDecorator.IParameterDecorator.WithParameter)),
+            (typeof(MethodDecorator.IReturnTypeDecorator), nameof(MethodDecorator.IReturnTypeDecorator.WithReturnType)),
+            (typeof(MethodDecorator.IBodyDecorator), nameof(MethodDecorator.IBodyDecorator.WithBody)),
+            (typeof(MethodDecorator.ITypeDecorator), nameof(MethodDecorator.ITypeDecorator.GetHandler)),
         };
 
         Assert.Multiple(() =>
@@ -392,9 +421,9 @@ public class DecoratorTests
             for (var level = 0; level < chain.Length; level++)
             {
                 Assert.That(DeclaredParts(chain[level].Level), Is.EqualTo(new[] {chain[level].Part}),
-                            $"the level {level} of the chain asks for a part which it does not hold.");
+                    $"the level {level} of the chain asks for a part which it does not hold.");
                 Assert.That(ReachableParts(chain[level].Level), Is.EquivalentTo(chain.Skip(level).Select(step => step.Part)),
-                            $"the level {level} of the chain reaches a part which was described before it.");
+                    $"the level {level} of the chain reaches a part which was described before it.");
             }
         });
     }
@@ -414,9 +443,9 @@ public class DecoratorTests
         var module = assembly.Source.MainModule;
         var host = AddAHost(handler);
 
-        var classChain = handler.AddClass("Class", Ns, ClassFlags.Public);
-        var structChain = handler.AddStruct("Struct", Ns, StructFlags.Public);
-        var enumChain = handler.AddEnum("Enum", Ns, EnumFlags.Public);
+        var classChain = handler.AddClass("Class", NS, ClassFlags.Public);
+        var structChain = handler.AddStruct("Struct", NS, StructFlags.Public);
+        var enumChain = handler.AddEnum("Enum", NS, EnumFlags.Public);
         var methodChain = host.AddMethod("Method", MethodFlags.Public | MethodFlags.Static);
         var fieldChain = host.AddField("Field", FieldFlags.Public | FieldFlags.Static);
         var propertyChain = host.AddProperty("Property", PropertyFlags.Public);
@@ -455,9 +484,9 @@ public class DecoratorTests
         var handler = (AssemblyHandler) assembly.Handler;
         var host = AddAHost(handler);
 
-        var classChain = handler.AddClass("Class", Ns, ClassFlags.Public);
-        var structChain = handler.AddStruct("Struct", Ns, StructFlags.Public);
-        var enumChain = handler.AddEnum("Enum", Ns, EnumFlags.Public);
+        var classChain = handler.AddClass("Class", NS, ClassFlags.Public);
+        var structChain = handler.AddStruct("Struct", NS, StructFlags.Public);
+        var enumChain = handler.AddEnum("Enum", NS, EnumFlags.Public);
         var methodChain = host.AddMethod("Method", MethodFlags.Public | MethodFlags.Static);
         var fieldChain = host.AddField("Field", FieldFlags.Public | FieldFlags.Static);
         var propertyChain = host.AddProperty("Property", PropertyFlags.Public);
@@ -559,7 +588,7 @@ public class DecoratorTests
         // writes it into the member being woven: another implementation holds nothing for it, so the delegate is refused
         // rather than read for the method alone, which would weave a body without the value the template read.
         var decorator = new ForeignBodyDecorator();
-        Func<int> delegation = () => 41;
+        var delegation = () => 41;
 
         var thrown = Assert.Throws<ArgumentException>(() => decorator.WithBody(delegation));
 

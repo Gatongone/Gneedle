@@ -1,9 +1,5 @@
-using System.Reflection;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
@@ -12,7 +8,7 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for the member of the base type which the template names through `Base`, which are the tests of <see cref="PointerTests"/> for that one placeholder.
@@ -27,7 +23,7 @@ public partial class PointerTests
     {
         var asm = Assembly.Create("BasePointerAssembly");
         var mod = asm.Source.MainModule;
-        var baseDef = new TypeDefinition(Ns, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
+        var baseDef = new TypeDefinition(NS, "BaseType", TypeAttributes.Public | TypeAttributes.Class, mod.TypeSystem.Object);
         addBaseMembers(baseDef, mod);
         mod.Types.Add(baseDef);
 
@@ -55,7 +51,7 @@ public partial class PointerTests
     {
         var host = NewDerivedHost((baseDef, mod) =>
         {
-            var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+            var calc = new MethodDefinition("Calc", MethodAttributes.Public | MethodAttributes.HideBySig, mod.TypeSystem.Int32) {DeclaringType = baseDef};
             calc.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, mod.TypeSystem.Int32));
             calc.Body.GetILProcessor().Emit(OpCodes.Ret);
             baseDef.Methods.Add(calc);
@@ -66,7 +62,7 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && ((MethodReference) i.Operand).Name == "Calc"), Is.True);
+            && ((MethodReference) i.Operand).Name == "Calc"), Is.True);
     }
 
     [Test]
@@ -88,7 +84,7 @@ public partial class PointerTests
         var host = NewDerivedHost((baseDef, mod) =>
         {
             var prop = new PropertyDefinition("Prop", PropertyAttributes.None, mod.TypeSystem.Int32);
-            var getter = new MethodDefinition("get_Prop", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, mod.TypeSystem.Int32) { DeclaringType = baseDef };
+            var getter = new MethodDefinition("get_Prop", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, mod.TypeSystem.Int32) {DeclaringType = baseDef};
             getter.Body.GetILProcessor().Emit(OpCodes.Ret);
             prop.GetMethod = getter;
             baseDef.Methods.Add(getter);
@@ -100,7 +96,7 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && ((MethodReference) i.Operand).Name == "get_Prop"), Is.True);
+            && ((MethodReference) i.Operand).Name == "get_Prop"), Is.True);
     }
 
     [Test]

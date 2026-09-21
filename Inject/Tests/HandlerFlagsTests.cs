@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// The flags which a handler reads back off the definition which it handles, which is the inverse of what the flags
@@ -15,7 +15,6 @@ using static Gneedle.Inject.Test.TestFixtures;
 [TestFixture]
 public class HandlerFlagsTests
 {
-
     /// <summary>
     /// The handler of a class of the attributes named, declared at the top of an assembly of its own. Every test asks
     /// for an assembly which is named after what it builds, because two assemblies of one name are one assembly to a
@@ -24,13 +23,13 @@ public class HandlerFlagsTests
     private static ClassHandler NewClass(string assemblyName, TypeAttributes attributes)
     {
         var assembly = Assembly.Create(assemblyName);
-        var handler = (AssemblyHandler) assembly.Handler;
+        var handler = (AssemblyHandler)assembly.Handler;
         var module = assembly.Source.MainModule;
 
-        var type = new TypeDefinition(Ns, "Host", attributes, module.TypeSystem.Object);
+        var type = new TypeDefinition(NS, "Host", attributes, module.TypeSystem.Object);
         module.Types.Add(type);
 
-        return (ClassHandler) handler.GetType(type);
+        return (ClassHandler)handler.GetType(type);
     }
 
     /// <summary>
@@ -40,15 +39,15 @@ public class HandlerFlagsTests
     private static ClassHandler NewNestedClass(string assemblyName, TypeAttributes visibility)
     {
         var assembly = Assembly.Create(assemblyName);
-        var handler = (AssemblyHandler) assembly.Handler;
+        var handler = (AssemblyHandler)assembly.Handler;
         var module = assembly.Source.MainModule;
 
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var inner = new TypeDefinition(Ns, "Inner", visibility | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
+        var outer = new TypeDefinition(NS, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var inner = new TypeDefinition(NS, "Inner", visibility | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
         outer.NestedTypes.Add(inner);
         module.Types.Add(outer);
 
-        return (ClassHandler) handler.GetType(inner);
+        return (ClassHandler)handler.GetType(inner);
     }
 
     #region Class
@@ -61,7 +60,7 @@ public class HandlerFlagsTests
     [TestCase(TypeAttributes.NotPublic | TypeAttributes.Abstract | TypeAttributes.Sealed, ClassFlags.Internal | ClassFlags.Static)]
     public void Class_Flags_Name_What_The_Definition_Declares(TypeAttributes attributes, ClassFlags expected)
     {
-        Assert.That(NewClass($"FlagsClass{(int) attributes}Assembly", attributes).Flags, Is.EqualTo(expected));
+        Assert.That(NewClass($"FlagsClass{(int)attributes}Assembly", attributes).Flags, Is.EqualTo(expected));
     }
 
     [TestCase(TypeAttributes.NestedPublic, ClassFlags.Public)]
@@ -72,7 +71,7 @@ public class HandlerFlagsTests
     [TestCase(TypeAttributes.NestedFamANDAssem, ClassFlags.Private | ClassFlags.Protected)]
     public void Nested_Class_Flags_Name_The_Visibility_Which_The_Definition_Declares(TypeAttributes visibility, ClassFlags expected)
     {
-        Assert.That(NewNestedClass($"FlagsNestedClass{(int) visibility}Assembly", visibility).Flags, Is.EqualTo(expected));
+        Assert.That(NewNestedClass($"FlagsNestedClass{(int)visibility}Assembly", visibility).Flags, Is.EqualTo(expected));
     }
 
     [TestCase(ClassFlags.Public)]
@@ -82,9 +81,9 @@ public class HandlerFlagsTests
     [TestCase(ClassFlags.Public | ClassFlags.Sealed)]
     public void Class_Flags_Are_Read_Back_Off_The_Definition_Which_They_Were_Written_Into(ClassFlags classFlags)
     {
-        var handler = (AssemblyHandler) Assembly.Create($"FlagsReadBackClass{(int) classFlags}Assembly").Handler;
+        var handler = (AssemblyHandler)Assembly.Create($"FlagsReadBackClass{(int)classFlags}Assembly").Handler;
 
-        Assert.That(handler.AddClass("Host", Ns, classFlags).GetHandler().Flags, Is.EqualTo(classFlags));
+        Assert.That(handler.AddClass("Host", NS, classFlags).GetHandler().Flags, Is.EqualTo(classFlags));
     }
 
     #endregion
@@ -97,9 +96,9 @@ public class HandlerFlagsTests
     [TestCase(StructFlags.Public | StructFlags.Ref)]
     public void Struct_Flags_Are_Read_Back_Off_The_Definition_Which_They_Were_Written_Into(StructFlags structFlags)
     {
-        var handler = (AssemblyHandler) Assembly.Create($"FlagsReadBackStruct{(int) structFlags}Assembly").Handler;
+        var handler = (AssemblyHandler)Assembly.Create($"FlagsReadBackStruct{(int)structFlags}Assembly").Handler;
 
-        Assert.That(handler.AddStruct("Host", Ns, structFlags).GetHandler().Flags, Is.EqualTo(structFlags));
+        Assert.That(handler.AddStruct("Host", NS, structFlags).GetHandler().Flags, Is.EqualTo(structFlags));
     }
 
     [Test]
@@ -108,16 +107,18 @@ public class HandlerFlagsTests
         // The visibility of a nested type is declared as the nested shape of it, which is none of the shapes a struct
         // which is declared at the top of a module is written with.
         var assembly = Assembly.Create("FlagsNestedStructAssembly");
-        var handler = (AssemblyHandler) assembly.Handler;
+        var handler = (AssemblyHandler)assembly.Handler;
         var module = assembly.Source.MainModule;
 
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedAssembly | TypeAttributes.SequentialLayout, module.ImportReference(typeof(ValueType))) { DeclaringType = outer };
+        var outer = new TypeDefinition(NS, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var inner = new TypeDefinition(NS, "Inner", TypeAttributes.NestedAssembly | TypeAttributes.SequentialLayout, module.ImportReference(typeof(ValueType))) { DeclaringType = outer };
         outer.NestedTypes.Add(inner);
         module.Types.Add(outer);
-
-        Assert.That(inner.ToStructFlags(), Is.EqualTo(StructFlags.Internal));
-        Assert.That(((IStructHandler) handler.GetType(inner)).Flags, Is.EqualTo(StructFlags.Internal));
+        Assert.Multiple(() =>
+        {
+            Assert.That(inner.ToStructFlags(), Is.EqualTo(StructFlags.Internal));
+            Assert.That(((IStructHandler) handler.GetType(inner)).Flags, Is.EqualTo(StructFlags.Internal));
+        });
     }
 
     #endregion
@@ -128,26 +129,28 @@ public class HandlerFlagsTests
     [TestCase(EnumFlags.Internal)]
     public void Enum_Flags_Are_Read_Back_Off_The_Definition_Which_They_Were_Written_Into(EnumFlags enumFlags)
     {
-        var handler = (AssemblyHandler) Assembly.Create($"FlagsReadBackEnum{(int) enumFlags}Assembly").Handler;
+        var handler = (AssemblyHandler)Assembly.Create($"FlagsReadBackEnum{(int)enumFlags}Assembly").Handler;
 
-        Assert.That(handler.AddEnum("Host", Ns, enumFlags).GetHandler().Flags, Is.EqualTo(enumFlags));
+        Assert.That(handler.AddEnum("Host", NS, enumFlags).GetHandler().Flags, Is.EqualTo(enumFlags));
     }
 
     [Test]
     public void Nested_Enum_Flags_Name_The_Visibility_Which_The_Definition_Declares()
     {
         var assembly = Assembly.Create("FlagsNestedEnumAssembly");
-        var handler = (AssemblyHandler) assembly.Handler;
+        var handler = (AssemblyHandler)assembly.Handler;
         var module = assembly.Source.MainModule;
 
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Sealed, module.ImportReference(typeof(Enum))) { DeclaringType = outer };
+        var outer = new TypeDefinition(NS, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var inner = new TypeDefinition(NS, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Sealed, module.ImportReference(typeof(Enum))) { DeclaringType = outer };
         inner.Fields.Add(new FieldDefinition("value__", FieldAttributes.Public | FieldAttributes.SpecialName | FieldAttributes.RTSpecialName, module.TypeSystem.Int32));
         outer.NestedTypes.Add(inner);
         module.Types.Add(outer);
-
-        Assert.That(inner.ToEnumFlags(), Is.EqualTo(EnumFlags.Public));
-        Assert.That(((IEnumHandler) handler.GetType(inner)).Flags, Is.EqualTo(EnumFlags.Public));
+        Assert.Multiple(() =>
+        {
+            Assert.That(inner.ToEnumFlags(), Is.EqualTo(EnumFlags.Public));
+            Assert.That(((IEnumHandler) handler.GetType(inner)).Flags, Is.EqualTo(EnumFlags.Public));
+        });
     }
 
     #endregion
@@ -163,7 +166,7 @@ public class HandlerFlagsTests
     [TestCase(MethodFlags.Public | MethodFlags.Abstract)]
     public void Method_Flags_Are_Read_Back_Off_The_Definition_Which_They_Were_Written_Into(MethodFlags methodFlags)
     {
-        var (_, host, _) = NewHost($"FlagsReadBackMethod{(int) methodFlags}Assembly");
+        var (_, host, _) = NewHost($"FlagsReadBackMethod{(int)methodFlags}Assembly");
 
         Assert.That(host.AddMethod("Run", methodFlags).GetHandler().Flags, Is.EqualTo(methodFlags));
     }
@@ -302,9 +305,9 @@ public class HandlerFlagsTests
         var (_, host, _) = NewHost("FlagsReadBackPropertyAssembly");
 
         var property = host.AddProperty("Count", PropertyFlags.Internal | PropertyFlags.Static)
-            .WithType(typeof(int))
-            .WithGetter(() => 0)
-            .GetHandler();
+                           .WithType(typeof(int))
+                           .WithGetter(() => 0)
+                           .GetHandler();
 
         Assert.That(property.Flags, Is.EqualTo(PropertyFlags.Internal | PropertyFlags.Static));
     }

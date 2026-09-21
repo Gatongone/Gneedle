@@ -19,17 +19,19 @@ public class InstructionOperandTests
     /// The number of the slots of the body which the tests read an instruction of, so that the slot of the variable
     /// which is read back is not the one every body holds first.
     /// </summary>
-    private const int Slots = 5;
+    private const int SLOTS = 5;
 
     [Test]
     public void A_Store_Which_Names_Its_Variable_Is_Read_As_The_Slot_Of_It()
     {
         var variable = LastVariable(out _);
         var instruction = Instruction.Create(OpCodes.Stloc, variable);
-
-        Assert.That(instruction.TryGetStlocIndex(out var index), Is.True, "the store of a variable was not read as a store.");
-        Assert.That(index, Is.EqualTo(variable.Index));
-        Assert.That(index, Is.EqualTo(Slots - 1), "the slot which was read is not the slot the variable stands in.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(instruction.TryGetStlocIndex(out var index), Is.True, "the store of a variable was not read as a store.");
+            Assert.That(index, Is.EqualTo(variable.Index));
+            Assert.That(index, Is.EqualTo(SLOTS - 1), "the slot which was read is not the slot the variable stands in.");
+        });
     }
 
     [Test]
@@ -37,9 +39,11 @@ public class InstructionOperandTests
     {
         var variable = LastVariable(out _);
         var instruction = Instruction.Create(OpCodes.Stloc_S, variable);
-
-        Assert.That(instruction.TryGetStlocIndex(out var index), Is.True, "the short store of a variable was not read as a store.");
-        Assert.That(index, Is.EqualTo(variable.Index));
+        Assert.Multiple(() =>
+        {
+            Assert.That(instruction.TryGetStlocIndex(out var index), Is.True, "the short store of a variable was not read as a store.");
+            Assert.That(index, Is.EqualTo(variable.Index));
+        });
     }
 
     [Test]
@@ -47,9 +51,11 @@ public class InstructionOperandTests
     {
         var variable = LastVariable(out _);
         var instruction = Instruction.Create(OpCodes.Ldloc, variable);
-
-        Assert.That(instruction.TryGetLdlocIndex(out var index), Is.True, "the load of a variable was not read as a load.");
-        Assert.That(index, Is.EqualTo(variable.Index));
+        Assert.Multiple(() =>
+        {
+            Assert.That(instruction.TryGetLdlocIndex(out var index), Is.True, "the load of a variable was not read as a load.");
+            Assert.That(index, Is.EqualTo(variable.Index));
+        });
     }
 
     [Test]
@@ -57,9 +63,11 @@ public class InstructionOperandTests
     {
         var variable = LastVariable(out _);
         var instruction = Instruction.Create(OpCodes.Ldloc_S, variable);
-
-        Assert.That(instruction.TryGetLdlocIndex(out var index), Is.True, "the short load of a variable was not read as a load.");
-        Assert.That(index, Is.EqualTo(variable.Index));
+        Assert.Multiple(() =>
+        {
+            Assert.That(instruction.TryGetLdlocIndex(out var index), Is.True, "the short load of a variable was not read as a load.");
+            Assert.That(index, Is.EqualTo(variable.Index));
+        });
     }
 
     [Test]
@@ -71,9 +79,11 @@ public class InstructionOperandTests
         var variable = LastVariable(out _);
         var instruction = Instruction.Create(OpCodes.Stloc, variable);
         instruction.Operand = 2;
-
-        Assert.That(instruction.TryGetStlocIndex(out var index), Is.True, "a store of a slot was not read as a store.");
-        Assert.That(index, Is.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            Assert.That(instruction.TryGetStlocIndex(out var index), Is.True, "a store of a slot was not read as a store.");
+            Assert.That(index, Is.EqualTo(2));
+        });
     }
 
     [Test]
@@ -86,28 +96,36 @@ public class InstructionOperandTests
 
         var odd = Instruction.Create(OpCodes.Stloc, variable);
         odd.Operand = "not a local";
-
-        Assert.That(odd.TryGetStlocIndex(out var index), Is.False, "an instruction whose operand names no local was read as a store.");
-        Assert.That(index, Is.EqualTo(-1));
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(odd.TryGetStlocIndex(out var index), Is.False, "an instruction whose operand names no local was read as a store.");
+            Assert.That(index, Is.EqualTo(-1));
+        });
         var absent = Instruction.Create(OpCodes.Stloc, variable);
         absent.Operand = null;
-
-        Assert.That(absent.TryGetStlocIndex(out index), Is.False, "an instruction whose operand is absent was read as a store.");
-        Assert.That(index, Is.EqualTo(-1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(absent.TryGetStlocIndex(out var index), Is.False, "an instruction whose operand is absent was read as a store.");
+            Assert.That(index, Is.EqualTo(-1));
+        });
 
         // The opcode of a macro form holds the slot itself, which is no operand at all.
         var macro = Instruction.Create(OpCodes.Stloc_0);
-        Assert.That(macro.TryGetStlocIndex(out index), Is.True);
-        Assert.That(index, Is.Zero);
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(macro.TryGetStlocIndex(out var index), Is.True);
+            Assert.That(index, Is.Zero);
+        });
         var none = Instruction.Create(OpCodes.Nop);
-        Assert.That(none.TryGetStlocIndex(out index), Is.False, "an instruction which is not a store was read as one.");
-        Assert.That(none.TryGetLdlocIndex(out index), Is.False, "an instruction which is not a load was read as one.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(none.TryGetStlocIndex(out _), Is.False, "an instruction which is not a store was read as one.");
+            Assert.That(none.TryGetLdlocIndex(out _), Is.False, "an instruction which is not a load was read as one.");
+        });
     }
 
     /// <summary>
-    /// The last of the slots of a body which holds <see cref="Slots"/> of them, which is the variable at the index which
+    /// The last of the slots of a body which holds <see cref="SLOTS"/> of them, which is the variable at the index which
     /// no macro opcode of a local reaches.
     /// </summary>
     /// <param name="method">The method which declares the variable.</param>
@@ -122,7 +140,7 @@ public class InstructionOperandTests
         host.Methods.Add(method);
 
         VariableDefinition variable = null!;
-        for (var index = 0; index < Slots; index++)
+        for (var index = 0; index < SLOTS; index++)
         {
             variable = new VariableDefinition(module.TypeSystem.Int32);
             method.Body.Variables.Add(variable);

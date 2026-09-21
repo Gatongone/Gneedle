@@ -25,13 +25,13 @@ public class TemplateLegTests
     {
         var assembly = typeof(TemplateLegTests).Assembly;
         var namesAnOptimizedLeg = assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-                                         .Any(attribute => attribute.Key == "OptimizedTemplates");
+                                          .Any(attribute => attribute.Key == "OptimizedTemplates");
 
         var debuggable = assembly.GetCustomAttribute<DebuggableAttribute>();
         Assert.That(debuggable, Is.Not.Null, "the assembly holds no attribute which says how it was built, so the shapes which it holds cannot be told apart.");
 
         var optimized = !debuggable!.IsJITOptimizerDisabled;
         Assert.That(optimized, Is.EqualTo(namesAnOptimizedLeg),
-                    $"the assembly is built {(optimized ? "with" : "without")} the optimizer, and names {(namesAnOptimizedLeg ? "an optimized leg" : "the leg without it")} of itself.");
+            $"the assembly is built {(optimized ? "with" : "without")} the optimizer, and names {(namesAnOptimizedLeg ? "an optimized leg" : "the leg without it")} of itself.");
     }
 }

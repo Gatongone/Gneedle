@@ -1,4 +1,3 @@
-using System.Reflection;
 using Gneedle.Inject;
 using Mono.Cecil;
 using Assembly = Gneedle.Inject.Assembly;
@@ -143,7 +142,7 @@ public class AssemblyInjectTests
         var (result, engine) = Inject(assembly, Project());
 
         Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        foreach (var name in new[] {"Public", "Internal", "Private", "Protected", "PrivateStatic", "PrivateWithResult"})
+        foreach (var name in new[] { "Public", "Internal", "Private", "Protected", "PrivateStatic", "PrivateWithResult" })
         {
             Assert.That(Throws(assembly, TargetType, name), Is.True, $"'{name}' was not injected into.");
         }
@@ -158,7 +157,7 @@ public class AssemblyInjectTests
 
         using var read = AssemblyDefinition.ReadAssembly(assembly);
         var type = read.MainModule.GetType(TargetType)!;
-        foreach (var name in new[] {"m_Marked", "m_MarkedInternal"})
+        foreach (var name in new[] { "m_Marked", "m_MarkedInternal" })
         {
             var field = type.Fields.Single(field => field.Name == name);
             Assert.That(field.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == typeof(ObsoleteAttribute).FullName), Is.True, name);
@@ -187,9 +186,12 @@ public class AssemblyInjectTests
         using var read = AssemblyDefinition.ReadAssembly(assembly);
         var type = read.MainModule.GetType(TargetType)!;
         var untouched = type.Methods.Single(method => method.Name == "Untouched");
-        Assert.That(untouched.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.False);
-        Assert.That(type.Fields.Single(field => field.Name == "m_Unmarked").CustomAttributes, Is.Empty);
-        Assert.That(type.Properties.Single(property => property.Name == "Plain").GetMethod!.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(untouched.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.False);
+            Assert.That(type.Fields.Single(field => field.Name == "m_Unmarked").CustomAttributes, Is.Empty);
+            Assert.That(type.Properties.Single(property => property.Name == "Plain").GetMethod!.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.False);
+        });
     }
 
     [Test]
@@ -201,7 +203,7 @@ public class AssemblyInjectTests
 
         Inject(assembly, Project());
 
-        Assert.That(Recorded(), Is.EqualTo(new[] {"Base.Inherited"}), "the member of the base type was injected into more or less than once.");
+        Assert.That(Recorded(), Is.EqualTo(new[] { "Base.Inherited" }), "the member of the base type was injected into more or less than once.");
     }
 
     #endregion
@@ -215,11 +217,13 @@ public class AssemblyInjectTests
         var before = File.ReadAllBytes(assembly);
 
         var (result, engine) = Inject(assembly, Project(disabled: true));
-
-        Assert.That(result, Is.True);
-        Assert.That(engine.Errors, Is.Empty);
-        Assert.That(Recorded(), Is.Empty);
-        Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although the injection was disabled");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True);
+            Assert.That(engine.Errors, Is.Empty);
+            Assert.That(Recorded(), Is.Empty);
+            Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although the injection was disabled");
+        });
     }
 
     [Test]
@@ -235,10 +239,12 @@ public class AssemblyInjectTests
         var before = File.ReadAllBytes(assembly);
 
         var (result, engine) = Inject(assembly, Project());
-
-        Assert.That(result, Is.True);
-        Assert.That(engine.Messages.Any(message => message.Contains("left as it was")), Is.True, string.Join(Environment.NewLine, engine.Messages));
-        Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although no injector changed it");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True);
+            Assert.That(engine.Messages.Any(message => message.Contains("left as it was")), Is.True, string.Join(Environment.NewLine, engine.Messages));
+            Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although no injector changed it");
+        });
     }
 
     #endregion
@@ -274,8 +280,11 @@ public class AssemblyInjectTests
         var type = read.MainModule.GetType(typeof(ClassOnlyAttribute).FullName!)!;
 
         Assert.That(type, Is.Not.Null);
-        Assert.That(type.Interfaces.Any(implementation => implementation.InterfaceType.FullName == typeof(IClassInjector).FullName), Is.False);
-        Assert.That(type.Methods.Any(method => method.Name == nameof(IClassInjector.Inject)), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.Interfaces.Any(implementation => implementation.InterfaceType.FullName == typeof(IClassInjector).FullName), Is.False);
+            Assert.That(type.Methods.Any(method => method.Name == nameof(IClassInjector.Inject)), Is.False);
+        });
     }
 
     [Test]
@@ -288,12 +297,17 @@ public class AssemblyInjectTests
         Inject(assembly, Project(), keepWeaver: "true");
 
         using var read = AssemblyDefinition.ReadAssembly(assembly);
-        Assert.That(read.MainModule.Types.Any(type => type.FullName == ThrowBodyAttributeName), Is.True, "the attribute was removed.");
-        Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "Gneedle.Inject"), Is.True, "the reference was dropped.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(read.MainModule.Types.Any(type => type.FullName == ThrowBodyAttributeName), Is.True, "the attribute was removed.");
+            Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "Gneedle.Inject"), Is.True, "the reference was dropped.");
+        });
         var method = read.MainModule.GetType(TargetType)!.Methods.Single(method => method.Name == "Public");
-        Assert.That(method.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == ThrowBodyAttributeName), Is.True, "the mark was taken off.");
-        Assert.That(method.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.True, "the member was not injected into.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(method.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == ThrowBodyAttributeName), Is.True, "the mark was taken off.");
+            Assert.That(method.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.True, "the member was not injected into.");
+        });
     }
 
     [Test]
@@ -321,15 +335,17 @@ public class AssemblyInjectTests
         var compiled = File.ReadAllBytes(symbols);
 
         var (result, engine) = Inject(assembly, Project());
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.Exists(symbols), Is.True, "the symbols of the assembly which was woven were taken away.");
-        Assert.That(File.ReadAllBytes(symbols), Is.Not.EqualTo(compiled),
-                    "the symbols which were compiled for the assembly which was read were left beside the one which was written.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+            Assert.That(File.Exists(symbols), Is.True, "the symbols of the assembly which was woven were taken away.");
+            Assert.That(File.ReadAllBytes(symbols), Is.Not.EqualTo(compiled),
+                        "the symbols which were compiled for the assembly which was read were left beside the one which was written.");
+        });
 
         // The two describe one image: a reader which is handed both reads the one which the other describes, and Cecil
         // refuses a database which was written for another image.
-        using var read = AssemblyDefinition.ReadAssembly(assembly, new ReaderParameters {ReadSymbols = true});
+        using var read = AssemblyDefinition.ReadAssembly(assembly, new ReaderParameters { ReadSymbols = true });
         Assert.That(read.MainModule.HasSymbols, Is.True, "the image which was woven was read without the symbols beside it.");
     }
 
@@ -350,10 +366,12 @@ public class AssemblyInjectTests
         var before = File.ReadAllBytes(assembly);
 
         var (result, engine) = Inject(assembly, Project());
-
-        Assert.That(result, Is.False);
-        Assert.That(engine.Errors.Single(), Does.Contain("is not a class"));
-        Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although the injector was refused");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(engine.Errors.Single(), Does.Contain("is not a class"));
+            Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was written although the injector was refused");
+        });
     }
 
     /// <summary>
@@ -405,10 +423,12 @@ public class AssemblyInjectTests
         var before = File.ReadAllBytes(partlyWoven);
 
         var (result, engine) = Inject(partlyWoven, Project());
-
-        Assert.That(result, Is.False);
-        Assert.That(engine.Errors.Single(), Does.Contain("is not a class"));
-        Assert.That(File.ReadAllBytes(partlyWoven), Is.EqualTo(before), "the assembly which was woven in part was written");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(engine.Errors.Single(), Does.Contain("is not a class"));
+            Assert.That(File.ReadAllBytes(partlyWoven), Is.EqualTo(before), "the assembly which was woven in part was written");
+        });
     }
 
     #endregion
@@ -426,9 +446,11 @@ public class AssemblyInjectTests
         File.WriteAllText(broken, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup></Project>");
 
         var (result, engine) = Inject(assembly, broken);
-
-        Assert.That(result, Is.False);
-        Assert.That(engine.Errors.Single(), Does.Contain("Broken.csproj"), string.Join(Environment.NewLine, engine.Errors));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(engine.Errors.Single(), Does.Contain("Broken.csproj"), string.Join(Environment.NewLine, engine.Errors));
+        });
     }
 
     [Test]
@@ -438,9 +460,11 @@ public class AssemblyInjectTests
         File.WriteAllBytes(notAnAssembly, [1, 2, 3, 4]);
 
         var (result, engine) = Inject(notAnAssembly, Project());
-
-        Assert.That(result, Is.False);
-        Assert.That(engine.Errors.Single(), Does.Contain("NotAnAssembly.dll"), string.Join(Environment.NewLine, engine.Errors));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(engine.Errors.Single(), Does.Contain("NotAnAssembly.dll"), string.Join(Environment.NewLine, engine.Errors));
+        });
     }
 
     [Test]
@@ -454,17 +478,22 @@ public class AssemblyInjectTests
         using (var held = new FileStream(assembly, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
             var (result, engine) = Inject(assembly, Project());
-
-            Assert.That(result, Is.False);
-            Assert.That(engine.Errors.Single(), Does.Contain(Path.GetFileName(assembly)), string.Join(Environment.NewLine, engine.Errors));
+            Assert.Multiple(() =>
+            {
+                Assert.That(result, Is.False);
+                Assert.That(engine.Errors.Single(), Does.Contain(Path.GetFileName(assembly)), string.Join(Environment.NewLine, engine.Errors));
+            });
         }
 
-        Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was not left as the build wrote it.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(File.ReadAllBytes(assembly), Is.EqualTo(before), "the assembly was not left as the build wrote it.");
 
-        // The image is written under a name of its own before it is put in place of the assembly, so a write which
-        // could not be made is one of those and nothing else.
-        Assert.That(Directory.GetFiles(m_WorkDirectory, "*.gneedle"), Is.Empty,
-                    "what the write wrote was left beside the assembly.");
+            // The image is written under a name of its own before it is put in place of the assembly, so a write which
+            // could not be made is one of those and nothing else.
+            Assert.That(Directory.GetFiles(m_WorkDirectory, "*.gneedle"), Is.Empty,
+                        "what the write wrote was left beside the assembly.");
+        });
     }
 
     #endregion

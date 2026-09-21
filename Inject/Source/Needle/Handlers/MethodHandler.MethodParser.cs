@@ -102,8 +102,8 @@ partial class MethodHandler
         // which no method of the declaring type could ever match.
         var invoked = delegateDef.Methods.First(method => method.Name.Equals("Invoke"));
         var parameters = invoked.Parameters
-                                 .Select(p => StackWalk.ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
-                                 .ToArray();
+                                .Select(p => StackWalk.ResolveDelegateParameterType(p.ParameterType, genericArguments).ParseGenericTokens(Source, Source.Module))
+                                .ToArray();
 
         // The delegate describes the member with the whole of its signature rather than with the types of its arguments
         // alone: what a member which declares parameters of its own hands back is what tells one instantiation of it
@@ -159,7 +159,7 @@ partial class MethodHandler
             // which may derive from that one, and the signature of a member of a base is written where that base stands
             // rather than where the type which derives from it does. A type which declares no parameter of its own names
             // every type of the signature of its members, so it is read through no instantiation at all.
-            var declaringInstance = methodDef.DeclaringType is { HasGenericParameters: true } declaring
+            var declaringInstance = methodDef.DeclaringType is {HasGenericParameters: true} declaring
                 ? InstantiationOf(declaring, namedInstance)
                 : null;
             methodDef.SameWith(parameters, returnType, out arguments, declaringInstance);
@@ -184,8 +184,8 @@ partial class MethodHandler
             // member declares is read where the signature describes the parameters of the member alone as well, which is
             // the rule which a member that declares no parameter of its own is found by: the name of a type tells nothing
             // of the value which a call of it leaves, so the value is read here.
-            var memberHandsBack     = StackWalk.HandsAValueBack(methodDef.ReturnType);
-            var describedHandsBack  = StackWalk.HandsAValueBack(returnType);
+            var memberHandsBack = StackWalk.HandsAValueBack(methodDef.ReturnType);
+            var describedHandsBack = StackWalk.HandsAValueBack(returnType);
             if (memberHandsBack != describedHandsBack
                 || (memberHandsBack && methodDef.GenericParameters.Count == 0
                     && !StackWalk.TheSameValueIsHandedBack(Source.Module, methodDef.ReturnType.WithTheArgumentsOf(methodDef.DeclaringType, declaringInstance), returnType)))
@@ -411,7 +411,7 @@ partial class MethodHandler
             // the body bears the name of is one which the type may name: both are parameters which the body names.
             var parameter = methodDef.GenericParameters[position];
             var named = Source.GenericParameters.FirstOrDefault(own => own.Name.Equals(parameter.Name))
-                        ?? Source.DeclaringType.GenericParameters.FirstOrDefault(own => own.Name.Equals(parameter.Name));
+                ?? Source.DeclaringType.GenericParameters.FirstOrDefault(own => own.Name.Equals(parameter.Name));
 
             // A parameter of the member which the signature of the member does not name is one which no token ties to
             // anything, and the parameter of the member being woven which stands at its position is the argument for it,
@@ -518,7 +518,7 @@ partial class MethodHandler
 
         if (woven.FullName == declaringType.FullName)
         {
-            return woven.MakeGenericInstanceType(woven.GenericParameters.Select(static parameter => (TypeReference) parameter).ToArray());
+            return woven.MakeGenericInstanceType([.. woven.GenericParameters.Select(static parameter => (TypeReference) parameter)]);
         }
 
         // The base type of the woven type is written out where the type is declared, so the arguments of it stand in
@@ -585,7 +585,7 @@ partial class MethodHandler
     /// <returns>Whether the body can write the type with every parameter which stands in it.</returns>
     private bool HoldsOnlyParametersWhichTheBodyNames(TypeReference type) => type switch
     {
-        GenericParameter parameter => parameter.Owner == Source.DeclaringType || parameter.Owner == Source,
+        GenericParameter parameter      => parameter.Owner == Source.DeclaringType || parameter.Owner == Source,
         // An argument is a type of its own, which may hold a parameter as well, just like Base<List<T>>, and the
         // element of an array is one, just like Base<T[]>: both are read through the type they stand for.
         GenericInstanceType instance    => HoldsOnlyParametersWhichTheBodyNames(instance.ElementType) && instance.GenericArguments.All(HoldsOnlyParametersWhichTheBodyNames),
@@ -645,7 +645,7 @@ partial class MethodHandler
             // member of the declaring type or of a base type of it which happens to carry that name is a different one.
             // The signature of the call is compared with the signature of this method, so a call which names another
             // one is refused rather than written.
-            return proceed.Parameters.SameWith(parameters.ToArray()) ? proceed : null;
+            return proceed.Parameters.SameWith([.. parameters]) ? proceed : null;
         }
 
         if (memberSymbol.HasFlag(MemberSymbols.Instance))
@@ -691,7 +691,7 @@ partial class MethodHandler
             // The type which the member is reached on is the one the arrangement ahead of the name stands for, which is
             // the same arrangement the parse read the name of the member through.
             var staticType = TypeNamedByAStaticFrom(filter, currentIndex)
-                             ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+                ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
 
             return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(staticType, (string) filter.Target[currentIndex].Operand, parameters, returnType);
         }
@@ -791,7 +791,7 @@ partial class MethodHandler
                 // through the symbol: the arms of a branch which each name a member of the same delegate type both
                 // leave a value for it, and the delegate which the arm which ran built is the one it is made on.
                 && StackWalk.TheSymbolIsOnEveryPathTo(filter, callIndex, index, targetDef)
-                && TopOfStackMatches(callMethod);                               // Make sure the top-of-stack types match the invoke parameters.
+                && TopOfStackMatches(callMethod); // Make sure the top-of-stack types match the invoke parameters.
 
         // Whether the arguments of the invocation are exactly the values which stand above the one which the symbol left,
         // which is what that value being the receiver of the invocation means: the arguments alone do not tell one
@@ -839,8 +839,9 @@ partial class MethodHandler
                 // An instruction which takes more values than the ones which stand above it took that value, and one
                 // which the walk cannot count is one whose result cannot be told: either way the invocation is made on
                 // something other than the value which the symbol left.
-                var effect = ins.OpCode == OpCodes.Nop ? (Taken: 0, Left: 0)
-                           : BranchEffect(ins) ?? StackWalk.StackEffect(ins);
+                var effect = ins.OpCode == OpCodes.Nop
+                    ? (Taken: 0, Left: 0)
+                    : BranchEffect(ins) ?? StackWalk.StackEffect(ins);
                 if (effect is not { } counted) return false;
                 if (counted.Taken > above) return false;
                 var left = above + counted.Left - counted.Taken;
@@ -881,10 +882,10 @@ partial class MethodHandler
                     return (1, 0);
 
                 case Code.Beq or Code.Beq_S or Code.Bne_Un or Code.Bne_Un_S
-                    or Code.Bge or Code.Bge_S or Code.Bge_Un or Code.Bge_Un_S
-                    or Code.Bgt or Code.Bgt_S or Code.Bgt_Un or Code.Bgt_Un_S
-                    or Code.Ble or Code.Ble_S or Code.Ble_Un or Code.Ble_Un_S
-                    or Code.Blt or Code.Blt_S or Code.Blt_Un or Code.Blt_Un_S:
+                  or Code.Bge or Code.Bge_S or Code.Bge_Un or Code.Bge_Un_S
+                  or Code.Bgt or Code.Bgt_S or Code.Bgt_Un or Code.Bgt_Un_S
+                  or Code.Ble or Code.Ble_S or Code.Ble_Un or Code.Ble_Un_S
+                  or Code.Blt or Code.Blt_S or Code.Blt_Un or Code.Blt_Un_S:
                     return (2, 0);
 
                 default:

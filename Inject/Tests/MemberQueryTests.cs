@@ -1,9 +1,8 @@
-using System.Linq;
 using Mono.Cecil;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// The queries which a type handler answers with the members of a type and with its base type. A member is asked for by
@@ -15,7 +14,6 @@ using static Gneedle.Inject.Test.TestFixtures;
 [TestFixture]
 public class MemberQueryTests
 {
-
     /// <summary>
     /// A method of the type which carries the attributes named.
     /// </summary>
@@ -153,10 +151,10 @@ public class MemberQueryTests
         // walks the base types and answers with what it finds there, while a plural query answers with what the type
         // itself declares, which is the fields and the properties it holds rather than the ones it inherits.
         var (handler, _, module) = NewHost("MemberQueryInheritedAssembly");
-        var baseType = new TypeDefinition(Ns, "Base", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var baseType = new TypeDefinition(NS, "Base", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
         baseType.Fields.Add(NewField(module, "InheritedField", FieldAttributes.Private));
         baseType.Properties.Add(new PropertyDefinition("InheritedProperty", PropertyAttributes.None, module.TypeSystem.Int32));
-        var derived = new TypeDefinition(Ns, "Derived", TypeAttributes.Public | TypeAttributes.Class, baseType);
+        var derived = new TypeDefinition(NS, "Derived", TypeAttributes.Public | TypeAttributes.Class, baseType);
         derived.Fields.Add(NewField(module, "OwnField", FieldAttributes.Private));
         module.Types.Add(baseType);
         module.Types.Add(derived);
@@ -176,8 +174,8 @@ public class MemberQueryTests
     public void The_Base_Type_Of_A_Class_Is_Answered_With_A_Handler_Of_It()
     {
         var (handler, _, module) = NewHost("MemberQueryBaseTypeAssembly");
-        var baseType = new TypeDefinition(Ns, "Base", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var derived = new TypeDefinition(Ns, "Derived", TypeAttributes.Public | TypeAttributes.Class, baseType);
+        var baseType = new TypeDefinition(NS, "Base", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var derived = new TypeDefinition(NS, "Derived", TypeAttributes.Public | TypeAttributes.Class, baseType);
         module.Types.Add(baseType);
         module.Types.Add(derived);
 
@@ -194,7 +192,7 @@ public class MemberQueryTests
         // null for it: the type which a module declares without a base type is one, and so is the type which the runtime
         // declares as the root of every hierarchy.
         var (handler, _, module) = NewHost("MemberQueryNoBaseTypeAssembly");
-        var root = new TypeDefinition(Ns, "Root", TypeAttributes.Public | TypeAttributes.Class);
+        var root = new TypeDefinition(NS, "Root", TypeAttributes.Public | TypeAttributes.Class);
         module.Types.Add(root);
 
         var host = (IClassHandler) handler.GetType(root);

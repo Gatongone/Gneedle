@@ -484,8 +484,8 @@ internal static class StackWalk
     /// <returns>Whether the two name the same value.</returns>
     internal static bool TheSameValueIsHandedBack(ModuleDefinition module, TypeReference member, TypeReference described)
         => TypeName.HasSameName(member, described)
-           || (IsI4Compatible(member) && IsI4Compatible(described))
-           || (IsI4Compatible(described) && HasAnI4UnderlyingType(module, member));
+            || (IsI4Compatible(member) && IsI4Compatible(described))
+            || (IsI4Compatible(described) && HasAnI4UnderlyingType(module, member));
 
     /// <summary>
     /// Whether the type is represented as a 4-byte integer on the CLR evaluation stack,
@@ -525,7 +525,7 @@ internal static class StackWalk
     /// <param name="ins">The instruction which is read.</param>
     /// <param name="targetDef">The template which the instruction belongs to.</param>
     /// <param name="type">The type of the value which the instruction leaves, or null when it leaves none.</param>
-    /// <returns>Whether the instruction leaves a value on the stack, <see cref="void"/> being none.</returns>
+    /// <returns>Whether the instruction leaves a value on the stack, <see cref="Void"/> being none.</returns>
     internal static bool TryGetStackType(ParseContext context, Instruction ins, MethodDefinition targetDef, out TypeReference? type)
     {
         var module = context.Module;
@@ -555,24 +555,24 @@ internal static class StackWalk
             // 4-byte integers whichever of them they are.
             Code.Conv_I1 or Code.Conv_I2 or Code.Conv_I4 or Code.Conv_U1 or Code.Conv_U2 or Code.Conv_U4
              or Code.Conv_Ovf_I1 or Code.Conv_Ovf_I2 or Code.Conv_Ovf_I4 or Code.Conv_Ovf_U1
-             or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un => typeSystem.Int32, // Conv, narrow
-            Code.Conv_I8 or Code.Conv_Ovf_I8 => typeSystem.Int64,                                                     // Conv, Int64
-            Code.Conv_U8 or Code.Conv_Ovf_U8 => typeSystem.UInt64,                                                    // Conv, UInt64
-            Code.Conv_I                      => typeSystem.IntPtr,                                                    // Conv, native
-            Code.Conv_U                      => typeSystem.UIntPtr,                                                   // Conv, native
-            Code.Conv_R4                     => typeSystem.Single,                                                    // Conv, Single
-            Code.Conv_R8 or Code.Conv_R_Un   => typeSystem.Double,                                                    // Conv, Double
+             or Code.Conv_Ovf_U2 or Code.Conv_Ovf_U4 or Code.Conv_Ovf_I_Un or Code.Conv_Ovf_U_Un => typeSystem.Int32,                                      // Conv, narrow
+            Code.Conv_I8 or Code.Conv_Ovf_I8                                                                   => typeSystem.Int64,                        // Conv, Int64
+            Code.Conv_U8 or Code.Conv_Ovf_U8                                                                   => typeSystem.UInt64,                       // Conv, UInt64
+            Code.Conv_I                                                                                        => typeSystem.IntPtr,                       // Conv, native
+            Code.Conv_U                                                                                        => typeSystem.UIntPtr,                      // Conv, native
+            Code.Conv_R4                                                                                       => typeSystem.Single,                       // Conv, Single
+            Code.Conv_R8 or Code.Conv_R_Un                                                                     => typeSystem.Double,                       // Conv, Double
             // The instructions which leave the type they name, which is the type of the value they leave: what is
             // looked for when the argument is the value which a call hands over.
-            Code.Box or Code.Unbox_Any or Code.Castclass or Code.Isinst when ins.Operand is TypeReference cast => cast,            // Cast
-            Code.Ldfld or Code.Ldsfld when ins.Operand is FieldReference field                                 => field.FieldType, // Field
+            Code.Box or Code.Unbox_Any or Code.Castclass or Code.Isinst when ins.Operand is TypeReference cast => cast,                                    // Cast
+            Code.Ldfld or Code.Ldsfld when ins.Operand is FieldReference field                                 => field.FieldType,                         // Field
             // The instructions which load the address of an argument or of a local rather than the value it holds, which
             // is what a template writes where it hands one to a member by `ref` or `out`: what stands on the stack is an
             // address of that type rather than a value of it, which is the type the delegate declares the argument as.
-            Code.Ldarga or Code.Ldarga_S or Code.Ldloca or Code.Ldloca_S                           => GetAddressType(context, ins, targetDef),     // Address
-            Code.Newobj when ins.Operand is MethodReference ctor                                   => ctor.DeclaringType,                 // Newobj
-            Code.Call or Code.Callvirt or Code.Ldftn when ins.Operand is MethodReference methodRef => ResolveMethodReturnType(methodRef), // Call
-            _                                                                                      => GetArgType(context, ins, targetDef)          // Args
+            Code.Ldarga or Code.Ldarga_S or Code.Ldloca or Code.Ldloca_S                                       => GetAddressType(context, ins, targetDef), // Address
+            Code.Newobj when ins.Operand is MethodReference ctor                                               => ctor.DeclaringType,                      // Newobj
+            Code.Call or Code.Callvirt or Code.Ldftn when ins.Operand is MethodReference methodRef             => ResolveMethodReturnType(methodRef),      // Call
+            _                                                                                                  => GetArgType(context, ins, targetDef)      // Args
         };
 
         return type != null && type != typeSystem.Void;
@@ -612,14 +612,14 @@ internal static class StackWalk
         var readsAnArgument = ins.OpCode.Code is Code.Ldarga or Code.Ldarga_S;
         var addressed = ins.Operand switch
         {
-            VariableReference local                                          => local.VariableType,
-            ParameterReference argument                                      => argument.ParameterType,
-            int slot when readsAnArgument                                    => ArgumentAt(slot, targetDef),
-            int slot when slot >= 0 && slot < targetDef.Body.Variables.Count => targetDef.Body.Variables[slot].VariableType,
-            _                                                                => null
+            VariableReference local                                      => local.VariableType,
+            ParameterReference argument                                  => argument.ParameterType,
+            int slot when readsAnArgument                                => ArgumentAt(slot, targetDef),
+            int slot and >= 0 when slot < targetDef.Body.Variables.Count => targetDef.Body.Variables[slot].VariableType,
+            _                                                            => null
         };
 
-        return addressed is { } type ? new ByReferenceType(type.ParseGenericTokens(context.Source, context.Module)) : null;
+        return addressed != null ? new ByReferenceType(addressed.ParseGenericTokens(context.Source, context.Module)) : null;
     }
 
     /// <summary>
