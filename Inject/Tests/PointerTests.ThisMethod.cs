@@ -1,18 +1,12 @@
-using System.Reflection;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
-using FieldAttributes = Mono.Cecil.FieldAttributes;
 using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
-using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for the method of the type which the template is woven into, which are the tests of <see cref="PointerTests"/> for that one placeholder.
@@ -31,12 +25,15 @@ public partial class PointerTests
         var host = AddAHost(handler);
         var module = host.Source.Module;
         var attrs = MethodAttributes.Public | MethodAttributes.HideBySig
-                    | (isVirtual ? MethodAttributes.Virtual | MethodAttributes.NewSlot : 0);
-        var add = new MethodDefinition("Add", attrs, module.TypeSystem.Int32) { DeclaringType = host.Source };
+            | (isVirtual ? MethodAttributes.Virtual | MethodAttributes.NewSlot : 0);
+        var add = new MethodDefinition("Add", attrs, module.TypeSystem.Int32) {DeclaringType = host.Source};
         add.Parameters.Add(new ParameterDefinition("a", ParameterAttributes.None, module.TypeSystem.Int32));
         add.Parameters.Add(new ParameterDefinition("b", ParameterAttributes.None, module.TypeSystem.Int32));
         var il = add.Body.GetILProcessor();
-        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Add); il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ret);
         host.Source.Methods.Add(add);
         return host;
     }
@@ -50,7 +47,7 @@ public partial class PointerTests
         var handler = (AssemblyHandler) Assembly.Create("MethodInjectionEchoAssembly").Handler;
         var host = AddAHost(handler);
         var t = host.Source.Module.ImportReference(host.AssemblyHandler.GetCecilType(echoType).Reference);
-        var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, t) { DeclaringType = host.Source };
+        var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, t) {DeclaringType = host.Source};
         echo.Parameters.Add(new ParameterDefinition("c", ParameterAttributes.None, t));
         echo.Body.GetILProcessor().Emit(OpCodes.Ret);
         host.Source.Methods.Add(echo);
@@ -75,7 +72,7 @@ public partial class PointerTests
 
         void AddAMember(string name, TypeReference returnType)
         {
-            var member = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.HideBySig, returnType) { DeclaringType = host.Source };
+            var member = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.HideBySig, returnType) {DeclaringType = host.Source};
             member.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int32));
             var il = member.Body.GetILProcessor();
             if (returnType.MetadataType != MetadataType.Void) il.Emit(OpCodes.Ldarg_1);
@@ -122,7 +119,7 @@ public partial class PointerTests
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeByNameWhichIsAConstant)));
 
         Assert.That(((MethodHandler) method).Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference
-                                                                                        && reference.Name == "Add"), Is.True);
+            && reference.Name == "Add"), Is.True);
     }
 
     [Test]
@@ -139,8 +136,7 @@ public partial class PointerTests
             [],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeByNameWhichIsComputed))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeByNameWhichIsComputed))));
 
         Assert.That(thrown!.Message, Does.Contain("is not written where the call is"));
     }
@@ -157,13 +153,16 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeInstanceMethod)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        Assert.Multiple(() =>
+        {
 
-        // The delegate Invoke must be rewritten to a direct call to Add, and no delegate
-        // construction (ldftn/newobj) should remain.
-        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && ((MethodReference) i.Operand).Name == "Add"), Is.True);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+            // The delegate Invoke must be rewritten to a direct call to Add, and no delegate
+            // construction (ldftn/newobj) should remain.
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                && ((MethodReference) i.Operand).Name == "Add"), Is.True);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        });
     }
 
     /// <summary>
@@ -185,8 +184,13 @@ public partial class PointerTests
         tryHalf.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int32));
         tryHalf.Parameters.Add(new ParameterDefinition("half", ParameterAttributes.Out, new ByReferenceType(module.TypeSystem.Int32)));
         var il = tryHalf.Body.GetILProcessor();
-        il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4_2); il.Emit(OpCodes.Div);
-        il.Emit(OpCodes.Stind_I4); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Div);
+        il.Emit(OpCodes.Stind_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
         host.Source.Methods.Add(tryHalf);
 
         var bump = new MethodDefinition("BumpByRef", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
@@ -195,8 +199,13 @@ public partial class PointerTests
         };
         bump.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, new ByReferenceType(module.TypeSystem.Int32)));
         var bumpIl = bump.Body.GetILProcessor();
-        bumpIl.Emit(OpCodes.Ldarg_1); bumpIl.Emit(OpCodes.Ldarg_1); bumpIl.Emit(OpCodes.Ldind_I4); bumpIl.Emit(OpCodes.Ldc_I4_1);
-        bumpIl.Emit(OpCodes.Add); bumpIl.Emit(OpCodes.Stind_I4); bumpIl.Emit(OpCodes.Ret);
+        bumpIl.Emit(OpCodes.Ldarg_1);
+        bumpIl.Emit(OpCodes.Ldarg_1);
+        bumpIl.Emit(OpCodes.Ldind_I4);
+        bumpIl.Emit(OpCodes.Ldc_I4_1);
+        bumpIl.Emit(OpCodes.Add);
+        bumpIl.Emit(OpCodes.Stind_I4);
+        bumpIl.Emit(OpCodes.Ret);
         host.Source.Methods.Add(bump);
         return host;
     }
@@ -214,7 +223,7 @@ public partial class PointerTests
         var host = AddAHost(handler);
         host.AddMethod(
             "Touch",
-            typeof(M_0).ToGneedleType(),
+            typeof(M0).ToGneedleType(),
             [new GenericParameterType("U")],
             [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
@@ -259,15 +268,16 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAnOutArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "TryHalf"), Is.True,
-                    "the delegate was not rewritten to a direct call to TryHalf.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
-        Assert.That(ins.First(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "TryHalf").Operand,
-                    Is.Not.InstanceOf<GenericInstanceMethod>(),
-                    "the call stands on a method specification rather than on the member which it names, and the specification of a member which declares no parameter of its own names no argument.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "TryHalf"), Is.True,
+                "the delegate was not rewritten to a direct call to TryHalf.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+            Assert.That(ins.First(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "TryHalf").Operand,
+                Is.Not.InstanceOf<GenericInstanceMethod>(),
+                "the call stands on a method specification rather than on the member which it names, and the specification of a member which declares no parameter of its own names no argument.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [9]), Is.EqualTo(4));
     }
@@ -288,14 +298,15 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "BumpByRef"), Is.True,
-                    "the delegate was not rewritten to a direct call to BumpByRef.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
-        Assert.That(ReceiverOf(ins, "BumpByRef", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldarg_0),
-                    "the member is not called on the instance which the member being woven belongs to.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "BumpByRef"), Is.True,
+                "the delegate was not rewritten to a direct call to BumpByRef.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+            Assert.That(ReceiverOf(ins, "BumpByRef", arguments: 1).OpCode, Is.EqualTo(OpCodes.Ldarg_0),
+                "the member is not called on the instance which the member being woven belongs to.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(42));
     }
@@ -316,8 +327,7 @@ public partial class PointerTests
             [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument))));
 
         Assert.That(thrown!.Message, Does.Contain("is static and belongs to none"));
     }
@@ -344,7 +354,8 @@ public partial class PointerTests
         identity.ReturnType = own;
         identity.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, own));
         var il = identity.Body.GetILProcessor();
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
         host.Source.Methods.Add(identity);
         return host;
     }
@@ -360,24 +371,26 @@ public partial class PointerTests
         var host = NewHostWithAMemberNamedByTheLaterParameter();
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(M_1).ToGneedleType(),
+            typeof(M1).ToGneedleType(),
             [new GenericParameterType("TKey"), new GenericParameterType("TRes")],
-            [new Parameter(typeof(M_0).ToGneedleType()), new Parameter(typeof(M_1).ToGneedleType())],
+            [new Parameter(typeof(M0).ToGneedleType()), new Parameter(typeof(M1).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichTheNameOfAParameterNames)));
 
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                          .FirstOrDefault(reference => reference.Name == "IdentityOfTheLater");
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
-        Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
+        Assert.Multiple(() =>
+        {
+            Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
                     "the call stands on the definition of the member rather than on an instantiation of it.");
-        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(method.Source.GenericParameters[1]),
-                    "the call does not name the parameter of the body which the name of the parameter of the member ties it to.");
-
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+            Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(method.Source.GenericParameters[1]),
+                "the call does not name the parameter of the body which the name of the parameter of the member ties it to.");
+        });
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
 
         Assert.That(type.GetMethod("Run")!.MakeGenericMethod(typeof(int), typeof(long)).Invoke(null, [1, 2L]), Is.EqualTo(2L),
-                    "the woven assembly does not hand back the value of the parameter which the member is named by.");
+            "the woven assembly does not hand back the value of the parameter which the member is named by.");
     }
 
     /// <summary>
@@ -390,7 +403,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMemberWhoseParameterTheTypeNames(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).WithGenericParameter("T").GetHandler();
+        var host = (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public).WithGenericParameter("T").GetHandler();
         var module = host.Source.Module;
 
         var identity = new MethodDefinition("Identity", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Object)
@@ -402,7 +415,8 @@ public partial class PointerTests
         identity.ReturnType = own;
         identity.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, own));
         var il = identity.Body.GetILProcessor();
-        il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ret);
         host.Source.Methods.Add(identity);
         return host;
     }
@@ -427,16 +441,18 @@ public partial class PointerTests
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                          .FirstOrDefault(reference => reference.Name == "Identity");
         Assert.That(call, Is.Not.Null, "the member which the template named was not called.");
-        Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
+        Assert.Multiple(() =>
+        {
+            Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
                     "the call stands on the definition of the member rather than on an instantiation of it.");
-        Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(host.Source.GenericParameters[0]),
-                    "the call does not name the parameter of the type which named the parameter of the member, which is "
-                    + "the one the parameter of the member bears the name of rather than the one the member declares.");
-
+            Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(host.Source.GenericParameters[0]),
+                "the call does not name the parameter of the type which named the parameter of the member, which is "
+                + "the one the parameter of the member bears the name of rather than the one the member declares.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [41]), Is.EqualTo(41),
-                    "the woven assembly does not hand back the value which the member was called with.");
+            "the woven assembly does not hand back the value which the member was called with.");
     }
 
     [Test]
@@ -455,8 +471,7 @@ public partial class PointerTests
             [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn))));
 
         Assert.That(thrown!.Message, Does.Contain("declares a generic parameter of its own which no parameter of the member being woven stands for"));
     }
@@ -477,7 +492,7 @@ public partial class PointerTests
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn)));
 
         Assert.That(InstantiationOfTheCall(method, "Touch"), Is.EqualTo(typeof(int).FullName),
-                    "the member was not instantiated with the type which the delegate describes the value it hands back with.");
+            "the member was not instantiated with the type which the delegate describes the value it hands back with.");
     }
 
     /// <summary>
@@ -496,7 +511,11 @@ public partial class PointerTests
         };
         widen.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Int64));
         var il = widen.Body.GetILProcessor();
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Conv_I8); il.Emit(OpCodes.Add); il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ret);
         host.Source.Methods.Add(widen);
         return host;
     }
@@ -517,13 +536,14 @@ public partial class PointerTests
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAConvertedArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Widen"), Is.True,
-                    "the delegate was not rewritten to a direct call to Widen.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
-
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Widen"), Is.True,
+                "the delegate was not rewritten to a direct call to Widen.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        });
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(null, [3]), Is.EqualTo(7L));
     }
 
@@ -546,9 +566,9 @@ public partial class PointerTests
         var pointer = Array.FindIndex(ins, instruction => instruction.OpCode == OpCodes.Ldftn);
         Assert.That(pointer, Is.GreaterThanOrEqualTo(0), "the delegate was not built out of the pointer of the member.");
         Assert.That(pointer > 0 && ins[pointer - 1].OpCode == OpCodes.Ldnull, Is.True,
-                    "the constructor of the delegate was not given the target which a member of no instance takes.");
+            "the constructor of the delegate was not given the target which a member of no instance takes.");
 
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
         var widen = (ThisMethodTemplates.LongOp) type.GetMethod("Run")!.Invoke(null, null)!;
 
         Assert.That(widen(3), Is.EqualTo(4L));
@@ -571,11 +591,13 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         var construction = ins.FirstOrDefault(i => i.OpCode == OpCodes.Newobj);
-        Assert.That(construction, Is.Not.Null, "the delegate was not built at all.");
-        Assert.That(((MethodReference) construction!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the constructor of the delegate was written on the definition rather than on the type which was named.");
-
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(construction, Is.Not.Null, "the delegate was not built at all.");
+            Assert.That(((MethodReference) construction!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
+                "the constructor of the delegate was written on the definition rather than on the type which was named.");
+        });
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
         var widen = (Func<long, long>) type.GetMethod("Run")!.Invoke(null, null)!;
 
         Assert.That(widen(3), Is.EqualTo(4L));
@@ -597,18 +619,19 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegate)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                   && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
-                    "the reads of the local were not both rewritten to a direct call to Add.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                    && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
+                "the reads of the local were not both rewritten to a direct call to Add.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        });
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(64));
     }
 
@@ -627,19 +650,20 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWithTheValueOfItsOwnInvocation)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                   && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
-                    "the reads of the local were not both rewritten to a direct call to Add.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.False,
-                    "an invocation of the delegate was left standing rather than folded.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                    && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
+                "the reads of the local were not both rewritten to a direct call to Add.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.False,
+                "an invocation of the delegate was left standing rather than folded.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        });
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(63));
     }
 
@@ -658,18 +682,19 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeASymbolWithTheValueOfAnother)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                   && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
-                    "the symbols were not both rewritten to a direct call to Add.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.False,
-                    "an invocation of the delegate was left standing rather than folded.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                    && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
+                "the symbols were not both rewritten to a direct call to Add.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.False,
+                "an invocation of the delegate was left standing rather than folded.");
+        });
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(63));
     }
 
@@ -688,19 +713,20 @@ public partial class PointerTests
             [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
         Assert.DoesNotThrow(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichWasHandedOn))),
-                            "the template which hands the delegate it holds on was refused rather than woven.");
+            "the template which hands the delegate it holds on was refused rather than woven.");
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
-                    "the delegate was not built into the local which holds it.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
-                    "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
+                "the delegate was not built into the local which holds it.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+                "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
+        });
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(42));
     }
 
@@ -711,7 +737,7 @@ public partial class PointerTests
         // walk counted the one it took away as the one which stood under the arguments of the invocation: the read which
         // handed the delegate over was answered for the invocation as well, which wrote the hand-over with the receiver of
         // the member rather than with the delegate which the local holds.
-        ThisMethodTemplates.Held.Slot = null;
+        ThisMethodTemplates.Held.Slot   = null;
         ThisMethodTemplates.Held.Number = 0;
         var host = NewHostWithAdd(isVirtual: false, "MethodInjectionStoredOnItsWayDelegateAssembly");
         var method = host.AddMethod(
@@ -722,20 +748,24 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichIsStoredThroughAValueItWasHandedTo)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
-                    "the delegate was not built into the local which holds it.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
-                    "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
+                "the delegate was not built into the local which holds it.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+                "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
+        });
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(42));
-        Assert.That(ThisMethodTemplates.Held.Slot, Is.Not.Null, "the delegate which the template handed over was not held.");
-        Assert.That(ThisMethodTemplates.Held.Number, Is.EqualTo(5), "the field which the template wrote on its way was not written.");
+        var type = assembly.Load().GetType($"{NS}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(42));
+            Assert.That(ThisMethodTemplates.Held.Slot, Is.Not.Null, "the delegate which the template handed over was not held.");
+            Assert.That(ThisMethodTemplates.Held.Number, Is.EqualTo(5), "the field which the template wrote on its way was not written.");
+        });
     }
 
     [Test]
@@ -754,17 +784,18 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichWasCountedFirst)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
-                    "the delegate was not built into the local which holds it.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
-                    "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
+                "the delegate was not built into the local which holds it.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+                "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
+        });
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [21]), Is.EqualTo(28));
     }
 
@@ -783,13 +814,14 @@ public partial class PointerTests
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateOfAStaticMember)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Widen"), Is.True,
-                    "the delegate was not rewritten to a direct call to Widen.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
-
-        var type = host.AssemblyHandler.Assembly.Load().GetType($"{Ns}.Host")!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Widen"), Is.True,
+                "the delegate was not rewritten to a direct call to Widen.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        });
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(null, [3L]), Is.EqualTo(4L));
     }
 
@@ -809,12 +841,14 @@ public partial class PointerTests
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithALocalReadTwice)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && ((MethodReference) i.Operand).Name == "Add"), Is.True,
-                    "the delegate was not rewritten to a direct call to Add.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                    && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+                "the delegate was not rewritten to a direct call to Add.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        });
     }
 
     [Test]
@@ -846,7 +880,7 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && ((MethodReference) i.Operand).Name == "Add"), Is.True);
+            && ((MethodReference) i.Operand).Name == "Add"), Is.True);
     }
 
     /// <summary>
@@ -1011,7 +1045,7 @@ public partial class PointerTests
     /// <param name="argument">The value itself.</param>
     /// <param name="message">What is reported when the member was not called.</param>
     private static void TheIdentityOfAConstrainedMemberIsCalled(string assemblyName, Type constraint, Type value, string template,
-                                                                object argument, string message)
+        object argument, string message)
     {
         var host = NewHostWhoseIdentityIsConstrainedTo(assemblyName, constraint);
         var method = host.AddMethod("Run", value.ToGneedleType(), [], [new Parameter(value.ToGneedleType())], MethodFlags.Public);
@@ -1044,10 +1078,10 @@ public partial class PointerTests
     /// <returns>The name of the type argument of the call, or null where the call names no instantiation.</returns>
     private static string? InstantiationOfTheCall(IMethodHandler method, string name)
         => ((MethodHandler) method).Source.Body.Instructions
-                                    .Select(instruction => instruction.Operand)
-                                    .OfType<GenericInstanceMethod>()
-                                    .FirstOrDefault(reference => reference.Name == name)?
-                                    .GenericArguments[0].FullName;
+                                   .Select(instruction => instruction.Operand)
+                                   .OfType<GenericInstanceMethod>()
+                                   .FirstOrDefault(reference => reference.Name == name)?
+                                   .GenericArguments[0].FullName;
 
     /// <summary>The names of the types which the call of a member of a woven body is instantiated with, in order.</summary>
     /// <param name="method">The member which was woven.</param>
@@ -1055,10 +1089,10 @@ public partial class PointerTests
     /// <returns>The names of the type arguments of the call, or an empty list where the call names no instantiation.</returns>
     private static string[] InstantiationsOfTheCall(IMethodHandler method, string name)
         => ((MethodHandler) method).Source.Body.Instructions
-                                    .Select(instruction => instruction.Operand)
-                                    .OfType<GenericInstanceMethod>()
-                                    .FirstOrDefault(reference => reference.Name == name)?
-                                    .GenericArguments.Select(argument => argument.FullName).ToArray() ?? [];
+                                   .Select(instruction => instruction.Operand)
+                                   .OfType<GenericInstanceMethod>()
+                                   .FirstOrDefault(reference => reference.Name == name)?
+                                   .GenericArguments.Select(argument => argument.FullName).ToArray() ?? [];
 
     [Test]
     public void ThisMethod_Of_A_Name_Which_Two_Members_Share_Is_The_One_Which_The_Names_Of_The_Types_Describe()
@@ -1077,7 +1111,7 @@ public partial class PointerTests
 
         Assert.That(call, Is.Not.Null, "the member which the delegate describes was not called.");
         Assert.That(call, Is.Not.InstanceOf<GenericInstanceMethod>(),
-                    "the member which declares a parameter of its own was called rather than the one the names describe.");
+            "the member which declares a parameter of its own was called rather than the one the names describe.");
     }
 
     [Test]
@@ -1091,19 +1125,22 @@ public partial class PointerTests
         asInt.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
         var asString = host.AddMethod("RunString", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
         asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString)));
-
-        Assert.That(InstantiationOfTheCall(asInt, "Identity"), Is.EqualTo(typeof(int).FullName),
-                    "the call was not one of the instantiation which the delegate named.");
-        Assert.That(InstantiationOfTheCall(asString, "Identity"), Is.EqualTo(typeof(string).FullName),
-                    "the call was not one of the instantiation which the delegate named.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(InstantiationOfTheCall(asInt, "Identity"), Is.EqualTo(typeof(int).FullName),
+                "the call was not one of the instantiation which the delegate named.");
+            Assert.That(InstantiationOfTheCall(asString, "Identity"), Is.EqualTo(typeof(string).FullName),
+                "the call was not one of the instantiation which the delegate named.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         var instance = Activator.CreateInstance(type)!;
-
-        Assert.That(type.GetMethod("RunInt")!.Invoke(instance, [5]), Is.EqualTo(5),
-                    "the member which declares a parameter of its own was not called through This.");
-        Assert.That(type.GetMethod("RunString")!.Invoke(instance, ["hi"]), Is.EqualTo("hi"),
-                    "the call was not one of the instantiation which the delegate named.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.GetMethod("RunInt")!.Invoke(instance, [5]), Is.EqualTo(5),
+                "the member which declares a parameter of its own was not called through This.");
+            Assert.That(type.GetMethod("RunString")!.Invoke(instance, ["hi"]), Is.EqualTo("hi"),
+                "the call was not one of the instantiation which the delegate named.");
+        });
     }
 
     [Test]
@@ -1114,20 +1151,20 @@ public partial class PointerTests
         var host = NewHostWithIdentity("MethodInjectionIdentityByTokenAssembly");
         var call = host.AddMethod(
             "Call",
-            typeof(M_0).ToGneedleType(),
+            typeof(M0).ToGneedleType(),
             [new GenericParameterType("U")],
-            [new Parameter(typeof(M_0).ToGneedleType())],
+            [new Parameter(typeof(M0).ToGneedleType())],
             MethodFlags.Public);
         call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfTheMethod)));
 
         Assert.That(InstantiationOfTheCall(call, "Identity"), Is.EqualTo("U"),
-                    "the call was not one of the member which declares one, instantiated with the parameter of the member.");
+            "the call was not one of the member which declares one, instantiated with the parameter of the member.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         var instance = Activator.CreateInstance(type)!;
 
         Assert.That(type.GetMethod("Call")!.MakeGenericMethod(typeof(string)).Invoke(instance, ["hi"]), Is.EqualTo("hi"),
-                    "the member which declares a parameter of its own was not called with the parameter of the member.");
+            "the member which declares a parameter of its own was not called with the parameter of the member.");
     }
 
     [Test]
@@ -1141,11 +1178,10 @@ public partial class PointerTests
         var host = NewHostWithIdentity("MethodInjectionIdentityMismatchAssembly");
         var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
+        var thrown = Assert.Throws<ArgumentException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was not refused as one which no candidate of that name describes: {thrown.Message}");
+            $"the member was not refused as one which no candidate of that name describes: {thrown.Message}");
     }
 
     [Test]
@@ -1165,11 +1201,10 @@ public partial class PointerTests
             [new Parameter(new GenericParameterType("T"))],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.IdentityOfTheTokenWithAValueOfAnotherType))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.IdentityOfTheTokenWithAValueOfAnotherType))));
 
         Assert.That(thrown!.Message, Does.Contain("names no member"),
-                    "the delegate was refused as one which names no member rather than by the rule of the call.");
+            "the delegate was refused as one which names no member rather than by the rule of the call.");
     }
 
     [Test]
@@ -1183,11 +1218,10 @@ public partial class PointerTests
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityAssembly");
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnIntWhichTheConstraintRefuses))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnIntWhichTheConstraintRefuses))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    "the member was called with a type which the constraint of its own parameter refuses.");
+            "the member was called with a type which the constraint of its own parameter refuses.");
     }
 
     [Test]
@@ -1200,12 +1234,12 @@ public partial class PointerTests
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString)));
 
         Assert.That(InstantiationOfTheCall(method, "Identity"), Is.EqualTo(typeof(string).FullName),
-                    "the member was not called one of the instantiation which fits the constraint of its parameter.");
+            "the member was not called one of the instantiation which fits the constraint of its parameter.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), ["hi"]), Is.EqualTo("hi"),
-                    "the member whose constraint the instantiation fits was not called.");
+            "the member whose constraint the instantiation fits was not called.");
     }
 
     [Test]
@@ -1214,23 +1248,24 @@ public partial class PointerTests
         // The other kind which a constraint names, which is read the same way: a parameter which accepts the types of
         // values is one which the type of a string does not fit and one which the type of an int does.
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAValueAssembly",
-                                                  GenericParameterAttributes.NotNullableValueTypeConstraint);
+            GenericParameterAttributes.NotNullableValueTypeConstraint);
         var asInt = host.AddMethod("RunInt", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         asInt.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
         var asString = host.AddMethod("RunString", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString))));
+        var thrown = Assert.Throws<ArgumentException>(() => asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    "the member was called with a type of a reference where its parameter accepts the types of values.");
+            "the member was called with a type of a reference where its parameter accepts the types of values.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-
-        Assert.That(InstantiationOfTheCall(asInt, "Identity"), Is.EqualTo(typeof(int).FullName),
-                    "the member was not called one of the instantiation which fits the constraint of its parameter.");
-        Assert.That(type.GetMethod("RunInt")!.Invoke(Activator.CreateInstance(type), [5]), Is.EqualTo(5),
-                    "the member whose parameter accepts the types of values was not called with one.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(InstantiationOfTheCall(asInt, "Identity"), Is.EqualTo(typeof(int).FullName),
+                "the member was not called one of the instantiation which fits the constraint of its parameter.");
+            Assert.That(type.GetMethod("RunInt")!.Invoke(Activator.CreateInstance(type), [5]), Is.EqualTo(5),
+                "the member whose parameter accepts the types of values was not called with one.");
+        });
     }
 
     [Test]
@@ -1240,14 +1275,13 @@ public partial class PointerTests
         // the one value of that kind which the constraint does not: the runtime refuses an instantiation of such a
         // parameter with it, so a delegate which names it describes no member rather than one which cannot be called.
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfANullableAssembly",
-                                                  GenericParameterAttributes.NotNullableValueTypeConstraint);
+            GenericParameterAttributes.NotNullableValueTypeConstraint);
         var method = host.AddMethod("Run", typeof(int?).ToGneedleType(), [], [new Parameter(typeof(int?).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with a value which may be absent where its own parameter accepts the types of values: {thrown.Message}");
+            $"the member was called with a value which may be absent where its own parameter accepts the types of values: {thrown.Message}");
     }
 
     [Test]
@@ -1259,11 +1293,10 @@ public partial class PointerTests
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAReferenceFromANullableAssembly");
         var method = host.AddMethod("Run", typeof(int?).ToGneedleType(), [], [new Parameter(typeof(int?).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with a value which may be absent where its own parameter accepts the types of references: {thrown.Message}");
+            $"the member was called with a value which may be absent where its own parameter accepts the types of references: {thrown.Message}");
     }
 
     [Test]
@@ -1276,11 +1309,10 @@ public partial class PointerTests
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToATypeAssembly", typeof(IComparable));
         var method = host.AddMethod("Run", typeof(object).ToGneedleType(), [], [new Parameter(typeof(object).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnObject))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnObject))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with a type which is made of nothing the constraint names: {thrown.Message}");
+            $"the member was called with a type which is made of nothing the constraint names: {thrown.Message}");
     }
 
     [Test]
@@ -1293,12 +1325,12 @@ public partial class PointerTests
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
 
         Assert.That(InstantiationOfTheCall(method, "Identity"), Is.EqualTo(typeof(int).FullName),
-                    "the member was not called one of the instantiation which satisfies the constraint of its parameter.");
+            "the member was not called one of the instantiation which satisfies the constraint of its parameter.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [5]), Is.EqualTo(5),
-                    "the member whose constraint the instantiation satisfies was not called.");
+            "the member whose constraint the instantiation satisfies was not called.");
     }
 
     [Test]
@@ -1307,8 +1339,8 @@ public partial class PointerTests
         // The type which the delegate names is not the type the constraint names, and it is made of it through the base
         // types it is declared with, which is what the walk reaches the constraint through.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToABaseTypeAssembly", typeof(HelperClass), typeof(DerivedOfAHelperClass),
-                                               nameof(ThisMethodTemplates.Identity_OfADerived), new DerivedOfAHelperClass(),
-                                               "the member whose constraint names a base type of the argument was not called.");
+            nameof(ThisMethodTemplates.Identity_OfADerived), new DerivedOfAHelperClass(),
+            "the member whose constraint names a base type of the argument was not called.");
     }
 
     [Test]
@@ -1317,8 +1349,8 @@ public partial class PointerTests
         // A type is made of the interfaces which are declared where it stands, which the walk reads as well: the
         // interface which the constraint names is one of them, as the very instantiation which the constraint names.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToAnInterfaceAssembly", typeof(ICountedOfAnInstantiation<int>), typeof(CountedOfAnInstantiation),
-                                               nameof(ThisMethodTemplates.Identity_OfACounted), new CountedOfAnInstantiation(),
-                                               "the member whose constraint names an interface of the argument was not called.");
+            nameof(ThisMethodTemplates.Identity_OfACounted), new CountedOfAnInstantiation(),
+            "the member whose constraint names an interface of the argument was not called.");
     }
 
     [Test]
@@ -1327,7 +1359,7 @@ public partial class PointerTests
         // The type is made of the interface, and not of the instantiation of it which the constraint names: the two are
         // different types, which is what the name of the interface holds, and the runtime refuses one for the other.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAnotherInstantiationAssembly",
-                                                      typeof(ICountedOfAnInstantiation<string>));
+            typeof(ICountedOfAnInstantiation<string>));
         var method = host.AddMethod(
             "Run",
             typeof(CountedOfAnInstantiation).ToGneedleType(),
@@ -1335,11 +1367,10 @@ public partial class PointerTests
             [new Parameter(typeof(CountedOfAnInstantiation).ToGneedleType())],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfACounted))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfACounted))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with a type which is made of another instantiation of the constraint: {thrown.Message}");
+            $"the member was called with a type which is made of another instantiation of the constraint: {thrown.Message}");
     }
 
     [Test]
@@ -1349,14 +1380,13 @@ public partial class PointerTests
         // with, and the type which the constraint names is none of them: the instantiation is one the runtime refuses
         // and the delegate describes no member rather than one which cannot be called.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAnUnnamedTypeOfAnArrayAssembly",
-                                                      typeof(IComparable));
+            typeof(IComparable));
         var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with an array which the constraint of the parameter refuses: {thrown.Message}");
+            $"the member was called with an array which the constraint of the parameter refuses: {thrown.Message}");
     }
 
     [Test]
@@ -1365,8 +1395,8 @@ public partial class PointerTests
         // The same array read against a type which the runtime does give it, which is what tells the refusal of the
         // types which no array is given from the refusal of an array which is given none of them.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToAGivenTypeOfAnArrayAssembly", typeof(IEnumerable<int>), typeof(int[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt), new[] { 1, 2, 3 },
-                                               "the member whose constraint names a type which the array is given was not called.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt), new[] {1, 2, 3},
+            "the member whose constraint names a type which the array is given was not called.");
     }
 
     [Test]
@@ -1378,11 +1408,10 @@ public partial class PointerTests
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAVectorOfAnArrayAssembly", typeof(IList<int>));
         var method = host.AddMethod("Run", typeof(int[,]).ToGneedleType(), [], [new Parameter(typeof(int[,]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTwoDimensions))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTwoDimensions))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with an array of two dimensions where the constraint names a collection of one: {thrown.Message}");
+            $"the member was called with an array of two dimensions where the constraint names a collection of one: {thrown.Message}");
     }
 
     [Test]
@@ -1392,8 +1421,8 @@ public partial class PointerTests
         // which is the covariance of the arrays and of the sequences which name the element: the walk reads the
         // argument of the constraint with that variance rather than by its name alone.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACovariantTypeOfAnArrayAssembly", typeof(IEnumerable<object>), typeof(string[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfString), new[] { "a", "b" },
-                                               "the member whose constraint names a type which the array is given through its element was not called.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfString), new[] {"a", "b"},
+            "the member whose constraint names a type which the array is given through its element was not called.");
     }
 
     [Test]
@@ -1402,8 +1431,8 @@ public partial class PointerTests
         // The same, of an instance of a generic type which implements the interface of the constraint as an instance of
         // another element type: a list of strings is a sequence of the values of the framework.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACovariantTypeOfAnInstanceAssembly", typeof(IEnumerable<object>), typeof(List<string>),
-                                               nameof(ThisMethodTemplates.Identity_OfAListOfString), new List<string> { "a", "b" },
-                                               "the member whose constraint names a type which the argument is given through its element was not called.");
+            nameof(ThisMethodTemplates.Identity_OfAListOfString), new List<string> {"a", "b"},
+            "the member whose constraint names a type which the argument is given through its element was not called.");
     }
 
     [Test]
@@ -1412,8 +1441,8 @@ public partial class PointerTests
         // A parameter which the declaration of an interface marks contravariant accepts the types of everything which
         // the argument of the constraint accepts, which is the other way the arguments of an instance are read.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToAContravariantTypeAssembly", typeof(IComparer<string>), typeof(Comparer<object>),
-                                               nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework), Comparer<object>.Default,
-                                               "the member whose constraint names a type which accepts the argument was not called.");
+            nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework), Comparer<object>.Default,
+            "the member whose constraint names a type which accepts the argument was not called.");
     }
 
     [Test]
@@ -1423,14 +1452,13 @@ public partial class PointerTests
         // boxed is no reference of the type which the argument of the constraint names: an array of ints is no sequence
         // of the values of the framework, which the runtime refuses the instantiation for.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABoxedElementOfAnArrayAssembly",
-                                                      typeof(IEnumerable<object>));
+            typeof(IEnumerable<object>));
         var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with an array whose element is another value than the one the constraint names: {thrown.Message}");
+            $"the member was called with an array whose element is another value than the one the constraint names: {thrown.Message}");
     }
 
     [Test]
@@ -1438,14 +1466,13 @@ public partial class PointerTests
     {
         // The same read of an instance of a generic type, whose argument is a value which is boxed as well.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABoxedElementOfAnInstanceAssembly",
-                                                      typeof(IEnumerable<object>));
+            typeof(IEnumerable<object>));
         var method = host.AddMethod("Run", typeof(List<int>).ToGneedleType(), [], [new Parameter(typeof(List<int>).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfAnInt))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfAnInt))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with an instance whose element is another value than the one the constraint names: {thrown.Message}");
+            $"the member was called with an instance whose element is another value than the one the constraint names: {thrown.Message}");
     }
 
     [Test]
@@ -1455,7 +1482,7 @@ public partial class PointerTests
         // a comparer of the values of the framework accepts the values which the argument of the constraint accepts,
         // and an int is no such value.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABoxedArgumentAssembly",
-                                                      typeof(IComparer<int>));
+            typeof(IComparer<int>));
         var method = host.AddMethod(
             "Run",
             typeof(Comparer<object>).ToGneedleType(),
@@ -1463,11 +1490,10 @@ public partial class PointerTests
             [new Parameter(typeof(Comparer<object>).ToGneedleType())],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with a comparer of a value which the constraint does not name: {thrown.Message}");
+            $"the member was called with a comparer of a value which the constraint does not name: {thrown.Message}");
     }
 
     [Test]
@@ -1477,8 +1503,8 @@ public partial class PointerTests
         // argument of the constraint is read with: a list of arrays of strings is a sequence of arrays of the values of
         // the framework.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToASequenceOfAnArrayAssembly", typeof(IEnumerable<object[]>), typeof(List<string[]>),
-                                               nameof(ThisMethodTemplates.Identity_OfAListOfAnArrayOfString), new List<string[]> { new[] { "a" }, new[] { "b" } },
-                                               "the member whose constraint names a sequence of an array was not called.");
+            nameof(ThisMethodTemplates.Identity_OfAListOfAnArrayOfString), new List<string[]> {new[] {"a"}, new[] {"b"}},
+            "the member whose constraint names a sequence of an array was not called.");
     }
 
     [Test]
@@ -1488,8 +1514,8 @@ public partial class PointerTests
         // type: the walk of it reaches the type of every value through the declaration of the interface, and a sequence
         // of the values of the framework is a sequence of an interface.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToASequenceOfAnInterfaceAssembly", typeof(IEnumerable<object>), typeof(IEnumerable<ICountedOfAnInstantiation<int>>),
-                                               nameof(ThisMethodTemplates.Identity_OfASequenceOfAnInterface), new List<ICountedOfAnInstantiation<int>>(),
-                                               "the member whose constraint names a sequence of the values of the framework was not called for an interface.");
+            nameof(ThisMethodTemplates.Identity_OfASequenceOfAnInterface), new List<ICountedOfAnInstantiation<int>>(),
+            "the member whose constraint names a sequence of the values of the framework was not called for an interface.");
     }
 
     [Test]
@@ -1499,8 +1525,8 @@ public partial class PointerTests
         // the element to, whatever the variance of the parameter which names the element is: an array of strings is a
         // collection of the values of the framework, which the runtime accepts and the walk reads as well.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfAnArrayAssembly", typeof(IList<object>), typeof(string[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfString), new[] { "a", "b" },
-                                               "the member whose constraint names a collection of the values of the framework was not called for an array.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfString), new[] {"a", "b"},
+            "the member whose constraint names a collection of the values of the framework was not called for an array.");
     }
 
     [Test]
@@ -1510,8 +1536,8 @@ public partial class PointerTests
         // which the covariance of the arrays takes it to: an array of arrays of strings is a collection of arrays of the
         // values of the framework.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfArraysAssembly", typeof(IList<object[]>), typeof(string[][]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnArrayOfString), new[] { new[] { "a" }, new[] { "b" } },
-                                               "the member whose constraint names a collection of arrays was not called for an array of arrays.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnArrayOfString), new[] {new[] {"a"}, new[] {"b"}},
+            "the member whose constraint names a collection of arrays was not called for an array of arrays.");
     }
 
     [Test]
@@ -1520,8 +1546,8 @@ public partial class PointerTests
         // The element of the array is an instance of a generic type whose conversion is the variance of the sequence it
         // implements: an array of lists of strings is a collection of sequences of the values of the framework.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfSequencesAssembly", typeof(IList<IEnumerable<object>>), typeof(List<string>[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfAListOfString), new[] { new List<string> { "a" } },
-                                               "the member whose constraint names a collection of sequences was not called for an array of instances.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfAListOfString), new[] {new List<string> {"a"}},
+            "the member whose constraint names a collection of sequences was not called for an array of instances.");
     }
 
     [Test]
@@ -1531,8 +1557,8 @@ public partial class PointerTests
         // constrained to a collection of that type is one which such an array is called for: the read of the elements of
         // the two arrays is what tells it, which no reference conversion does.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfAnUnderlyingTypeAssembly", typeof(IList<int>), typeof(DayOfWeek[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration), new[] { DayOfWeek.Monday },
-                                               "the member whose constraint names a collection of the type under an enumeration was not called for an array of it.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration), new[] {DayOfWeek.Monday},
+            "the member whose constraint names a collection of the type under an enumeration was not called for an array of it.");
     }
 
     [Test]
@@ -1542,8 +1568,8 @@ public partial class PointerTests
         // parameter is constrained to a collection of the values of one sign is one which an array of the other sign is
         // called for.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfOneWidthAssembly", typeof(IList<int>), typeof(uint[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfUnsignedValues), new[] { 1u, 2u },
-                                               "the member whose constraint names a collection of one width was not called for an array of another.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfUnsignedValues), new[] {1u, 2u},
+            "the member whose constraint names a collection of one width was not called for an array of another.");
     }
 
     [Test]
@@ -1552,8 +1578,8 @@ public partial class PointerTests
         // The width of the values of an enumeration is the width of the type under it, and it is read from the
         // enumeration rather than from the type which stands under it alone.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfAByteEnumerationAssembly", typeof(IList<ByteEnumOfTheTests>), typeof(byte[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheValuesUnderAByteEnumeration), new byte[] { 1, 2 },
-                                               "the member whose constraint names a collection of the values under an enumeration of a byte was not called.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheValuesUnderAByteEnumeration), new byte[] {1, 2},
+            "the member whose constraint names a collection of the values under an enumeration of a byte was not called.");
     }
 
     [Test]
@@ -1561,8 +1587,8 @@ public partial class PointerTests
     {
         // The same of the values of eight bytes, which is the other end of the widths which the integer family holds.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfTheWidestValuesAssembly", typeof(IList<long>), typeof(ulong[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestUnsignedValues), new[] { 1ul, 2ul },
-                                               "the member whose constraint names a collection of the widest signed values was not called for an array of the unsigned ones.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestUnsignedValues), new[] {1ul, 2ul},
+            "the member whose constraint names a collection of the widest signed values was not called for an array of the unsigned ones.");
     }
 
     [Test]
@@ -1571,8 +1597,8 @@ public partial class PointerTests
         // The native values of the two signs are related to one another whatever the width the runtime holds them at,
         // which the width of the values of every other type of the integer family does not tell.
         TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfTheNativeValuesAssembly", typeof(IList<IntPtr>), typeof(UIntPtr[]),
-                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheUnsignedNativeValues), new[] { (UIntPtr) 1, (UIntPtr) 2 },
-                                               "the member whose constraint names a collection of the signed native values was not called for an array of the unsigned ones.");
+            nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheUnsignedNativeValues), new[] {(UIntPtr) 1, (UIntPtr) 2},
+            "the member whose constraint names a collection of the signed native values was not called for an array of the unsigned ones.");
     }
 
     [Test]
@@ -1581,14 +1607,13 @@ public partial class PointerTests
         // The native values are related to one another alone, and neither to the values of the width which the runtime
         // holds them at: the runtime refuses the instantiation as well.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfTheNativeValuesOfOneWidthAssembly",
-                                                      typeof(IList<IntPtr>));
+            typeof(IList<IntPtr>));
         var method = host.AddMethod("Run", typeof(long[]).ToGneedleType(), [], [new Parameter(typeof(long[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestSignedValues))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestSignedValues))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with an array of the width which the native values are held at: {thrown.Message}");
+            $"the member was called with an array of the width which the native values are held at: {thrown.Message}");
     }
 
     [Test]
@@ -1598,14 +1623,13 @@ public partial class PointerTests
         // told by nothing: the runtime refuses the instantiation for an array of the values alone, and the walk reads
         // the array as the type it is.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfArraysOfAnEnumerationAssembly",
-                                                      typeof(IList<DayOfWeek[]>));
+            typeof(IList<DayOfWeek[]>));
         var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with an array of values where the constraint names an array of arrays of an enumeration: {thrown.Message}");
+            $"the member was called with an array of values where the constraint names an array of arrays of an enumeration: {thrown.Message}");
     }
 
     [Test]
@@ -1614,7 +1638,7 @@ public partial class PointerTests
         // The widths of the elements are what relates them, and the values of two widths are related by nothing: the
         // runtime refuses the instantiation as well.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAnotherWidthAssembly",
-                                                      typeof(IList<float>));
+            typeof(IList<float>));
         var method = host.AddMethod(
             "Run",
             typeof(DayOfWeek[]).ToGneedleType(),
@@ -1622,11 +1646,10 @@ public partial class PointerTests
             [new Parameter(typeof(DayOfWeek[]).ToGneedleType())],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
-                    $"the member was called with an array whose element is of another width than the one the constraint names: {thrown.Message}");
+            $"the member was called with an array whose element is of another width than the one the constraint names: {thrown.Message}");
     }
 
     [Test]
@@ -1640,10 +1663,9 @@ public partial class PointerTests
         // runtime refuses to run rather than one which calls the member.
         var host = NewHostWithIdentity("MethodInjectionIdentityMismatchNamedAssembly");
         var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [new GenericParameterType("T")],
-                                  [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
+        var thrown = Assert.Throws<ArgumentException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
         Assert.That(thrown!.Message, Does.Contain("Identity"));
     }
@@ -1658,8 +1680,8 @@ public partial class PointerTests
         var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeAString)));
 
-        Assert.That(InstantiationsOfTheCall(method, "Make"), Is.EqualTo(new[] { typeof(int).FullName, typeof(string).FullName }),
-                    "the member was not instantiated with the argument and the value which the delegate describes together.");
+        Assert.That(InstantiationsOfTheCall(method, "Make"), Is.EqualTo(new[] {typeof(int).FullName, typeof(string).FullName}),
+            "the member was not instantiated with the argument and the value which the delegate describes together.");
     }
 
     [Test]
@@ -1673,8 +1695,7 @@ public partial class PointerTests
         var host = NewHostWithAMake("MethodInjectionMakeOfNoValueAssembly");
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeOfNoValue))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeOfNoValue))));
 
         Assert.That(thrown!.Message, Does.Contain("Make"));
     }
@@ -1689,11 +1710,10 @@ public partial class PointerTests
         var host = NewHostWithAnEchoAndASilence("MethodInjectionVoidDelegateAssembly");
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAVoidDelegate))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAVoidDelegate))));
 
         Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
-                    $"the member which hands a value back was called through a delegate which hands nothing back: {thrown.Message}");
+            $"the member which hands a value back was called through a delegate which hands nothing back: {thrown.Message}");
     }
 
     [Test]
@@ -1704,11 +1724,10 @@ public partial class PointerTests
         var host = NewHostWithAnEchoAndASilence("MethodInjectionValueDelegateAssembly");
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAValueDelegate))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAValueDelegate))));
 
         Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
-                    $"the member which hands nothing back was called through a delegate which hands a value back: {thrown.Message}");
+            $"the member which hands nothing back was called through a delegate which hands a value back: {thrown.Message}");
     }
 
     [Test]
@@ -1720,11 +1739,10 @@ public partial class PointerTests
         var host = NewHostWithAnEchoAndASilence("MethodInjectionAnotherValueAssembly");
         var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAStringDelegate))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAStringDelegate))));
 
         Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
-                    $"the member was called through a delegate which hands back a value of another type: {thrown.Message}");
+            $"the member was called through a delegate which hands back a value of another type: {thrown.Message}");
     }
 
     [Test]
@@ -1735,11 +1753,10 @@ public partial class PointerTests
         // the type of the argument of the call, and the delegate hands back a value of another type than that one.
         var (_, _, method) = NewInstanceHost("InstanceMethodAnotherValueAssembly", [typeof(GenericHelper<int>), typeof(int)]);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethodOfAGenericTypeWhichHandsBackAnotherType))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethodOfAGenericTypeWhichHandsBackAnotherType))));
 
         Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
-                    $"the member of the generic type was called through a delegate which hands back a value of another type: {thrown.Message}");
+            $"the member of the generic type was called through a delegate which hands back a value of another type: {thrown.Message}");
     }
 
     [Test]
@@ -1755,7 +1772,7 @@ public partial class PointerTests
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [65]), Is.EqualTo('A'),
-                    "the member which hands back a value of the integer family was not called through the delegate.");
+            "the member which hands back a value of the integer family was not called through the delegate.");
     }
 
     [Test]
@@ -1771,7 +1788,7 @@ public partial class PointerTests
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
 
         Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [0]), Is.EqualTo((int) StringComparison.Ordinal),
-                    "the member which hands back a value under an enumeration was not called through the delegate.");
+            "the member which hands back a value under an enumeration was not called through the delegate.");
     }
 
     [Test]
@@ -1785,8 +1802,8 @@ public partial class PointerTests
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeAList)));
 
         Assert.That(InstantiationsOfTheCall(method, "Make"),
-                    Is.EqualTo(new[] { typeof(int).FullName, typeof(string).FullName }),
-                    "the member was not instantiated with the argument and the type which stands in the value it hands back.");
+            Is.EqualTo(new[] {typeof(int).FullName, typeof(string).FullName}),
+            "the member was not instantiated with the argument and the type which stands in the value it hands back.");
     }
 
     [Test]
@@ -1800,14 +1817,14 @@ public partial class PointerTests
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArray)));
 
         Assert.That(InstantiationOfTheCall(method, "Echo"), Is.EqualTo(typeof(int).FullName),
-                    "the call was not one of the instantiation which the delegate named.");
+            "the call was not one of the instantiation which the delegate named.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         var instance = Activator.CreateInstance(type)!;
-        var value = new[] { 1, 2, 3 };
+        var value = new[] {1, 2, 3};
 
         Assert.That(type.GetMethod("Run")!.Invoke(instance, [value]), Is.SameAs(value),
-                    "the member whose parameter stands in an array was not called through the array it was handed.");
+            "the member whose parameter stands in an array was not called through the array it was handed.");
     }
 
     [Test]
@@ -1821,8 +1838,7 @@ public partial class PointerTests
         var host = NewHostWithAnArrayEcho("MethodInjectionArrayRankAssembly");
         var method = host.AddMethod("Run", typeof(int[,]).ToGneedleType(), [], [new Parameter(typeof(int[,]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnotherRank))));
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnotherRank))));
 
         Assert.That(thrown!.Message, Does.Contain("Echo"));
     }
@@ -1834,10 +1850,12 @@ public partial class PointerTests
         var method = host.AddMethod("Run", typeof(char).ToGneedleType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeCharLiteral)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && ((MethodReference) i.Operand).Name == "Echo"), Is.True);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                && ((MethodReference) i.Operand).Name == "Echo"), Is.True);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        });
     }
 
     [Test]
@@ -1847,9 +1865,11 @@ public partial class PointerTests
         var method = host.AddMethod("Run", typeof(bool).ToGneedleType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeBoolLiteral)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
-                                 && ((MethodReference) i.Operand).Name == "Echo"), Is.True);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                && ((MethodReference) i.Operand).Name == "Echo"), Is.True);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+        });
     }
 }

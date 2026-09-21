@@ -17,28 +17,28 @@ public class MappedImageTests
     /// <summary>
     /// Offset of the field of the DOS header which holds the offset of the PE header.
     /// </summary>
-    private const int PeHeaderOffset = 0x3C;
+    private const int PE_HEADER_OFFSET = 0x3C;
 
     /// <summary>
     /// The sizes of the header of an image: the signature, the file header, the optional header of a 32-bit image and of
     /// a 64-bit one, and one entry of the section table.
     /// </summary>
-    private const int SignatureSize = 4;
-    private const int FileHeaderSize = 20;
-    private const int OptionalHeader32 = 224;
-    private const int OptionalHeader64 = 240;
-    private const int SectionHeaderSize = 40;
+    private const int SIGNATURE_SIZE = 4;
+
+    private const int FILE_HEADER_SIZE    = 20;
+    private const int OPTIONAL_HEADER32   = 224;
 
     [Test]
     public void An_Image_Is_Measured_To_The_End_Of_Its_Last_Section()
     {
         var image = ReadImage();
         var header = ReadHeader(image);
-
-        Assert.That(CachedAssemblyResolver.TryMeasureImage(header, image.Length, out var fileSize), Is.True,
-            "the header of the assembly of these tests was not read as an image.");
-        Assert.That(fileSize, Is.GreaterThan(0));
-        Assert.That(fileSize, Is.LessThanOrEqualTo(image.Length), "the length which was measured stands past the file which holds the image.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(CachedAssemblyResolver.TryMeasureImage(header, image.Length, out var fileSize), Is.True, "the header of the assembly of these tests was not read as an image.");
+            Assert.That(fileSize, Is.GreaterThan(0));
+            Assert.That(fileSize, Is.LessThanOrEqualTo(image.Length), "the length which was measured stands past the file which holds the image.");
+        });
     }
 
     [Test]
@@ -54,7 +54,7 @@ public class MappedImageTests
     public void An_Image_Whose_Pe_Header_Stands_Past_What_Was_Read_In_Is_Refused()
     {
         var header = ReadHeader(ReadImage());
-        PutInt(header, PeHeaderOffset, header.Length);
+        PutInt(header, PE_HEADER_OFFSET, header.Length);
 
         Assert.That(CachedAssemblyResolver.TryMeasureImage(header, header.Length, out _), Is.False,
             "an image whose PE header stands past the window which was read in was measured.");
@@ -64,7 +64,7 @@ public class MappedImageTests
     public void An_Image_Which_Names_More_Sections_Than_A_Loader_Accepts_Is_Refused()
     {
         var header = ReadHeader(ReadImage());
-        PutShort(header, FileHeaderOf(header) + 2, unchecked((short) 0xFFFF));
+        PutShort(header, FileHeaderOf(header) + 2, unchecked((short)0xFFFF));
 
         Assert.That(CachedAssemblyResolver.TryMeasureImage(header, header.Length, out _), Is.False,
             "an image which names more sections than a loader accepts was measured.");
@@ -86,8 +86,8 @@ public class MappedImageTests
         var header = ReadHeader(ReadImage());
         var fileHeader = FileHeaderOf(header);
         PutShort(header, fileHeader + 2, 96);
-        PutShort(header, fileHeader + 16, OptionalHeader32);
-        var sectionTable = fileHeader + FileHeaderSize + OptionalHeader32;
+        PutShort(header, fileHeader + 16, OPTIONAL_HEADER32);
+        var sectionTable = fileHeader + FILE_HEADER_SIZE + OPTIONAL_HEADER32;
 
         // The window holds the headers alone, so the table which the header names stands past it.
         Assert.That(CachedAssemblyResolver.TryMeasureImage(header, sectionTable, out _), Is.False,
@@ -135,7 +135,7 @@ public class MappedImageTests
     /// </summary>
     /// <param name="header">The beginning of the image.</param>
     /// <returns>The offset of the file header.</returns>
-    private static int FileHeaderOf(byte[] header) => BitConverter.ToInt32(header, PeHeaderOffset) + SignatureSize;
+    private static int FileHeaderOf(byte[] header) => BitConverter.ToInt32(header, PE_HEADER_OFFSET) + SIGNATURE_SIZE;
 
     /// <summary>
     /// Offset of the first entry of the section table of the image which the given header describes.
@@ -146,7 +146,7 @@ public class MappedImageTests
     {
         var fileHeader = FileHeaderOf(header);
         var sizeOfOptionalHeader = BitConverter.ToInt16(header, fileHeader + 16);
-        return fileHeader + FileHeaderSize + sizeOfOptionalHeader;
+        return fileHeader + FILE_HEADER_SIZE + sizeOfOptionalHeader;
     }
 
     /// <summary>

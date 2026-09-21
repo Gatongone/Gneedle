@@ -69,8 +69,8 @@ public readonly struct TypeName : IEquatable<TypeName>
     {
         var name = typeRef is GenericInstanceType genericInstance
             ? genericInstance.FullName
-                .Replace('<', '[')
-                .Replace('>', ']')
+                             .Replace('<', '[')
+                             .Replace('>', ']')
             : typeRef.FullName;
 
         return name.Replace('/', '+');
@@ -183,10 +183,10 @@ public readonly struct TypeName : IEquatable<TypeName>
     /// <param name="typeName">The type name which is compared.</param>
     /// <param name="other">The object which is compared with.</param>
     /// <returns>Whether the object is a type name which holds the same name.</returns>
-    public static bool operator ==(TypeName typeName, object other)   => typeName.Equals(other);
+    public static bool operator ==(TypeName typeName, object other) => typeName.Equals(other);
 
     /// <inheritdoc cref="operator ==(TypeName, object)"/>
-    public static bool operator !=(TypeName typeName, object other)   => !(typeName == other);
+    public static bool operator !=(TypeName typeName, object other) => !(typeName == other);
 
     /// <remarks>
     /// We just need to check  whether <c>Name</c> is equal.

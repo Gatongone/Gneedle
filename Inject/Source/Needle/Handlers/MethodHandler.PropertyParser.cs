@@ -72,7 +72,7 @@ partial class MethodHandler
                 // The type which the template named the instance through is written out where the accessor belongs to
                 // that type itself: the value which the instance holds is one of the type as the template declared it,
                 // which is an instantiation of the type which the lookup below answers with.
-                namedInstance = instanceType;
+                namedInstance            = instanceType;
             }
         }
         else if (memberSymbol.HasFlag(MemberSymbols.Static) && TypeNamedByAStaticFrom(filter, currentIndex) is { } staticType)
@@ -88,7 +88,7 @@ partial class MethodHandler
         // Whether the instance which the template reached the property through is a value which it computed where it
         // stands, rather than a load of one of its arguments: the load is written where the name of the property stands,
         // and a value which was computed is not held anywhere else than where it was computed.
-        var instanceIsComputed = instance is { Load: null };
+        var instanceIsComputed = instance is {Load: null};
 
         var propertyDef = memberSymbol.HasFlag(MemberSymbols.Base)
             ? DeclaringTypeHandler.GetPropertyInBase(memberName)
@@ -105,13 +105,13 @@ partial class MethodHandler
         // The accessor which is not called says nothing about it, and a property which holds only the one being called
         // is what makes that worth saying: reading staticness off both of them together takes the accessor which is not
         // there for one which is not static, and writes a load of `this` into a member which is static.
-        var calledAccessor  = isGet ? propertyDef.GetMethod : propertyDef.SetMethod;
-        var takesAReceiver  = calledAccessor is not {IsStatic: true};
+        var calledAccessor = isGet ? propertyDef.GetMethod : propertyDef.SetMethod;
+        var takesAReceiver = calledAccessor is not {IsStatic: true};
 
         // A handle which the template holds in a local is read and written through that local rather than where the
         // name stands, so what the name stands for is the handle itself: nothing of it is written, and every accessor
         // which a read of the local is the receiver of is written as the accessor of the property instead.
-        var held          = StackWalk.HeldLocal(filter.Target, currentIndex + 1);
+        var held = StackWalk.HeldLocal(filter.Target, currentIndex + 1);
         var heldAccessors = held is { } handle ? StackWalk.AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
         if (held != null && heldAccessors == null)
         {
@@ -160,7 +160,7 @@ partial class MethodHandler
             }
         }
 
-        if (heldAccessors is { } accessors)
+        if (heldAccessors != null)
         {
             // ldstr {property_name} -> nop, because the name is not what the property is reached through: every read of
             // the local is, and each of them stands where it stood.
@@ -173,7 +173,7 @@ partial class MethodHandler
             // the one which the weaving empties, so nothing of the handle is left in the body.
             filter.Skip(held!.Value.Store);
 
-            foreach (var (read, accessor, accessorIsGet) in accessors)
+            foreach (var (read, accessor, accessorIsGet) in heldAccessors)
             {
                 var accessorDef = AccessorOf(propertyDef, accessorIsGet);
 

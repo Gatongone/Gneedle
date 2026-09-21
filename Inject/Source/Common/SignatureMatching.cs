@@ -640,11 +640,11 @@ internal static class SignatureMatching
     /// </summary>
     private static readonly Type[] s_TheCollectionsWhichNameTheElement =
     [
-        typeof(System.Collections.Generic.IList<>),
-        typeof(System.Collections.Generic.ICollection<>),
-        typeof(System.Collections.Generic.IEnumerable<>),
-        typeof(System.Collections.Generic.IReadOnlyList<>),
-        typeof(System.Collections.Generic.IReadOnlyCollection<>)
+        typeof(IList<>),
+        typeof(ICollection<>),
+        typeof(IEnumerable<>),
+        typeof(IReadOnlyList<>),
+        typeof(IReadOnlyCollection<>)
     ];
 
     /// <summary>

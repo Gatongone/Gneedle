@@ -31,9 +31,11 @@ public class InstructionFilterTests
     {
         var filter = new InstructionFilter(Instructions(2));
         filter.ApplyTo(new List<Instruction>());
-
-        Assert.That(filter.Emitted(null), Is.Null, "the boundary which the template does not hold was answered with an instruction.");
-        Assert.That(filter.Emitted(Instruction.Create(OpCodes.Nop)), Is.Null, "an instruction of another body was answered with one of this body.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(filter.Emitted(null), Is.Null, "the boundary which the template does not hold was answered with an instruction.");
+            Assert.That(filter.Emitted(Instruction.Create(OpCodes.Nop)), Is.Null, "an instruction of another body was answered with one of this body.");
+        });
     }
 
     [Test]
@@ -45,18 +47,20 @@ public class InstructionFilterTests
 
         var body = new List<Instruction>();
         filter.ApplyTo(body);
-
-        Assert.That(body, Has.Count.EqualTo(2));
-        Assert.That(filter.Emitted(instructions[0]), Is.SameAs(body[0]));
-        Assert.That(filter.Emitted(instructions[1]), Is.SameAs(body[1]), "an instruction which was written as nothing does not stand where the instruction after it was written.");
-        Assert.That(filter.Emitted(instructions[2]), Is.SameAs(body[1]));
+        Assert.Multiple(() =>
+        {
+            Assert.That(body, Has.Count.EqualTo(2));
+            Assert.That(filter.Emitted(instructions[0]), Is.SameAs(body[0]));
+            Assert.That(filter.Emitted(instructions[1]), Is.SameAs(body[1]), "an instruction which was written as nothing does not stand where the instruction after it was written.");
+            Assert.That(filter.Emitted(instructions[2]), Is.SameAs(body[1]));
+        });
     }
 
     [Test]
     public void An_Instruction_Of_Another_Body_Is_Reported_By_An_Index_Of_Nowhere()
     {
         var filter = new InstructionFilter(Instructions(2));
-        var body = new List<Instruction> { Instruction.Create(OpCodes.Br, Instruction.Create(OpCodes.Nop)) };
+        var body = new List<Instruction> {Instruction.Create(OpCodes.Br, Instruction.Create(OpCodes.Nop))};
 
         var thrown = Assert.Throws<InvalidILException>(() => filter.ApplyTo(body));
         Assert.That(thrown!.Message, Is.EqualTo(string.Format(ErrorMessages.INVALID_IL, "$-1")),
@@ -70,7 +74,7 @@ public class InstructionFilterTests
         var filter = new InstructionFilter(instructions);
         for (var index = 0; index < instructions.Count; index++) filter.Skip(index);
 
-        var body = new List<Instruction> { Instruction.Create(OpCodes.Br, instructions[1]) };
+        var body = new List<Instruction> {Instruction.Create(OpCodes.Br, instructions[1])};
 
         var thrown = Assert.Throws<InvalidILException>(() => filter.ApplyTo(body));
         Assert.That(thrown!.Message, Is.EqualTo(string.Format(ErrorMessages.INVALID_IL, "$1")),
@@ -84,7 +88,7 @@ public class InstructionFilterTests
         // entry rather than the filter: the reading of the place of a thing which stands nowhere answers with the
         // place of nothing, which is what the message reports, and it is not the reading of a table which breaks.
         var filter = new InstructionFilter(Instructions(2));
-        var body = new List<Instruction> { Instruction.Create(OpCodes.Switch, new Instruction[] { null! }) };
+        var body = new List<Instruction> {Instruction.Create(OpCodes.Switch, [null!])};
 
         var thrown = Assert.Throws<InvalidILException>(() => filter.ApplyTo(body));
         Assert.That(thrown!.Message, Is.EqualTo(string.Format(ErrorMessages.INVALID_IL, "$-1")),

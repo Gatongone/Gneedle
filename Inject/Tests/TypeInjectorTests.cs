@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for adding a type of each kind to the assembly through the handler which adds it, which is a class, a struct and
@@ -11,7 +11,6 @@ using static Gneedle.Inject.Test.TestFixtures;
 [TestFixture]
 public class TypeInjectorTests
 {
-
     private static AssemblyHandler CreateHandler()
         => (AssemblyHandler) Assembly.Create("TestAssembly").Handler;
 
@@ -21,14 +20,14 @@ public class TypeInjectorTests
     public void AddStruct_Creates_ValueType()
     {
         var handler = CreateHandler();
-        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public).GetHandler();
+        var structHandler = handler.AddStruct("MyStruct", NS, StructFlags.Public).GetHandler();
 
         Assert.That(structHandler, Is.Not.Null);
         Assert.That(structHandler, Is.InstanceOf<IStructHandler>());
         Assert.Multiple(() =>
         {
             Assert.That(structHandler.Name, Is.EqualTo("MyStruct"));
-            Assert.That(structHandler.Namespace, Is.EqualTo(Ns));
+            Assert.That(structHandler.Namespace, Is.EqualTo(NS));
         });
         var def = ((StructHandler) structHandler).Source;
         Assert.Multiple(() =>
@@ -42,9 +41,9 @@ public class TypeInjectorTests
     public void AddStruct_Appends_To_Module()
     {
         var handler = CreateHandler();
-        handler.AddStruct("Appended", Ns, StructFlags.Public).GetHandler();
+        handler.AddStruct("Appended", NS, StructFlags.Public).GetHandler();
 
-        var found = handler.GetType($"{Ns}.Appended");
+        var found = handler.GetType($"{NS}.Appended");
         Assert.That(found, Is.Not.Null);
         Assert.That(found, Is.InstanceOf<IStructHandler>());
     }
@@ -53,16 +52,16 @@ public class TypeInjectorTests
     public void AddStruct_Redefined_Throws()
     {
         var handler = CreateHandler();
-        handler.AddStruct("Dup", Ns, StructFlags.Public).GetHandler();
+        handler.AddStruct("Dup", NS, StructFlags.Public).GetHandler();
 
-        Assert.Throws<ArgumentException>(() => handler.AddStruct("Dup", Ns, StructFlags.Public));
+        Assert.Throws<ArgumentException>(() => handler.AddStruct("Dup", NS, StructFlags.Public));
     }
 
     [Test]
     public void AddStruct_Ref_Applies_IsByRefLike_And_Obsolete()
     {
         var handler = CreateHandler();
-        var structHandler = handler.AddStruct("RefStruct", Ns, StructFlags.Public | StructFlags.Ref).GetHandler();
+        var structHandler = handler.AddStruct("RefStruct", NS, StructFlags.Public | StructFlags.Ref).GetHandler();
 
         var def = ((StructHandler) structHandler).Source;
         Assert.Multiple(() =>
@@ -76,7 +75,7 @@ public class TypeInjectorTests
     public void AddStruct_ReadOnly_Applies_IsReadOnly()
     {
         var handler = CreateHandler();
-        var structHandler = handler.AddStruct("RoStruct", Ns, StructFlags.Public | StructFlags.ReadOnly).GetHandler();
+        var structHandler = handler.AddStruct("RoStruct", NS, StructFlags.Public | StructFlags.ReadOnly).GetHandler();
 
         var def = ((StructHandler) structHandler).Source;
         Assert.That(def.CustomAttributes.Any(a => a.AttributeType.Name == nameof(IsReadOnlyAttribute)), Is.True);
@@ -86,24 +85,24 @@ public class TypeInjectorTests
     public void AddStruct_WithInterface_Type_Adds_Interface()
     {
         var handler = CreateHandler();
-        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public)
-                                   .WithInterface(typeof(System.IDisposable))
+        var structHandler = handler.AddStruct("MyStruct", NS, StructFlags.Public)
+                                   .WithInterface(typeof(IDisposable))
                                    .GetHandler();
 
         var def = ((StructHandler) structHandler).Source;
-        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(System.IDisposable).FullName), Is.True);
+        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(IDisposable).FullName), Is.True);
     }
 
     [Test]
     public void AddStruct_WithInterface_IType_Adds_Interface()
     {
         var handler = CreateHandler();
-        var structHandler = handler.AddStruct("MyStruct", Ns, StructFlags.Public)
-                                   .WithInterface(typeof(System.IComparable).ToGneedleType())
+        var structHandler = handler.AddStruct("MyStruct", NS, StructFlags.Public)
+                                   .WithInterface(typeof(IComparable).ToGneedleType())
                                    .GetHandler();
 
         var def = ((StructHandler) structHandler).Source;
-        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(System.IComparable).FullName), Is.True);
+        Assert.That(def.Interfaces.Any(i => i.InterfaceType.FullName == typeof(IComparable).FullName), Is.True);
     }
 
     #endregion
@@ -114,7 +113,7 @@ public class TypeInjectorTests
     public void AddClass_Creates_ReferenceType()
     {
         var handler = CreateHandler();
-        var classHandler = handler.AddClass("MyClass", Ns, ClassFlags.Public).GetHandler();
+        var classHandler = handler.AddClass("MyClass", NS, ClassFlags.Public).GetHandler();
 
         Assert.That(classHandler, Is.InstanceOf<IClassHandler>());
         Assert.That(classHandler.Name, Is.EqualTo("MyClass"));
@@ -132,9 +131,9 @@ public class TypeInjectorTests
     public void AddClass_Redefined_Throws()
     {
         var handler = CreateHandler();
-        handler.AddClass("Dup", Ns, ClassFlags.Public).GetHandler();
+        handler.AddClass("Dup", NS, ClassFlags.Public).GetHandler();
 
-        Assert.Throws<ArgumentException>(() => handler.AddClass("Dup", Ns, ClassFlags.Public));
+        Assert.Throws<ArgumentException>(() => handler.AddClass("Dup", NS, ClassFlags.Public));
     }
 
     #endregion
@@ -145,20 +144,23 @@ public class TypeInjectorTests
     public void AddEnum_Creates_Enum_With_Int_Underlying_Type()
     {
         var handler = CreateHandler();
-        var enumHandler = handler.AddEnum("MyEnum", Ns, EnumFlags.Public).GetHandler();
+        var enumHandler = handler.AddEnum("MyEnum", NS, EnumFlags.Public).GetHandler();
 
         var def = ((EnumHandler) enumHandler).Source;
-        Assert.That(def.IsEnum, Is.True);
-        Assert.That(def.IsValueType, Is.True);
-        Assert.That(def.BaseType!.FullName, Is.EqualTo(typeof(Enum).FullName));
-        Assert.That(def.Fields.Any(f => f.Name == "value__" && f.FieldType.FullName == typeof(int).FullName), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.IsEnum, Is.True);
+            Assert.That(def.IsValueType, Is.True);
+            Assert.That(def.BaseType!.FullName, Is.EqualTo(typeof(Enum).FullName));
+            Assert.That(def.Fields.Any(f => f.Name == "value__" && f.FieldType.FullName == typeof(int).FullName), Is.True);
+        });
     }
 
     [Test]
     public void AddEnum_WithUnderlyingType_Sets_Value_Field_Type()
     {
         var handler = CreateHandler();
-        var enumHandler = handler.AddEnum("MyEnum", Ns, EnumFlags.Public)
+        var enumHandler = handler.AddEnum("MyEnum", NS, EnumFlags.Public)
                                  .WithUnderlyingType(typeof(byte))
                                  .GetHandler();
 
@@ -171,7 +173,7 @@ public class TypeInjectorTests
     public void AddEnum_WithFlagsAttribute_Adds_FlagsAttribute()
     {
         var handler = CreateHandler();
-        var enumHandler = handler.AddEnum("MyEnum", Ns, EnumFlags.Public)
+        var enumHandler = handler.AddEnum("MyEnum", NS, EnumFlags.Public)
                                  .WithFlagsAttribute()
                                  .GetHandler();
 
@@ -183,18 +185,18 @@ public class TypeInjectorTests
     public void AddEnum_Redefined_Throws()
     {
         var handler = CreateHandler();
-        handler.AddEnum("Dup", Ns, EnumFlags.Public).GetHandler();
+        handler.AddEnum("Dup", NS, EnumFlags.Public).GetHandler();
 
-        Assert.Throws<ArgumentException>(() => handler.AddEnum("Dup", Ns, EnumFlags.Public));
+        Assert.Throws<ArgumentException>(() => handler.AddEnum("Dup", NS, EnumFlags.Public));
     }
 
     [Test]
     public void AddEnum_Appends_To_Module()
     {
         var handler = CreateHandler();
-        handler.AddEnum("MyEnum", Ns, EnumFlags.Public).GetHandler();
+        handler.AddEnum("MyEnum", NS, EnumFlags.Public).GetHandler();
 
-        var found = handler.GetType($"{Ns}.MyEnum");
+        var found = handler.GetType($"{NS}.MyEnum");
         Assert.That(found, Is.Not.Null);
     }
 
@@ -206,9 +208,9 @@ public class TypeInjectorTests
     public void GetType_Returns_StructHandler_For_ValueType()
     {
         var handler = CreateHandler();
-        handler.AddStruct("SomeStruct", Ns, StructFlags.Public).GetHandler();
+        handler.AddStruct("SomeStruct", NS, StructFlags.Public).GetHandler();
 
-        var found = handler.GetType($"{Ns}.SomeStruct");
+        var found = handler.GetType($"{NS}.SomeStruct");
         Assert.That(found, Is.InstanceOf<IStructHandler>());
         Assert.That(found, Is.Not.InstanceOf<IClassHandler>());
     }
@@ -217,9 +219,9 @@ public class TypeInjectorTests
     public void GetType_Returns_ClassHandler_For_ReferenceType()
     {
         var handler = CreateHandler();
-        handler.AddClass("SomeClass", Ns, ClassFlags.Public).GetHandler();
+        handler.AddClass("SomeClass", NS, ClassFlags.Public).GetHandler();
 
-        var found = handler.GetType($"{Ns}.SomeClass");
+        var found = handler.GetType($"{NS}.SomeClass");
         Assert.That(found, Is.InstanceOf<IClassHandler>());
     }
 
@@ -227,9 +229,9 @@ public class TypeInjectorTests
     public void GetType_Returns_EnumHandler_For_Enum()
     {
         var handler = CreateHandler();
-        handler.AddEnum("MyEnum", Ns, EnumFlags.Public).WithUnderlyingType(typeof(int)).GetHandler();
+        handler.AddEnum("MyEnum", NS, EnumFlags.Public).WithUnderlyingType(typeof(int)).GetHandler();
 
-        var found = handler.GetType($"{Ns}.MyEnum");
+        var found = handler.GetType($"{NS}.MyEnum");
         Assert.That(found, Is.InstanceOf<IEnumHandler>());
     }
 
@@ -237,7 +239,7 @@ public class TypeInjectorTests
     public void GetType_Unknown_Returns_Null()
     {
         var handler = CreateHandler();
-        Assert.That(handler.GetType($"{Ns}.DoesNotExist"), Is.Null);
+        Assert.That(handler.GetType($"{NS}.DoesNotExist"), Is.Null);
     }
 
     #endregion

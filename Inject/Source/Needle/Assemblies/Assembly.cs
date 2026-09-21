@@ -54,7 +54,7 @@ public abstract class Assembly : IDisposable
     /// The cache of the stream which the assembly was read from, which an assembly which was read from a file also
     /// keeps the path of, and which is released with it.
     /// </summary>
-    private          IAssemblyCache?        m_AssemblyCache;
+    private IAssemblyCache? m_AssemblyCache;
 
     /// <summary>
     /// The handler of the assembly, which is made when it is first asked for.

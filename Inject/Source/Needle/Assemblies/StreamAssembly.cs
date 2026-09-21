@@ -56,15 +56,15 @@ internal sealed class StreamAssembly(IAssemblyCache cache, AssemblySymbol symbol
         var parameters = symbols != null
             ? new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = new PdbInBytes(symbols)}
             : symbol switch
-              {
-                  AssemblySymbol.Pdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = PdbSymbolReaderProvider},
-                  AssemblySymbol.Mdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = MdbSymbolReaderProvider},
+            {
+                AssemblySymbol.Pdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = PdbSymbolReaderProvider},
+                AssemblySymbol.Mdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = MdbSymbolReaderProvider},
 
-                  // No symbol was asked for, so none is read. The default symbol reader provider throws when the assembly
-                  // has no symbol besides it, which an assembly which was just produced, or which was built without
-                  // symbols, has not.
-                  _ => new ReaderParameters(ReadingMode.Deferred) {ReadSymbols = false}
-              };
+                // No symbol was asked for, so none is read. The default symbol reader provider throws when the assembly
+                // has no symbol besides it, which an assembly which was just produced, or which was built without
+                // symbols, has not.
+                _ => new ReaderParameters(ReadingMode.Deferred) {ReadSymbols = false}
+            };
 
         // The resolver holds the assemblies which are read into the module, so that one which only exists in memory, or
         // which was read from a stream, is resolvable, and it is given the folder which the assemblies the image refers

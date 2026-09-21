@@ -30,7 +30,7 @@ internal static class TokenParsing
     /// <param name="token">The letter which tells the token of the type from the token of the method.</param>
     /// <returns>The pattern of the token.</returns>
     private static Regex BuildTokenPattern(string token)
-        => new($@"^{nameof(Gneedle)}\.{nameof(Inject)}\.{token}_({string.Join("|", Enumerable.Range(0, GenericTokens.HighestIndex + 1))})$");
+        => new($@"^{nameof(Gneedle)}\.{nameof(Inject)}\.{token}_({string.Join("|", Enumerable.Range(0, GenericTokens.HIGHEST_INDEX + 1))})$");
 
     /// <summary>
     /// Try to parse the index which the Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] token of <paramref name="typeName"/> holds.
@@ -41,7 +41,7 @@ internal static class TokenParsing
     /// <returns>Whether the <paramref name="typeName"/> is a token.</returns>
     private static bool TryGetParsedTokenIndex(string typeName, out int index, out bool isFromMethod)
     {
-        index        = 0;
+        index = 0;
         isFromMethod = false;
 
         // Match type.
@@ -93,9 +93,9 @@ internal static class TokenParsing
         // The token stands for the generic parameter of the declaring type.
         var typeDef = typeProvider switch
         {
-            TypeDefinition typeDefinition     => typeDefinition,
+            TypeDefinition typeDefinition => typeDefinition,
             MethodDefinition methodDefinition => methodDefinition.DeclaringType,
-            _                                 => null
+            _ => null
         };
         if (typeDef == null) return false;
         if (index > typeDef.GenericParameters.Count - 1)
@@ -118,7 +118,8 @@ internal static class TokenParsing
         /// <returns>Whether the <c>typeReference</c> could passer as GenericParameter.</returns>
         /// <exception cref="ArgumentException">Thrown when the <c>typeReference</c> names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal bool TryGetParsedGenericParameter(IMemberDefinition provider, out GenericParameter? parameter)
-            => TryGetParsedGenericParameter(typeReference, provider, out parameter, out _, out _);
+            =>
+                typeReference.TryGetParsedGenericParameter(provider, out parameter, out _, out _);
 
         /// <summary>
         /// Try to parse Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20] to GenericParameter.
@@ -131,7 +132,7 @@ internal static class TokenParsing
         /// <exception cref="ArgumentException">Thrown when the <c>typeReference</c> names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal bool TryGetParsedGenericParameter(IMemberDefinition provider, out GenericParameter? parameter, out int index, out bool isFromMethod)
         {
-            parameter = default;
+            parameter = null;
             if (!TryGetParsedTokenIndex(typeReference.FullName, out index, out isFromMethod)) return false;
 
             // Match type.
@@ -139,9 +140,9 @@ internal static class TokenParsing
             {
                 var typeDef = provider switch
                 {
-                    TypeDefinition typeDefinition     => typeDefinition,
+                    TypeDefinition typeDefinition => typeDefinition,
                     MethodDefinition methodDefinition => methodDefinition.DeclaringType,
-                    _                                 => null
+                    _ => null
                 };
                 if (typeDef == null) return false;
 
@@ -188,17 +189,14 @@ internal static class TokenParsing
                 // The token stands for the generic parameter of the provider itself. It is not a type of any module, so it doesn't need to be imported.
                 if (typeReference.TryGetParsedGenericParameter(provider, out var parameter)) return parameter!;
 
-                // A type which FromAssemblyAttribute marks stands for the real type of the same name which another
-                // assembly declares, so the real type replaces it. The reference ownership is not a criterion here: the
-                // reference of a member operand was imported to the module before it is parsed, even though the type it
-                // denotes is the stub of the template assembly.
-                if (typeReference.TryGetFromAssemblyDefinition(module, out var fromAssemblyType))
-                {
-                    return module.ImportReference(fromAssemblyType);
-                }
-
-                // Import the type reference, so that it could be used in the module even if it comes from another assembly.
-                return module.ImportReference(typeReference);
+                return typeReference.TryGetFromAssemblyDefinition(module, out var fromAssemblyType)
+                    // A type which FromAssemblyAttribute marks stands for the real type of the same name which another
+                    // assembly declares, so the real type replaces it. The reference ownership is not a criterion here: the
+                    // reference of a member operand was imported to the module before it is parsed, even though the type it
+                    // denotes is the stub of the template assembly.
+                    ? module.ImportReference(fromAssemblyType) :
+                    // Import the type reference, so that it could be used in the module even if it comes from another assembly.
+                    module.ImportReference(typeReference);
             }
 
             // Import the type reference, so that it could be used in the module even if it comes from another assembly.
@@ -332,7 +330,7 @@ internal static class TokenParsing
         internal FieldReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
         {
             fieldReference.DeclaringType = fieldReference.DeclaringType.ParseGenericTokens(provider, module);
-            fieldReference.FieldType     = fieldReference.FieldType.ParseGenericTokens(provider, module);
+            fieldReference.FieldType = fieldReference.FieldType.ParseGenericTokens(provider, module);
             return fieldReference;
         }
     }

@@ -8,7 +8,7 @@ using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Signature of the method which the templates below proceed through, which a template names as the generic argument
@@ -117,7 +117,7 @@ public static class WideAroundTemplates
 /// It names the first generic parameter of the method which is woven around through the
 /// <c>Gneedle.Inject.M_0</c> token rather than declaring a generic parameter of its own, because a delegate cannot.
 /// </summary>
-public delegate M_0 PassthroughOp(M_0 value);
+public delegate M0 PassthroughOp(M0 value);
 
 /// <summary>
 /// Templates for a generic target.<para/>
@@ -128,14 +128,14 @@ public static class GenericAroundTemplates
     /// <summary>
     /// Proceed with the value as it is.
     /// </summary>
-    public static M_0 Passthrough(M_0 value) => Proceed.Method<PassthroughOp>()(value);
+    public static M0 Passthrough(M0 value) => Proceed.Method<PassthroughOp>()(value);
 
     /// <summary>
     /// Proceed with the value which this template was given, where neither that argument nor the value which is handed
     /// back has a type of its own: the call names the token which the weaving turns into the parameter of the member,
     /// and the signature of the delegate which the template above needs is written nowhere.
     /// </summary>
-    public static M_0 PassthroughWithItsOwnArguments(M_0 value) => Proceed.Invoke<M_0>();
+    public static M0 PassthroughWithItsOwnArguments(M0 value) => Proceed.Invoke<M0>();
 }
 
 /// <summary>
@@ -186,8 +186,7 @@ public class InstanceCaptureTemplate
 [TestFixture]
 public class AroundBodyTests
 {
-
-    private const string ProceedMethodName = "<Add>k__Proceed";
+    private const string PROCEED_METHOD_NAME = "<Add>k__Proceed";
 
     #region Fixture
 
@@ -249,7 +248,7 @@ public class AroundBodyTests
     {
         var assembly = Assembly.Create(assemblyName);
         var module = assembly.Source.MainModule;
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public)
+        var host = (TypeHandler)((AssemblyHandler)assembly.Handler).AddClass("Host", NS, ClassFlags.Public)
                                                                     .WithGenericParameter("T")
                                                                     .GetHandler();
 
@@ -267,7 +266,7 @@ public class AroundBodyTests
         return (assembly, host, add);
     }
 
-    private static MethodHandler HandlerOf(TypeHandler host, string name) => (MethodHandler) host.GetMethod(name)!;
+    private static MethodHandler HandlerOf(TypeHandler host, string name) => (MethodHandler)host.GetMethod(name)!;
 
     #endregion
 
@@ -283,7 +282,7 @@ public class AroundBodyTests
         var (assembly, host, _) = NewHost(isStatic, assemblyName);
         HandlerOf(host, "Add").AroundBody(Template(templateHolder, templateName));
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = isStatic ? null : Activator.CreateInstance(type);
         return type.GetMethod("Add")!.Invoke(instance, arguments);
     }
@@ -322,7 +321,7 @@ public class AroundBodyTests
         method.SetBody(Template(typeof(WideAroundTemplates), nameof(WideAroundTemplates.Number)));
         method.AroundBody(Template(typeof(WideAroundTemplates), nameof(WideAroundTemplates.ReversedThenAddOne)));
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
 
         // 1234 reversed is 4321, and the template adds one to what it returned: 4322 rather than 3212, which is what
         // the arguments come to when the loads keep the slots of the template.
@@ -341,7 +340,7 @@ public class AroundBodyTests
 
         run.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedInsideACatch)));
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(-1));
     }
 
@@ -376,7 +375,7 @@ public class AroundBodyTests
         HandlerOf(host, "Identity")
             .AroundBody(Template(typeof(GenericAroundTemplates), nameof(GenericAroundTemplates.PassthroughWithItsOwnArguments)));
 
-        var identity = assembly.Load().GetType($"{Ns}.Host")!.GetMethod("Identity")!.MakeGenericMethod(typeof(string));
+        var identity = assembly.Load().GetType($"{NS}.Host")!.GetMethod("Identity")!.MakeGenericMethod(typeof(string));
 
         Assert.That(identity.Invoke(null, ["hello"]), Is.EqualTo("hello"));
     }
@@ -390,7 +389,7 @@ public class AroundBodyTests
         var (assembly, host, _) = NewGenericTypeHost("AroundBodyOfAGenericTypeAssembly");
         HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.DoubleThenProceedThenAddOne)));
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!.MakeGenericType(typeof(int));
+        var type = assembly.Load().GetType($"{NS}.Host")!.MakeGenericType(typeof(int));
 
         Assert.That(type.GetMethod("Add")!.Invoke(Activator.CreateInstance(type), [3, 4]), Is.EqualTo(15));
     }
@@ -431,10 +430,10 @@ public class AroundBodyTests
 
         run.AroundBody(() => Proceed.Invoke());
 
-        Assert.That(((MethodHandler) run).Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference
+        Assert.That(((MethodHandler)run).Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference
                                                                                         && reference.Name == "<Run>k__Proceed"), Is.True);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var thrown = Assert.Throws<TargetInvocationException>(() => type.GetMethod("Run")!.Invoke(null, null));
         Assert.That(thrown!.InnerException, Is.InstanceOf<NotSupportedException>());
     }
@@ -451,13 +450,19 @@ public class AroundBodyTests
 
         HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
 
-        var generated = host.Source.Methods.Single(method => method.Name == ProceedMethodName);
-        Assert.That(generated.IsStatic, Is.True);
-        Assert.That(generated.Body.Instructions, Is.EqualTo(originalInstructions));
-        Assert.That(generated.Body.Instructions.Last().OpCode, Is.EqualTo(OpCodes.Ret));
+        var generated = host.Source.Methods.Single(method => method.Name == PROCEED_METHOD_NAME);
+        Assert.Multiple(() =>
+        {
+            Assert.That(generated.IsStatic, Is.True);
+            Assert.That(generated.Body.Instructions, Is.EqualTo(originalInstructions));
+        });
+        Assert.Multiple(() =>
+        {
+            Assert.That(generated.Body.Instructions.Last().OpCode, Is.EqualTo(OpCodes.Ret));
 
-        // The body which was moved is not left behind in the method which was woven around.
-        Assert.That(add.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Add), Is.False);
+            // The body which was moved is not left behind in the method which was woven around.
+            Assert.That(add.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Add), Is.False);
+        });
     }
 
     [Test]
@@ -469,9 +474,12 @@ public class AroundBodyTests
 
         HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
 
-        var generated = host.Source.Methods.Single(method => method.Name == ProceedMethodName);
-        Assert.That(generated.Parameters[0], Is.SameAs(add.Parameters[0]));
-        Assert.That(generated.Parameters[1], Is.SameAs(add.Parameters[1]));
+        var generated = host.Source.Methods.Single(method => method.Name == PROCEED_METHOD_NAME);
+        Assert.Multiple(() =>
+        {
+            Assert.That(generated.Parameters[0], Is.SameAs(add.Parameters[0]));
+            Assert.That(generated.Parameters[1], Is.SameAs(add.Parameters[1]));
+        });
     }
 
     [Test]
@@ -481,10 +489,12 @@ public class AroundBodyTests
         var (_, host, add) = NewHost(true);
 
         HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
-
-        Assert.That(add.ReturnType.FullName, Is.EqualTo(typeof(int).FullName));
-        Assert.That(add.Parameters.Count, Is.EqualTo(2));
-        Assert.That(add.IsStatic, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(add.ReturnType.FullName, Is.EqualTo(typeof(int).FullName));
+            Assert.That(add.Parameters.Count, Is.EqualTo(2));
+            Assert.That(add.IsStatic, Is.True);
+        });
     }
 
     [Test]
@@ -496,13 +506,15 @@ public class AroundBodyTests
 
         var instructions = add.Body.Instructions;
         var call = instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
-                               .FirstOrDefault(reference => reference.Name == ProceedMethodName);
-
-        Assert.That(call, Is.Not.Null);
-        Assert.That(instructions.Any(instruction => instruction.OpCode == OpCodes.Callvirt
-                                                 && instruction.Operand is MethodReference reference && reference.Name == "Invoke"), Is.False);
-        Assert.That(instructions.Any(instruction => instruction.Operand is MethodReference reference
-                                                 && reference.DeclaringType.FullName == Proceed.TYPE_NAME), Is.False);
+                               .FirstOrDefault(reference => reference.Name == PROCEED_METHOD_NAME);
+        Assert.Multiple(() =>
+        {
+            Assert.That(call, Is.Not.Null);
+            Assert.That(instructions.Any(instruction => instruction.OpCode == OpCodes.Callvirt
+                                                     && instruction.Operand is MethodReference reference && reference.Name == "Invoke"), Is.False);
+            Assert.That(instructions.Any(instruction => instruction.Operand is MethodReference reference
+                                                     && reference.DeclaringType.FullName == Proceed.TYPE_NAME), Is.False);
+        });
     }
 
     [Test]
@@ -513,12 +525,15 @@ public class AroundBodyTests
 
         HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
 
-        var generated = host.Source.Methods.Single(method => method.Name == ProceedMethodName);
-        Assert.That(generated.IsVirtual, Is.False);
+        var generated = host.Source.Methods.Single(method => method.Name == PROCEED_METHOD_NAME);
+        Assert.Multiple(() =>
+        {
+            Assert.That(generated.IsVirtual, Is.False);
 
-        // The generated method is not virtual, so the call to it is not a virtual one.
-        Assert.That(add.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Call
-                                                         && instruction.Operand is MethodReference reference && reference.Name == ProceedMethodName), Is.True);
+            // The generated method is not virtual, so the call to it is not a virtual one.
+            Assert.That(add.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Call
+                                                             && instruction.Operand is MethodReference reference && reference.Name == PROCEED_METHOD_NAME), Is.True);
+        });
     }
 
     [Test]
@@ -529,9 +544,9 @@ public class AroundBodyTests
         var (assembly, host, add) = NewHost(true);
         var module = assembly.Source.MainModule;
 
-        var tryStart     = Instruction.Create(OpCodes.Ldc_I4_7);
+        var tryStart = Instruction.Create(OpCodes.Ldc_I4_7);
         var handlerStart = Instruction.Create(OpCodes.Pop);
-        var end          = Instruction.Create(OpCodes.Ret);
+        var end = Instruction.Create(OpCodes.Ret);
         add.Body.Instructions.Clear();
         add.Body.Variables.Add(new VariableDefinition(module.TypeSystem.Int32));
         add.Body.Instructions.Add(tryStart);
@@ -542,11 +557,11 @@ public class AroundBodyTests
         add.Body.Instructions.Add(end);
         add.Body.ExceptionHandlers.Add(new ExceptionHandler(ExceptionHandlerType.Catch)
         {
-            CatchType    = module.ImportReference(typeof(Exception)),
-            TryStart     = tryStart,
-            TryEnd       = handlerStart,
+            CatchType = module.ImportReference(typeof(Exception)),
+            TryStart = tryStart,
+            TryEnd = handlerStart,
             HandlerStart = handlerStart,
-            HandlerEnd   = end
+            HandlerEnd = end
         });
 
         HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
@@ -556,11 +571,13 @@ public class AroundBodyTests
         stream.Position = 0;
 
         var reread = AssemblyDefinition.ReadAssembly(stream);
-        var emitted = reread.MainModule.GetType($"{Ns}.Host")!.Methods.Single(method => method.Name == ProceedMethodName);
-
-        Assert.That(emitted.Body.Variables.Count, Is.EqualTo(1));
-        Assert.That(emitted.Body.ExceptionHandlers.Count, Is.EqualTo(1));
-        Assert.That(emitted.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Stloc_0), Is.True);
+        var emitted = reread.MainModule.GetType($"{NS}.Host")!.Methods.Single(method => method.Name == PROCEED_METHOD_NAME);
+        Assert.Multiple(() =>
+        {
+            Assert.That(emitted.Body.Variables.Count, Is.EqualTo(1));
+            Assert.That(emitted.Body.ExceptionHandlers.Count, Is.EqualTo(1));
+            Assert.That(emitted.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Stloc_0), Is.True);
+        });
     }
 
     #endregion
@@ -582,13 +599,16 @@ public class AroundBodyTests
 
         run.AroundBody(() => Proceed.Method<Func<int>>()() + captured);
 
-        var body = ((MethodHandler) run).Source.Body;
-        // Nothing reads the instance which the delegate held, and the value which was captured stands in the body.
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+        var body = ((MethodHandler)run).Source.Body;
+        Assert.Multiple(() =>
+        {
+            // Nothing reads the instance which the delegate held, and the value which was captured stands in the body.
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 41), Is.True);
+        });
 
         // The body which was taken over hands back the default of int, which what the template captured is added to.
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(41));
     }
 
@@ -605,11 +625,13 @@ public class AroundBodyTests
 
         new InstanceCaptureTemplate(7).Weave(run);
 
-        var body = ((MethodHandler) run).Source.Body;
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
-        Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 7), Is.True);
-
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var body = ((MethodHandler)run).Source.Body;
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldarg_0), Is.False);
+            Assert.That(body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldc_I4 && instruction.Operand is 7), Is.True);
+        });
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(null, null), Is.EqualTo(7));
     }
 
@@ -707,7 +729,7 @@ public class AroundBodyTests
     public void AroundBody_With_An_Occupied_Generated_Name_Throws()
     {
         var (_, host, add) = NewHost(true);
-        host.Source.Fields.Add(new FieldDefinition(ProceedMethodName, FieldAttributes.Private, add.ReturnType));
+        host.Source.Fields.Add(new FieldDefinition(PROCEED_METHOD_NAME, FieldAttributes.Private, add.ReturnType));
 
         Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
     }
@@ -729,10 +751,13 @@ public class AroundBodyTests
         // The member holds the very body object it held, with the very instructions in it, and neither a variable nor
         // a handler of the template was written into it: what the parse wrote went to a body which was discarded.
         Assert.That(add.Body, Is.SameAs(body));
-        Assert.That(add.Body.Instructions, Is.EqualTo(instructions));
-        Assert.That(add.Body.Variables, Is.Empty);
-        Assert.That(add.Body.ExceptionHandlers, Is.Empty);
-        Assert.That(host.Source.Methods.Any(method => method.Name == ProceedMethodName), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(add.Body.Instructions, Is.EqualTo(instructions));
+            Assert.That(add.Body.Variables, Is.Empty);
+            Assert.That(add.Body.ExceptionHandlers, Is.Empty);
+            Assert.That(host.Source.Methods.Any(method => method.Name == PROCEED_METHOD_NAME), Is.False);
+        });
 
         // A second attempt which fails leaves as little behind as the first one did: nothing of the member is carried
         // from one attempt into the next, and nothing of the template either.
@@ -740,17 +765,20 @@ public class AroundBodyTests
            .AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ReadAMissingField))));
 
         Assert.That(add.Body, Is.SameAs(body));
-        Assert.That(add.Body.Instructions, Is.EqualTo(instructions));
-        Assert.That(add.Body.Variables, Is.Empty);
-        Assert.That(add.Body.ExceptionHandlers, Is.Empty);
-        Assert.That(host.Source.Methods.Any(method => method.Name == ProceedMethodName), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(add.Body.Instructions, Is.EqualTo(instructions));
+            Assert.That(add.Body.Variables, Is.Empty);
+            Assert.That(add.Body.ExceptionHandlers, Is.Empty);
+            Assert.That(host.Source.Methods.Any(method => method.Name == PROCEED_METHOD_NAME), Is.False);
+        });
 
         // The weave which is done next is done as the first one rather than refused for one which never happened, and
         // the body which it takes over is the one which the attempts above left alone: what the member held before
         // them is what the generated method holds after it, in the image as it is written rather than in memory only.
         HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
 
-        var generated = host.Source.Methods.Single(method => method.Name == ProceedMethodName);
+        var generated = host.Source.Methods.Single(method => method.Name == PROCEED_METHOD_NAME);
         Assert.That(generated.Body.Instructions, Is.EqualTo(instructions));
 
         using var stream = new MemoryStream();
@@ -758,9 +786,9 @@ public class AroundBodyTests
         stream.Position = 0;
 
         var reread = AssemblyDefinition.ReadAssembly(stream);
-        var emitted = reread.MainModule.GetType($"{Ns}.Host")!.Methods.Single(method => method.Name == ProceedMethodName);
+        var emitted = reread.MainModule.GetType($"{NS}.Host")!.Methods.Single(method => method.Name == PROCEED_METHOD_NAME);
         Assert.That(emitted.Body.Instructions.Select(instruction => instruction.OpCode),
-                    Is.EqualTo(new[] {OpCodes.Ldarg_0, OpCodes.Ldarg_1, OpCodes.Add, OpCodes.Ret}));
+                    Is.EqualTo(new[] { OpCodes.Ldarg_0, OpCodes.Ldarg_1, OpCodes.Add, OpCodes.Ret }));
     }
 
     [Test]
@@ -794,14 +822,20 @@ public class AroundBodyTests
         // generic parameter names.
         var copy = generated.GenericParameters[0];
         Assert.That(copy, Is.Not.SameAs(identity.GenericParameters[0]));
-        Assert.That(copy.Name, Is.EqualTo(identity.GenericParameters[0].Name));
-        Assert.That(copy.Position, Is.EqualTo(identity.GenericParameters[0].Position));
-        Assert.That(copy.Owner, Is.SameAs(generated));
+        Assert.Multiple(() =>
+        {
+            Assert.That(copy.Name, Is.EqualTo(identity.GenericParameters[0].Name));
+            Assert.That(copy.Position, Is.EqualTo(identity.GenericParameters[0].Position));
+            Assert.That(copy.Owner, Is.SameAs(generated));
 
-        // The method which was woven around keeps its own signature.
-        Assert.That(identity.GenericParameters.Count, Is.EqualTo(1));
-        Assert.That(identity.GenericParameters[0].Owner, Is.SameAs(identity));
-        Assert.That(identity.ReturnType.Name, Is.EqualTo("T"));
+            // The method which was woven around keeps its own signature.
+            Assert.That(identity.GenericParameters.Count, Is.EqualTo(1));
+        });
+        Assert.Multiple(() =>
+        {
+            Assert.That(identity.GenericParameters[0].Owner, Is.SameAs(identity));
+            Assert.That(identity.ReturnType.Name, Is.EqualTo("T"));
+        });
     }
 
     [Test]
@@ -814,8 +848,11 @@ public class AroundBodyTests
         HandlerOf(host, "Identity").AroundBody(Template(typeof(GenericAroundTemplates), nameof(GenericAroundTemplates.Passthrough)));
 
         var copy = host.Source.Methods.Single(method => method.Name == "<Identity>k__Proceed").GenericParameters[0];
-        Assert.That(copy.Attributes, Is.EqualTo(GenericParameterAttributes.ReferenceTypeConstraint));
-        Assert.That(copy.Constraints.Count, Is.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(copy.Attributes, Is.EqualTo(GenericParameterAttributes.ReferenceTypeConstraint));
+            Assert.That(copy.Constraints.Count, Is.EqualTo(1));
+        });
         Assert.That(copy.Constraints[0].ConstraintType.FullName, Is.EqualTo(typeof(IComparable<>).FullName));
     }
 
@@ -827,7 +864,7 @@ public class AroundBodyTests
         var (assembly, host, _) = NewGenericHost("AroundBodyGenericExecutionAssembly");
         HandlerOf(host, "Identity").AroundBody(Template(typeof(GenericAroundTemplates), nameof(GenericAroundTemplates.Passthrough)));
 
-        var identity = assembly.Load().GetType($"{Ns}.Host")!.GetMethod("Identity")!.MakeGenericMethod(typeof(string));
+        var identity = assembly.Load().GetType($"{NS}.Host")!.GetMethod("Identity")!.MakeGenericMethod(typeof(string));
 
         Assert.That(identity.Invoke(null, ["hello"]), Is.EqualTo("hello"));
     }
@@ -844,7 +881,7 @@ public class AroundBodyTests
 
         // The decorator describes the body of the method alone, of which one part is the body it holds. A body is woven
         // around through the handler, which is what holds one.
-        var method = (MethodHandler) host.AddMethod("Add", MethodFlags.Public | MethodFlags.Static)
+        var method = (MethodHandler)host.AddMethod("Add", MethodFlags.Public | MethodFlags.Static)
                                      .WithParameter("left", typeof(int))
                                      .WithParameter("right", typeof(int))
                                      .WithReturnType(typeof(int))
@@ -852,11 +889,14 @@ public class AroundBodyTests
         method.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
 
         // A method which is added carries a body which throws, which is the body the around template proceeds into.
-        var generated = host.Source.Methods.Single(methodDef => methodDef.Name == ProceedMethodName);
-        Assert.That(generated.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.True);
+        var generated = host.Source.Methods.Single(methodDef => methodDef.Name == PROCEED_METHOD_NAME);
+        Assert.Multiple(() =>
+        {
+            Assert.That(generated.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj), Is.True);
 
-        // The method itself now calls the generated one rather than holding the throwing body.
-        Assert.That(method.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.Name == ProceedMethodName), Is.True);
+            // The method itself now calls the generated one rather than holding the throwing body.
+            Assert.That(method.Source.Body.Instructions.Any(instruction => instruction.Operand is MethodReference reference && reference.Name == PROCEED_METHOD_NAME), Is.True);
+        });
     }
 
     #endregion

@@ -86,7 +86,7 @@ partial class MethodHandler
         // Whether the instance which the template reached the field through is a value which it computed where it stands,
         // rather than a load of one of its arguments: the load is written where the name of the field stands, and a value
         // which was computed is not held anywhere else than where it was computed.
-        var instanceIsComputed = instance is { Load: null };
+        var instanceIsComputed = instance is {Load: null};
 
         var field = memberSymbol.HasFlag(MemberSymbols.Base)
             ? DeclaringTypeHandler.GetFieldInBase(memberName)
@@ -107,7 +107,7 @@ partial class MethodHandler
         // A handle which the template holds in a local is read and written through that local rather than where the
         // name stands, so what the name stands for is the handle itself: nothing of it is written, and every accessor
         // which a read of the local is the receiver of is written as the field instead.
-        var held          = StackWalk.HeldLocal(filter.Target, currentIndex + 1);
+        var held = StackWalk.HeldLocal(filter.Target, currentIndex + 1);
         var heldAccessors = held is { } handle ? StackWalk.AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
         if (held != null && heldAccessors == null)
         {
@@ -126,7 +126,7 @@ partial class MethodHandler
             : field.ContainsGenericParameter
                 // If the field contains generic parameter, we need to make a new FieldReference with the generic instance type of declaring type as its DeclaringType.
                 // Related to issue: https://github.com/jbevain/cecil/issues/954
-                ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType(declaringType.GenericParameters.Select(static p => (TypeReference) p).ToArray()))
+                ? new FieldReference(field.Name, field.FieldType, declaringType.MakeGenericInstanceType([.. declaringType.GenericParameters.Select(static p => (TypeReference) p)]))
                 // Otherwise we can directly import the field definition as reference.
                 : Source.Module.ImportReference(field);
         var isStatic = field.Resolve().IsStatic;
@@ -175,10 +175,12 @@ partial class MethodHandler
 
         Instruction AccessorOf(bool isGet)
             => Instruction.Create(isGet
-                // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> ldfld/ldsfld class {field_type} {declaring_type}::{field_name}
-                ? isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld
-                // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> stfld/stsfld class {field_type} {declaring_type}::{field_name}
-                : isStatic ? OpCodes.Stsfld : OpCodes.Stfld,
+                    // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> ldfld/ldsfld class {field_type} {declaring_type}::{field_name}
+                    ? isStatic ? OpCodes.Ldsfld : OpCodes.Ldfld
+                    // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> stfld/stsfld class {field_type} {declaring_type}::{field_name}
+                    : isStatic
+                        ? OpCodes.Stsfld
+                        : OpCodes.Stfld,
                 fieldRef);
 
         if (heldAccessors is { } accessors)

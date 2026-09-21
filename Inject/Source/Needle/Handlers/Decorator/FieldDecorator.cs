@@ -1,5 +1,3 @@
-using Mono.Cecil;
-
 namespace Gneedle.Inject;
 
 /// <summary>
@@ -44,8 +42,8 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
     internal FieldDecorator(TypeHandler typeHandler, string fieldName, FieldFlags fieldFlags)
     {
         m_TypeHandler = typeHandler;
-        m_FieldName   = fieldName;
-        m_FieldFlags  = fieldFlags;
+        m_FieldName = fieldName;
+        m_FieldFlags = fieldFlags;
     }
 
     /// <inheritdoc/>

@@ -1,18 +1,13 @@
-using System.Reflection;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for the member of another type which the template names through `Static`, which are the tests of <see cref="PointerTests"/> for that one placeholder.
@@ -65,12 +60,13 @@ public partial class PointerTests
             StaticMember.FieldSet => OpCodes.Stsfld,
             _                     => OpCodes.Call
         };
-
-        Assert.That(ins.Any(i => i.OpCode == opcode && i.Operand is MemberReference reference && reference.Name == name), Is.True,
-                    $"the member which the placeholder names was not reached by a {opcode.Name}.");
-        Assert.That(ins.Any(i => i.Operand is MemberReference reference && reference.DeclaringType.FullName == Static.TYPE_NAME), Is.False,
-                    "an instruction of the body still names the placeholder.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == opcode && i.Operand is MemberReference reference && reference.Name == name), Is.True,
+                $"the member which the placeholder names was not reached by a {opcode.Name}.");
+            Assert.That(ins.Any(i => i.Operand is MemberReference reference && reference.DeclaringType.FullName == Static.TYPE_NAME), Is.False,
+                "an instruction of the body still names the placeholder.");
+        });
         if (member is StaticMember.PropertyGet)
         {
             // The property holds a getter and no setter, and the member which is woven is static: no receiver is
@@ -110,7 +106,7 @@ public partial class PointerTests
             case StaticMember.PropertyGet or StaticMember.PropertySet:
                 var property = new PropertyDefinition(name.Substring(name.IndexOf('_') + 1), PropertyAttributes.None, module.TypeSystem.Int32);
                 var accessor = new MethodDefinition(name, MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
-                                                    member is StaticMember.PropertySet ? module.TypeSystem.Void : module.TypeSystem.Int32)
+                    member is StaticMember.PropertySet ? module.TypeSystem.Void : module.TypeSystem.Int32)
                 {
                     DeclaringType = staticClass.Source,
                 };
@@ -123,6 +119,7 @@ public partial class PointerTests
                 {
                     property.GetMethod = accessor;
                 }
+
                 accessor.Body.GetILProcessor().Emit(OpCodes.Ret);
                 staticClass.Source.Methods.Add(accessor);
                 staticClass.Source.Properties.Add(property);

@@ -3,16 +3,15 @@ using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 [TestFixture]
 public class MethodTests
 {
-
     private static IClassHandler NewClass()
     {
         var handler = (AssemblyHandler) Assembly.Create("MethodTestAssembly").Handler;
-        return handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        return handler.AddClass("Host", NS, ClassFlags.Public).GetHandler();
     }
 
     private static MethodDefinition SourceOf(IMethodHandler handler) => ((MethodHandler) handler).Source;
@@ -26,12 +25,15 @@ public class MethodTests
         var method = host.AddMethod("Foo", MethodFlags.Public).WithReturnType(typeof(void)).GetHandler();
 
         var def = SourceOf(method);
-        Assert.That(def.Name, Is.EqualTo("Foo"));
-        Assert.That(def.ReturnType.FullName, Is.EqualTo(typeof(void).FullName));
-        Assert.That(def.IsStatic, Is.False);
-        Assert.That(def.IsPublic, Is.True);
-        Assert.That(def.Parameters, Is.Empty);
-        Assert.That(((ClassHandler) host).Source.Methods, Does.Contain(def));
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.Name, Is.EqualTo("Foo"));
+            Assert.That(def.ReturnType.FullName, Is.EqualTo(typeof(void).FullName));
+            Assert.That(def.IsStatic, Is.False);
+            Assert.That(def.IsPublic, Is.True);
+            Assert.That(def.Parameters, Is.Empty);
+            Assert.That(((ClassHandler) host).Source.Methods, Does.Contain(def));
+        });
     }
 
     [Test]
@@ -39,17 +41,23 @@ public class MethodTests
     {
         var host = NewClass();
         var method = host.AddMethod("Bar", MethodFlags.Public | MethodFlags.Static)
-            .WithParameter("text", typeof(string))
-            .WithParameter("count", typeof(int))
-            .WithReturnType(typeof(int))
-            .GetHandler();
+                         .WithParameter("text", typeof(string))
+                         .WithParameter("count", typeof(int))
+                         .WithReturnType(typeof(int))
+                         .GetHandler();
 
         var def = SourceOf(method);
-        Assert.That(def.IsStatic, Is.True);
-        Assert.That(def.ReturnType.FullName, Is.EqualTo(typeof(int).FullName));
-        Assert.That(def.Parameters.Count, Is.EqualTo(2));
-        Assert.That(def.Parameters[0].ParameterType.FullName, Is.EqualTo(typeof(string).FullName));
-        Assert.That(def.Parameters[1].ParameterType.FullName, Is.EqualTo(typeof(int).FullName));
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.IsStatic, Is.True);
+            Assert.That(def.ReturnType.FullName, Is.EqualTo(typeof(int).FullName));
+            Assert.That(def.Parameters.Count, Is.EqualTo(2));
+        });
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.Parameters[0].ParameterType.FullName, Is.EqualTo(typeof(string).FullName));
+            Assert.That(def.Parameters[1].ParameterType.FullName, Is.EqualTo(typeof(int).FullName));
+        });
     }
 
     [Test]
@@ -57,16 +65,19 @@ public class MethodTests
     {
         var host = NewClass();
         var method = host.AddMethod("Identity", MethodFlags.Public)
-            .WithGenericParameter("T")
-            .WithParameter("value", new GenericParameterType("T"))
-            .WithReturnType(new GenericParameterType("T"))
-            .GetHandler();
+                         .WithGenericParameter("T")
+                         .WithParameter("value", new GenericParameterType("T"))
+                         .WithReturnType(new GenericParameterType("T"))
+                         .GetHandler();
 
         var def = SourceOf(method);
         Assert.That(def.GenericParameters.Count, Is.EqualTo(1));
-        Assert.That(def.GenericParameters[0].Name, Is.EqualTo("T"));
-        Assert.That(def.ReturnType.Name, Is.EqualTo("T"));
-        Assert.That(def.Parameters.Count, Is.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.GenericParameters[0].Name, Is.EqualTo("T"));
+            Assert.That(def.ReturnType.Name, Is.EqualTo("T"));
+            Assert.That(def.Parameters.Count, Is.EqualTo(1));
+        });
         Assert.That(def.Parameters[0].ParameterType.Name, Is.EqualTo("T"));
     }
 
@@ -86,9 +97,12 @@ public class MethodTests
 
         stream.Position = 0;
         var reread = AssemblyDefinition.ReadAssembly(stream);
-        var emitted = reread.MainModule.GetType($"{Ns}.Host")!.Methods.First(method => method.Name == "Run");
-        Assert.That(emitted.ReturnType.FullName, Is.EqualTo(typeof(void).FullName));
-        Assert.That(emitted.Parameters[0].ParameterType.FullName, Is.EqualTo(typeof(MethodTests).FullName));
+        var emitted = reread.MainModule.GetType($"{NS}.Host")!.Methods.First(method => method.Name == "Run");
+        Assert.Multiple(() =>
+        {
+            Assert.That(emitted.ReturnType.FullName, Is.EqualTo(typeof(void).FullName));
+            Assert.That(emitted.Parameters[0].ParameterType.FullName, Is.EqualTo(typeof(MethodTests).FullName));
+        });
     }
 
     [Test]
@@ -108,12 +122,14 @@ public class MethodTests
     {
         // An abstract method must not carry a body.
         var handler = (AssemblyHandler) Assembly.Create("AbstractMethodAssembly").Handler;
-        var host = handler.AddClass("Host", Ns, ClassFlags.Public | ClassFlags.Abstract).GetHandler();
+        var host = handler.AddClass("Host", NS, ClassFlags.Public | ClassFlags.Abstract).GetHandler();
 
         var def = SourceOf(host.AddMethod("Foo", MethodFlags.Public | MethodFlags.Abstract).WithReturnType(typeof(void)).GetHandler());
-
-        Assert.That(def.IsAbstract, Is.True);
-        Assert.That(def.HasBody, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.IsAbstract, Is.True);
+            Assert.That(def.HasBody, Is.False);
+        });
     }
 
     #endregion
@@ -159,9 +175,12 @@ public class MethodTests
         var method = host.AddMethod(".cctor", MethodFlags.Static | MethodFlags.Private).WithReturnType(typeof(void)).GetHandler();
 
         var def = SourceOf(method);
-        Assert.That(def.IsStatic, Is.True);
-        Assert.That(def.IsRuntimeSpecialName, Is.True);
-        Assert.That(def.Name, Is.EqualTo(".cctor"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.IsStatic, Is.True);
+            Assert.That(def.IsRuntimeSpecialName, Is.True);
+            Assert.That(def.Name, Is.EqualTo(".cctor"));
+        });
     }
 
     #endregion
@@ -177,8 +196,11 @@ public class MethodTests
     public void ToMethodAttributes_AccessLevel(MethodFlags flags, MethodAttributes expected)
     {
         var attributes = flags.ToMethodAttributes();
-        Assert.That(attributes.HasFlag(expected), Is.True);
-        Assert.That(attributes.HasFlag(MethodAttributes.HideBySig), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(attributes.HasFlag(expected), Is.True);
+            Assert.That(attributes.HasFlag(MethodAttributes.HideBySig), Is.True);
+        });
     }
 
     [Test]
@@ -189,8 +211,11 @@ public class MethodTests
     public void ToMethodAttributes_Virtual_Adds_NewSlot()
     {
         var attributes = (MethodFlags.Public | MethodFlags.Virtual).ToMethodAttributes();
-        Assert.That(attributes.HasFlag(MethodAttributes.Virtual), Is.True);
-        Assert.That(attributes.HasFlag(MethodAttributes.NewSlot), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(attributes.HasFlag(MethodAttributes.Virtual), Is.True);
+            Assert.That(attributes.HasFlag(MethodAttributes.NewSlot), Is.True);
+        });
     }
 
     #endregion

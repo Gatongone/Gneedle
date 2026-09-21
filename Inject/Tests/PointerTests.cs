@@ -1,18 +1,4 @@
-using System.Reflection;
-using Mono.Cecil;
-using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
-using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
-using MethodAttributes = Mono.Cecil.MethodAttributes;
-using OpCodes = Mono.Cecil.Cil.OpCodes;
-using ParameterAttributes = Mono.Cecil.ParameterAttributes;
-using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
-
 namespace Gneedle.Inject.Test;
-
-using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// Tests for the placeholders which a template reaches the members of the type it is woven into through: <c>This</c>,
@@ -30,7 +16,7 @@ public partial class PointerTests
     public class HelperClass
     {
         public int Calc(int a) => a * 2;
-        public int PublicField;
+        public        int PublicField;
         public static int StaticField;
         public int PublicProperty { get; set; }
 
@@ -66,7 +52,7 @@ public partial class PointerTests
         public int Calc(int a) => a * 2;
         public int PublicField;
         public int PublicProperty => 42;
-        public U Identity<U>(U value) => value;
+        public TU Identity<TU>(TU value) => value;
 
         /// <summary>
         /// A member whose signature names the parameter of the type which declares it, which the lookup of a member
@@ -109,7 +95,7 @@ public partial class PointerTests
         /// is read through the instantiation of the type which declares it rather than through the one of the type which
         /// the template named an instance of.
         /// </summary>
-        public U EchoBoth<U>(T value, U seed) => seed;
+        public TU EchoBoth<TU>(T value, TU seed) => seed;
     }
 
     /// <summary>
@@ -172,7 +158,7 @@ public partial class PointerTests
         /// value of the write and the accessor which writes it.
         /// </summary>
         public static void AddTheFirstElementOfAnArrayToTheField()
-            => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + new[] { 1 }[0]);
+            => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + new[] {1}[0]);
 
         // Two of the cases begin where the name of a member stands rather than where a value is loaded, and the
         // compiler writes the switch as a table of the instructions the cases begin at.
@@ -180,11 +166,11 @@ public partial class PointerTests
         {
             switch (value)
             {
-                case 0: return This.Field<int>("Value").Get();
-                case 1: return This.Field<int>("Other").Get();
-                case 2: return 20;
-                case 3: return 30;
-                case 4: return 40;
+                case 0:  return This.Field<int>("Value").Get();
+                case 1:  return This.Field<int>("Other").Get();
+                case 2:  return 20;
+                case 3:  return 30;
+                case 4:  return 40;
                 default: return -1;
             }
         }
@@ -229,7 +215,7 @@ public partial class PointerTests
         public static int ReadAHeldHandleAsAValue()
         {
             var count = This.Field<int>("Value");
-            var copy  = count;
+            var copy = count;
             return copy.Get();
         }
 
@@ -264,6 +250,7 @@ public partial class PointerTests
         // Delegates whose parameter is loaded via ldc.i4.* literals in IL, which lose the
         // distinction between char/bool/short/int on the evaluation stack.
         public delegate char CharOp(char c);
+
         public delegate bool BoolOp(bool b);
 
         // Immediately invokes the returned delegate -> branch that rewrites to a direct call.
@@ -367,10 +354,10 @@ public partial class PointerTests
         // does: the member is looked up by the types of the parameters of the delegate, which are compared by name
         // rather than by position, so what names the parameter of the member is the name of the token and not where it
         // stands among the parameters of the body.
-        public delegate M_1 LaterOp(M_1 value);
+        public delegate M1 LaterOp(M1 value);
 
         /// <inheritdoc cref="LaterOp"/>
-        public static M_1 InvokeAMemberWhichTheNameOfAParameterNames(M_0 key, M_1 value) => This.Method<LaterOp>("IdentityOfTheLater")(value);
+        public static M1 InvokeAMemberWhichTheNameOfAParameterNames(M0 key, M1 value) => This.Method<LaterOp>("IdentityOfTheLater")(value);
 
         // The member which the symbol names declares a parameter of its own which its own signature names, and the token
         // of the template stands for the parameter of the type which the body is a member of, which bears the name of
@@ -455,7 +442,7 @@ public partial class PointerTests
         public class DelegateHolder
         {
             public Func<int, int, int>? Slot;
-            public int Number;
+            public int                  Number;
         }
 
         /// <summary>
@@ -552,10 +539,10 @@ public partial class PointerTests
         /// The same of a member whose parameter no delegate of the framework could describe: the token stands for the
         /// parameter of the member which is woven, which is what the readme writes such a signature with.
         /// </summary>
-        public delegate M_0 IdentityOfTheMethod(M_0 value);
+        public delegate M0 IdentityOfTheMethod(M0 value);
 
         /// <inheritdoc cref="Identity_OfAnInt"/>
-        public static M_0 Identity_OfTheMethod(M_0 value) => This.Method<IdentityOfTheMethod>("Identity")(value);
+        public static M0 Identity_OfTheMethod(M0 value) => This.Method<IdentityOfTheMethod>("Identity")(value);
 
         /// <summary>
         /// The delegate describes the member whole, so the type which it hands back is what tells one instantiation of
@@ -569,7 +556,7 @@ public partial class PointerTests
         /// of the member, and the value which the member hands back is described with a type of its own: the two
         /// disagree, so the delegate describes no instantiation of the member.
         /// </summary>
-        public static int IdentityOfTheTokenWithAValueOfAnotherType(M_0 value) => This.Method<Func<M_0, int>>("Identity")(value);
+        public static int IdentityOfTheTokenWithAValueOfAnotherType(M0 value) => This.Method<Func<M0, int>>("Identity")(value);
 
         /// <summary>
         /// The member which the name stands for declares a parameter of its own which accepts only the types of
@@ -983,7 +970,7 @@ public partial class PointerTests
         /// instantiation rather than on the definition of the constraint, which names no type of the body, and the call
         /// names that instantiation.
         /// </summary>
-        public static int InstanceMethod_OfAConstraintWhichIsAnInstantiation(M_0 box, int a)
+        public static int InstanceMethod_OfAConstraintWhichIsAnInstantiation(M0 box, int a)
             => new Instance(box).Method<IntOp>("Echo")(a);
 
         /// <summary>
@@ -992,10 +979,10 @@ public partial class PointerTests
         /// which declares a parameter as well is matched by it, and the call is one of the instantiation of the member
         /// which reaches the body.
         /// </summary>
-        public delegate M_0 IdentityOfTheMethod(M_0 value);
+        public delegate M0 IdentityOfTheMethod(M0 value);
 
         /// <inheritdoc cref="IdentityOfTheMethod"/>
-        public static M_0 InstanceMethodOfAGenericMemberOfAGenericType(GenericHelper<int> helper, M_0 value)
+        public static M0 InstanceMethodOfAGenericMemberOfAGenericType(GenericHelper<int> helper, M0 value)
             => new Instance(helper).Method<IdentityOfTheMethod>("Identity")(value);
 
         /// <summary>
@@ -1003,7 +990,7 @@ public partial class PointerTests
         /// member which is reached declares fewer parameters than the body does, so the arguments of the instantiation
         /// are the ones which the delegate names rather than every parameter of the body.
         /// </summary>
-        public static M_0 InstanceMethodOfAGenericMemberOfABodyOfAGreaterArity(GenericHelper<int> helper, M_0 value)
+        public static M0 InstanceMethodOfAGenericMemberOfABodyOfAGreaterArity(GenericHelper<int> helper, M0 value)
             => new Instance(helper).Method<IdentityOfTheMethod>("Identity")(value);
 
         /// <summary>
@@ -1024,6 +1011,6 @@ public partial class PointerTests
         var weaver = typeof(This).Assembly.GetName().Name;
 
         Assert.That(host.Source.Module.AssemblyReferences.Any(reference => reference.Name == weaver), Is.False,
-                    $"the assembly which was woven refers to {weaver}.");
+            $"the assembly which was woven refers to {weaver}.");
     }
 }

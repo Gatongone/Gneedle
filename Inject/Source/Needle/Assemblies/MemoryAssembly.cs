@@ -74,7 +74,7 @@ internal sealed class MemoryAssembly : Assembly
             MetadataImporterProvider   = SPCLMetadataImporterProvider.Instance,
             // The resolver holds the assemblies which are read into the module, so that one which only exists in memory
             // is resolvable. It is given here because the resolver of a module cannot be replaced once it was created.
-            AssemblyResolver = new CachedAssemblyResolver(new DefaultAssemblyResolver())
+            AssemblyResolver           = new CachedAssemblyResolver(new DefaultAssemblyResolver())
         };
     }
 

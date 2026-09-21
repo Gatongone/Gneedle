@@ -1,18 +1,11 @@
-using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
 using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
-using MethodAttributes = Mono.Cecil.MethodAttributes;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
-using ParameterAttributes = Mono.Cecil.ParameterAttributes;
-using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Tests for the field of the type which the template is woven into, which are the tests of <see cref="PointerTests"/> for that one placeholder.
@@ -46,7 +39,7 @@ public partial class PointerTests
         var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
-        return assembly.Load().GetType($"{Ns}.Host")!;
+        return assembly.Load().GetType($"{NS}.Host")!;
     }
 
     /// <summary>
@@ -56,7 +49,7 @@ public partial class PointerTests
     {
         var method = host.AddMethod(methodName, returnType.ToGneedleType(), [], parameters, flags);
         method.SetBody(Template(typeof(ThisMemberTemplates), template));
-        return ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        return [.. ((MethodHandler) method).Source.Body.Instructions];
     }
 
     [Test]
@@ -67,8 +60,11 @@ public partial class PointerTests
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceField)));
 
         var body = ((MethodHandler) method).Source.Body;
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldfld), Is.True);
-        Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldfld), Is.True);
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldarg_0), Is.True);
+        });
     }
 
     [Test]
@@ -76,9 +72,11 @@ public partial class PointerTests
     {
         var host = NewHostWithField("Value", isStatic: false);
         var ins = Rewrite(host, "Write", typeof(void), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.WriteInstanceField), MethodFlags.Public);
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld), Is.True);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld), Is.True);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld), Is.False);
+        });
     }
 
     [Test]
@@ -89,15 +87,16 @@ public partial class PointerTests
         // because the read is the first accessor after the name, and the parse then refused the second of them.
         var host = NewHostWithField("Value", isStatic: false, "FieldReadAndWriteAssembly");
         var ins = Rewrite(host, "Bump", typeof(void), [], nameof(ThisMemberTemplates.AddOneToInstanceField), MethodFlags.Public);
-
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(1), "the field was not read exactly once.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(1), "the field was not read exactly once.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
+        });
         var assembly = host.AssemblyHandler.Assembly;
         var module = assembly.Source.MainModule;
         AddAnInstanceConstructor(host);
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = Activator.CreateInstance(type);
         type.GetField("Value")!.SetValue(instance, 41);
         type.GetMethod("Bump")!.Invoke(instance, null);
@@ -116,12 +115,13 @@ public partial class PointerTests
         var host = NewHostWithField("Value", isStatic: false, "FieldArrayValueAssembly");
         var method = host.AddMethod("Bump", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         Assert.DoesNotThrow(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.AddTheFirstElementOfAnArrayToTheField))),
-                            "the write of a value which holds an array was refused rather than woven.");
+            "the write of a value which holds an array was refused rather than woven.");
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(1), "the field was not read exactly once.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(1), "the field was not read exactly once.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         var instance = Activator.CreateInstance(type);
         type.GetField("Value")!.SetValue(instance, 41);
@@ -137,12 +137,15 @@ public partial class PointerTests
         // which the template wrote belong to the local: the local has to be read as the member which the name found.
         var host = NewHostWithField("Value", isStatic: false, "FieldHeldHandleAssembly");
         var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandle), MethodFlags.Public);
+        Assert.Multiple(() =>
+        {
 
-        // The two reads are the one which the write is given and the one which the member hands back.
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(2), "the field was not read exactly twice.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
-        Assert.That(ins.Any(i => i.Operand is MemberReference { DeclaringType.Namespace: "Gneedle.Inject" }), Is.False,
-                    "the handle which the template holds was left in the body.");
+            // The two reads are the one which the write is given and the one which the member hands back.
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(2), "the field was not read exactly twice.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
+            Assert.That(ins.Any(i => i.Operand is MemberReference { DeclaringType.Namespace: "Gneedle.Inject" }), Is.False,
+                "the handle which the template holds was left in the body.");
+        });
 
         // The local which holds the handle is emptied by the weaving, and a local which is declared with a type of the
         // weaver is what would leave the reference behind after the handle itself was written away.
@@ -151,9 +154,11 @@ public partial class PointerTests
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         var instance = Activator.CreateInstance(type);
         type.GetField("Value")!.SetValue(instance, 41);
-
-        Assert.That(type.GetMethod("Bump")!.Invoke(instance, [3]), Is.EqualTo(44));
-        Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(44));
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.GetMethod("Bump")!.Invoke(instance, [3]), Is.EqualTo(44));
+            Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(44));
+        });
     }
 
     [Test]
@@ -162,17 +167,21 @@ public partial class PointerTests
         // What the template holds and what it names stand in one body, and each of them is woven where it stands.
         var host = NewHostWithField("Value", isStatic: false, "FieldHeldHandleAndNameAssembly");
         var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleAndTheFieldItself), MethodFlags.Public);
+        Assert.Multiple(() =>
+        {
 
-        // The three reads are the ones of the write, of the member which is handed back and of the name which is read.
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(3), "the field was not read exactly three times.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
-
+            // The three reads are the ones of the write, of the member which is handed back and of the name which is read.
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(3), "the field was not read exactly three times.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
+        });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         var instance = Activator.CreateInstance(type);
         type.GetField("Value")!.SetValue(instance, 41);
-
-        Assert.That(type.GetMethod("Bump")!.Invoke(instance, [3]), Is.EqualTo(88));
-        Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(44));
+        Assert.Multiple(() =>
+        {
+            Assert.That(type.GetMethod("Bump")!.Invoke(instance, [3]), Is.EqualTo(88));
+            Assert.That(type.GetField("Value")!.GetValue(instance), Is.EqualTo(44));
+        });
     }
 
     [Test]
@@ -181,11 +190,13 @@ public partial class PointerTests
         // A field which belongs to no instance takes no receiver, so the read of the local is written as nothing.
         var host = NewHostWithField("Value", isStatic: true, "StaticFieldHeldHandleAssembly");
         var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleOfAStaticField), MethodFlags.Public | MethodFlags.Static);
-
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldsfld), Is.EqualTo(2), "the field was not read exactly twice.");
-        Assert.That(ins.Count(i => i.OpCode == OpCodes.Stsfld), Is.EqualTo(1), "the field was not written exactly once.");
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld || i.OpCode == OpCodes.Stfld), Is.False,
-                    "a field which belongs to no instance was read through a receiver.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldsfld), Is.EqualTo(2), "the field was not read exactly twice.");
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Stsfld), Is.EqualTo(1), "the field was not written exactly once.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld || i.OpCode == OpCodes.Stfld), Is.False,
+                "a field which belongs to no instance was read through a receiver.");
+        });
         DoesNotReferToTheWeaver(host);
     }
 
@@ -198,9 +209,11 @@ public partial class PointerTests
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
         var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadAHeldHandleAsAValue))));
-
-        Assert.That(thrown!.Message, Does.Contain("Value"));
-        Assert.That(thrown.Message, Does.Contain("no way to write"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(thrown!.Message, Does.Contain("Value"));
+            Assert.That(thrown.Message, Does.Contain("no way to write"));
+        });
     }
 
     [Test]
@@ -210,9 +223,11 @@ public partial class PointerTests
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadStaticField)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
-
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldsfld), Is.True);
-        Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldsfld), Is.True);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld), Is.False);
+        });
     }
 
     [Test]
@@ -252,18 +267,20 @@ public partial class PointerTests
 
         Assert.That(table, Is.Not.Empty, "the switch of the template was not carried as a table.");
         Assert.That(table.All(entry => body.Instructions.Contains(entry)), Is.True,
-                    "an entry of the table named an instruction which the body does not hold.");
+            "an entry of the table named an instruction which the body does not hold.");
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
         var instance = Activator.CreateInstance(type);
         type.GetField("Value")!.SetValue(instance, 7);
         type.GetField("Other")!.SetValue(instance, 9);
         var read = type.GetMethod("Read")!;
-
-        Assert.That(read.Invoke(instance, [0]), Is.EqualTo(7), "the case which names the first field reached another case.");
-        Assert.That(read.Invoke(instance, [1]), Is.EqualTo(9), "the case which names the second field reached another case.");
-        Assert.That(read.Invoke(instance, [4]), Is.EqualTo(40), "the case which holds a value of its own reached another case.");
-        Assert.That(read.Invoke(instance, [9]), Is.EqualTo(-1), "the default of the table reached another case.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(read.Invoke(instance, [0]), Is.EqualTo(7), "the case which names the first field reached another case.");
+            Assert.That(read.Invoke(instance, [1]), Is.EqualTo(9), "the case which names the second field reached another case.");
+            Assert.That(read.Invoke(instance, [4]), Is.EqualTo(40), "the case which holds a value of its own reached another case.");
+            Assert.That(read.Invoke(instance, [9]), Is.EqualTo(-1), "the default of the table reached another case.");
+        });
     }
 
     /// <summary>
@@ -272,7 +289,7 @@ public partial class PointerTests
     private static TypeHandler NewGenericHostWithField(string fieldName)
     {
         var handler = (AssemblyHandler) Assembly.Create("MemberInjectionGenericAssembly").Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public)
+        var host = (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public)
                                         .WithGenericParameter("T")
                                         .GetHandler();
         var gp = host.Source.GenericParameters[0];
@@ -289,9 +306,12 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         var ldfld = ins.FirstOrDefault(i => i.OpCode == OpCodes.Ldfld);
-        Assert.That(ldfld, Is.Not.Null);
-        // The field reference's declaring type must be the generic instance Host<T>, not the open definition.
-        Assert.That(((FieldReference) ldfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>());
+        Assert.Multiple(() =>
+        {
+            Assert.That(ldfld, Is.Not.Null);
+            // The field reference's declaring type must be the generic instance Host<T>, not the open definition.
+            Assert.That(((FieldReference) ldfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>());
+        });
     }
 
     [Test]
@@ -303,7 +323,10 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
         var stfld = ins.FirstOrDefault(i => i.OpCode == OpCodes.Stfld);
-        Assert.That(stfld, Is.Not.Null);
-        Assert.That(((FieldReference) stfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>());
+        Assert.Multiple(() =>
+        {
+            Assert.That(stfld, Is.Not.Null);
+            Assert.That(((FieldReference) stfld!.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>());
+        });
     }
 }

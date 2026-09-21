@@ -33,9 +33,9 @@ internal static class InstructionSlots
                 Code.Ldarg_3 => 3,
                 Code.Ldarg or Code.Ldarg_S => ins.Operand switch
                 {
-                    int slot                     => slot,
+                    int slot => slot,
                     ParameterReference parameter => parameter.Index + (hasReceiver ? 1 : 0),
-                    _                            => -1
+                    _ => -1
                 },
                 _ => -1
             };
@@ -62,9 +62,9 @@ internal static class InstructionSlots
                 Code.Stloc_3 => 3,
                 Code.Stloc or Code.Stloc_S => ins.Operand switch
                 {
-                    int slot                   => slot,
+                    int slot => slot,
                     VariableReference variable => variable.Index,
-                    _                          => -1
+                    _ => -1
                 },
                 _ => -1
             };
@@ -90,9 +90,9 @@ internal static class InstructionSlots
                 Code.Ldloc_3 => 3,
                 Code.Ldloc or Code.Ldloc_S => ins.Operand switch
                 {
-                    int slot                   => slot,
+                    int slot => slot,
                     VariableReference variable => variable.Index,
-                    _                          => -1
+                    _ => -1
                 },
                 _ => -1
             };

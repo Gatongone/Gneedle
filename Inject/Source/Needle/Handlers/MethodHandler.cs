@@ -2,8 +2,6 @@ using System.Globalization;
 using System.Reflection;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using MethodBody = Mono.Cecil.Cil.MethodBody;
-using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject;
 
@@ -133,7 +131,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // argument of that instantiation rather than the parameter of the definition alone.
         var baseMethod = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(
             DeclaringTypeHandler.AssemblyHandler.GetCecilType(baseType).Definition,
-            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray(), instance: baseType);
+            Source.Name, [.. Source.Parameters.Select(p => p.ParameterType)], instance: baseType);
         if (baseMethod == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
@@ -700,7 +698,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         var token = DeclaringTypeHandler.AssemblyHandler.GetCecilType(captured).Reference;
-        var read  = Source.Module.ImportReference(typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
+        var read = Source.Module.ImportReference(typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
 
         filter.Insert(index, Instruction.Create(OpCodes.Ldtoken, token));
         filter.Replace(index, Instruction.Create(OpCodes.Call, read));

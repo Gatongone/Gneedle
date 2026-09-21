@@ -15,7 +15,7 @@ internal static class TestFixtures
     /// <summary>
     /// The name of the namespace which the types a test describes are declared in.
     /// </summary>
-    internal const string Ns = "Gneedle.Test.Generated";
+    internal const string NS = "Gneedle.Test.Generated";
 
     /// <summary>
     /// Create an assembly of a class named <c>Host</c>, and hand back the handler of the type, the handler of the
@@ -30,7 +30,7 @@ internal static class TestFixtures
     {
         var assembly = Assembly.Create(assemblyName);
         var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass(typeName, Ns, ClassFlags.Public).GetHandler();
+        var host = (TypeHandler) handler.AddClass(typeName, NS, ClassFlags.Public).GetHandler();
 
         return (handler, host, assembly.Source.MainModule);
     }
@@ -45,7 +45,7 @@ internal static class TestFixtures
     {
         var assembly = Assembly.Create(assemblyName);
         var module = assembly.Source.MainModule;
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var outer = new TypeDefinition(NS, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
         module.Types.Add(outer);
 
         return ((AssemblyHandler) assembly.Handler, outer);
@@ -60,7 +60,7 @@ internal static class TestFixtures
     internal static (AssemblyHandler Handler, TypeDefinition Outer, TypeDefinition Inner) NewOuterWithInner(string assemblyName)
     {
         var (handler, outer) = NewOuter(assemblyName);
-        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, outer.Module.TypeSystem.Object) { DeclaringType = outer };
+        var inner = new TypeDefinition(NS, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, outer.Module.TypeSystem.Object) {DeclaringType = outer};
         outer.NestedTypes.Add(inner);
 
         return (handler, outer, inner);
@@ -107,7 +107,7 @@ internal static class TestFixtures
     /// <param name="typeName">The name of the class, which is <c>Host</c> for the files which call it that.</param>
     /// <returns>The handler of the class.</returns>
     internal static TypeHandler AddAHost(AssemblyHandler handler, string typeName = "Host")
-        => (TypeHandler) handler.AddClass(typeName, Ns, ClassFlags.Public).GetHandler();
+        => (TypeHandler) handler.AddClass(typeName, NS, ClassFlags.Public).GetHandler();
 
     /// <summary>
     /// The same, of the assembly a test built rather than of the handler it took out of it.
