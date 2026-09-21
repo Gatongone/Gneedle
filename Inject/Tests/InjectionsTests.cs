@@ -19,6 +19,8 @@ using static Gneedle.Inject.Test.TestFixtures;
 public class MarkTypeAttribute : Attribute, ITypeInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+    /// <inheritdoc/>
     public void Inject(Type type, ITypeHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "marked");
 }
 
@@ -53,6 +55,8 @@ public class DerivedMarkedFixture;
 [AttributeUsage(AttributeTargets.All)]
 public sealed class ThrowTypeAttribute : Attribute, ITypeInjector
 {
+    /// <inheritdoc/>
+    public int Priority => 0;
     /// <summary>
     /// The environment variable which names the type the injector throws for.
     /// </summary>
@@ -81,6 +85,8 @@ public class ThrowingFixture;
 public sealed class MarkClassAttribute : Attribute, IClassInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+    /// <inheritdoc/>
     public void Inject(Type type, IClassHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "class");
 }
 
@@ -89,6 +95,8 @@ public sealed class MarkClassAttribute : Attribute, IClassInjector
 public sealed class MarkStructAttribute : Attribute, IStructInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+    /// <inheritdoc/>
     public void Inject(Type type, IStructHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "struct");
 }
 
@@ -96,6 +104,8 @@ public sealed class MarkStructAttribute : Attribute, IStructInjector
 [AttributeUsage(AttributeTargets.All)]
 public sealed class MarkEnumAttribute : Attribute, IEnumInjector
 {
+    /// <inheritdoc/>
+    public int Priority => 0;
     /// <inheritdoc/>
     public void Inject(Type type, IEnumHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "enum");
 }
@@ -151,6 +161,8 @@ public static class OverloadBodies
 public sealed class RunBodyAttribute : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+    /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler)
         => handler.SetBody(typeof(OverloadBodies).GetMethod(method.GetParameters().Length == 0 ? nameof(OverloadBodies.None) : nameof(OverloadBodies.One))!);
 }
@@ -182,6 +194,8 @@ public interface IRunBodyInjector : IMethodInjector;
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class RunBodyThroughAnInterfaceAttribute : Attribute, IRunBodyInjector
 {
+    /// <inheritdoc/>
+    public int Priority => 0;
     /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler) => handler.SetBody(typeof(OverloadBodies).GetMethod(nameof(OverloadBodies.None))!);
 }
@@ -235,11 +249,18 @@ public static class InjectorOrderBodies
 }
 
 /// <summary>
-/// An attribute which weaves the member it is put on around the body which the member holds.
+/// An attribute which weaves the member it is put on around the body which the member holds.<para/>
+/// The order in which it is applied among the injectors of a member is the order of the priorities which they declare:
+/// the attribute specifications of a member are equivalent in every order, so which of two injectors takes over the
+/// body of the member and which proceeds into what the other wrote is told by the priority and by nothing else.
 /// </summary>
+/// <param name="priority">The order in which this injector is applied among the injectors of the member it stands on.</param>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public sealed class AroundBodyInjectorAttribute : Attribute, IMethodInjector
+public sealed class AroundBodyInjectorAttribute(int priority = 0) : Attribute, IMethodInjector
 {
+    /// <inheritdoc/>
+    public int Priority { get; } = priority;
+
     /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler)
     {
@@ -249,11 +270,16 @@ public sealed class AroundBodyInjectorAttribute : Attribute, IMethodInjector
 }
 
 /// <summary>
-/// An attribute which replaces the body of the member it is put on.
+/// An attribute which replaces the body of the member it is put on.<para/>
+/// The order in which it is applied is the order of the priorities, as the injector above says.
 /// </summary>
+/// <param name="priority">The order in which this injector is applied among the injectors of the member it stands on.</param>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public sealed class ReplaceBodyInjectorAttribute : Attribute, IMethodInjector
+public sealed class ReplaceBodyInjectorAttribute(int priority = 0) : Attribute, IMethodInjector
 {
+    /// <inheritdoc/>
+    public int Priority { get; } = priority;
+
     /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler)
     {
@@ -283,21 +309,23 @@ public class ReplaceThenAroundFixture
     /// <summary>
     /// The member which the two injectors above are put on.
     /// </summary>
-    [ReplaceBodyInjector]
-    [AroundBodyInjector]
+    [ReplaceBodyInjector(priority: 10)]
+    [AroundBodyInjector(priority: 0)]
     public static void Run() { }
 }
 
 /// <summary>
-/// A type whose member carries the same two injectors as the type above, in the other order.
+/// A type whose member carries the same two injectors as the type above, of the other order: which of them is applied
+/// first is the priority, so what tells the two types apart is the pair of priorities rather than where the attributes
+/// stand, which no test could tell apart at all.
 /// </summary>
 public class AroundThenReplaceFixture
 {
     /// <summary>
     /// The member which the two injectors above are put on.
     /// </summary>
-    [AroundBodyInjector]
-    [ReplaceBodyInjector]
+    [AroundBodyInjector(priority: 10)]
+    [ReplaceBodyInjector(priority: 0)]
     public static void Run() { }
 }
 

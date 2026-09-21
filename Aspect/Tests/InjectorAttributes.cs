@@ -11,6 +11,8 @@ namespace Gneedle.Aspect.Test;
 public sealed class ThrowBodyAttribute : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+    /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler) => handler.SetBody(DefaultMethodBody.ThrowException);
 }
 
@@ -22,6 +24,8 @@ public sealed class ThrowBodyAttribute : Attribute, IMethodInjector
 public sealed class MarkFieldAttribute : Attribute, IFieldInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+    /// <inheritdoc/>
     public void Inject(FieldInfo field, IFieldHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "marked");
 }
 
@@ -31,6 +35,8 @@ public sealed class MarkFieldAttribute : Attribute, IFieldInjector
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class ThrowGetterBodyAttribute : Attribute, IPropertyInjector
 {
+    /// <inheritdoc/>
+    public int Priority => 0;
     /// <inheritdoc/>
     public void Inject(PropertyInfo property, IPropertyHandler handler) => handler.SetGetter(DefaultPropertyBody.ThrowException);
 }
@@ -45,6 +51,8 @@ public sealed class ThrowGetterBodyAttribute : Attribute, IPropertyInjector
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class RecordingAttribute : Attribute, IMethodInjector
 {
+    /// <inheritdoc/>
+    public int Priority => 0;
     /// <summary>
     /// The environment variable which names the file the members are recorded into.
     /// </summary>
@@ -64,6 +72,8 @@ public sealed class RecordingAttribute : Attribute, IMethodInjector
 [AttributeUsage(AttributeTargets.All)]
 public sealed class ClassOnlyAttribute : Attribute, IClassInjector
 {
+    /// <inheritdoc/>
+    public int Priority => 0;
     /// <inheritdoc/>
     public void Inject(Type type, IClassHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "class");
 }

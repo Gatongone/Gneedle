@@ -160,6 +160,8 @@ public static class Carried
 public sealed class CarriedInjectorAttribute : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+    /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler)
     {
         if (Environment.GetEnvironmentVariable(Carried.Variable) is not { } wanted) return;
@@ -438,14 +440,16 @@ public class CompilerGeneratedTemplateTests
 
             // Every copy is declared before any body is written, because a body reaches a copy which is declared after
             // it: what a type is written against is the map, and the map is whole only once nothing is left to declare.
-            foreach (var (fullName, copy) in Types)
+            // The two of a pair are named by their parts rather than taken apart by a deconstruction, which is a member
+            // the framework the tests are built for on Windows does not hold.
+            foreach (var type in Types)
             {
-                Fill(fullName, copy);
+                Fill(type.Key, type.Value);
             }
 
-            foreach (var (fullName, copy) in Members)
+            foreach (var member in Members)
             {
-                FillMember(fullName, copy);
+                FillMember(member.Key, member.Value);
             }
 
             Repoint(template);
@@ -816,8 +820,11 @@ public class CompilerGeneratedTemplateTests
     /// body it has no instructions of, done here before the weaving runs, so that what the weaving does with the result
     /// is read on its own.
     /// </summary>
+    /// <param name="module">The module which declares the template and the type it is carried onto.</param>
     /// <param name="holder">The full name of the type which declares the template, which a template of a generic type
     /// is declared by the instantiation it is read as.</param>
+    /// <param name="templateName">The name of the template whose bodies are carried.</param>
+    /// <param name="intoTypeName">The full name of the type which what the compiler wrote is carried onto.</param>
     private static void Move(ModuleDefinition module, string holder, string templateName, string intoTypeName)
     {
         var template = module.GetType(holder)!.Methods.Single(method => method.Name == templateName);
