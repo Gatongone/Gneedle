@@ -608,7 +608,7 @@ internal static class SignatureMatching
 
         foreach (var declaration in s_TheTypesWhichEveryArrayIsGiven)
         {
-            given.Add(module.ImportReference(declaration));
+            given.Add(ModuleLock.Import(module, declaration));
         }
 
         // The collections and the sequences of the runtime which name the element are given to a vector, and they are
@@ -640,11 +640,11 @@ internal static class SignatureMatching
     /// </summary>
     private static readonly Type[] s_TheCollectionsWhichNameTheElement =
     [
-        typeof(System.Collections.Generic.IList<>),
-        typeof(System.Collections.Generic.ICollection<>),
-        typeof(System.Collections.Generic.IEnumerable<>),
-        typeof(System.Collections.Generic.IReadOnlyList<>),
-        typeof(System.Collections.Generic.IReadOnlyCollection<>)
+        typeof(IList<>),
+        typeof(ICollection<>),
+        typeof(IEnumerable<>),
+        typeof(IReadOnlyList<>),
+        typeof(IReadOnlyCollection<>)
     ];
 
     /// <summary>

@@ -6,7 +6,7 @@ using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// The templates which a compiler carries a body out of, one per construct which it writes a method or a type of its
@@ -68,7 +68,7 @@ public static class CompilerGeneratedTemplates
     /// A body which calls a generic method, which is a shape the weaver carries whatever the compiler did with the body
     /// of the template: the call names the method through the instantiation it makes of it.
     /// </summary>
-    public static int CallsAGenericMethod(int value) => Enumerable.First<int>([value]);
+    public static int CallsAGenericMethod(int value) => Enumerable.First([value]);
 
     /// <summary>
     /// A lambda which captured two locals rather than one, so that the type the compiler wrote for it holds more than
@@ -103,7 +103,7 @@ public static class CompilerGeneratedTemplates
         Func<int, int> outer = x =>
         {
             var two = 2;
-            Func<int> inner = () => one + x + two;
+            var inner = () => one + x + two;
             return inner();
         };
         return outer(value);
@@ -133,7 +133,7 @@ public static class GenericCompilerGeneratedTemplates<T>
     /// </summary>
     public static T ReturnsWhatItCaptured(T value)
     {
-        Func<T> captured = () => value;
+        var captured = () => value;
         return captured();
     }
 }
@@ -148,7 +148,7 @@ public static class Carried
     /// The environment variable which the injector below reads, which holds the type whose member is woven, the name of
     /// the template which is woven into it, and the type which declares that template, separated by bars.
     /// </summary>
-    public const string Variable = "GneedleCarried";
+    public const string VARIABLE = "GneedleCarried";
 }
 
 /// <summary>
@@ -160,9 +160,12 @@ public static class Carried
 public sealed class CarriedInjectorAttribute : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+
+    /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler)
     {
-        if (Environment.GetEnvironmentVariable(Carried.Variable) is not { } wanted) return;
+        if (Environment.GetEnvironmentVariable(Carried.VARIABLE) is not { } wanted) return;
 
         var parts = wanted.Split('|');
         if (parts[0] != method.DeclaringType!.FullName) return;
@@ -280,7 +283,7 @@ public class CompilerGeneratedTemplateTests
         // The member hands back an int and takes one, which is the signature every template above has: SetBody adopts
         // the return type of the template, so what is read here is the refusal rather than a mismatch.
         var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-                                 [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
         var refusal = Assert.Throws<ArgumentException>(() => run.SetBody(template));
         Assert.That(refusal, Is.Not.Null, $"'{template.Name}' was woven rather than refused.");
@@ -291,12 +294,12 @@ public class CompilerGeneratedTemplateTests
     [Test]
     public void A_Template_Which_Holds_A_Lambda_Is_Refused()
         => Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsALambda))),
-                       Does.Contain("names a type which the compiler wrote"));
+            Does.Contain("names a type which the compiler wrote"));
 
     [Test]
     public void A_Template_Which_Holds_A_Capturing_Lambda_Is_Refused()
         => Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsACapturingLambda))),
-                       Does.Contain("names a type which the compiler wrote"));
+            Does.Contain("names a type which the compiler wrote"));
 
     [Test]
     public void A_Template_Which_Holds_A_Local_Function_Is_Refused()
@@ -309,35 +312,35 @@ public class CompilerGeneratedTemplateTests
         // The two are carried the same way and are not reached the same way. There is no type to move for the local
         // function, which is the cheaper of the two moves and the one the other four are not.
         Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsALocalFunction))),
-                    Does.Contain("calls a member which the compiler wrote"));
+            Does.Contain("calls a member which the compiler wrote"));
     }
 
     [Test]
     public void A_Template_Which_Is_An_Iterator_Is_Refused()
         => Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Yields))),
-                       Does.Contain("names a type which the compiler wrote"));
+            Does.Contain("names a type which the compiler wrote"));
 
     [Test]
     public void A_Template_Which_Is_An_Async_Body_Is_Refused()
         => Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Awaits))),
-                       Does.Contain("names a type which the compiler wrote"));
+            Does.Contain("names a type which the compiler wrote"));
 
     [Test]
     [Ignore("Blocked by a fault of the weaver rather than by this proposal: a call of a generic method throws. "
-          + "TokenParsing.ParseGenericTokens assigns DeclaringType unconditionally, and the setter of a "
-          + "MethodSpecification throws, because the declaring type of an instantiation is read of the method it "
-          + "instantiates. The method handles a GenericInstanceMethod below that line and never reaches it. "
-          + "TokenParsing.cs:291.")]
+        + "TokenParsing.ParseGenericTokens assigns DeclaringType unconditionally, and the setter of a "
+        + "MethodSpecification throws, because the declaring type of an instantiation is read of the method it "
+        + "instantiates. The method handles a GenericInstanceMethod below that line and never reaches it. "
+        + "TokenParsing.cs:291.")]
     public void A_Template_Which_Calls_A_Generic_Method_Is_Woven()
     {
         // Nothing here is a construct the compiler carried out of the template: the call names a generic method of the
         // framework through the instantiation it makes of it, which is a shape any template may write.
         var (_, host, _) = NewHost($"CompilerGeneratedAGenericCall{Guid.NewGuid():N}");
         var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-                                 [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+            [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
         Assert.DoesNotThrow(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericMethod))),
-                            "the call of a generic method was refused rather than carried.");
+            "the call of a generic method was refused rather than carried.");
     }
 
     /// <summary>
@@ -414,7 +417,7 @@ public class CompilerGeneratedTemplateTests
                         if (!found.Add(from.FullName)) continue;
 
                         var copy = Declare(from);
-                        Types[from.FullName] = copy;
+                        Types[from.FullName]       = copy;
                         m_Originals[from.FullName] = from;
                         foreach (var held in from.Methods) pending.Enqueue(held);
                         continue;
@@ -430,7 +433,7 @@ public class CompilerGeneratedTemplateTests
                     var looseCopy = DeclareMethod(looseDefinition, into);
                     into.Methods.Add(looseCopy);
 
-                    Members[loose.FullName] = looseCopy;
+                    Members[loose.FullName]           = looseCopy;
                     m_MemberOriginals[loose.FullName] = looseDefinition;
                     pending.Enqueue(looseDefinition);
                 }
@@ -438,14 +441,16 @@ public class CompilerGeneratedTemplateTests
 
             // Every copy is declared before any body is written, because a body reaches a copy which is declared after
             // it: what a type is written against is the map, and the map is whole only once nothing is left to declare.
-            foreach (var (fullName, copy) in Types)
+            // The two of a pair are named by their parts rather than taken apart by a deconstruction, which is a member
+            // the framework the tests are built for on Windows does not hold.
+            foreach (var type in Types)
             {
-                Fill(fullName, copy);
+                Fill(type.Key, type.Value);
             }
 
-            foreach (var (fullName, copy) in Members)
+            foreach (var member in Members)
             {
-                FillMember(fullName, copy);
+                FillMember(member.Key, member.Value);
             }
 
             Repoint(template);
@@ -602,12 +607,12 @@ public class CompilerGeneratedTemplateTests
 
                 placedInstruction.Operand = instruction.Operand switch
                 {
-                    Instruction branch => placed[branch],
-                    Instruction[] table => table.Select(target => placed[target]).ToArray(),
+                    Instruction branch          => placed[branch],
+                    Instruction[] table         => table.Select(target => placed[target]).ToArray(),
                     VariableDefinition variable => copy.Body.Variables[variable.Index],
-                    FieldReference field => Point(field),
-                    MethodReference called => Point(called),
-                    _ => Imported(instruction.Operand)
+                    FieldReference field        => Point(field),
+                    MethodReference called      => Point(called),
+                    _                           => Imported(instruction.Operand)
                 };
             }
 
@@ -615,12 +620,12 @@ public class CompilerGeneratedTemplateTests
             {
                 copy.Body.ExceptionHandlers.Add(new ExceptionHandler(handler.HandlerType)
                 {
-                    TryStart = placed[handler.TryStart],
-                    TryEnd = handler.TryEnd is null ? null : placed[handler.TryEnd],
+                    TryStart     = placed[handler.TryStart],
+                    TryEnd       = handler.TryEnd is null ? null : placed[handler.TryEnd],
                     HandlerStart = placed[handler.HandlerStart],
-                    HandlerEnd = handler.HandlerEnd is null ? null : placed[handler.HandlerEnd],
-                    FilterStart = handler.FilterStart is null ? null : placed[handler.FilterStart],
-                    CatchType = handler.CatchType is null ? null : TypeOf(handler.CatchType)
+                    HandlerEnd   = handler.HandlerEnd is null ? null : placed[handler.HandlerEnd],
+                    FilterStart  = handler.FilterStart is null ? null : placed[handler.FilterStart],
+                    CatchType    = handler.CatchType is null ? null : TypeOf(handler.CatchType)
                 });
             }
         }
@@ -636,9 +641,9 @@ public class CompilerGeneratedTemplateTests
             => operand switch
             {
                 MethodReference method => module.ImportReference(method),
-                FieldReference field => module.ImportReference(field),
-                TypeReference type => module.ImportReference(type),
-                _ => operand
+                FieldReference field   => module.ImportReference(field),
+                TypeReference type     => module.ImportReference(type),
+                _                      => operand
             };
 
         /// <summary>
@@ -649,7 +654,7 @@ public class CompilerGeneratedTemplateTests
         {
             if (field.DeclaringType is null || !Types.TryGetValue(field.DeclaringType.GetElementType().FullName, out var copy))
             {
-                return (FieldReference)module.ImportReference(field);
+                return (FieldReference) module.ImportReference(field);
             }
 
             return copy.Fields.Single(candidate => candidate.Name == field.Name);
@@ -687,9 +692,9 @@ public class CompilerGeneratedTemplateTests
             {
                 instruction.Operand = instruction.Operand switch
                 {
-                    FieldReference field => Point(field),
+                    FieldReference field   => Point(field),
                     MethodReference called => Point(called),
-                    _ => Imported(instruction.Operand) ?? instruction.Operand
+                    _                      => Imported(instruction.Operand) ?? instruction.Operand
                 };
             }
         }
@@ -701,9 +706,9 @@ public class CompilerGeneratedTemplateTests
         private static string? OwnerOf(GenericParameter parameter)
             => parameter.Owner switch
             {
-                TypeReference type => type.FullName,
+                TypeReference type     => type.FullName,
                 MethodReference method => method.FullName,
-                _ => null
+                _                      => null
             };
 
         /// <summary>
@@ -717,8 +722,8 @@ public class CompilerGeneratedTemplateTests
             if (reference is GenericParameter parameter && OwnerOf(parameter) is { } owner)
             {
                 return m_Parameters.TryGetValue($"{owner}/{parameter.Position}", out var declared)
-                           ? declared
-                           : module.ImportReference(reference);
+                    ? declared
+                    : module.ImportReference(reference);
             }
 
             if (reference is GenericInstanceType instantiation)
@@ -745,23 +750,23 @@ public class CompilerGeneratedTemplateTests
 
         return instruction.Operand switch
         {
-            null => Instruction.Create(opcode),
-            Instruction branch => Instruction.Create(opcode, branch),
-            Instruction[] table => Instruction.Create(opcode, table),
-            VariableDefinition variable => Instruction.Create(opcode, variable),
-            FieldReference field => Instruction.Create(opcode, field),
-            MethodReference method => Instruction.Create(opcode, method),
-            TypeReference type => Instruction.Create(opcode, type),
+            null                          => Instruction.Create(opcode),
+            Instruction branch            => Instruction.Create(opcode, branch),
+            Instruction[] table           => Instruction.Create(opcode, table),
+            VariableDefinition variable   => Instruction.Create(opcode, variable),
+            FieldReference field          => Instruction.Create(opcode, field),
+            MethodReference method        => Instruction.Create(opcode, method),
+            TypeReference type            => Instruction.Create(opcode, type),
             ParameterDefinition parameter => Instruction.Create(opcode, parameter),
-            CallSite site => Instruction.Create(opcode, site),
-            string text => Instruction.Create(opcode, text),
-            sbyte number => Instruction.Create(opcode, number),
-            byte number => Instruction.Create(opcode, number),
-            int number => Instruction.Create(opcode, number),
-            long number => Instruction.Create(opcode, number),
-            float number => Instruction.Create(opcode, number),
-            double number => Instruction.Create(opcode, number),
-            _ => Unsupported(instruction)
+            CallSite site                 => Instruction.Create(opcode, site),
+            string text                   => Instruction.Create(opcode, text),
+            sbyte number                  => Instruction.Create(opcode, number),
+            byte number                   => Instruction.Create(opcode, number),
+            int number                    => Instruction.Create(opcode, number),
+            long number                   => Instruction.Create(opcode, number),
+            float number                  => Instruction.Create(opcode, number),
+            double number                 => Instruction.Create(opcode, number),
+            _                             => Unsupported(instruction)
         };
     }
 
@@ -778,37 +783,37 @@ public class CompilerGeneratedTemplateTests
     /// <summary>
     /// The full name of the type which declares the templates above.
     /// </summary>
-    private const string TemplatesType = "Gneedle.Inject.Test.CompilerGeneratedTemplates";
+    private const string TEMPLATES_TYPE = "Gneedle.Inject.Test.CompilerGeneratedTemplates";
 
     /// <summary>
     /// The full name of the type onto which the closure of the lambda is carried.
     /// </summary>
-    private const string CarriedClosureType = "Gneedle.Inject.Test.CarriedClosureFixture";
+    private const string CARRIED_CLOSURE_TYPE = "Gneedle.Inject.Test.CarriedClosureFixture";
 
     /// <summary>
     /// The full name of the type onto which the lambda which captured two locals is carried.
     /// </summary>
-    private const string CarriedTwoLocalsType = "Gneedle.Inject.Test.CarriedTwoLocalsFixture";
+    private const string CARRIED_TWO_LOCALS_TYPE = "Gneedle.Inject.Test.CarriedTwoLocalsFixture";
 
     /// <summary>
     /// The full name of the type onto which the lambda written inside a lambda is carried.
     /// </summary>
-    private const string CarriedNestedType = "Gneedle.Inject.Test.CarriedNestedFixture";
+    private const string CARRIED_NESTED_TYPE = "Gneedle.Inject.Test.CarriedNestedFixture";
 
     /// <summary>
     /// The full name of the type onto which the local function is carried.
     /// </summary>
-    private const string CarriedLocalFunctionType = "Gneedle.Inject.Test.CarriedLocalFunctionFixture";
+    private const string CARRIED_LOCAL_FUNCTION_TYPE = "Gneedle.Inject.Test.CarriedLocalFunctionFixture";
 
     /// <summary>
     /// The full name of the type onto which the state machine of an iterator is carried.
     /// </summary>
-    private const string CarriedStateMachineType = "Gneedle.Inject.Test.CarriedIteratorFixture";
+    private const string CARRIED_STATE_MACHINE_TYPE = "Gneedle.Inject.Test.CarriedIteratorFixture";
 
     /// <summary>
     /// The full name of the type onto which the state machine of an async body is carried.
     /// </summary>
-    private const string CarriedAsyncType = "Gneedle.Inject.Test.CarriedAsyncFixture";
+    private const string CARRIED_ASYNC_TYPE = "Gneedle.Inject.Test.CarriedAsyncFixture";
 
     /// <summary>
     /// Move everything the compiler wrote for the bodies of a template onto the type which is named.<para/>
@@ -816,8 +821,11 @@ public class CompilerGeneratedTemplateTests
     /// body it has no instructions of, done here before the weaving runs, so that what the weaving does with the result
     /// is read on its own.
     /// </summary>
+    /// <param name="module">The module which declares the template and the type it is carried onto.</param>
     /// <param name="holder">The full name of the type which declares the template, which a template of a generic type
     /// is declared by the instantiation it is read as.</param>
+    /// <param name="templateName">The name of the template whose bodies are carried.</param>
+    /// <param name="intoTypeName">The full name of the type which what the compiler wrote is carried onto.</param>
     private static void Move(ModuleDefinition module, string holder, string templateName, string intoTypeName)
     {
         var template = module.GetType(holder)!.Methods.Single(method => method.Name == templateName);
@@ -825,14 +833,15 @@ public class CompilerGeneratedTemplateTests
 
         carrier.Carry(template);
     }
+
     /// <summary>
     /// The type which declares the generic template, and the generic type which its lambda is carried onto, which are
     /// named as the metadata names a generic type rather than as the runtime writes an instantiation of it.
     /// </summary>
-    private const string GenericTemplatesType = "Gneedle.Inject.Test.GenericCompilerGeneratedTemplates`1";
+    private const string GENERIC_TEMPLATES_TYPE = "Gneedle.Inject.Test.GenericCompilerGeneratedTemplates`1";
 
-    /// <inheritdoc cref="GenericTemplatesType"/>
-    private const string CarriedGenericClosureType = "Gneedle.Inject.Test.CarriedGenericClosureFixture`1";
+    /// <inheritdoc cref="GENERIC_TEMPLATES_TYPE"/>
+    private const string CARRIED_GENERIC_CLOSURE_TYPE = "Gneedle.Inject.Test.CarriedGenericClosureFixture`1";
 
     /// <summary>
     /// Carry what the compiler wrote for a template onto the type which is named, weave the assembly of these tests once
@@ -856,19 +865,19 @@ public class CompilerGeneratedTemplateTests
         }
 
         var reported = new List<string>();
-        Environment.SetEnvironmentVariable(Carried.Variable, $"{intoType}|{template}{(holder == TemplatesType ? "" : "|" + holder)}");
+        Environment.SetEnvironmentVariable(Carried.VARIABLE, $"{intoType}|{template}{(holder == TEMPLATES_TYPE ? "" : "|" + holder)}");
 
         try
         {
             var (changed, result) = Injections.Apply(AssemblyLoader.LoadFromBytes(modified), modified, reportError: reported.Add);
             Assert.That(changed, Is.True,
-                        $"the member which carries the injector was woven by nothing.{Environment.NewLine}{string.Join(Environment.NewLine, reported)}");
+                $"the member which carries the injector was woven by nothing.{Environment.NewLine}{string.Join(Environment.NewLine, reported)}");
 
             return (result, reported);
         }
         finally
         {
-            Environment.SetEnvironmentVariable(Carried.Variable, null);
+            Environment.SetEnvironmentVariable(Carried.VARIABLE, null);
         }
     }
 
@@ -888,37 +897,41 @@ public class CompilerGeneratedTemplateTests
         // type being woven, and every operand which named a member of it names the copy. What is read here is whether
         // that move is mechanical - whether an assembly which was written that way still reads, and holds no reference
         // of the body to the type which was moved.
-        var (result, reported) = CarriedThenWoven(TemplatesType, nameof(CompilerGeneratedTemplates.RunsACapturingLambda), CarriedClosureType);
+        var (result, reported) = CarriedThenWoven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.RunsACapturingLambda), CARRIED_CLOSURE_TYPE);
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
         using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
         {
-            var run = read.MainModule.GetType(CarriedClosureType)!.Methods.Single(method => method.Name == "Run");
+            var run = read.MainModule.GetType(CARRIED_CLOSURE_TYPE)!.Methods.Single(method => method.Name == "Run");
 
             var reached = run.Body.Instructions
                              .Select(instruction => instruction.Operand as MemberReference)
                              .Where(member => member?.DeclaringType?.Name.StartsWith("<", StringComparison.Ordinal) == true)
                              .ToArray();
-
-            Assert.That(reached, Is.Empty,
-                        $"the body of the member still names what the compiler wrote: {string.Join(", ", reached.Select(member => member!.FullName))}");
-            Assert.That(run.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldftn),
-                        Is.True, "the member holds no delegate, so the template was not carried into it.");
+            Assert.Multiple(() =>
+            {
+                Assert.That(reached, Is.Empty,
+                    $"the body of the member still names what the compiler wrote: {string.Join(", ", reached.Select(member => member!.FullName))}");
+                Assert.That(run.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Ldftn),
+                    Is.True, "the member holds no delegate, so the template was not carried into it.");
+            });
         }
 
-        Assert.That(Ran(result, CarriedClosureType, "Run", 41), Is.EqualTo(42),
-                    "the member which was woven did not compute what the template computes.");
+        Assert.That(Ran(result, CARRIED_CLOSURE_TYPE, "Run", 41), Is.EqualTo(42),
+            "the member which was woven did not compute what the template computes.");
     }
 
     [Test]
     [NonParallelizable]
     public void The_Lambda_Which_Captured_Two_Locals_Is_Carried_With_Both_Of_Its_Fields()
     {
-        var (result, reported) = CarriedThenWoven(TemplatesType, nameof(CompilerGeneratedTemplates.CapturesTwoLocals), CarriedTwoLocalsType);
-
-        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
-        Assert.That(Ran(result, CarriedTwoLocalsType, "Run", 41), Is.EqualTo(44),
-                    "the member which was woven did not compute what the template computes.");
+        var (result, reported) = CarriedThenWoven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.CapturesTwoLocals), CARRIED_TWO_LOCALS_TYPE);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+            Assert.That(Ran(result, CARRIED_TWO_LOCALS_TYPE, "Run", 41), Is.EqualTo(44),
+                "the member which was woven did not compute what the template computes.");
+        });
     }
 
     [Test]
@@ -928,11 +941,13 @@ public class CompilerGeneratedTemplateTests
         // The body of the outer lambda holds the pointer to the inner one, and that pointer names a type the compiler
         // wrote just as the pointer of the template does: what the move carries is not one type but everything the
         // bodies it carries reach, and this tells a move that follows what it carries from one that does not.
-        var (result, reported) = CarriedThenWoven(TemplatesType, nameof(CompilerGeneratedTemplates.NestsLambdas), CarriedNestedType);
-
-        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
-        Assert.That(Ran(result, CarriedNestedType, "Run", 41), Is.EqualTo(44),
-                    "the member which was woven did not compute what the template computes.");
+        var (result, reported) = CarriedThenWoven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.NestsLambdas), CARRIED_NESTED_TYPE);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+            Assert.That(Ran(result, CARRIED_NESTED_TYPE, "Run", 41), Is.EqualTo(44),
+                "the member which was woven did not compute what the template computes.");
+        });
     }
 
     [Test]
@@ -941,11 +956,13 @@ public class CompilerGeneratedTemplateTests
     {
         // A local function which captured nothing is not a type of its own: it is a member of the type which declares
         // the template, which is the other shape the move has, and the cheaper of the two.
-        var (result, reported) = CarriedThenWoven(TemplatesType, nameof(CompilerGeneratedTemplates.RunsALocalFunction), CarriedLocalFunctionType);
-
-        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
-        Assert.That(Ran(result, CarriedLocalFunctionType, "Run", 41), Is.EqualTo(42),
-                    "the member which was woven did not compute what the template computes.");
+        var (result, reported) = CarriedThenWoven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.RunsALocalFunction), CARRIED_LOCAL_FUNCTION_TYPE);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+            Assert.That(Ran(result, CARRIED_LOCAL_FUNCTION_TYPE, "Run", 41), Is.EqualTo(42),
+                "the member which was woven did not compute what the template computes.");
+        });
     }
 
     [Test]
@@ -958,22 +975,22 @@ public class CompilerGeneratedTemplateTests
         //
         // What is read here is the move rather than the parsing of MoveNext: the weaving is handed the stub, which is
         // what the member holds, because the move is what the proposal turns on and it is the move which is in doubt.
-        var (result, reported) = CarriedThenWoven(TemplatesType, nameof(CompilerGeneratedTemplates.Yields), CarriedStateMachineType);
+        var (result, reported) = CarriedThenWoven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.Yields), CARRIED_STATE_MACHINE_TYPE);
 
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
         using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
         {
-            var run = read.MainModule.GetType(CarriedStateMachineType)!.Methods.Single(method => method.Name == "Run");
+            var run = read.MainModule.GetType(CARRIED_STATE_MACHINE_TYPE)!.Methods.Single(method => method.Name == "Run");
             Assert.That(run.Body.Instructions.Any(instruction => instruction.OpCode == OpCodes.Newobj),
-                        Is.True, "the member holds no state machine, so the template was not carried into it.");
+                Is.True, "the member holds no state machine, so the template was not carried into it.");
         }
 
         // The sequence is enumerated, because a state machine which was moved is a type whose methods still have to
         // find the fields they were written against: the switch of MoveNext turns on a field of the type.
-        var produced = ((IEnumerable<int>)Ran(result, CarriedStateMachineType, "Run", 7)!).ToArray();
+        var produced = ((IEnumerable<int>) Ran(result, CARRIED_STATE_MACHINE_TYPE, "Run", 7)!).ToArray();
         Assert.That(produced, Is.EqualTo(new[] {7, 8}),
-                    "the member which was woven did not produce what the template produces.");
+            "the member which was woven did not produce what the template produces.");
     }
 
     [Test]
@@ -983,22 +1000,22 @@ public class CompilerGeneratedTemplateTests
         // What a copy is declared under is a name of the type being woven, which may already be taken: the name of a
         // type the compiler wrote is not one an identifier of C# holds, and the brackets of it are taken out, so the
         // name a copy takes is a name a member of the type being woven may hold already.
-        var (result, reported) = CarriedThenWoven(TemplatesType, nameof(CompilerGeneratedTemplates.RunsACapturingLambda), CarriedClosureType,
-                                                 module => module.GetType(CarriedClosureType)!
-                                                                   .NestedTypes.Add(new TypeDefinition("", "_c__DisplayClass1_0", TypeAttributes.NestedPrivate, module.TypeSystem.Object)));
+        var (result, reported) = CarriedThenWoven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.RunsACapturingLambda), CARRIED_CLOSURE_TYPE,
+            module => module.GetType(CARRIED_CLOSURE_TYPE)!
+                            .NestedTypes.Add(new TypeDefinition("", "_c__DisplayClass1_0", TypeAttributes.NestedPrivate, module.TypeSystem.Object)));
 
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
         using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
         {
-            var names = read.MainModule.GetType(CarriedClosureType)!.NestedTypes.Select(nested => nested.Name).ToArray();
+            var names = read.MainModule.GetType(CARRIED_CLOSURE_TYPE)!.NestedTypes.Select(nested => nested.Name).ToArray();
 
             Assert.That(names, Does.Contain("_c__DisplayClass1_0"), "the type which was there already was taken away.");
             Assert.That(names.Length, Is.EqualTo(2), $"the copy was not declared under a name of its own: {string.Join(", ", names)}");
         }
 
-        Assert.That(Ran(result, CarriedClosureType, "Run", 41), Is.EqualTo(42),
-                    "the member which was woven did not compute what the template computes.");
+        Assert.That(Ran(result, CARRIED_CLOSURE_TYPE, "Run", 41), Is.EqualTo(42),
+            "the member which was woven did not compute what the template computes.");
     }
 
     [Test]
@@ -1011,71 +1028,77 @@ public class CompilerGeneratedTemplateTests
 
         using (var source = AssemblyDefinition.ReadAssembly(System.Reflection.Assembly.GetExecutingAssembly().Location))
         {
-            var carrier = new Carrier(module, (TypeDefinition) module.GetType($"{Ns}.Host")!);
-            carrier.Carry(source.MainModule.GetType(TemplatesType)!.Methods
+            var carrier = new Carrier(module, (TypeDefinition) module.GetType($"{NS}.Host")!);
+            carrier.Carry(source.MainModule.GetType(TEMPLATES_TYPE)!.Methods
                                 .Single(method => method.Name == nameof(CompilerGeneratedTemplates.CapturesATypeOfItsOwnAssembly)));
         }
 
         using var written = new MemoryStream();
         Assert.DoesNotThrow(() => handler.Assembly.SaveTo(written),
-                            "the assembly which holds a body that names a type of another one could not be written.");
+            "the assembly which holds a body that names a type of another one could not be written.");
 
         written.Position = 0;
         using var read = AssemblyDefinition.ReadAssembly(written);
-        var carried = read.MainModule.GetType($"{Ns}.Host")!.NestedTypes.Single();
+        var carried = read.MainModule.GetType($"{NS}.Host")!.NestedTypes.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(carried.Fields.Single(field => field.Name == "captured").FieldType.FullName,
+                Is.EqualTo("Gneedle.Inject.Test.Captured"),
+                "the field of the copy does not name the type the template captured.");
 
-        Assert.That(carried.Fields.Single(field => field.Name == "captured").FieldType.FullName,
-                    Is.EqualTo("Gneedle.Inject.Test.Captured"),
-                    "the field of the copy does not name the type the template captured.");
-
-        Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "Gneedle.Inject.Test"),
-                    Is.True, "the assembly names no reference to the one which declares the type its body reaches.");
+            Assert.That(read.MainModule.AssemblyReferences.Any(reference => reference.Name == "Gneedle.Inject.Test"),
+                Is.True, "the assembly names no reference to the one which declares the type its body reaches.");
+        });
     }
 
     [Test]
     [NonParallelizable]
     [Ignore("Blocked as the two above are. The stub of an async body hands the state machine to the builder as the type "
-          + "argument of Start<TStateMachine>, which is a generic instance method and is refused for the fault of "
-          + "TokenParsing.cs:291; and the move here re-points the type the call is declared by and not the type it is "
-          + "instantiated with, so even once the call is carried the call would name the machine which was left behind. "
-          + "Neither of those is the move which Tier 3 turns on, and neither is read by this.")]
+        + "argument of Start<TStateMachine>, which is a generic instance method and is refused for the fault of "
+        + "TokenParsing.cs:291; and the move here re-points the type the call is declared by and not the type it is "
+        + "instantiated with, so even once the call is carried the call would name the machine which was left behind. "
+        + "Neither of those is the move which Tier 3 turns on, and neither is read by this.")]
     public void A_Template_Which_Is_An_Async_Body_Whose_State_Machine_Was_Carried_Is_Woven_And_Awaited()
     {
-        var (result, reported) = CarriedThenWoven(TemplatesType, nameof(CompilerGeneratedTemplates.Awaits), CarriedAsyncType);
-
-        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
-        Assert.That(((Task<int>)Ran(result, CarriedAsyncType, "Run", 5)!).GetAwaiter().GetResult(), Is.EqualTo(5),
-                    "the member which was woven did not hand back what the template hands back.");
+        var (result, reported) = CarriedThenWoven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.Awaits), CARRIED_ASYNC_TYPE);
+        Assert.Multiple(() =>
+        {
+            Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+            Assert.That(((Task<int>) Ran(result, CARRIED_ASYNC_TYPE, "Run", 5)!).GetAwaiter().GetResult(), Is.EqualTo(5),
+                "the member which was woven did not hand back what the template hands back.");
+        });
     }
 
     [Test]
     [NonParallelizable]
     [Ignore("Blocked by the same fault as the generic call above, and this is the second of the three tiers which it "
-          + "stands in front of: the stub of a lambda of a generic template reaches the type which the compiler wrote "
-          + "through an instantiation of it, so every call of it is a GenericInstanceMethod and TokenParsing.cs:291 "
-          + "throws on the first one. The move itself is written and reads back; what cannot be read is the weaving of "
-          + "it. Nothing here is tested until that fault is answered.")]
+        + "stands in front of: the stub of a lambda of a generic template reaches the type which the compiler wrote "
+        + "through an instantiation of it, so every call of it is a GenericInstanceMethod and TokenParsing.cs:291 "
+        + "throws on the first one. The move itself is written and reads back; what cannot be read is the weaving of "
+        + "it. Nothing here is tested until that fault is answered.")]
     public void The_Lambda_Of_A_Generic_Template_Is_Carried_And_Its_Parameter_Re_Parented()
     {
         // Tier 1 where the type the compiler wrote is generic over the type which declares the template, so the copy
         // declares a parameter of its own and every reference to the original names the copy of it. This is the move
         // which CreateProceedMethod already makes for the method it generates, one level down: a generic parameter
         // belongs to the type which declares it, so a copy which was added to another type declares its own.
-        var (result, reported) = CarriedThenWoven(GenericTemplatesType, "ReturnsWhatItCaptured", CarriedGenericClosureType);
+        var (result, reported) = CarriedThenWoven(GENERIC_TEMPLATES_TYPE, "ReturnsWhatItCaptured", CARRIED_GENERIC_CLOSURE_TYPE);
 
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
         using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
         {
-            var copy = read.MainModule.GetType(CarriedGenericClosureType)!.NestedTypes.Single();
-
-            Assert.That(copy.HasGenericParameters, Is.True,
-                        "the copy declares no generic parameter, so nothing was re-parented.");
-            Assert.That(copy.Fields.Single(field => field.Name == "value").FieldType, Is.SameAs(copy.GenericParameters.Single()),
-                        "the field of the copy is not the parameter of the copy.");
+            var copy = read.MainModule.GetType(CARRIED_GENERIC_CLOSURE_TYPE)!.NestedTypes.Single();
+            Assert.Multiple(() =>
+            {
+                Assert.That(copy.HasGenericParameters, Is.True,
+                    "the copy declares no generic parameter, so nothing was re-parented.");
+                Assert.That(copy.Fields.Single(field => field.Name == "value").FieldType, Is.SameAs(copy.GenericParameters.Single()),
+                    "the field of the copy is not the parameter of the copy.");
+            });
         }
 
-        Assert.That(Ran(result, CarriedGenericClosureType, "Run", 41), Is.EqualTo(41),
-                    "the member which was woven did not compute what the template computes.");
+        Assert.That(Ran(result, CARRIED_GENERIC_CLOSURE_TYPE, "Run", 41), Is.EqualTo(41),
+            "the member which was woven did not compute what the template computes.");
     }
 }

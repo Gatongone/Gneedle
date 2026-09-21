@@ -3,18 +3,17 @@ using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 [TestFixture]
 public class AssemblyHandlerTests
 {
-
     [Test]
     public void GetType_Returns_Outer_Type()
     {
         var (handler, _) = NewOuter("NestedAssembly");
 
-        var result = handler.GetType($"{Ns}.Outer");
+        var result = handler.GetType($"{NS}.Outer");
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.InstanceOf<IClassHandler>());
@@ -26,7 +25,7 @@ public class AssemblyHandlerTests
         var (handler, _, _) = NewOuterWithInner("NestedAssembly");
 
         // Nested type FullName format: "Namespace.Outer/Namespace.Inner"
-        var result = handler.GetType($"{Ns}.Outer/{Ns}.Inner");
+        var result = handler.GetType($"{NS}.Outer/{NS}.Inner");
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.InstanceOf<IClassHandler>());
@@ -45,10 +44,12 @@ public class AssemblyHandlerTests
         // was resolved through one of them is found through the other rather than resolved and held twice.
         using var read = AssemblyDefinition.ReadAssembly(typeof(AssemblyHandlerTests).Assembly.Location);
         var nested = read.MainModule.GetType(typeof(Nested).FullName!.Replace('+', '/'));
-
-        Assert.That(nested, Is.Not.Null, "the assembly of the tests does not declare the nested type which is read.");
-        Assert.That(new TypeName(nested!).ToString(), Is.EqualTo(new TypeName(typeof(Nested)).ToString()),
-                    "the name which the metadata writes is not the one which the runtime writes.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(nested, Is.Not.Null, "the assembly of the tests does not declare the nested type which is read.");
+            Assert.That(new TypeName(nested!).ToString(), Is.EqualTo(new TypeName(typeof(Nested)).ToString()),
+                "the name which the metadata writes is not the one which the runtime writes.");
+        });
     }
 
     [Test]
@@ -59,25 +60,25 @@ public class AssemblyHandlerTests
         // the name is looked up: the name is taken where the chain begins now, so the second one is refused by the name
         // of the type whichever kind of type it is.
         var asm = Assembly.Create("TwiceDeclaredAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
 
-        handler.AddClass("Host", Ns, ClassFlags.Public);
-        handler.AddEnum("Kind", Ns, EnumFlags.Public);
+        handler.AddClass("Host", NS, ClassFlags.Public);
+        handler.AddEnum("Kind", NS, EnumFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => handler.AddClass("Host", Ns, ClassFlags.Public));
+        var thrown = Assert.Throws<ArgumentException>(() => handler.AddClass("Host", NS, ClassFlags.Public));
 
         Assert.That(thrown!.Message, Does.Contain("Host"), "the refusal does not name the type which was asked for twice.");
-        Assert.Throws<ArgumentException>(() => handler.AddStruct("Kind", Ns, StructFlags.Public),
-                                        "a type of a name which another kind of type took was not refused.");
+        Assert.Throws<ArgumentException>(() => handler.AddStruct("Kind", NS, StructFlags.Public),
+            "a type of a name which another kind of type took was not refused.");
     }
 
     [Test]
     public void GetType_Returns_Null_For_Nonexistent_Type()
     {
         var asm = Assembly.Create("NestedAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
 
-        var result = handler.GetType($"{Ns}.DoesNotExist");
+        var result = handler.GetType($"{NS}.DoesNotExist");
 
         Assert.That(result, Is.Null);
     }
@@ -99,7 +100,7 @@ public class AssemblyHandlerTests
     {
         var (handler, _, _) = NewOuterWithInner("NestedAssembly");
 
-        var results = handler.GetTypes(t => t.Namespace == Ns);
+        var results = handler.GetTypes(t => t.Namespace == NS);
 
         Assert.That(results.Length, Is.EqualTo(2)); // Outer + Inner
     }
@@ -111,12 +112,12 @@ public class AssemblyHandlerTests
     private static AssemblyHandler NewTwiceNestedHost(string assemblyName)
     {
         var asm = Assembly.Create(assemblyName);
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var module = asm.Source.MainModule;
 
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
-        var innermost = new TypeDefinition(Ns, "Innermost", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = inner };
+        var outer = new TypeDefinition(NS, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var inner = new TypeDefinition(NS, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
+        var innermost = new TypeDefinition(NS, "Innermost", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = inner };
         inner.NestedTypes.Add(innermost);
         outer.NestedTypes.Add(inner);
         module.Types.Add(outer);
@@ -131,17 +132,17 @@ public class AssemblyHandlerTests
         // nesting is deep: the lookups walk the nesting to the end of it rather than reading the first level of it only,
         // which is what leaves a type which is nested twice behind, both by its name and among the types of the assembly.
         var handler = NewTwiceNestedHost("TwiceNestedAssembly");
-        var fullName = $"{Ns}.Outer/{Ns}.Inner/{Ns}.Innermost";
+        var fullName = $"{NS}.Outer/{NS}.Inner/{NS}.Innermost";
 
         Assert.Multiple(() =>
         {
             Assert.That(handler.GetType(fullName), Is.Not.Null, "the lookup by name did not answer with a type which is nested twice.");
             Assert.That(handler.GetTypes().Select(type => type.Name), Does.Contain("Innermost"),
-                        "the query of every type of the assembly left a type which is nested twice out.");
-            Assert.That(handler.GetTypes(type => type.Namespace == Ns).Select(type => type.Name), Does.Contain("Innermost"),
-                        "the query of every type which matches a filter left a type which is nested twice out.");
+                "the query of every type of the assembly left a type which is nested twice out.");
+            Assert.That(handler.GetTypes(type => type.Namespace == NS).Select(type => type.Name), Does.Contain("Innermost"),
+                "the query of every type which matches a filter left a type which is nested twice out.");
             Assert.That(handler.GetCecilType(fullName).Definition.FullName, Is.EqualTo(fullName),
-                        "the lookup of the definition by name did not answer with a type which is nested twice.");
+                "the lookup of the definition by name did not answer with a type which is nested twice.");
         });
     }
 
@@ -152,14 +153,14 @@ public class AssemblyHandlerTests
         // which declares no such field has no type to be read as: the refusal names the enum rather than coming out of
         // the lookup of the field as a sequence which holds nothing, which is a reason the caller cannot act on.
         var asm = Assembly.Create("EnumWithoutAValueAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var module = asm.Source.MainModule;
-        var enumType = new TypeDefinition(Ns, "Broken", TypeAttributes.Public, module.ImportReference(typeof(Enum)));
+        var enumType = new TypeDefinition(NS, "Broken", TypeAttributes.Public, module.ImportReference(typeof(Enum)));
         module.Types.Add(enumType);
 
         var thrown = Assert.Throws<ArgumentException>(() => handler.GetType(enumType));
 
-        Assert.That(thrown!.Message, Does.Contain($"{Ns}.Broken"), "the refusal does not name the enum which is not one.");
+        Assert.That(thrown!.Message, Does.Contain($"{NS}.Broken"), "the refusal does not name the enum which is not one.");
     }
 
     #region GetCecilType
@@ -171,7 +172,7 @@ public class AssemblyHandlerTests
         // declares has to be resolved through the System.Type which the IType holds. TestBaseClass lives in the test
         // assembly, so it is neither of them.
         var asm = Assembly.Create("CecilLoaderAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
 
         var result = handler.GetCecilType(typeof(TestBaseClass).ToGneedleType());
 
@@ -184,16 +185,18 @@ public class AssemblyHandlerTests
         // A type which the target assembly declares is not loadable by its name, so it is looked up in the module by its
         // full name. The nested types are looked up as well, just like GetType(string) looks them up.
         var asm = Assembly.Create("CecilLoaderAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var module = asm.Source.MainModule;
 
-        var outer = new TypeDefinition(Ns, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var inner = new TypeDefinition(Ns, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
+        var outer = new TypeDefinition(NS, "Outer", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var inner = new TypeDefinition(NS, "Inner", TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
         outer.NestedTypes.Add(inner);
         module.Types.Add(outer);
-
-        Assert.That(handler.GetCecilType($"{Ns}.Outer").Definition.FullName, Is.EqualTo($"{Ns}.Outer"));
-        Assert.That(handler.GetCecilType($"{Ns}.Outer/{Ns}.Inner").Definition.FullName, Is.EqualTo($"{Ns}.Outer/{Ns}.Inner"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(handler.GetCecilType($"{NS}.Outer").Definition.FullName, Is.EqualTo($"{NS}.Outer"));
+            Assert.That(handler.GetCecilType($"{NS}.Outer/{NS}.Inner").Definition.FullName, Is.EqualTo($"{NS}.Outer/{NS}.Inner"));
+        });
     }
 
     [Test]
@@ -201,15 +204,17 @@ public class AssemblyHandlerTests
     {
         // The reference is the one which may be assigned to the target assembly, whichever module declares the type.
         var asm = Assembly.Create("CecilLoaderAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var module = asm.Source.MainModule;
 
         foreach (var type in new[] { typeof(int), typeof(Guid), typeof(TestBaseClass) })
         {
             var result = handler.GetCecilType(type);
-
-            Assert.That(result.Reference.Module, Is.SameAs(module), $"the reference of {type.FullName} is owned by another module");
-            Assert.That(result.Definition.FullName, Is.EqualTo(type.FullName));
+            Assert.Multiple(() =>
+            {
+                Assert.That(result.Reference.Module, Is.SameAs(module), $"the reference of {type.FullName} is owned by another module");
+                Assert.That(result.Definition.FullName, Is.EqualTo(type.FullName));
+            });
         }
     }
 
@@ -221,7 +226,7 @@ public class AssemblyHandlerTests
         // reference from the test assembly to the target cyclic.
         var cecilName = typeof(TypeReference).Assembly.GetName();
         var target = Assembly.Create(cecilName.Name!, cecilName.Version!, null, cecilName.GetPublicKeyToken());
-        var handler = (AssemblyHandler) target.Handler;
+        var handler = (AssemblyHandler)target.Handler;
 
         Assert.Throws<ArgumentException>(() => handler.GetCecilType(typeof(TestBaseClass)));
     }
@@ -233,7 +238,7 @@ public class AssemblyHandlerTests
         // assembly it is asked of does not hold has none: the handler which is built on it holds nothing, so every query
         // of it throws from somewhere the caller cannot see the reason of. It is refused where it is read, by name.
         var asm = Assembly.Create("CecilLoaderAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var module = asm.Source.MainModule;
         var missing = new TypeReference("Nope", "Missing", module.TypeSystem.Object.Module, module.TypeSystem.CoreLibrary);
 
@@ -258,7 +263,7 @@ public class AssemblyHandlerTests
     public void GetMethodFromType_Throws_When_The_Method_Is_Not_Found()
     {
         var asm = Assembly.Create("MethodLookupAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var type = asm.Source.MainModule.Types[0];
 
         Assert.Throws<ArgumentException>(() => handler.GetMethodFromType(type, "Missing", []));
@@ -270,7 +275,7 @@ public class AssemblyHandlerTests
         // The constraint lookup walks the constraints of a generic parameter and has to be able to try the next one,
         // which is what the flag is for.
         var asm = Assembly.Create("MethodLookupAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var type = asm.Source.MainModule.Types[0];
 
         Assert.That(handler.GetMethodFromType(type, "Missing", [], returnType: null, throwWhenNotFound: false), Is.Null);
@@ -280,11 +285,11 @@ public class AssemblyHandlerTests
     public void GetMethodFromType_Finds_A_Method_Of_A_Base_Type()
     {
         var asm = Assembly.Create("MethodLookupAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var module = asm.Source.MainModule;
 
-        var baseType = new TypeDefinition(Ns, "Base", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-        var derived = new TypeDefinition(Ns, "Derived", TypeAttributes.Public | TypeAttributes.Class, baseType);
+        var baseType = new TypeDefinition(NS, "Base", TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
+        var derived = new TypeDefinition(NS, "Derived", TypeAttributes.Public | TypeAttributes.Class, baseType);
         module.Types.Add(baseType);
         module.Types.Add(derived);
         var expected = AddMethod(baseType, "Ping");
@@ -306,7 +311,7 @@ public class AssemblyHandlerTests
         // Make the other assembly reference the target, which makes the reference cyclic.
         other.Source.MainModule.AssemblyReferences.Add(target.Source.Name);
 
-        var handler = (AssemblyHandler) target.Handler;
+        var handler = (AssemblyHandler)target.Handler;
 
         Assert.Throws<ArgumentException>(() => handler.AddReference(other));
     }
@@ -317,7 +322,7 @@ public class AssemblyHandlerTests
         var target = Assembly.Create("ReferenceTargetAssembly");
         var other = Assembly.Create("ReferenceOtherAssembly");
 
-        var handler = (AssemblyHandler) target.Handler;
+        var handler = (AssemblyHandler)target.Handler;
         handler.AddReference(other);
 
         Assert.That(target.Source.MainModule.AssemblyReferences.Any(reference => reference.FullName == other.Source.FullName), Is.True);
@@ -331,7 +336,7 @@ public class AssemblyHandlerTests
     public void AddInterface_Adds_The_Interface_To_The_Type()
     {
         var asm = Assembly.Create("HandlerInterfaceAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var host = AddAHost(handler);
 
         host.AddInterface<ITestInterface>();
@@ -344,7 +349,7 @@ public class AssemblyHandlerTests
     public void AddInterface_With_An_IType_Adds_The_Interface_To_The_Type()
     {
         var asm = Assembly.Create("HandlerInterfaceITypeAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var host = AddAHost(handler);
 
         host.AddInterface(typeof(ITestInterface).ToGneedleType());
@@ -356,7 +361,7 @@ public class AssemblyHandlerTests
     public void AddInterface_Is_Reported_By_ContainsInterface()
     {
         var asm = Assembly.Create("HandlerInterfaceContainsAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var host = AddAHost(handler);
 
         Assert.That(host.ContainsInterface<ITestInterface>(), Is.False);
@@ -370,7 +375,7 @@ public class AssemblyHandlerTests
         // A class as the interface of a type is metadata which no loader reads, so it is refused where it is asked for
         // rather than where the assembly which holds it is loaded.
         var asm = Assembly.Create("HandlerInterfaceRefusedAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var host = AddAHost(handler);
 
         Assert.Throws<ArgumentException>(() => host.AddInterface(typeof(TestBaseClass)));
@@ -383,7 +388,7 @@ public class AssemblyHandlerTests
         // belong to the assembly which is built rather than to the one which declares the interface: a member of
         // another module is written through a reference to it alone.
         var asm = Assembly.Create("HandlerInterfaceReadableAssembly");
-        var handler = (AssemblyHandler) asm.Handler;
+        var handler = (AssemblyHandler)asm.Handler;
         var host = AddAHost(handler);
         host.AddInterface<ITestInterface>();
 
@@ -392,10 +397,13 @@ public class AssemblyHandlerTests
         stream.Position = 0;
 
         var reread = AssemblyDefinition.ReadAssembly(stream);
-        var type = reread.MainModule.GetType($"{Ns}.Host");
+        var type = reread.MainModule.GetType($"{NS}.Host");
         Assert.That(type, Is.Not.Null);
-        Assert.That(type!.Interfaces.Count, Is.EqualTo(1));
-        Assert.That(type.Interfaces[0].InterfaceType.FullName, Is.EqualTo(typeof(ITestInterface).FullName));
+        Assert.Multiple(() =>
+        {
+            Assert.That(type!.Interfaces.Count, Is.EqualTo(1));
+            Assert.That(type.Interfaces[0].InterfaceType.FullName, Is.EqualTo(typeof(ITestInterface).FullName));
+        });
     }
 
     #endregion

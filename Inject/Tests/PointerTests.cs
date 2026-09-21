@@ -1,18 +1,4 @@
-using System.Reflection;
-using Mono.Cecil;
-using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
-using FieldAttributes = Mono.Cecil.FieldAttributes;
-using GenericParameterAttributes = Mono.Cecil.GenericParameterAttributes;
-using MethodAttributes = Mono.Cecil.MethodAttributes;
-using OpCodes = Mono.Cecil.Cil.OpCodes;
-using ParameterAttributes = Mono.Cecil.ParameterAttributes;
-using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
-
 namespace Gneedle.Inject.Test;
-
-using static Gneedle.Inject.Test.TestFixtures;
 
 /// <summary>
 /// Tests for the placeholders which a template reaches the members of the type it is woven into through: <c>This</c>,
@@ -30,7 +16,7 @@ public partial class PointerTests
     public class HelperClass
     {
         public int Calc(int a) => a * 2;
-        public int PublicField;
+        public        int PublicField;
         public static int StaticField;
         public int PublicProperty { get; set; }
 
@@ -66,7 +52,7 @@ public partial class PointerTests
         public int Calc(int a) => a * 2;
         public int PublicField;
         public int PublicProperty => 42;
-        public U Identity<U>(U value) => value;
+        public TU Identity<TU>(TU value) => value;
 
         /// <summary>
         /// A member whose signature names the parameter of the type which declares it, which the lookup of a member
@@ -109,7 +95,7 @@ public partial class PointerTests
         /// is read through the instantiation of the type which declares it rather than through the one of the type which
         /// the template named an instance of.
         /// </summary>
-        public U EchoBoth<U>(T value, U seed) => seed;
+        public TU EchoBoth<TU>(T value, TU seed) => seed;
     }
 
     /// <summary>
@@ -172,7 +158,7 @@ public partial class PointerTests
         /// value of the write and the accessor which writes it.
         /// </summary>
         public static void AddTheFirstElementOfAnArrayToTheField()
-            => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + new[] { 1 }[0]);
+            => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + new[] {1}[0]);
 
         // Two of the cases begin where the name of a member stands rather than where a value is loaded, and the
         // compiler writes the switch as a table of the instructions the cases begin at.
@@ -180,11 +166,11 @@ public partial class PointerTests
         {
             switch (value)
             {
-                case 0: return This.Field<int>("Value").Get();
-                case 1: return This.Field<int>("Other").Get();
-                case 2: return 20;
-                case 3: return 30;
-                case 4: return 40;
+                case 0:  return This.Field<int>("Value").Get();
+                case 1:  return This.Field<int>("Other").Get();
+                case 2:  return 20;
+                case 3:  return 30;
+                case 4:  return 40;
                 default: return -1;
             }
         }
@@ -229,7 +215,7 @@ public partial class PointerTests
         public static int ReadAHeldHandleAsAValue()
         {
             var count = This.Field<int>("Value");
-            var copy  = count;
+            var copy = count;
             return copy.Get();
         }
 
@@ -264,6 +250,7 @@ public partial class PointerTests
         // Delegates whose parameter is loaded via ldc.i4.* literals in IL, which lose the
         // distinction between char/bool/short/int on the evaluation stack.
         public delegate char CharOp(char c);
+
         public delegate bool BoolOp(bool b);
 
         // Immediately invokes the returned delegate -> branch that rewrites to a direct call.
@@ -455,7 +442,7 @@ public partial class PointerTests
         public class DelegateHolder
         {
             public Func<int, int, int>? Slot;
-            public int Number;
+            public int                  Number;
         }
 
         /// <summary>
@@ -1024,6 +1011,6 @@ public partial class PointerTests
         var weaver = typeof(This).Assembly.GetName().Name;
 
         Assert.That(host.Source.Module.AssemblyReferences.Any(reference => reference.Name == weaver), Is.False,
-                    $"the assembly which was woven refers to {weaver}.");
+            $"the assembly which was woven refers to {weaver}.");
     }
 }

@@ -18,7 +18,7 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     /// The extensions which the file of an assembly which lies beside an image is named by, which are the ones a managed
     /// image is written to.
     /// </summary>
-    private static readonly string[] s_AssemblyExtensions = {".dll", ".exe"};
+    private static readonly string[] s_AssemblyExtensions = [".dll", ".exe"];
 
 #if NETFRAMEWORK
     /// <summary>
@@ -45,7 +45,7 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
 
         // The version of a reference may differ from the version of the assembly which was read, and the full name holds
         // the version, so the simple name is the one which ties them together as well.
-        var byName = Assemblies.Values.FirstOrDefault(assembly => assembly.Name.Name == name.Name);
+        var byName = Assemblies.Values.FirstOrDefault(assem => assem.Name.Name == name.Name);
         if (byName != null) return byName;
 
         // The directory of the image is read before the resolver of the process is asked, because that resolver knows
@@ -241,7 +241,7 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
         try
         {
             var basePtr = System.Runtime.InteropServices.Marshal.GetHINSTANCE(assembly.ManifestModule);
-            if (basePtr == IntPtr.Zero ||  basePtr == (IntPtr) (-1) || System.Runtime.InteropServices.Marshal.ReadInt16(basePtr, 0) != 0x5A4D) // "MZ"
+            if (basePtr == IntPtr.Zero || basePtr == (IntPtr) (-1) || System.Runtime.InteropServices.Marshal.ReadInt16(basePtr, 0) != 0x5A4D) // "MZ"
             {
                 return false;
             }
@@ -253,6 +253,11 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
             // stands past the memory which is mapped faults the process in a way which cannot be caught.
             var mapped = MappedSizeOf(basePtr);
             var headerLength = (int) Math.Min(mapped, HeaderWindow);
+
+            // A window too short to hold a header is not read at all, which is what keeps the read of this memory to a
+            // mapping which could be an image: the measuring below refuses such a window as well, so a mapping this
+            // narrow is refused twice rather than once, and the copy which the refusal of it saves is one whose source
+            // is too short to be the header of anything.
             if (headerLength < MinimumHeader)
             {
                 return false;
@@ -300,9 +305,10 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     /// are the two sizes a portable image declares - and one entry of the section table.
     /// </summary>
     private const int SignatureSize = 4;
-    private const int FileHeaderSize = 20;
-    private const int OptionalHeader32 = 224;
-    private const int OptionalHeader64 = 240;
+
+    private const int FileHeaderSize    = 20;
+    private const int OptionalHeader32  = 224;
+    private const int OptionalHeader64  = 240;
     private const int SectionHeaderSize = 40;
 
     /// <summary>
@@ -311,20 +317,30 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     private const int MaxSections = 96;
 
     /// <summary>
-    /// How much of the memory at <paramref name="basePtr"/> is mapped, or zero when it cannot be asked about.
+    /// How many bytes of the memory at <paramref name="basePtr"/> are mapped from it onwards, or zero when it cannot be
+    /// asked about.
     /// </summary>
     /// <remarks>
-    /// The view of an image lies in one region, so the size of the region which the base of an image stands in is the
-    /// size of the whole of it, and it is a length which was measured by the runtime rather than read out of the image
-    /// itself - which is what makes it a bound a malformed image cannot name.
+    /// The region which is answered about is the one which holds the address rather than the one which begins at it, and
+    /// what is read are the bytes at the address and after it alone: the region is what is counted, so the part of it
+    /// which stands ahead of the address is taken off, and a region which begins below the image would otherwise bound
+    /// the read by bytes which the image does not stand in.<para/>
+    /// The size of the region was measured by the runtime rather than read out of the image itself, which is what makes
+    /// it a bound a malformed image cannot name.
     /// </remarks>
     /// <param name="basePtr">Base of the memory which the image was mapped into.</param>
-    /// <returns>The number of bytes of it which are mapped.</returns>
+    /// <returns>The number of bytes of the memory which are mapped from that address onwards.</returns>
     private static long MappedSizeOf(IntPtr basePtr)
     {
-        var information = new MEMORY_BASIC_INFORMATION();
-        var size = (IntPtr) System.Runtime.InteropServices.Marshal.SizeOf<MEMORY_BASIC_INFORMATION>();
-        return VirtualQuery(basePtr, ref information, size) == IntPtr.Zero ? 0 : information.RegionSize.ToInt64();
+        var information = new MemoryBasicInformation();
+        var size = (IntPtr) System.Runtime.InteropServices.Marshal.SizeOf<MemoryBasicInformation>();
+        if (VirtualQuery(basePtr, ref information, size) == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        var mapped = information.RegionSize.ToInt64() - (basePtr.ToInt64() - information.BaseAddress.ToInt64());
+        return Math.Max(mapped, 0);
     }
 
     /// <summary>
@@ -389,8 +405,8 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
         for (var index = 0; index < numberOfSections; index++)
         {
             var section = sectionTable + index * SectionHeaderSize;
-            int sizeOfRawData = BitConverter.ToInt32(header, section + 16);
-            int pointerToRawData = BitConverter.ToInt32(header, section + 20);
+            var sizeOfRawData = BitConverter.ToInt32(header, section + 16);
+            var pointerToRawData = BitConverter.ToInt32(header, section + 20);
             if (sizeOfRawData < 0 || pointerToRawData < 0)
             {
                 return false;
@@ -428,7 +444,7 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     /// <summary>
     /// The description which the system keeps of the memory at an address, of which the size of the region is read.
     /// </summary>
-    private struct MEMORY_BASIC_INFORMATION
+    private struct MemoryBasicInformation
     {
         /// <summary>Base of the region.</summary>
         public IntPtr BaseAddress;
@@ -460,6 +476,6 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     /// <param name="length">Size of the answer which was handed over.</param>
     /// <returns>Number of bytes which were written to the answer, or zero when nothing was.</returns>
     [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr VirtualQuery(IntPtr address, ref MEMORY_BASIC_INFORMATION information, IntPtr length);
+    private static extern IntPtr VirtualQuery(IntPtr address, ref MemoryBasicInformation information, IntPtr length);
 #endif
 }

@@ -2,7 +2,7 @@ using Mono.Cecil;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// The attribute which the tests below put on the metadata which they build. It is declared by the test assembly rather
@@ -23,11 +23,10 @@ internal sealed class MarkerAttribute : Attribute
 [TestFixture]
 public class AttributeTests
 {
-
     private static TypeHandler NewHost(string assemblyName)
     {
-        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        return (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var handler = (AssemblyHandler)Assembly.Create(assemblyName).Handler;
+        return (TypeHandler)handler.AddClass("Host", NS, ClassFlags.Public).GetHandler();
     }
 
     /// <summary>
@@ -47,8 +46,11 @@ public class AttributeTests
         host.AddAttribute<MarkerAttribute>("hello");
 
         var attribute = host.Source.CustomAttributes.Single();
-        Assert.That(attribute.AttributeType.FullName, Is.EqualTo(typeof(MarkerAttribute).FullName));
-        Assert.That(attribute.ConstructorArguments[0].Value, Is.EqualTo("hello"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(attribute.AttributeType.FullName, Is.EqualTo(typeof(MarkerAttribute).FullName));
+            Assert.That(attribute.ConstructorArguments[0].Value, Is.EqualTo("hello"));
+        });
     }
 
     [Test]
@@ -57,7 +59,7 @@ public class AttributeTests
         // The type definition which the attribute is built from is the one of the attribute itself, so adding the
         // attribute to it would decorate the attribute class with itself and leave the handled type untouched.
         var assembly = Assembly.Create("AttributeSelfAssembly");
-        var handler = (AssemblyHandler) assembly.Handler;
+        var handler = (AssemblyHandler)assembly.Handler;
         var host = AddAHost(handler);
 
         host.AddAttribute<MarkerAttribute>("hello");
@@ -119,7 +121,7 @@ public class AttributeTests
         // parameter which it was left for is the one the message names.
         var host = NewHost("AttributeNullArgumentsAssembly");
 
-        var thrown = Assert.Throws<ArgumentNullException>(() => host.AddAttribute<MarkerAttribute>((object[]) null!));
+        var thrown = Assert.Throws<ArgumentNullException>(() => host.AddAttribute<MarkerAttribute>((object[])null!));
 
         Assert.That(thrown.ParamName, Is.EqualTo("arguments"));
     }
@@ -138,11 +140,14 @@ public class AttributeTests
         stream.Position = 0;
 
         var reread = AssemblyDefinition.ReadAssembly(stream);
-        var type = reread.MainModule.GetType($"{Ns}.Host");
+        var type = reread.MainModule.GetType($"{NS}.Host");
         Assert.That(type, Is.Not.Null);
         var attribute = type!.CustomAttributes.Single();
-        Assert.That(attribute.AttributeType.FullName, Is.EqualTo(typeof(MarkerAttribute).FullName));
-        Assert.That(attribute.ConstructorArguments[0].Value, Is.EqualTo("hello"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(attribute.AttributeType.FullName, Is.EqualTo(typeof(MarkerAttribute).FullName));
+            Assert.That(attribute.ConstructorArguments[0].Value, Is.EqualTo("hello"));
+        });
     }
 
     #endregion
@@ -153,15 +158,17 @@ public class AttributeTests
     public void AddAttribute_On_A_Field_Puts_The_Attribute_On_The_Field()
     {
         var assembly = Assembly.Create("FieldAttributeAssembly");
-        var handler = (AssemblyHandler) assembly.Handler;
+        var handler = (AssemblyHandler)assembly.Handler;
         var host = AddAHost(handler);
         host.Source.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
         var field = host.GetField("Value")!;
 
         field.AddAttribute(typeof(MarkerAttribute).ToGneedleType(), "hello");
-
-        Assert.That(((FieldHandler) field).Source.CustomAttributes.Count, Is.EqualTo(1));
-        Assert.That(CarriesMarker(handler.GetCecilType(typeof(MarkerAttribute)).Definition), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(((FieldHandler) field).Source.CustomAttributes.Count, Is.EqualTo(1));
+            Assert.That(CarriesMarker(handler.GetCecilType(typeof(MarkerAttribute)).Definition), Is.False);
+        });
     }
 
     [Test]
@@ -184,15 +191,17 @@ public class AttributeTests
     public void AddAttribute_On_A_Property_Puts_The_Attribute_On_The_Property()
     {
         var assembly = Assembly.Create("PropertyAttributeAssembly");
-        var handler = (AssemblyHandler) assembly.Handler;
+        var handler = (AssemblyHandler)assembly.Handler;
         var host = AddAHost(handler);
         host.Source.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, host.Source.Module.TypeSystem.Int32));
         var property = host.GetProperty("Prop")!;
 
         property.AddAttribute(typeof(MarkerAttribute).ToGneedleType(), "hello");
-
-        Assert.That(((PropertyHandler) property).Source.CustomAttributes.Count, Is.EqualTo(1));
-        Assert.That(CarriesMarker(handler.GetCecilType(typeof(MarkerAttribute)).Definition), Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(((PropertyHandler) property).Source.CustomAttributes.Count, Is.EqualTo(1));
+            Assert.That(CarriesMarker(handler.GetCecilType(typeof(MarkerAttribute)).Definition), Is.False);
+        });
     }
 
     [Test]
@@ -215,14 +224,17 @@ public class AttributeTests
     public void ContainsAttribute_On_A_Type_Reports_The_Attribute_Which_Was_Added()
     {
         var host = NewHost("TypeAttributeContainsAssembly");
-
-        Assert.That(host.ContainsAttribute<MarkerAttribute>(), Is.False);
-        Assert.That(host.ContainsAttribute(typeof(MarkerAttribute)), Is.False);
-
+        Assert.Multiple(() =>
+        {
+            Assert.That(host.ContainsAttribute<MarkerAttribute>(), Is.False);
+            Assert.That(host.ContainsAttribute(typeof(MarkerAttribute)), Is.False);
+        });
         host.AddAttribute<MarkerAttribute>("hello");
-
-        Assert.That(host.ContainsAttribute<MarkerAttribute>(), Is.True);
-        Assert.That(host.ContainsAttribute(typeof(MarkerAttribute)), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(host.ContainsAttribute<MarkerAttribute>(), Is.True);
+            Assert.That(host.ContainsAttribute(typeof(MarkerAttribute)), Is.True);
+        });
     }
 
     #endregion
@@ -237,10 +249,13 @@ public class AttributeTests
 
         method.AddAttribute<MarkerAttribute>("hello");
 
-        var definition = ((MethodHandler) method).Source;
-        Assert.That(definition.CustomAttributes.Single().AttributeType.FullName, Is.EqualTo(typeof(MarkerAttribute).FullName));
-        // The attribute belongs to the method, so the type which declares it is left without it.
-        Assert.That(host.Source.CustomAttributes.Any(carried => carried.AttributeType.FullName == typeof(MarkerAttribute).FullName), Is.False);
+        var definition = ((MethodHandler)method).Source;
+        Assert.Multiple(() =>
+        {
+            Assert.That(definition.CustomAttributes.Single().AttributeType.FullName, Is.EqualTo(typeof(MarkerAttribute).FullName));
+            // The attribute belongs to the method, so the type which declares it is left without it.
+            Assert.That(host.Source.CustomAttributes.Any(carried => carried.AttributeType.FullName == typeof(MarkerAttribute).FullName), Is.False);
+        });
     }
 
     [Test]

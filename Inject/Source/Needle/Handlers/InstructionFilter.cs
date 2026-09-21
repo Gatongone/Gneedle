@@ -38,7 +38,7 @@ internal sealed class InstructionFilter(Mono.Collections.Generic.Collection<Inst
     /// The instruction at index in target collection will be replaced with the instruction in m_Replacements at the same index if there is one,
     /// or will be added to source collection directly if there is no replacement instruction.
     /// </summary>
-    public readonly Instruction[] Target = target.ToArray();
+    public readonly Instruction[] Target = [.. target];
 
     /// <summary>
     /// The index which each instruction of <see cref="Target"/> stands at, which is where a branch of the body, an

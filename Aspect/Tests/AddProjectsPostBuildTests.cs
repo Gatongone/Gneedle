@@ -81,9 +81,11 @@ public class AddProjectsPostBuildTests
         var solution = WriteSolution(withFolder: false, "App");
 
         var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), woven ? Does.Contain("GneedleTarget") : Does.Not.Contain("GneedleTarget"), message);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+            Assert.That(File.ReadAllText(project), woven ? Does.Contain("GneedleTarget") : Does.Not.Contain("GneedleTarget"), message);
+        });
     }
 
     /// <summary>
@@ -129,7 +131,7 @@ public class AddProjectsPostBuildTests
     /// <param name="project">The project which was read back from its file.</param>
     /// <param name="name">Name of the target which is asked for.</param>
     private static XElement? Target(XDocument project, string name)
-        => project.Descendants().FirstOrDefault(element => element.Name.LocalName == "Target" && (string?) element.Attribute("Name") == name);
+        => project.Descendants().FirstOrDefault(element => element.Name.LocalName == "Target" && (string?)element.Attribute("Name") == name);
 
     /// <summary>
     /// Whether a target runs the task which <paramref name="name"/> names, which is a child element of it rather than
@@ -220,9 +222,11 @@ public class AddProjectsPostBuildTests
         var solution = WriteSolution(withFolder: false, "Disabled");
 
         var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(project), Does.Not.Contain("GneedleTarget"), "a project which disabled the aspect was added to.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+            Assert.That(File.ReadAllText(project), Does.Not.Contain("GneedleTarget"), "a project which disabled the aspect was added to.");
+        });
     }
 
     [Test]
@@ -234,10 +238,12 @@ public class AddProjectsPostBuildTests
         var solution = WriteSolution(withFolder: true, "App");
 
         var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(engine.Errors, Is.Empty);
-        Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+            Assert.That(engine.Errors, Is.Empty);
+            Assert.That(File.ReadAllText(project), Does.Contain("GneedleTarget"));
+        });
     }
 
     [Test]
@@ -280,10 +286,13 @@ public class AddProjectsPostBuildTests
         Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
         var written = XDocument.Load(project);
         var woven = Target(written, "GneedleTarget");
-        Assert.That(woven, Is.Not.Null, "the target which weaves was not added to a project which runs a target of its own on the event.");
-        Assert.That(Runs(woven!, "AssemblyInject"), Is.True, "the target which weaves runs no task which weaves.");
-        Assert.That(Runs(Target(written, "CopyTheOutput")!, "AssemblyInject"), Is.False,
-                    "the task which weaves was written into a target which the project runs.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(woven, Is.Not.Null, "the target which weaves was not added to a project which runs a target of its own on the event.");
+            Assert.That(Runs(woven!, "AssemblyInject"), Is.True, "the target which weaves runs no task which weaves.");
+            Assert.That(Runs(Target(written, "CopyTheOutput")!, "AssemblyInject"), Is.False,
+                        "the task which weaves was written into a target which the project runs.");
+        });
     }
 
     [Test]
@@ -426,12 +435,15 @@ public class AddProjectsPostBuildTests
         Assert.That(written.Descendants().Count(element => element.Name.LocalName == "Target"), Is.EqualTo(1),
                     "a second target was added to a project which already held the target of the package.");
         var woven = Target(written, "gneedletarget");
-        Assert.That(woven, Is.Not.Null, "the target which the project held was taken out of it.");
-        Assert.That((string?) woven!.Attribute("AfterTargets"), Is.EqualTo("PostBuildEvent"),
-                    "the target which was found was not given the event which the package runs it on.");
-        Assert.That(Runs(woven, "AssemblyInject"), Is.True, "the target which weaves runs no task which weaves.");
-        Assert.That(File.ReadAllText(project), Does.Not.Contain("$(Stale)"),
-                    "a parameter which no longer holds what the package writes was left as it was.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(woven, Is.Not.Null, "the target which the project held was taken out of it.");
+            Assert.That((string?) woven!.Attribute("AfterTargets"), Is.EqualTo("PostBuildEvent"),
+                        "the target which was found was not given the event which the package runs it on.");
+            Assert.That(Runs(woven, "AssemblyInject"), Is.True, "the target which weaves runs no task which weaves.");
+            Assert.That(File.ReadAllText(project), Does.Not.Contain("$(Stale)"),
+                        "a parameter which no longer holds what the package writes was left as it was.");
+        });
     }
 
     [Test]
@@ -467,22 +479,26 @@ public class AddProjectsPostBuildTests
         var solution = WriteSolution(withFolder: false, "Broken", "App");
 
         var (result, engine) = Scan(solution);
-
-        Assert.That(result, Is.False, "a project which could not be read was passed over in silence.");
-        Assert.That(engine.Errors.Single(), Does.Contain("Broken"), string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.ReadAllText(woven), Does.Contain("GneedleTarget"),
-                    "the projects of a solution which holds one which cannot be read were left without their weaving.");
-        Assert.That(File.ReadAllText(broken), Is.EqualTo("<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup></Project>"),
-                    "a project which cannot be read was written to.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False, "a project which could not be read was passed over in silence.");
+            Assert.That(engine.Errors.Single(), Does.Contain("Broken"), string.Join(Environment.NewLine, engine.Errors));
+            Assert.That(File.ReadAllText(woven), Does.Contain("GneedleTarget"),
+                        "the projects of a solution which holds one which cannot be read were left without their weaving.");
+            Assert.That(File.ReadAllText(broken), Is.EqualTo("<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup></Project>"),
+                        "a project which cannot be read was written to.");
+        });
     }
 
     [Test]
     public void A_Solution_Which_Cannot_Be_Read_Is_Reported()
     {
         var (result, engine) = Scan(Path.Combine(m_WorkDirectory, "Nowhere.sln"));
-
-        Assert.That(result, Is.False);
-        Assert.That(engine.Errors.Single(), Does.Contain("Nowhere.sln"), string.Join(Environment.NewLine, engine.Errors));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.False);
+            Assert.That(engine.Errors.Single(), Does.Contain("Nowhere.sln"), string.Join(Environment.NewLine, engine.Errors));
+        });
     }
 
     [Test]
@@ -512,8 +528,11 @@ public class AddProjectsPostBuildTests
         var (result, engine) = Scan(solution);
 
         var written = File.ReadAllText(project);
-        Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(written, Does.Contain("GneedleTarget"), "the target which the project held was taken out of it.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
+            Assert.That(written, Does.Contain("GneedleTarget"), "the target which the project held was taken out of it.");
+        });
         Assert.That(written, Does.Not.Contain("$(Stale)"),
                     "a parameter which no longer holds what the package writes was left as it was.");
         Assert.That(written, Does.Contain("TargetPath=\"$(TargetPath)\""),

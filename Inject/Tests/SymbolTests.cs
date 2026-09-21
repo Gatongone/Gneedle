@@ -19,9 +19,11 @@ public class SymbolTests
         var symbols = File.ReadAllBytes(Path.ChangeExtension(location, ".pdb"));
 
         var (changed, woven, wovenSymbols) = Injections.Apply(AssemblyLoader.LoadFromBytes(image), image, symbols);
-
-        Assert.That(changed, Is.True, "the assembly of these tests was woven by none of its injectors.");
-        Assert.That(wovenSymbols, Is.Not.Null.And.Not.Empty, "the symbols which were read were not written back.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(changed, Is.True, "the assembly of these tests was woven by none of its injectors.");
+            Assert.That(wovenSymbols, Is.Not.Null.And.Not.Empty, "the symbols which were read were not written back.");
+        });
 
         // A reader which is handed both reads the image which the other describes: the database names the image it was
         // written for, and Cecil refuses one which was written for another, so a pair which was not woven together is

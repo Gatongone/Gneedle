@@ -50,7 +50,7 @@ public class AssemblyLoaderTests
             using (var target = AssemblyDefinition.ReadAssembly(typeof(AssemblyLoaderTests).Assembly.Location))
             {
                 var reference = target.MainModule.AssemblyReferences
-                    .First(reference => reference.Name == typeof(AssemblyLoader).Assembly.GetName().Name);
+                                      .First(reference => reference.Name == typeof(AssemblyLoader).Assembly.GetName().Name);
                 reference.Name = name;
                 target.Write(targetPath);
             }
@@ -63,7 +63,7 @@ public class AssemblyLoaderTests
             var loader = weaverOfTheContext.GetType(typeof(AssemblyLoader).FullName!)!;
             var image = File.ReadAllBytes(targetPath);
 
-            var loaded = (System.Reflection.Assembly) loader.GetMethod(nameof(AssemblyLoader.LoadFromBytes))!.Invoke(null, [image])!;
+            var loaded = (System.Reflection.Assembly)loader.GetMethod(nameof(AssemblyLoader.LoadFromBytes))!.Invoke(null, [image])!;
 
             // Every type of the image is read, which is what the weaving does with the assembly it was handed.
             var types = loaded.GetTypes();
@@ -91,7 +91,7 @@ public class AssemblyLoaderTests
         // wrote, and an injector which was added or taken out of the sources would not be read again.
         var image = File.ReadAllBytes(typeof(AssemblyLoaderTests).Assembly.Location);
 
-        var first  = AssemblyLoader.LoadFromBytes(image);
+        var first = AssemblyLoader.LoadFromBytes(image);
         var second = AssemblyLoader.LoadFromBytes(image);
 
         Assert.That(second, Is.Not.SameAs(first));

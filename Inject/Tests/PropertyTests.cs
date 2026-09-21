@@ -1,14 +1,13 @@
 using System.Reflection;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using Assembly = Gneedle.Inject.Assembly;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using ParameterAttributes = Mono.Cecil.ParameterAttributes;
 using PropertyAttributes = Mono.Cecil.PropertyAttributes;
 
 namespace Gneedle.Inject.Test;
 
-using static Gneedle.Inject.Test.TestFixtures;
+using static TestFixtures;
 
 /// <summary>
 /// Templates for the bodies of a property's accessors, which live top level in the test assembly so that Cecil can
@@ -70,14 +69,12 @@ public class AutoPropertyBase
 [TestFixture]
 public class PropertyTests
 {
-
     /// <summary>
     /// Create a host which carries a constructor, so that an instance of it could be created once it is loaded.
     /// </summary>
     private static (Assembly Assembly, TypeHandler Host) NewHost(string assemblyName)
     {
         var assembly = Assembly.Create(assemblyName);
-        var module = assembly.Source.MainModule;
         var host = AddAHost(assembly);
 
         // A type which Cecil emits carries no constructor of its own, and one is needed to create an instance of it.
@@ -104,7 +101,7 @@ public class PropertyTests
                 propertyType);
             getter.Body.GetILProcessor().Emit(OpCodes.Ret);
             getter.DeclaringType = host.Source;
-            property.GetMethod = getter;
+            property.GetMethod   = getter;
             host.Source.Methods.Add(getter);
         }
 
@@ -117,7 +114,7 @@ public class PropertyTests
             setter.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, propertyType));
             setter.Body.GetILProcessor().Emit(OpCodes.Ret);
             setter.DeclaringType = host.Source;
-            property.SetMethod = setter;
+            property.SetMethod   = setter;
             host.Source.Methods.Add(setter);
         }
 
@@ -132,9 +129,8 @@ public class PropertyTests
     private static (Assembly Assembly, TypeHandler Host) NewDerivedHost(string assemblyName)
     {
         var assembly = Assembly.Create(assemblyName);
-        var module = assembly.Source.MainModule;
         var host = (TypeHandler) ((AssemblyHandler) assembly.Handler)
-                                 .AddClass("Host", Ns, ClassFlags.Public)
+                                 .AddClass("Host", NS, ClassFlags.Public)
                                  .WithBaseType(typeof(AutoPropertyBase))
                                  .GetHandler();
 
@@ -167,9 +163,11 @@ public class PropertyTests
     {
         var (_, host) = NewHost("PropertyTestAssembly");
         var property = NewProperty(host, "Value", withGetter: true, withSetter: true);
-
-        Assert.That(property.Name, Is.EqualTo("Value"));
-        Assert.That(property.FullName, Does.Contain("Value"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(property.Name, Is.EqualTo("Value"));
+            Assert.That(property.FullName, Does.Contain("Value"));
+        });
     }
 
     [Test]
@@ -237,10 +235,13 @@ public class PropertyTests
             .WithType(typeof(int))
             .WithGetter(Template(typeof(PropertyBodyTemplates), nameof(PropertyBodyTemplates.GetConstant)))
             .GetHandler();
+        Assert.Multiple(() =>
+        {
 
-        // The body of the template, rather than the one which reads the backing field.
-        Assert.That(Holds(GetterOf(host), OpCodes.Ldc_I4_S), Is.True);
-        Assert.That(Holds(GetterOf(host), OpCodes.Ldfld), Is.False);
+            // The body of the template, rather than the one which reads the backing field.
+            Assert.That(Holds(GetterOf(host), OpCodes.Ldc_I4_S), Is.True);
+            Assert.That(Holds(GetterOf(host), OpCodes.Ldfld), Is.False);
+        });
     }
 
     [Test]
@@ -252,10 +253,13 @@ public class PropertyTests
             .WithType(typeof(int))
             .WithSetter(Template(typeof(PropertyBodyTemplates), nameof(PropertyBodyTemplates.RecordValue)))
             .GetHandler();
+        Assert.Multiple(() =>
+        {
 
-        // The body of the template, rather than the one which writes the backing field.
-        Assert.That(Holds(SetterOf(host), OpCodes.Stsfld), Is.True);
-        Assert.That(Holds(SetterOf(host), OpCodes.Stfld), Is.False);
+            // The body of the template, rather than the one which writes the backing field.
+            Assert.That(Holds(SetterOf(host), OpCodes.Stsfld), Is.True);
+            Assert.That(Holds(SetterOf(host), OpCodes.Stfld), Is.False);
+        });
     }
 
     [Test]
@@ -288,10 +292,13 @@ public class PropertyTests
             .GetHandler();
 
         var field = host.Source.Fields.Single(f => f.Name == "<Value>k__BackingField");
-        Assert.That(field.IsStatic, Is.True);
-        Assert.That(Holds(GetterOf(host), OpCodes.Ldsfld), Is.True);
-        Assert.That(Holds(GetterOf(host), OpCodes.Ldarg_0), Is.False);
-        Assert.That(Holds(SetterOf(host), OpCodes.Stsfld), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(field.IsStatic, Is.True);
+            Assert.That(Holds(GetterOf(host), OpCodes.Ldsfld), Is.True);
+            Assert.That(Holds(GetterOf(host), OpCodes.Ldarg_0), Is.False);
+            Assert.That(Holds(SetterOf(host), OpCodes.Stsfld), Is.True);
+        });
     }
 
     [Test]
@@ -309,9 +316,9 @@ public class PropertyTests
             .GetHandler();
 
         Assert.That(host.Source.Fields.Any(field => field.Name == "<Value>k__BackingField"), Is.True,
-                    "the type which holds the accessor declares no backing field of its own, so the field of the base type was taken.");
+            "the type which holds the accessor declares no backing field of its own, so the field of the base type was taken.");
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = Activator.CreateInstance(type);
         type.GetProperty("Value")!.SetValue(instance, 5);
 
@@ -330,7 +337,7 @@ public class PropertyTests
             .WithSetter(DefaultPropertyBody.WithFieldOperation)
             .GetHandler();
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         type.GetProperty("Value")!.SetValue(null, 5);
 
         Assert.That(type.GetProperty("Value")!.GetValue(null), Is.EqualTo(5));
@@ -347,9 +354,11 @@ public class PropertyTests
             .WithSetter(DefaultPropertyBody.WithFieldOperation)
             .WithGetter(DefaultPropertyBody.WithFieldOperation)
             .GetHandler();
-
-        Assert.That(Holds(GetterOf(host), OpCodes.Ldfld), Is.True);
-        Assert.That(Holds(SetterOf(host), OpCodes.Stfld), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(Holds(GetterOf(host), OpCodes.Ldfld), Is.True);
+            Assert.That(Holds(SetterOf(host), OpCodes.Stfld), Is.True);
+        });
     }
 
     #endregion
@@ -368,8 +377,11 @@ public class PropertyTests
         property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne)));
 
         var proceed = ProceedOf(host, "get_Value");
-        Assert.That(proceed, Is.Not.Null);
-        Assert.That(Holds(proceed!, OpCodes.Ldfld), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(proceed, Is.Not.Null);
+            Assert.That(Holds(proceed!, OpCodes.Ldfld), Is.True);
+        });
     }
 
     [Test]
@@ -398,9 +410,11 @@ public class PropertyTests
                            .GetHandler();
 
         property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne)));
-
-        Assert.That(GetterOf(host).IsVirtual, Is.True);
-        Assert.That(ProceedOf(host, "get_Value")!.IsVirtual, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(GetterOf(host).IsVirtual, Is.True);
+            Assert.That(ProceedOf(host, "get_Value")!.IsVirtual, Is.False);
+        });
     }
 
     [Test]
@@ -418,7 +432,7 @@ public class PropertyTests
         stream.Position = 0;
 
         var reread = AssemblyDefinition.ReadAssembly(stream);
-        var type = reread.MainModule.GetType($"{Ns}.Host")!;
+        var type = reread.MainModule.GetType($"{NS}.Host")!;
         var proceed = type.Methods.FirstOrDefault(method => method.Name == "<get_Value>k__Proceed");
 
         Assert.That(proceed, Is.Not.Null);
@@ -439,7 +453,7 @@ public class PropertyTests
                            .GetHandler();
         property.GetGetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.GetThenAddsOne)));
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = Activator.CreateInstance(type)!;
         type.GetField("<Value>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, 5);
 
@@ -458,7 +472,7 @@ public class PropertyTests
                            .GetHandler();
         property.GetSetter()!.AroundBody(Template(typeof(PropertyAroundTemplates), nameof(PropertyAroundTemplates.SetThenAddsOne)));
 
-        var type = assembly.Load().GetType($"{Ns}.Host")!;
+        var type = assembly.Load().GetType($"{NS}.Host")!;
         var instance = Activator.CreateInstance(type)!;
         type.GetProperty("Value")!.SetValue(instance, 5);
 

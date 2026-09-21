@@ -19,8 +19,7 @@ partial class AssemblyHandler
                 // A token stands for a generic parameter of the target type or of the method, so it is parsed before
                 // GetCecilType. GetCecilType would append a Gneedle.Inject assembly reference to the target module,
                 // which leaves the produced assembly depending on the weaver even though the token itself is replaced.
-                if (TokenParsing.TryResolveGenericParameter(nongenericType.Type, target as IMemberDefinition, methodGenericParameters,
-                    out var tokenParameter))
+                if (TokenParsing.TryResolveGenericParameter(nongenericType.Type, target as IMemberDefinition, methodGenericParameters, out var tokenParameter))
                 {
                     return tokenParameter!;
                 }
@@ -40,13 +39,9 @@ partial class AssemblyHandler
                 var arguments = genericType.GenericArguments
                                            .Select(argument => ResolveParameterType(target, argument, methodGenericParameters))
                                            .ToArray();
-                // Create generic instance. The import appends to the tables of the module, which are written under its
-                // lock.
+                // Create generic instance.
                 var module = Assembly.Source.MainModule;
-                lock (ModuleLock.Of(module))
-                {
-                    return module.ImportReference(parameterTypeDef.Definition).MakeGenericInstanceType(arguments);
-                }
+                return ModuleLock.Import(module, parameterTypeDef.Definition).MakeGenericInstanceType(arguments);
             default: throw new ArgumentOutOfRangeException(nameof(parameterType));
         }
     }
@@ -125,8 +120,8 @@ partial class AssemblyHandler
             // name, so they share the cache entry as well.
             if (typeRef.TryGetFromAssemblyDefinition(module, out var fromAssemblyType))
             {
-                cecilType           = new CecilType(fromAssemblyType!, module.ImportReference(fromAssemblyType));
-                m_TypeCache[name]   = cecilType;
+                cecilType         = new CecilType(fromAssemblyType!, ModuleLock.Import(module, fromAssemblyType!));
+                m_TypeCache[name] = cecilType;
                 return cecilType;
             }
 
@@ -137,7 +132,7 @@ partial class AssemblyHandler
             if (!m_AssemblyCache.TryGetValue(assemblyName, out var assemblyDef))
             {
                 // Get target assembly definition.
-                assemblyDef = typeRef.Module.Assembly;
+                assemblyDef                   = typeRef.Module.Assembly;
                 // Append to cache.
                 m_AssemblyCache[assemblyName] = assemblyDef;
                 //Add to Reference.
@@ -151,9 +146,9 @@ partial class AssemblyHandler
             // carried about as a type of nothing, whose every query would throw from somewhere the caller cannot see the
             // reason of.
             var definition = typeRef.Resolve()
-                             ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, typeRef.FullName));
-            cecilType           = new CecilType(definition, module.ImportReference(typeRef));
-            m_TypeCache[name]   = cecilType;
+                ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, typeRef.FullName));
+            cecilType         = new CecilType(definition, ModuleLock.Import(module, typeRef));
+            m_TypeCache[name] = cecilType;
             return cecilType;
         }
     }
@@ -185,7 +180,7 @@ partial class AssemblyHandler
             if (type.Assembly.GetName().Name == Assembly.Source.Name.Name)
             {
                 var declaredType = FindDeclaredType(type) ?? throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);
-                cecilType         = new CecilType(declaredType, declaredType);
+                cecilType = new CecilType(declaredType, declaredType);
                 m_TypeCache[name] = cecilType;
                 return cecilType;
             }
@@ -204,7 +199,7 @@ partial class AssemblyHandler
             if (Attribute.GetCustomAttribute(type, typeof(FromAssemblyAttribute)) is FromAssemblyAttribute fromAssembly)
             {
                 var fromAssemblyDefinition = FromAssembly.ResolveTypeFromAssembly(module, fromAssembly.Name, type.FullName!);
-                cecilType         = new CecilType(fromAssemblyDefinition, module.ImportReference(fromAssemblyDefinition));
+                cecilType = new CecilType(fromAssemblyDefinition, ModuleLock.Import(module, fromAssemblyDefinition));
                 m_TypeCache[name] = cecilType;
                 return cecilType;
             }
@@ -212,13 +207,12 @@ partial class AssemblyHandler
             // Import type ref into the current assembly definition. The import registers the assembly reference which the
             // type is resolved through as well, and that one may differ from the assembly which declares the type,
             // because the reflection importer maps the corlib to another assembly.
-            var targetTypeRef = module.ImportReference(type);
+            var targetTypeRef = ModuleLock.Import(module, type);
 
             // The definition is the one for looking the members up, and a type which the assembly it was asked of does
             // not hold has none: the type is refused here rather than being carried about as a type of nothing.
-            var definition = targetTypeRef.Resolve()
-                             ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, type.FullName));
-            cecilType         = new CecilType(definition, targetTypeRef);
+            var definition = targetTypeRef.Resolve() ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, type.FullName));
+            cecilType = new CecilType(definition, targetTypeRef);
             m_TypeCache[name] = cecilType;
             return cecilType;
         }
@@ -242,13 +236,8 @@ partial class AssemblyHandler
     {
         if (template.DeclaringType == null || template.DeclaringType.Assembly.GetName().Name != Assembly.Source.Name.Name)
         {
-            // The import appends the assembly which declares the template to the tables of the module, which are written
-            // under its lock.
             var module = Assembly.Source.MainModule;
-            lock (ModuleLock.Of(module))
-            {
-                return module.ImportReference(template).Resolve();
-            }
+            return ModuleLock.Import(module, template).Resolve();
         }
 
         // The name of a method alone does not tell two of one name apart, so the signature is what the template is
@@ -256,7 +245,7 @@ partial class AssemblyHandler
         // parameters of the template, of which a template that takes none holds the empty signature.
         var parameterTypes = template.GetParameters().Select(parameter => parameter.ParameterType).ToArray();
         var declaredMethod = FindDeclaredType(template.DeclaringType)?.Methods
-                                               .FirstOrDefault(method => method.Name == template.Name && method.Parameters.SameWith(parameterTypes));
+                                                                     .FirstOrDefault(method => method.Name == template.Name && method.Parameters.SameWith(parameterTypes));
         return declaredMethod ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, $"{template.DeclaringType.FullName}.{template.Name}"));
     }
 
@@ -271,11 +260,8 @@ partial class AssemblyHandler
 
         // The name of a type which is declared by another one is qualified by the type which declares it, which Cecil
         // writes out itself, so only the name of the type is compared there.
-        if (declaring == null)
-        {
-            return Assembly.Source.Modules.SelectMany(module => module.Types).FirstOrDefault(candidate => candidate.FullName == type.FullName);
-        }
-
-        return FindDeclaredType(declaring)?.NestedTypes.FirstOrDefault(nested => nested.Name == type.Name);
+        return declaring == null
+            ? Assembly.Source.Modules.SelectMany(module => module.Types).FirstOrDefault(candidate => candidate.FullName == type.FullName)
+            : FindDeclaredType(declaring)?.NestedTypes.FirstOrDefault(nested => nested.Name == type.Name);
     }
 }

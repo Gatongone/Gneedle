@@ -14,7 +14,7 @@ public static class TheOrderOfTheInjectors
     /// The name of the variable of the process which holds the path of the file the order is written to, which is what
     /// tells the copy of the assembly where to write, and which no copy writes to where a test did not set it.
     /// </summary>
-    public const string LogVariable = "GneedleInjectorOrderLog";
+    public const string LOG_VARIABLE = "GneedleInjectorOrderLog";
 
     /// <summary>
     /// Write the name of an injector into the log, where the process was given one to write to.
@@ -22,7 +22,7 @@ public static class TheOrderOfTheInjectors
     /// <param name="name">The name of the injector which was applied.</param>
     public static void Record(string name)
     {
-        if (Environment.GetEnvironmentVariable(LogVariable) is not { } path) return;
+        if (Environment.GetEnvironmentVariable(LOG_VARIABLE) is not { } path) return;
 
         File.AppendAllText(path, name + Environment.NewLine);
     }
@@ -34,7 +34,7 @@ public static class TheOrderOfTheInjectors
 /// <param name="name">The name which the record of this injector is written under.</param>
 /// <param name="priority">The order in which this injector is applied among the injectors of the member it stands on.</param>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-public sealed class RecordsTheOrderAttribute(string name, int priority = 0) : Attribute, IMethodInjector, IOrderedInjector
+public sealed class RecordsTheOrderAttribute(string name, int priority = 0) : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
     public int Priority { get; } = priority;
@@ -51,6 +51,9 @@ public sealed class RecordsTheOrderAttribute(string name, int priority = 0) : At
 public sealed class AFirstOfItsPriorityAttribute : Attribute, IMethodInjector
 {
     /// <inheritdoc/>
+    public int Priority => 0;
+
+    /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler) => TheOrderOfTheInjectors.Record(nameof(AFirstOfItsPriorityAttribute));
 }
 
@@ -60,6 +63,9 @@ public sealed class AFirstOfItsPriorityAttribute : Attribute, IMethodInjector
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class ZLastOfItsPriorityAttribute : Attribute, IMethodInjector
 {
+    /// <inheritdoc/>
+    public int Priority => 0;
+
     /// <inheritdoc/>
     public void Inject(MethodInfo method, IMethodHandler handler) => TheOrderOfTheInjectors.Record(nameof(ZLastOfItsPriorityAttribute));
 }
@@ -103,12 +109,14 @@ public class InjectorOrderTests
     public void The_Injectors_Of_A_Member_Are_Applied_By_Their_Priority()
     {
         var applied = WeaveTheTests();
-
-        Assert.That(applied, Does.Contain("greater").And.Contain("lesser"),
-                    "the injectors of the member which declares two priorities were not applied at all.");
-        // Array.IndexOf rather than the extension of the enumerable, which an array is not one of on every framework.
-        Assert.That(Array.IndexOf(applied, "greater"), Is.LessThan(Array.IndexOf(applied, "lesser")),
-                    "the injector of the greater priority was not applied before the one of the lesser.");
+        Assert.Multiple(() =>
+        {
+            Assert.That(applied, Does.Contain("greater").And.Contain("lesser"),
+                "the injectors of the member which declares two priorities were not applied at all.");
+            // Array.IndexOf rather than the extension of the enumerable, which an array is not one of on every framework.
+            Assert.That(Array.IndexOf(applied, "greater"), Is.LessThan(Array.IndexOf(applied, "lesser")),
+                "the injector of the greater priority was not applied before the one of the lesser.");
+        });
     }
 
     [Test]
@@ -117,10 +125,10 @@ public class InjectorOrderTests
         var applied = WeaveTheTests();
 
         var first = Array.IndexOf(applied, nameof(AFirstOfItsPriorityAttribute));
-        var last  = Array.IndexOf(applied, nameof(ZLastOfItsPriorityAttribute));
+        var last = Array.IndexOf(applied, nameof(ZLastOfItsPriorityAttribute));
 
         Assert.That(first, Is.GreaterThanOrEqualTo(0).And.LessThan(last),
-                    "the injector whose type sorts first was not applied before the one whose type sorts last.");
+            "the injector whose type sorts first was not applied before the one whose type sorts last.");
     }
 
     /// <summary>
@@ -131,7 +139,7 @@ public class InjectorOrderTests
     private static string[] WeaveTheTests()
     {
         var log = Path.Combine(Path.GetTempPath(), $"Gneedle.Inject.Order.{Guid.NewGuid():N}.txt");
-        Environment.SetEnvironmentVariable(TheOrderOfTheInjectors.LogVariable, log);
+        Environment.SetEnvironmentVariable(TheOrderOfTheInjectors.LOG_VARIABLE, log);
         try
         {
             var image = File.ReadAllBytes(typeof(InjectorOrderTests).Assembly.Location);
@@ -143,7 +151,7 @@ public class InjectorOrderTests
         }
         finally
         {
-            Environment.SetEnvironmentVariable(TheOrderOfTheInjectors.LogVariable, null);
+            Environment.SetEnvironmentVariable(TheOrderOfTheInjectors.LOG_VARIABLE, null);
             if (File.Exists(log)) File.Delete(log);
         }
     }

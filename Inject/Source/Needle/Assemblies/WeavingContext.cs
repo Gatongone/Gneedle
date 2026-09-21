@@ -21,7 +21,7 @@ namespace Gneedle.Inject;
 /// which the earlier compilation loaded.<para/>
 /// A runtime which holds no context at all, which .NET Framework and Mono are, loads the image the way it always did.
 /// </remarks>
-internal sealed class WeavingContext
+internal static class WeavingContext
 {
     /// <summary>
     /// The type of a context of the runtime, or null where the runtime holds none.<para/>
@@ -42,24 +42,6 @@ internal sealed class WeavingContext
     private static readonly PropertyInfo? s_Assemblies = s_Type?.GetProperty("Assemblies");
 
     /// <summary>
-    /// The context which the image was loaded into, which is an object of the type above.
-    /// </summary>
-    private readonly object m_Context;
-
-    /// <summary>
-    /// The method which loads an image into a context, as the type above declares it.
-    /// </summary>
-    private readonly MethodInfo m_LoadFromStream;
-
-    /// <param name="context">The context which the image was loaded into.</param>
-    /// <param name="loadFromStream">The method which loaded the image into it.</param>
-    private WeavingContext(object context, MethodInfo loadFromStream)
-    {
-        m_Context        = context;
-        m_LoadFromStream = loadFromStream;
-    }
-
-    /// <summary>
     /// Load the image of <paramref name="rawBytes"/> into a context of its own, or answer null where the runtime holds
     /// no context to load it into.
     /// </summary>
@@ -71,8 +53,8 @@ internal sealed class WeavingContext
 
         try
         {
-            var resolving      = type.GetEvent("Resolving");
-            var constructor    = type.GetConstructor([typeof(string), typeof(bool)]);
+            var resolving = type.GetEvent("Resolving");
+            var constructor = type.GetConstructor([typeof(string), typeof(bool)]);
             var loadFromStream = type.GetMethod("LoadFromStream", [typeof(Stream)]);
             if (constructor == null || resolving?.AddMethod == null || loadFromStream == null) return null;
 
@@ -95,7 +77,7 @@ internal sealed class WeavingContext
     /// </summary>
     private static Type? FindTheType()
     {
-        foreach (var name in new[] { "System.Runtime.Loader.AssemblyLoadContext, System.Runtime.Loader", "System.Runtime.Loader.AssemblyLoadContext" })
+        foreach (var name in new[] {"System.Runtime.Loader.AssemblyLoadContext, System.Runtime.Loader", "System.Runtime.Loader.AssemblyLoadContext"})
         {
             if (Type.GetType(name, false) is { } type) return type;
         }
@@ -114,9 +96,9 @@ internal sealed class WeavingContext
         // for it: the sender is a context, which this library cannot name where it is built, and neither can the method
         // of this class which answers the request read it.
         var parameters = handler.GetMethod("Invoke")!.GetParameters();
-        var sender     = Expression.Parameter(parameters[0].ParameterType, "sender");
-        var name       = Expression.Parameter(parameters[1].ParameterType, "name");
-        var body       = Expression.Call(typeof(WeavingContext).GetMethod(nameof(Resolve), BindingFlags.NonPublic | BindingFlags.Static)!, name);
+        var sender = Expression.Parameter(parameters[0].ParameterType, "sender");
+        var name = Expression.Parameter(parameters[1].ParameterType, "name");
+        var body = Expression.Call(typeof(WeavingContext).GetMethod(nameof(Resolve), BindingFlags.NonPublic | BindingFlags.Static)!, name);
         return Expression.Lambda(handler, body, sender, name).Compile();
     }
 

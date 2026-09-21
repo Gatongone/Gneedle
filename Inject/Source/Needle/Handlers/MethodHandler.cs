@@ -2,8 +2,6 @@ using System.Globalization;
 using System.Reflection;
 using MethodAttributes = Mono.Cecil.MethodAttributes;
 using MethodBody = Mono.Cecil.Cil.MethodBody;
-using PropertyAttributes = Mono.Cecil.PropertyAttributes;
-using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject;
 
@@ -133,7 +131,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // argument of that instantiation rather than the parameter of the definition alone.
         var baseMethod = DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(
             DeclaringTypeHandler.AssemblyHandler.GetCecilType(baseType).Definition,
-            Source.Name, Source.Parameters.Select(p => p.ParameterType).ToArray(), instance: baseType);
+            Source.Name, [.. Source.Parameters.Select(p => p.ParameterType)], instance: baseType);
         if (baseMethod == null)
         {
             throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
@@ -164,7 +162,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     private void SetBodyThrowException(ILProcessor il)
     {
         var module = Source.Module;
-        var ctor = module.ImportReference(typeof(NotSupportedException).GetConstructor(Type.EmptyTypes));
+        var ctor = ModuleLock.Import(module, typeof(NotSupportedException).GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Newobj, ctor);
         il.Emit(OpCodes.Throw);
     }
@@ -578,7 +576,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 FilterStart  = filter.Emitted(handler.FilterStart),
                 CatchType = handler.CatchType == null
                     ? null
-                    : Source.Module.ImportReference(handler.CatchType).ParseGenericTokens(Source, Source.Module)
+                    : ModuleLock.Import(Source.Module, handler.CatchType).ParseGenericTokens(Source, Source.Module)
             };
 
             // A region which begins at nothing would protect nothing, and a boundary which the template holds and the
@@ -700,7 +698,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         var token = DeclaringTypeHandler.AssemblyHandler.GetCecilType(captured).Reference;
-        var read  = Source.Module.ImportReference(typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
+        var read = ModuleLock.Import(Source.Module, typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
 
         filter.Insert(index, Instruction.Create(OpCodes.Ldtoken, token));
         filter.Replace(index, Instruction.Create(OpCodes.Call, read));
@@ -970,7 +968,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 RefuseANameWhichIsNotWritten(methodRef, currentIndex, filter);
                 RefuseTheCompilersOwnType(methodRef.DeclaringType, methodRef.FullName);
                 RefuseTheCompilersOwnMember(methodRef, targetDef);
-                var importedMethod = Source.Module.ImportReference(methodRef).ParseGenericTokens(Source, Source.Module);
+                var importedMethod = ModuleLock.Import(Source.Module, methodRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
                 break;
             // The parameter of the template is matched to the parameter of the same position rather than to the one of
@@ -986,7 +984,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // It may also hold a declaring type which stands for the type of another assembly, which is replaced below.
             case FieldReference fieldRef:
                 RefuseTheCompilersOwnType(fieldRef.DeclaringType, fieldRef.FullName);
-                var importedField = Source.Module.ImportReference(fieldRef).ParseGenericTokens(Source, Source.Module);
+                var importedField = ModuleLock.Import(Source.Module, fieldRef).ParseGenericTokens(Source, Source.Module);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedField));
                 break;
             // We need to find the variable with the same index in source method definition, and replace the operand with it.

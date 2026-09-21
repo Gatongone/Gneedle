@@ -26,7 +26,7 @@ public sealed class AssemblyInject : Microsoft.Build.Utilities.Task
     /// The extensions which the symbols of an assembly lie beside it under: the program database, which is the format
     /// the weaving reads and writes, and the Mono database, which it only takes away.
     /// </summary>
-    private static readonly string[] SymbolExtensions = {".pdb", ".mdb"};
+    private static readonly string[] SymbolExtensions = [".pdb", ".mdb"];
 
     /// <summary>
     /// The extension which the program database of an assembly lies beside it under.

@@ -13,7 +13,7 @@ internal static class GenericTokens
     /// against and the weaving reads as an ordinary type of this library instead of as a generic parameter, which is a
     /// body that is written and does not stand for what it says.
     /// </summary>
-    internal const int HighestIndex = 20;
+    internal const int HIGHEST_INDEX = 20;
 }
 
 /// <summary>

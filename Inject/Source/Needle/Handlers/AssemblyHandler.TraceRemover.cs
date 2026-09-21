@@ -68,11 +68,17 @@ partial class AssemblyHandler
             changed |= attributes.Count > 0;
         }
 
-        var weaver = module.AssemblyReferences.FirstOrDefault(reference => reference.Name == typeof(IAssemblyInjector).Assembly.GetName().Name);
-        if (weaver != null && !NamesTheAssembly(module, weaver))
+        // The reading which tells whether the assembly still names the weaver and the writing which takes the reference
+        // out are one step, which is what the lock of the module holds together, as it does for the reference which is
+        // appended.
+        lock (ModuleLock.Of(module))
         {
-            module.AssemblyReferences.Remove(weaver);
-            changed = true;
+            var weaver = module.AssemblyReferences.FirstOrDefault(reference => reference.Name == typeof(IAssemblyInjector).Assembly.GetName().Name);
+            if (weaver != null && !NamesTheAssembly(module, weaver))
+            {
+                module.AssemblyReferences.Remove(weaver);
+                changed = true;
+            }
         }
 
         return changed;
@@ -158,8 +164,12 @@ partial class AssemblyHandler
     /// <param name="type">The type which is removed.</param>
     private static void Remove(ModuleDefinition module, TypeDefinition type)
     {
-        if (type.DeclaringType != null) type.DeclaringType.NestedTypes.Remove(type);
-        else module.Types.Remove(type);
+        // What the type is taken out of is a collection of the module, which is written under the lock of it.
+        lock (ModuleLock.Of(module))
+        {
+            if (type.DeclaringType != null) type.DeclaringType.NestedTypes.Remove(type);
+            else module.Types.Remove(type);
+        }
     }
 
     /// <summary>
@@ -205,8 +215,8 @@ partial class AssemblyHandler
     /// <param name="method">The method which was read.</param>
     private static bool NamesTheMethod(ModuleDefinition module, MethodDefinition method)
         => AnyReference(module, method.DeclaringType, reference => reference is MethodReference named
-                                                                && named.Name == method.Name
-                                                                && named.DeclaringType.FullName == method.DeclaringType.FullName);
+            && named.Name == method.Name
+            && named.DeclaringType.FullName == method.DeclaringType.FullName);
 
     /// <summary>
     /// Whether anything which the module holds names a type of <paramref name="assembly"/>, which is what an image
@@ -216,8 +226,8 @@ partial class AssemblyHandler
     /// <param name="assembly">The reference which the module may not need any more.</param>
     private static bool NamesTheAssembly(ModuleDefinition module, AssemblyNameReference assembly)
         => AnyReference(module, null, reference => reference is TypeReference named
-                                                && named.Scope is AssemblyNameReference scope
-                                                && scope.Name == assembly.Name);
+            && named.Scope is AssemblyNameReference scope
+            && scope.Name == assembly.Name);
 
     /// <summary>
     /// Whether any reference which the metadata of the module holds matches, apart from the ones which
@@ -282,13 +292,12 @@ partial class AssemblyHandler
             {
                 // A generic instance is a specification which holds its arguments beside the type it is made of, so it
                 // is asked about before the specifications, which hold the element type alone.
-                GenericInstanceType instance    => instance.GenericArguments.Any(Matches) || Matches(instance.ElementType),
-                TypeSpecification specification => Matches(specification.ElementType),
-                MethodReference method          => Matches(method.DeclaringType) || Matches(method.ReturnType)
-                                                                                || method.Parameters.Any(parameter => Matches(parameter.ParameterType)),
-                FieldReference field            => Matches(field.DeclaringType) || Matches(field.FieldType),
-                TypeReference { DeclaringType: not null } type => Matches(type.DeclaringType),
-                _                               => false
+                GenericInstanceType instance                 => instance.GenericArguments.Any(Matches) || Matches(instance.ElementType),
+                TypeSpecification specification              => Matches(specification.ElementType),
+                MethodReference method                       => Matches(method.DeclaringType) || Matches(method.ReturnType) || method.Parameters.Any(parameter => Matches(parameter.ParameterType)),
+                FieldReference field                         => Matches(field.DeclaringType) || Matches(field.FieldType),
+                TypeReference {DeclaringType: not null} type => Matches(type.DeclaringType),
+                _                                            => false
             };
         }
     }
@@ -307,5 +316,4 @@ partial class AssemblyHandler
 
         return false;
     }
-
 }
