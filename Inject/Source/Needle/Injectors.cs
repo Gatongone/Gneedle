@@ -10,11 +10,12 @@ namespace Gneedle.Inject;
 /// what the runtime hands back is no order of the source at all. An injector which has to be applied before another -
 /// which is the case of two which both write the body of a member, one of which proceeds into what the other wrote -
 /// declares a priority rather than relying on where it stands.<para/>
-/// This is not an interface which every injector is of, because a member of an interface which hands a body over is not
-/// supported by every framework the weaver is built for: what every injector is of is the interface of the kind it
-/// injects into, and an injector which wants an order implements this beside that one.
+/// Every injector is of this, and an injector which declares no priority of its own is one which is applied as though
+/// its priority were nothing: the member cannot be handed a body by the interface, because a default member of an
+/// interface is not supported by every framework the weaver is built for - net472 answers one with CS8701 - so each
+/// injector which declares none says so itself.
 /// </summary>
-public interface IOrderedInjector
+public interface IInjector
 {
     /// <summary>
     /// The order in which this injector is applied among the injectors of the member which carries it: an injector of a
@@ -30,7 +31,7 @@ public interface IOrderedInjector
 /// <summary>
 /// Injects assemblies into a project using the provided assembly handler.
 /// </summary>
-public interface IAssemblyInjector
+public interface IAssemblyInjector : IInjector
 {
     /// <summary>
     /// Injects the specified assembly into the project using the provided assembly handler.
@@ -43,7 +44,7 @@ public interface IAssemblyInjector
 /// <summary>
 /// Injects types into an assembly using the provided type handler.
 /// </summary>
-public interface ITypeInjector
+public interface ITypeInjector : IInjector
 {
     /// <summary>
     /// Injects the specified type into the assembly using the provided type handler.
@@ -56,7 +57,7 @@ public interface ITypeInjector
 /// <summary>
 /// Injects classes into a type using the provided class handler.
 /// </summary>
-public interface IClassInjector
+public interface IClassInjector : IInjector
 {
     /// <summary>
     /// Injects the specified class into the type using the provided class handler.
@@ -69,7 +70,7 @@ public interface IClassInjector
 /// <summary>
 /// Injects structs into a type using the provided struct handler.
 /// </summary>
-public interface IStructInjector
+public interface IStructInjector : IInjector
 {
     /// <summary>
     /// Injects the specified struct into the type using the provided struct handler.
@@ -82,7 +83,7 @@ public interface IStructInjector
 /// <summary>
 /// Injects enums into a type using the provided enum handler.
 /// </summary>
-public interface IEnumInjector
+public interface IEnumInjector : IInjector
 {
     /// <summary>
     /// Injects the specified enum into the type using the provided enum handler.
@@ -95,7 +96,7 @@ public interface IEnumInjector
 /// <summary>
 /// Injects methods into a type using the provided method handler.
 /// </summary>
-public interface IMethodInjector
+public interface IMethodInjector : IInjector
 {
     /// <summary>
     /// Injects the specified method into the type using the provided method handler.
@@ -108,7 +109,7 @@ public interface IMethodInjector
 /// <summary>
 /// Injects properties into a type using the provided property handler.
 /// </summary>
-public interface IPropertyInjector
+public interface IPropertyInjector : IInjector
 {
     /// <summary>
     /// Injects the specified property into the type using the provided property handler.
@@ -121,7 +122,7 @@ public interface IPropertyInjector
 /// <summary>
 /// Injects fields into a type using the provided field handler.
 /// </summary>
-public interface IFieldInjector
+public interface IFieldInjector : IInjector
 {
     /// <summary>
     /// Injects the specified field into the type using the provided field handler.

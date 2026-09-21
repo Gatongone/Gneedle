@@ -468,7 +468,7 @@ public static class Injections
         /// <param name="injectors">The injectors which the member carries.</param>
         /// <returns>The same injectors, in the order in which they are applied.</returns>
         private static Attribute[] InTheOrderTheyAreApplied(IEnumerable<Attribute> injectors)
-            => injectors.OrderByDescending(injector => injector is IOrderedInjector ordered ? ordered.Priority : 0)
+            => injectors.OrderByDescending(injector => ((IInjector) injector).Priority)
                         .ThenBy(injector => injector.GetType().FullName, StringComparer.Ordinal)
                         .ToArray();
 
