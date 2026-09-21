@@ -7,7 +7,9 @@ namespace Gneedle.Inject;
 /// <param name="symbol">Assembly symbol file type.</param>
 /// <param name="searchDirectory">Directory which the assemblies the image refers to lie in, or null when the caller knows
 /// of none.</param>
-internal sealed class StreamAssembly(IAssemblyCache cache, AssemblySymbol symbol = AssemblySymbol.None, string? searchDirectory = null) : Assembly(AssemblyDefinition.ReadAssembly(cache.Stream, GetReaderSymbolProvider(symbol, searchDirectory)))
+/// <param name="symbols">Bytes of the portable program database which describes the image, or null for the symbols which
+/// lie beside a file, whose format <paramref name="symbol"/> names.</param>
+internal sealed class StreamAssembly(IAssemblyCache cache, AssemblySymbol symbol = AssemblySymbol.None, string? searchDirectory = null, byte[]? symbols = null) : Assembly(AssemblyDefinition.ReadAssembly(cache.Stream, GetReaderSymbolProvider(symbol, searchDirectory, symbols)))
 {
     /// <inheritdoc/>
     public override System.Reflection.Assembly Load()
@@ -46,18 +48,23 @@ internal sealed class StreamAssembly(IAssemblyCache cache, AssemblySymbol symbol
     /// <param name="symbol">Assembly symbol.</param>
     /// <param name="searchDirectory">Directory which the assemblies the image refers to lie in, or null when the caller
     /// knows of none.</param>
+    /// <param name="symbols">Bytes of the symbols, which are read out of this memory rather than from beside a file, or
+    /// null when they lie beside one.</param>
     /// <returns>ReaderParameters with target symbol reader provider.</returns>
-    private static ReaderParameters GetReaderSymbolProvider(AssemblySymbol symbol, string? searchDirectory)
+    private static ReaderParameters GetReaderSymbolProvider(AssemblySymbol symbol, string? searchDirectory, byte[]? symbols = null)
     {
-        var parameters = symbol switch
-        {
-            AssemblySymbol.Pdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = PdbSymbolReaderProvider},
-            AssemblySymbol.Mdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = MdbSymbolReaderProvider},
+        var parameters = symbols != null
+            ? new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = new PdbInBytes(symbols)}
+            : symbol switch
+              {
+                  AssemblySymbol.Pdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = PdbSymbolReaderProvider},
+                  AssemblySymbol.Mdb => new ReaderParameters(ReadingMode.Deferred) {SymbolReaderProvider = MdbSymbolReaderProvider},
 
-            // No symbol was asked for, so none is read. The default symbol reader provider throws when the assembly has
-            // no symbol besides it, which an assembly which was just produced, or which was built without symbols, has not.
-            _ => new ReaderParameters(ReadingMode.Deferred) {ReadSymbols = false}
-        };
+                  // No symbol was asked for, so none is read. The default symbol reader provider throws when the assembly
+                  // has no symbol besides it, which an assembly which was just produced, or which was built without
+                  // symbols, has not.
+                  _ => new ReaderParameters(ReadingMode.Deferred) {ReadSymbols = false}
+              };
 
         // The resolver holds the assemblies which are read into the module, so that one which only exists in memory, or
         // which was read from a stream, is resolvable, and it is given the folder which the assemblies the image refers

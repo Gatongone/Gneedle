@@ -310,19 +310,27 @@ public class AssemblyInjectTests
     }
 
     [Test]
-    public void The_Symbols_Of_The_Assembly_Which_Was_Replaced_Are_Not_Left_Beside_It()
+    public void The_Symbols_Of_The_Assembly_Which_Was_Woven_Describe_It()
     {
-        // What is written carries no debug directory, which is what a debugger reads to find the symbols of an
-        // assembly. The symbols of the assembly which was replaced therefore describe an assembly which is no longer
-        // there, and they are taken away with it rather than left to be paired with the image by the name of the file.
+        // What is written carries the instructions of the template where the stub of it stood, so the symbols which were
+        // compiled for the assembly which was read describe places which are no longer there. They are read with the
+        // image and written back beside it, which is what leaves a debugger the symbols of the assembly it debugs.
         var assembly = CopyOfTheTestAssembly();
         var symbols = Path.ChangeExtension(assembly, ".pdb");
         File.Copy(Path.ChangeExtension(System.Reflection.Assembly.GetExecutingAssembly().Location, ".pdb"), symbols);
+        var compiled = File.ReadAllBytes(symbols);
 
         var (result, engine) = Inject(assembly, Project());
 
         Assert.That(result, Is.True, string.Join(Environment.NewLine, engine.Errors));
-        Assert.That(File.Exists(symbols), Is.False, "the symbols of the assembly which was replaced were left beside it.");
+        Assert.That(File.Exists(symbols), Is.True, "the symbols of the assembly which was woven were taken away.");
+        Assert.That(File.ReadAllBytes(symbols), Is.Not.EqualTo(compiled),
+                    "the symbols which were compiled for the assembly which was read were left beside the one which was written.");
+
+        // The two describe one image: a reader which is handed both reads the one which the other describes, and Cecil
+        // refuses a database which was written for another image.
+        using var read = AssemblyDefinition.ReadAssembly(assembly, new ReaderParameters {ReadSymbols = true});
+        Assert.That(read.MainModule.HasSymbols, Is.True, "the image which was woven was read without the symbols beside it.");
     }
 
     #endregion

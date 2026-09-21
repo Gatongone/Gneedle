@@ -47,10 +47,16 @@ internal static class SPCL
     /// <returns>The reference of the standard.</returns>
     public static AssemblyNameReference NetstandardOf(ModuleDefinition module)
     {
-        var reference = module.AssemblyReferences.FirstOrDefault(candidate => candidate.Name == NETSTANDARD) ?? s_Netstandard;
-        module.AssemblyReferences.TryAdd(reference);
+        // This is reached from the importer of Cecil, in the middle of the import of a type, and what it writes is the
+        // tables of the module that import writes: it holds the lock of that module, which the import which reached it
+        // holds as well.
+        lock (ModuleLock.Of(module))
+        {
+            var reference = module.AssemblyReferences.FirstOrDefault(candidate => candidate.Name == NETSTANDARD) ?? s_Netstandard;
+            module.AssemblyReferences.TryAdd(reference);
 
-        return reference;
+            return reference;
+        }
     }
 }
 

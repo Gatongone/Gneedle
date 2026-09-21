@@ -36,6 +36,29 @@ public class ConcurrentTests
         }
     }
 
+    [Test]
+    public void A_Type_Which_Several_Threads_Import_At_Once_Is_Imported_Once()
+    {
+        // A lookup which misses the cache of a handler is the one which imports, and an import appends to the tables of
+        // the module the handler holds - which are not collections more than one thread can stand at. The threads below
+        // stand at one handler, as the requests of the runtime for an assembly do while a weaving runs, and each of them
+        // asks for the same type: what one of them imports is what the rest are given.
+        const string assemblyName = "ConcurrentImports";
+        var (handler, _, module) = TestFixtures.NewHost(assemblyName);
+
+        var asked = new Type[Count * 8];
+        for (var index = 0; index < asked.Length; index++) asked[index] = typeof(List<int>);
+
+        var answered = new CecilType[asked.Length];
+        Parallel.For(0, asked.Length, index => answered[index] = handler.GetCecilType(asked[index]));
+
+        Assert.That(answered.Distinct().Count(), Is.EqualTo(1),
+            "the threads which asked for one type were answered with more than one, so each of them imported it.");
+        Assert.That(module.AssemblyReferences.Select(reference => reference.Name).Distinct().Count(),
+            Is.EqualTo(module.AssemblyReferences.Count),
+            "a reference was appended more than once, so the module names an assembly twice.");
+    }
+
     private static byte[] Weave(byte[] image)
     {
         var (_, woven) = Injections.Apply(AssemblyLoader.LoadFromBytes(image), image);
