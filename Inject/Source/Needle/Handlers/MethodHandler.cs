@@ -653,6 +653,15 @@ internal sealed partial class MethodHandler : IMethodHandler
             captured = member.GetValue(captured);
         }
 
+        // A type is not a value which one instruction holds, so it is written as the pair of the token of it and the
+        // call which reads the type that token names back: the pair stands where the read of the capture stood, and the
+        // reads of the field and of the instance it belongs to are dropped with it.
+        if (captured is Type capturedType)
+        {
+            WriteACapturedType(capturedType, fields[fields.Count - 1], filter, index, fields.Count);
+            return true;
+        }
+
         if (!TryCreateLiteral(fields[fields.Count - 1].FieldType, captured, out var literal))
         {
             throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, fields[fields.Count - 1].Name, fields[fields.Count - 1].FieldType.FullName, Source.FullName));
@@ -665,6 +674,40 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Write the type which a template captured where the read of it stood, which is the token of the type and the call
+    /// which reads the type that token names back.<para/>
+    /// A type is a value of the run rather than of the assembly being woven, so it is written as the name of it which
+    /// the runtime resolves, which is what an argument of an attribute is read through as well.
+    /// </summary>
+    /// <param name="captured">The type which the template captured.</param>
+    /// <param name="field">The field of the capture which held it, which the report names.</param>
+    /// <param name="filter">The instruction filter to replace the instructions.</param>
+    /// <param name="index">Index of the instruction which is the load of the instance the capture belongs to.</param>
+    /// <param name="reads">Number of the reads which follow it, which are the reads of the capture.</param>
+    /// <exception cref="ArgumentException">Thrown when the type is one which the weaver itself declares.</exception>
+    private void WriteACapturedType(Type captured, FieldReference field, InstructionFilter filter, int index, int reads)
+    {
+        // The assembly being woven must not name the weaver: the attributes which the injectors are read from, and the
+        // reference to the weaver which they name, are taken out of it once they have been applied, and the token of a
+        // type of the weaver would name it again. The type is refused where it is read rather than written, which is
+        // where the injector which named it can be found.
+        if (captured.Assembly == typeof(Injections).Assembly)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_NAMES_THE_WEAVER, field.Name, captured.FullName, Source.FullName));
+        }
+
+        var token = DeclaringTypeHandler.AssemblyHandler.GetCecilType(captured).Reference;
+        var read  = Source.Module.ImportReference(typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle))!);
+
+        filter.Insert(index, Instruction.Create(OpCodes.Ldtoken, token));
+        filter.Replace(index, Instruction.Create(OpCodes.Call, read));
+        for (var at = index + 1; at <= index + reads; at++)
+        {
+            filter.Skip(at);
+        }
     }
 
     /// <summary>

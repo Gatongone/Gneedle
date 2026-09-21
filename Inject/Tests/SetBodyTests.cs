@@ -307,6 +307,41 @@ public class SetBodyTests
     }
 
     [Test]
+    public void SetBody_Of_A_Template_Which_Captured_A_Type_Writes_That_Type_Into_The_Member()
+    {
+        // A type is a value of the run rather than of the assembly being woven, so what the template captured is written
+        // as the token of the type and the call which reads the type of that token back, which is the pair the woven
+        // member hands back.
+        // The assembly is one of this test's own: a test which loads its host gives it a name no other test loaded, so
+        // that two assemblies of one name are not asked of one run.
+        var handler = (AssemblyHandler) Assembly.Create("CapturedTypeAssembly").Handler;
+        var host = AddAHost(handler);
+        var method = host.AddMethod("TypeOf", typeof(Type).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var captured = typeof(BodyTemplates);
+
+        method.SetBody(() => captured);
+
+        var woven = handler.Assembly.Load().GetType($"{Ns}.Host")!.GetMethod("TypeOf")!;
+
+        Assert.That(woven.Invoke(null, null), Is.EqualTo(captured), "the type which the template captured was not handed back.");
+    }
+
+    [Test]
+    public void SetBody_Of_A_Template_Which_Captured_A_Type_Of_The_Weaver_Is_Refused()
+    {
+        // The assembly being woven must not name the weaver: the attributes which the injectors are read from, and the
+        // reference to the weaver which they name, are taken out of it once they have been applied, and the token of a
+        // type of the weaver would name it again.
+        var (_, host) = NewCalc();
+        var method = host.AddMethod("TypeOf", typeof(Type).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var captured = typeof(Gneedle.Inject.This);
+
+        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(() => captured));
+
+        Assert.That(thrown!.Message, Does.Contain(captured.FullName!), "the report does not name the type which was captured.");
+    }
+
+    [Test]
     public void SetBody_Produces_Structurally_Valid_Assembly()
     {
         var assembly = Assembly.Create("SetBodyValidAssembly");
