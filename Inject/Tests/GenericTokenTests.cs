@@ -49,9 +49,9 @@ public class GenericTokenTests
         public static T_1 ReturnSecondTypeGeneric() => null!;
         public static T_10 ReturnTenthTypeGeneric() => null!;
         public static T_11 ReturnEleventhTypeGeneric() => null!;
-        public static M0 ReturnFirstMethodGeneric() => null!;
-        public static M10 ReturnTenthMethodGeneric() => null!;
-        public static M1 ReturnSecondMethodGeneric() => null!;
+        public static M_0 ReturnFirstMethodGeneric() => null!;
+        public static M_10 ReturnTenthMethodGeneric() => null!;
+        public static M_1 ReturnSecondMethodGeneric() => null!;
 
         // Local variable templates. The local is kept alive with GC.KeepAlive so that the
         // compiler cannot fold it away and the stloc/ldloc instructions survive.
@@ -71,7 +71,7 @@ public class GenericTokenTests
 
         public static bool LocalFirstMethodGeneric()
         {
-            M0 local = null!;
+            M_0 local = null!;
             GC.KeepAlive(local);
             return true;
         }
@@ -233,7 +233,7 @@ public class GenericTokenTests
     #region M_X: the generic parameter of the method itself
 
     [Test]
-    public void ParseReturnType_Maps_M0_To_First_Method_Generic_Parameter()
+    public void ParseReturnType_Maps_M_0_To_First_Method_Generic_Parameter()
     {
         var host = NewHost();
         var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], nameof(Templates.ReturnFirstMethodGeneric));
@@ -243,7 +243,7 @@ public class GenericTokenTests
     }
 
     [Test]
-    public void ParseReturnType_Maps_M1_To_Second_Method_Generic_Parameter()
+    public void ParseReturnType_Maps_M_1_To_Second_Method_Generic_Parameter()
     {
         var host = NewHost();
         var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [new GenericParameterType("V"), new GenericParameterType("U")],
@@ -254,11 +254,11 @@ public class GenericTokenTests
     }
 
     [Test]
-    public void ParseReturnType_With_M0_Token_But_NonGeneric_Method_Throws()
+    public void ParseReturnType_With_M_0_Token_But_NonGeneric_Method_Throws()
     {
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
-        var token = host.Source.Module.ImportReference(typeof(M0));
+        var token = host.Source.Module.ImportReference(typeof(M_0));
 
         var thrown = Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
         Assert.That(thrown.Message, Does.Contain("M_0"), "the message does not name the token which was read.");
@@ -266,7 +266,7 @@ public class GenericTokenTests
     }
 
     [Test]
-    public void ParseReturnType_Maps_M10_To_Tenth_Method_Generic_Parameter()
+    public void ParseReturnType_Maps_M_10_To_Tenth_Method_Generic_Parameter()
     {
         // The method pattern is an expression of its own rather than the type one, so the tens are guarded here as well.
         var host = NewHost();
@@ -278,12 +278,12 @@ public class GenericTokenTests
     }
 
     [Test]
-    public void ParseReturnType_With_M10_Token_But_Single_Method_Generic_Parameter_Throws()
+    public void ParseReturnType_With_M_10_Token_But_Single_Method_Generic_Parameter_Throws()
     {
         // An unparsed token would be imported as an ordinary type and set as the return type without any complaint.
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], [], MethodFlags.Public);
-        var token = host.Source.Module.ImportReference(typeof(M10));
+        var token = host.Source.Module.ImportReference(typeof(M_10));
 
         Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
     }
@@ -340,7 +340,7 @@ public class GenericTokenTests
     }
 
     [Test]
-    public void CopyVariables_Maps_M0_Local_To_First_Method_Generic_Parameter()
+    public void CopyVariables_Maps_M_0_Local_To_First_Method_Generic_Parameter()
     {
         var host = NewHost();
         var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [new GenericParameterType("U")], nameof(Templates.LocalFirstMethodGeneric));
@@ -669,7 +669,7 @@ public class GenericTokenTests
     {
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [new GenericParameterType("U")],
-            [new Parameter(typeof(M0).ToGneedleType())], MethodFlags.Public);
+            [new Parameter(typeof(M_0).ToGneedleType())], MethodFlags.Public);
 
         Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(method.Source.GenericParameters[0]));
     }

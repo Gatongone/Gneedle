@@ -124,104 +124,104 @@ public sealed class T_20 : Instance;
 /// <summary>
 /// The generic parameter type of the method that the index of 0.
 /// </summary>
-public sealed class M0 : Instance;
+public sealed class M_0 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 1.
 /// </summary>
-public sealed class M1 : Instance;
+public sealed class M_1 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 2.
 /// </summary>
-public sealed class M2 : Instance;
+public sealed class M_2 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 3.
 /// </summary>
-public sealed class M3 : Instance;
+public sealed class M_3 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 4.
 /// </summary>
-public sealed class M4 : Instance;
+public sealed class M_4 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 5.
 /// </summary>
-public sealed class M5 : Instance;
+public sealed class M_5 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 6.
 /// </summary>
-public sealed class M6 : Instance;
+public sealed class M_6 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 7.
 /// </summary>
-public sealed class M7 : Instance;
+public sealed class M_7 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 8.
 /// </summary>
-public sealed class M8 : Instance;
+public sealed class M_8 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 9.
 /// </summary>
-public sealed class M9 : Instance;
+public sealed class M_9 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 10.
 /// </summary>
-public sealed class M10 : Instance;
+public sealed class M_10 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 11.
 /// </summary>
-public sealed class M11 : Instance;
+public sealed class M_11 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 12.
 /// </summary>
-public sealed class M12 : Instance;
+public sealed class M_12 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 13.
 /// </summary>
-public sealed class M13 : Instance;
+public sealed class M_13 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 14.
 /// </summary>
-public sealed class M14 : Instance;
+public sealed class M_14 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 15.
 /// </summary>
-public sealed class M15 : Instance;
+public sealed class M_15 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 16.
 /// </summary>
-public sealed class M16 : Instance;
+public sealed class M_16 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 17.
 /// </summary>
-public sealed class M17 : Instance;
+public sealed class M_17 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 18.
 /// </summary>
-public sealed class M18 : Instance;
+public sealed class M_18 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 19.
 /// </summary>
-public sealed class M19 : Instance;
+public sealed class M_19 : Instance;
 
 /// <summary>
 /// The generic parameter type of the method that the index of 20.
 /// </summary>
-public sealed class M20 : Instance;
+public sealed class M_20 : Instance;

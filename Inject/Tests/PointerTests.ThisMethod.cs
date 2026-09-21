@@ -223,7 +223,7 @@ public partial class PointerTests
         var host = AddAHost(handler);
         host.AddMethod(
             "Touch",
-            typeof(M0).ToGneedleType(),
+            typeof(M_0).ToGneedleType(),
             [new GenericParameterType("U")],
             [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
@@ -371,9 +371,9 @@ public partial class PointerTests
         var host = NewHostWithAMemberNamedByTheLaterParameter();
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(M1).ToGneedleType(),
+            typeof(M_1).ToGneedleType(),
             [new GenericParameterType("TKey"), new GenericParameterType("TRes")],
-            [new Parameter(typeof(M0).ToGneedleType()), new Parameter(typeof(M1).ToGneedleType())],
+            [new Parameter(typeof(M_0).ToGneedleType()), new Parameter(typeof(M_1).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichTheNameOfAParameterNames)));
 
@@ -1145,9 +1145,9 @@ public partial class PointerTests
         var host = NewHostWithIdentity("MethodInjectionIdentityByTokenAssembly");
         var call = host.AddMethod(
             "Call",
-            typeof(M0).ToGneedleType(),
+            typeof(M_0).ToGneedleType(),
             [new GenericParameterType("U")],
-            [new Parameter(typeof(M0).ToGneedleType())],
+            [new Parameter(typeof(M_0).ToGneedleType())],
             MethodFlags.Public);
         call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfTheMethod)));
 
