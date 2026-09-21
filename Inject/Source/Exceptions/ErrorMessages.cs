@@ -299,7 +299,7 @@ internal static class ErrorMessages
     /// being woven, where the value would have to be held. The placeholders are the name of the field which holds it,
     /// the name of the type, and the member.
     /// </summary>
-    internal const string TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN = "The template captures a variable whose value cannot be written into the member being woven, where a string, a number, a character, a boolean, an enumeration, a null of a reference type can. Field: {0}, Type: {1}, Method: {2}.";
+    internal const string TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN = "The template captures a variable whose value cannot be written into the member being woven, where a type, a string, a number, a character, a boolean, an enumeration, a null of a reference type can. Field: {0}, Type: {1}, Method: {2}.";
 
     /// <summary>
     /// The template captured a type which the weaver itself declares, which the assembly being woven must not name: the

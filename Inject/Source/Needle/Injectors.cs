@@ -3,17 +3,16 @@ using System.Reflection;
 namespace Gneedle.Inject;
 
 /// <summary>
-/// What an injector may also be, whichever member it is put on: the order in which the injectors of one member are
-/// applied is read off the priorities of those which declare one.<para/>
+/// The order in which the injectors which an assembly or a type or a member of one carries are applied, which every
+/// injector of every kind tells.<para/>
 /// The order of a member's injectors is not the order in which they are written where the member is declared: the
 /// specification of the language says that the attribute specifications of a member are equivalent in every order, so
 /// what the runtime hands back is no order of the source at all. An injector which has to be applied before another -
 /// which is the case of two which both write the body of a member, one of which proceeds into what the other wrote -
 /// declares a priority rather than relying on where it stands.<para/>
-/// Every injector is of this, and an injector which declares no priority of its own is one which is applied as though
-/// its priority were nothing: the member cannot be handed a body by the interface, because a default member of an
-/// interface is not supported by every framework the weaver is built for - net472 answers one with CS8701 - so each
-/// injector which declares none says so itself.
+/// Every injector is of this one, and every injector declares the priority where it is declared rather than taking one
+/// from here: an interface which handed a body over would be a default member of an interface, which is not supported by
+/// every framework the weaver is built for, and net472 answers one with CS8701.
 /// </summary>
 public interface IInjector
 {
