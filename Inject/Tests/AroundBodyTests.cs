@@ -199,7 +199,7 @@ public class AroundBodyTests
     {
         var assembly = Assembly.Create(assemblyName);
         var module = assembly.Source.MainModule;
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
 
         var add = new MethodDefinition("Add", MethodAttributes.Public | (isStatic ? MethodAttributes.Static : 0), module.TypeSystem.Int32);
         add.Parameters.Add(new ParameterDefinition("left", ParameterAttributes.None, module.TypeSystem.Int32));
@@ -227,7 +227,7 @@ public class AroundBodyTests
     {
         var assembly = Assembly.Create(assemblyName);
         var module = assembly.Source.MainModule;
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
 
         var identity = new MethodDefinition("Identity", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
         var parameter = new GenericParameter("T", identity);
@@ -313,7 +313,7 @@ public class AroundBodyTests
         // The member which is wrapped holds a receiver ahead of its arguments, so every load of an argument of the
         // template is written one slot after the one which the template names, whichever form of the opcode carries it.
         var assembly = Assembly.Create("AroundBodyWideArgumentsAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var intType = typeof(int).ToGneedleType();
         host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
 
@@ -337,7 +337,7 @@ public class AroundBodyTests
         // is written with it: -1 rather than the exception leaving the woven member, and rather than 0, which is what a
         // region without a handler would hand back by reading nothing off the stack.
         var assembly = Assembly.Create("AroundBodyCatchAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
         run.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedInsideACatch)));
@@ -427,7 +427,7 @@ public class AroundBodyTests
         // The call is a statement rather than an expression, and the body which it proceeds into is the one which the
         // method already held: the throwing body which a method is added with, which the call reaches and runs.
         var assembly = Assembly.Create("AroundBodyOwnArgumentsVoidAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
         run.AroundBody(() => Proceed.Invoke());
@@ -576,7 +576,7 @@ public class AroundBodyTests
         // instance belongs to the run of the injector and not to the assembly being woven, so the value is written into
         // the member instead: the woven body reaches the same value, and holds no instance which it could not.
         var assembly = Assembly.Create("AroundBodyCapturedValueAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
         var captured = 41;
@@ -600,7 +600,7 @@ public class AroundBodyTests
         // variables of the method it is written in, so the closure holds the instance and what the template reads is a
         // member of it, which is read off the instance the delegate holds.
         var assembly = Assembly.Create("AroundBodyInstanceCaptureAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
 
@@ -621,7 +621,7 @@ public class AroundBodyTests
         // character, a boolean, an enumeration or a null of a reference type has a form for. A capture of any other
         // type is named rather than woven into a member which the runtime would refuse.
         var assembly = Assembly.Create("AroundBodyUnwritableCaptureAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
         var captured = new object();
 
@@ -641,7 +641,7 @@ public class AroundBodyTests
         // A template which is given as the method alone is given no instance, so what it reads off the instance it
         // belongs to is held by nothing, and there is no value of it to write into the member being woven.
         var assembly = Assembly.Create("AroundBodyInstanceFieldAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var intType = typeof(int).ToGneedleType();
         var one = host.AddMethod("One", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
         one.SetBody(DefaultMethodBody.WithDefaultReturn);
@@ -841,7 +841,7 @@ public class AroundBodyTests
     public void MethodDecorator_Around_Of_A_Method_It_Added_Proceeds_Into_The_Body_Which_Was_Added()
     {
         var assembly = Assembly.Create("AroundBodyDecoratorAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
 
         // The decorator describes the body of the method alone, of which one part is the body it holds. A body is woven
         // around through the handler, which is what holds one.

@@ -78,7 +78,7 @@ public class MethodTests
         // needs to be imported". The return type is void, whose definition is owned by the corlib, and the parameter is a
         // type of another assembly, so both of the shapes which are not importable as-is are covered here.
         var assembly = Assembly.Create("DeclaredTypeAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(new NongenericType(typeof(MethodTests)))], MethodFlags.Public);
 
         using var stream = new MemoryStream();
