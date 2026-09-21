@@ -89,14 +89,6 @@ public static class Injections
             | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
         /// <summary>
-        /// The interfaces which an attribute implements to be asked to inject into a type.<para/>
-        /// Every one of them is looked for, which the kinds are told apart by afterwards: looking for the first alone
-        /// leaves the attributes of the other three on a type, where they are passed over without a word because nothing
-        /// asked for them.
-        /// </summary>
-        private static readonly Type[] s_TypeInjectors = [typeof(ITypeInjector), typeof(IClassInjector), typeof(IStructInjector), typeof(IEnumInjector)];
-
-        /// <summary>
         /// Whether anything was reported of this run.<para/>
         /// A report is made of a member which could not be woven, and one which could not be woven leaves the assembly
         /// woven in part: the injectors which ran before it hold, and the ones which would have run after it do not.
@@ -442,11 +434,9 @@ public static class Injections
         {
             if (!HoldsInjector(assemblyHandler.Assembly.Source.CustomAttributes, InjectorInterfaces.AssemblyInjectorNames)) return false;
 
-            var injectors = InTheOrderTheyAreApplied(assembly.GetCustomAttributes(inherit: false)
-                                                             .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IAssemblyInjector)))
-                                                             .Cast<Attribute>())
-                            .Cast<IAssemblyInjector>()
-                            .ToArray();
+            var injectors = TheInjectorsWhich(assembly, static attribute => attribute is IAssemblyInjector)
+                           .Cast<IAssemblyInjector>()
+                           .ToArray();
             if (injectors.Length == 0) return false;
             foreach (var injector in injectors)
             {
@@ -457,15 +447,26 @@ public static class Injections
         }
 
         /// <summary>
-        /// The injectors of a member, in the order in which they are applied: by the priority which each of those which
-        /// declare one declares, the greatest first, and the rest of them by the name of the type of each.<para/>
+        /// The injectors which <paramref name="provider"/> carries, in the order in which they are applied: the
+        /// attributes of it which the predicate names.
+        /// </summary>
+        /// <param name="provider">The assembly or member whose attributes are read.</param>
+        /// <param name="isAnInjector">Whether an attribute is one of the kind which is asked for.</param>
+        /// <returns>The injectors which it carries, in the order in which they are applied.</returns>
+        private static Attribute[] TheInjectorsWhich(System.Reflection.ICustomAttributeProvider provider, Func<Attribute, bool> isAnInjector)
+            => InTheOrderTheyAreApplied(provider.GetCustomAttributes(inherit: false).OfType<Attribute>().Where(isAnInjector));
+
+        /// <summary>
+        /// The injectors which an assembly or a member carries, in the order in which they are applied: by the priority
+        /// which each of them declares, the greatest first, and the rest of them by the name of the type of each.<para/>
         /// The name of a type is what tells two injectors of one priority apart because nothing else does: the order in
         /// which the runtime hands the attributes of a member back is not the order in which they are written there,
         /// which the specification of the language says is no order of the source at all, so a weaving which is left to
         /// it is not the same weaving twice. Nothing of the order of two attributes of one type is read off the source
-        /// either, because the source holds none: the priority is what tells those two apart.
+        /// either, because the source holds none: a pair of them of one priority keeps the order which the runtime hands
+        /// them back in.
         /// </summary>
-        /// <param name="injectors">The injectors which the member carries.</param>
+        /// <param name="injectors">The injectors which it carries.</param>
         /// <returns>The same injectors, in the order in which they are applied.</returns>
         private static Attribute[] InTheOrderTheyAreApplied(IEnumerable<Attribute> injectors)
             =>
@@ -486,9 +487,7 @@ public static class Injections
             if (!HoldsInjector(assemblyHandler.GetCecilType(type).Definition.CustomAttributes, InjectorInterfaces.TypeInjectorNames)) return false;
 
             var dirty = false;
-            var typeAttributes = InTheOrderTheyAreApplied(type.GetCustomAttributes(inherit: false)
-                                                              .Where(static item => item is Attribute attr && s_TypeInjectors.Any(injector => injector.IsInstanceOfType(attr)))
-                                                              .Cast<Attribute>());
+            var typeAttributes = TheInjectorsWhich(type, static attribute => InjectorInterfaces.TypeInjectors.Any(injector => injector.IsInstanceOfType(attribute)));
 
             foreach (var typeAttribute in typeAttributes)
             {
@@ -570,11 +569,9 @@ public static class Injections
             // over in silence.
             if (methodHandler is MethodHandler {Source: { } methodDefinition} && !HoldsInjector(methodDefinition.CustomAttributes, InjectorInterfaces.MethodInjectorNames)) return false;
 
-            if (InTheOrderTheyAreApplied(methodInfo.GetCustomAttributes(inherit: false)
-                                                   .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IMethodInjector)))
-                                                   .Cast<Attribute>())
-                .Cast<IMethodInjector>()
-                .ToArray() is not {Length: > 0} injectors) return false;
+            if (TheInjectorsWhich(methodInfo, static attribute => attribute is IMethodInjector)
+                    .Cast<IMethodInjector>()
+                    .ToArray() is not {Length: > 0} injectors) return false;
 
             // The assembly is written back only when something was injected into it, so an injector which found nothing
             // to inject into is not counted as a change: the member it names was reported instead.
@@ -607,11 +604,9 @@ public static class Injections
             var fieldHandler = typeHandler.GetField(fieldInfo.Name);
             if (fieldHandler is FieldHandler {Source: { } fieldDefinition} && !HoldsInjector(fieldDefinition.CustomAttributes, InjectorInterfaces.FieldInjectorNames)) return false;
 
-            if (InTheOrderTheyAreApplied(fieldInfo.GetCustomAttributes(inherit: false)
-                                                  .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IFieldInjector)))
-                                                  .Cast<Attribute>())
-                .Cast<IFieldInjector>()
-                .ToArray() is not {Length: > 0} injectors) return false;
+            if (TheInjectorsWhich(fieldInfo, static attribute => attribute is IFieldInjector)
+                    .Cast<IFieldInjector>()
+                    .ToArray() is not {Length: > 0} injectors) return false;
 
             var injected = false;
             foreach (var injector in injectors)
@@ -642,11 +637,9 @@ public static class Injections
             var propertyHandler = typeHandler.GetProperty(propertyInfo.Name);
             if (propertyHandler is PropertyHandler {Source: { } propertyDefinition} && !HoldsInjector(propertyDefinition.CustomAttributes, InjectorInterfaces.PropertyInjectorNames)) return false;
 
-            if (InTheOrderTheyAreApplied(propertyInfo.GetCustomAttributes(inherit: false)
-                                                     .Where(static item => item is Attribute attr && attr.GetType().GetInterfaces().Contains(typeof(IPropertyInjector)))
-                                                     .Cast<Attribute>())
-                .Cast<IPropertyInjector>()
-                .ToArray() is not {Length: > 0} injectors) return false;
+            if (TheInjectorsWhich(propertyInfo, static attribute => attribute is IPropertyInjector)
+                    .Cast<IPropertyInjector>()
+                    .ToArray() is not {Length: > 0} injectors) return false;
 
             var injected = false;
             foreach (var injector in injectors)

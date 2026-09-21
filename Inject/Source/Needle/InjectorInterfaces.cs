@@ -25,13 +25,20 @@ internal static class InjectorInterfaces
     internal static readonly string[] AssemblyInjectorNames = [typeof(IAssemblyInjector).FullName!];
 
     /// <summary>
-    /// The interfaces which an attribute implements to be asked to inject into a type, named as the metadata names
-    /// them.<para/>
+    /// The interfaces which an attribute implements to be asked to inject into a type.<para/>
+    /// The same set is read as the names of the metadata, and by the runtime as the interfaces themselves, so it is held
+    /// once and named from here: a kind which is added to one of the two alone is a kind whose injectors are either
+    /// never materialised or never applied.
+    /// </summary>
+    internal static readonly Type[] TypeInjectors = [typeof(ITypeInjector), typeof(IClassInjector), typeof(IStructInjector), typeof(IEnumInjector)];
+
+    /// <summary>
+    /// The same, named as the metadata names them.<para/>
     /// Every one of them is looked for, which the kinds are told apart by afterwards: looking for the first alone leaves
     /// the attributes of the other three on a type, where they are passed over without a word because nothing asked for
     /// them.
     /// </summary>
-    internal static readonly string[] TypeInjectorNames = [typeof(ITypeInjector).FullName!, typeof(IClassInjector).FullName!, typeof(IStructInjector).FullName!, typeof(IEnumInjector).FullName!];
+    internal static readonly string[] TypeInjectorNames = [.. TypeInjectors.Select(type => type.FullName!)];
 
     /// <summary>
     /// The interface which an attribute implements to be asked to inject into a method, named as the metadata names it.
