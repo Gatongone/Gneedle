@@ -28,7 +28,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAdd(bool isVirtual, string assemblyName = "MethodInjectionAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var attrs = MethodAttributes.Public | MethodAttributes.HideBySig
                     | (isVirtual ? MethodAttributes.Virtual | MethodAttributes.NewSlot : 0);
@@ -48,7 +48,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithEcho(Type echoType)
     {
         var handler = (AssemblyHandler) Assembly.Create("MethodInjectionEchoAssembly").Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var t = host.Source.Module.ImportReference(host.AssemblyHandler.GetCecilType(echoType).Reference);
         var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, t) { DeclaringType = host.Source };
         echo.Parameters.Add(new ParameterDefinition("c", ParameterAttributes.None, t));
@@ -67,7 +67,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAnEchoAndASilence(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         AddAMember("Echo", module.TypeSystem.Int32);
         AddAMember("Silent", module.TypeSystem.Void);
@@ -93,7 +93,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAValueOfAnEnumeration(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var kind = new MethodDefinition("Kind", MethodAttributes.Public | MethodAttributes.HideBySig, module.ImportReference(typeof(StringComparison)))
         {
@@ -176,7 +176,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAnArgumentTakenByAddress(string assemblyName = "MethodInjectionByRefAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var tryHalf = new MethodDefinition("TryHalf", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Boolean)
         {
@@ -211,7 +211,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMemberWhichDeclaresAParameterOfItsOwn(string assemblyName = "MethodInjectionUnnamedParameterAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.AddMethod(
             "Touch",
             typeof(M_0).ToGneedleType(),
@@ -232,7 +232,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMemberWhoseParameterStandsNowhere(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.AddMethod(
             "Touch",
             typeof(int).ToGneedleType(),
@@ -333,7 +333,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMemberNamedByTheLaterParameter(string assemblyName = "MethodInjectionNamedParameterAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var identity = new MethodDefinition("IdentityOfTheLater", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -488,7 +488,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithWiden(string assemblyName = "MethodInjectionConversionAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var widen = new MethodDefinition("Widen", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, module.TypeSystem.Int64)
         {
@@ -859,7 +859,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithTwoMembersOfOneName(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.AddMethod(
             "Filter",
             typeof(int).ToGneedleType(),
@@ -885,7 +885,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAMake(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var make = new MethodDefinition("Make", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -912,7 +912,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAListReturn(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var make = new MethodDefinition("Make", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -941,7 +941,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithAnArrayEcho(string assemblyName)
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var echo = new MethodDefinition("Echo", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -966,7 +966,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithIdentity(string assemblyName = "MethodInjectionIdentityAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var module = host.Source.Module;
         var identity = new MethodDefinition("Identity", MethodAttributes.Public | MethodAttributes.HideBySig, module.TypeSystem.Void)
         {
@@ -997,6 +997,29 @@ public partial class PointerTests
         var host = NewHostWithIdentity(assemblyName);
         host.Source.Methods.First(method => method.Name == "Identity").GenericParameters[0].Attributes = kind;
         return host;
+    }
+
+    /// <summary>
+    /// Weave the identity of a member whose constraint names the given type, hand it the given value, and run it: the
+    /// value which comes back is the value which went in, which is what tells that the member was called at all rather
+    /// than refused for the constraint it declares.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which each test gives one of its own.</param>
+    /// <param name="constraint">The type which the constraint of the member names.</param>
+    /// <param name="value">The type of the value which the member is handed and hands back.</param>
+    /// <param name="template">Name of the template which is woven.</param>
+    /// <param name="argument">The value itself.</param>
+    /// <param name="message">What is reported when the member was not called.</param>
+    private static void TheIdentityOfAConstrainedMemberIsCalled(string assemblyName, Type constraint, Type value, string template,
+                                                                object argument, string message)
+    {
+        var host = NewHostWhoseIdentityIsConstrainedTo(assemblyName, constraint);
+        var method = host.AddMethod("Run", value.ToGneedleType(), [], [new Parameter(value.ToGneedleType())], MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), template));
+
+        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument), message);
     }
 
     /// <summary>
@@ -1283,20 +1306,9 @@ public partial class PointerTests
     {
         // The type which the delegate names is not the type the constraint names, and it is made of it through the base
         // types it is declared with, which is what the walk reaches the constraint through.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABaseTypeAssembly", typeof(HelperClass));
-        var method = host.AddMethod(
-            "Run",
-            typeof(DerivedOfAHelperClass).ToGneedleType(),
-            [],
-            [new Parameter(typeof(DerivedOfAHelperClass).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfADerived)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new DerivedOfAHelperClass();
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a base type of the argument was not called.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToABaseTypeAssembly", typeof(HelperClass), typeof(DerivedOfAHelperClass),
+                                               nameof(ThisMethodTemplates.Identity_OfADerived), new DerivedOfAHelperClass(),
+                                               "the member whose constraint names a base type of the argument was not called.");
     }
 
     [Test]
@@ -1304,21 +1316,9 @@ public partial class PointerTests
     {
         // A type is made of the interfaces which are declared where it stands, which the walk reads as well: the
         // interface which the constraint names is one of them, as the very instantiation which the constraint names.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAnInterfaceAssembly",
-                                                      typeof(ICountedOfAnInstantiation<int>));
-        var method = host.AddMethod(
-            "Run",
-            typeof(CountedOfAnInstantiation).ToGneedleType(),
-            [],
-            [new Parameter(typeof(CountedOfAnInstantiation).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfACounted)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new CountedOfAnInstantiation();
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names an interface of the argument was not called.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToAnInterfaceAssembly", typeof(ICountedOfAnInstantiation<int>), typeof(CountedOfAnInstantiation),
+                                               nameof(ThisMethodTemplates.Identity_OfACounted), new CountedOfAnInstantiation(),
+                                               "the member whose constraint names an interface of the argument was not called.");
     }
 
     [Test]
@@ -1364,16 +1364,9 @@ public partial class PointerTests
     {
         // The same array read against a type which the runtime does give it, which is what tells the refusal of the
         // types which no array is given from the refusal of an array which is given none of them.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAGivenTypeOfAnArrayAssembly",
-                                                      typeof(IEnumerable<int>));
-        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { 1, 2, 3 };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a type which the array is given was not called.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToAGivenTypeOfAnArrayAssembly", typeof(IEnumerable<int>), typeof(int[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt), new[] { 1, 2, 3 },
+                                               "the member whose constraint names a type which the array is given was not called.");
     }
 
     [Test]
@@ -1398,16 +1391,9 @@ public partial class PointerTests
         // The runtime accepts an array for a collection of every type which the element of the array is accepted for,
         // which is the covariance of the arrays and of the sequences which name the element: the walk reads the
         // argument of the constraint with that variance rather than by its name alone.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACovariantTypeOfAnArrayAssembly",
-                                                      typeof(IEnumerable<object>));
-        var method = host.AddMethod("Run", typeof(string[]).ToGneedleType(), [], [new Parameter(typeof(string[]).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfString)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { "a", "b" };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a type which the array is given through its element was not called.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACovariantTypeOfAnArrayAssembly", typeof(IEnumerable<object>), typeof(string[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfString), new[] { "a", "b" },
+                                               "the member whose constraint names a type which the array is given through its element was not called.");
     }
 
     [Test]
@@ -1415,16 +1401,9 @@ public partial class PointerTests
     {
         // The same, of an instance of a generic type which implements the interface of the constraint as an instance of
         // another element type: a list of strings is a sequence of the values of the framework.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACovariantTypeOfAnInstanceAssembly",
-                                                      typeof(IEnumerable<object>));
-        var method = host.AddMethod("Run", typeof(List<string>).ToGneedleType(), [], [new Parameter(typeof(List<string>).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfString)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new List<string> { "a", "b" };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a type which the argument is given through its element was not called.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACovariantTypeOfAnInstanceAssembly", typeof(IEnumerable<object>), typeof(List<string>),
+                                               nameof(ThisMethodTemplates.Identity_OfAListOfString), new List<string> { "a", "b" },
+                                               "the member whose constraint names a type which the argument is given through its element was not called.");
     }
 
     [Test]
@@ -1432,21 +1411,9 @@ public partial class PointerTests
     {
         // A parameter which the declaration of an interface marks contravariant accepts the types of everything which
         // the argument of the constraint accepts, which is the other way the arguments of an instance are read.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAContravariantTypeAssembly",
-                                                      typeof(IComparer<string>));
-        var method = host.AddMethod(
-            "Run",
-            typeof(Comparer<object>).ToGneedleType(),
-            [],
-            [new Parameter(typeof(Comparer<object>).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = Comparer<object>.Default;
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a type which accepts the argument was not called.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToAContravariantTypeAssembly", typeof(IComparer<string>), typeof(Comparer<object>),
+                                               nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework), Comparer<object>.Default,
+                                               "the member whose constraint names a type which accepts the argument was not called.");
     }
 
     [Test]
@@ -1509,21 +1476,9 @@ public partial class PointerTests
         // An array stands among the arguments of the instance as well, and the covariance of the arrays is what the
         // argument of the constraint is read with: a list of arrays of strings is a sequence of arrays of the values of
         // the framework.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToASequenceOfAnArrayAssembly",
-                                                      typeof(IEnumerable<object[]>));
-        var method = host.AddMethod(
-            "Run",
-            typeof(List<string[]>).ToGneedleType(),
-            [],
-            [new Parameter(typeof(List<string[]>).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfAnArrayOfString)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new List<string[]> { new[] { "a" }, new[] { "b" } };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a sequence of an array was not called.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToASequenceOfAnArrayAssembly", typeof(IEnumerable<object[]>), typeof(List<string[]>),
+                                               nameof(ThisMethodTemplates.Identity_OfAListOfAnArrayOfString), new List<string[]> { new[] { "a" }, new[] { "b" } },
+                                               "the member whose constraint names a sequence of an array was not called.");
     }
 
     [Test]
@@ -1532,21 +1487,9 @@ public partial class PointerTests
         // An interface is a reference of the type of every value as a class is, and the metadata of it declares no base
         // type: the walk of it reaches the type of every value through the declaration of the interface, and a sequence
         // of the values of the framework is a sequence of an interface.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToASequenceOfAnInterfaceAssembly",
-                                                      typeof(IEnumerable<object>));
-        var method = host.AddMethod(
-            "Run",
-            typeof(IEnumerable<ICountedOfAnInstantiation<int>>).ToGneedleType(),
-            [],
-            [new Parameter(typeof(IEnumerable<ICountedOfAnInstantiation<int>>).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfASequenceOfAnInterface)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new List<ICountedOfAnInstantiation<int>>();
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a sequence of the values of the framework was not called for an interface.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToASequenceOfAnInterfaceAssembly", typeof(IEnumerable<object>), typeof(IEnumerable<ICountedOfAnInstantiation<int>>),
+                                               nameof(ThisMethodTemplates.Identity_OfASequenceOfAnInterface), new List<ICountedOfAnInstantiation<int>>(),
+                                               "the member whose constraint names a sequence of the values of the framework was not called for an interface.");
     }
 
     [Test]
@@ -1555,16 +1498,9 @@ public partial class PointerTests
         // The collections which name the element are given to an array for every type which a reference conversion takes
         // the element to, whatever the variance of the parameter which names the element is: an array of strings is a
         // collection of the values of the framework, which the runtime accepts and the walk reads as well.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAnArrayAssembly",
-                                                      typeof(IList<object>));
-        var method = host.AddMethod("Run", typeof(string[]).ToGneedleType(), [], [new Parameter(typeof(string[]).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfString)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { "a", "b" };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a collection of the values of the framework was not called for an array.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfAnArrayAssembly", typeof(IList<object>), typeof(string[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfString), new[] { "a", "b" },
+                                               "the member whose constraint names a collection of the values of the framework was not called for an array.");
     }
 
     [Test]
@@ -1573,21 +1509,9 @@ public partial class PointerTests
         // The element of the array is an array as well, and the type which the collection of the constraint names is one
         // which the covariance of the arrays takes it to: an array of arrays of strings is a collection of arrays of the
         // values of the framework.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfArraysAssembly",
-                                                      typeof(IList<object[]>));
-        var method = host.AddMethod(
-            "Run",
-            typeof(string[][]).ToGneedleType(),
-            [],
-            [new Parameter(typeof(string[][]).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnArrayOfString)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { new[] { "a" }, new[] { "b" } };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a collection of arrays was not called for an array of arrays.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfArraysAssembly", typeof(IList<object[]>), typeof(string[][]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnArrayOfString), new[] { new[] { "a" }, new[] { "b" } },
+                                               "the member whose constraint names a collection of arrays was not called for an array of arrays.");
     }
 
     [Test]
@@ -1595,21 +1519,9 @@ public partial class PointerTests
     {
         // The element of the array is an instance of a generic type whose conversion is the variance of the sequence it
         // implements: an array of lists of strings is a collection of sequences of the values of the framework.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfSequencesAssembly",
-                                                      typeof(IList<IEnumerable<object>>));
-        var method = host.AddMethod(
-            "Run",
-            typeof(List<string>[]).ToGneedleType(),
-            [],
-            [new Parameter(typeof(List<string>[]).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAListOfString)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { new List<string> { "a" } };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a collection of sequences was not called for an array of instances.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfSequencesAssembly", typeof(IList<IEnumerable<object>>), typeof(List<string>[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfAListOfString), new[] { new List<string> { "a" } },
+                                               "the member whose constraint names a collection of sequences was not called for an array of instances.");
     }
 
     [Test]
@@ -1618,21 +1530,9 @@ public partial class PointerTests
         // The runtime reads an array of an enumeration as an array of the type under it, so a member whose parameter is
         // constrained to a collection of that type is one which such an array is called for: the read of the elements of
         // the two arrays is what tells it, which no reference conversion does.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAnUnderlyingTypeAssembly",
-                                                      typeof(IList<int>));
-        var method = host.AddMethod(
-            "Run",
-            typeof(DayOfWeek[]).ToGneedleType(),
-            [],
-            [new Parameter(typeof(DayOfWeek[]).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { DayOfWeek.Monday };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a collection of the type under an enumeration was not called for an array of it.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfAnUnderlyingTypeAssembly", typeof(IList<int>), typeof(DayOfWeek[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration), new[] { DayOfWeek.Monday },
+                                               "the member whose constraint names a collection of the type under an enumeration was not called for an array of it.");
     }
 
     [Test]
@@ -1641,16 +1541,9 @@ public partial class PointerTests
         // The values of one width are read as one another whatever the sign of each of them is, so a member whose
         // parameter is constrained to a collection of the values of one sign is one which an array of the other sign is
         // called for.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfOneWidthAssembly",
-                                                      typeof(IList<int>));
-        var method = host.AddMethod("Run", typeof(uint[]).ToGneedleType(), [], [new Parameter(typeof(uint[]).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfUnsignedValues)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { 1u, 2u };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a collection of one width was not called for an array of another.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfOneWidthAssembly", typeof(IList<int>), typeof(uint[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfUnsignedValues), new[] { 1u, 2u },
+                                               "the member whose constraint names a collection of one width was not called for an array of another.");
     }
 
     [Test]
@@ -1658,32 +1551,18 @@ public partial class PointerTests
     {
         // The width of the values of an enumeration is the width of the type under it, and it is read from the
         // enumeration rather than from the type which stands under it alone.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfAByteEnumerationAssembly",
-                                                      typeof(IList<ByteEnumOfTheTests>));
-        var method = host.AddMethod("Run", typeof(byte[]).ToGneedleType(), [], [new Parameter(typeof(byte[]).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheValuesUnderAByteEnumeration)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new byte[] { 1, 2 };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a collection of the values under an enumeration of a byte was not called.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfAByteEnumerationAssembly", typeof(IList<ByteEnumOfTheTests>), typeof(byte[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheValuesUnderAByteEnumeration), new byte[] { 1, 2 },
+                                               "the member whose constraint names a collection of the values under an enumeration of a byte was not called.");
     }
 
     [Test]
     public void ThisMethod_Of_A_Member_Whose_Constraint_Names_A_Collection_Of_The_Widest_Signed_Values_Is_Called_For_An_Array_Of_The_Unsigned_Ones()
     {
         // The same of the values of eight bytes, which is the other end of the widths which the integer family holds.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfTheWidestValuesAssembly",
-                                                      typeof(IList<long>));
-        var method = host.AddMethod("Run", typeof(ulong[]).ToGneedleType(), [], [new Parameter(typeof(ulong[]).ToGneedleType())], MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestUnsignedValues)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { 1ul, 2ul };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a collection of the widest signed values was not called for an array of the unsigned ones.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfTheWidestValuesAssembly", typeof(IList<long>), typeof(ulong[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestUnsignedValues), new[] { 1ul, 2ul },
+                                               "the member whose constraint names a collection of the widest signed values was not called for an array of the unsigned ones.");
     }
 
     [Test]
@@ -1691,21 +1570,9 @@ public partial class PointerTests
     {
         // The native values of the two signs are related to one another whatever the width the runtime holds them at,
         // which the width of the values of every other type of the integer family does not tell.
-        var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfTheNativeValuesAssembly",
-                                                      typeof(IList<IntPtr>));
-        var method = host.AddMethod(
-            "Run",
-            typeof(UIntPtr[]).ToGneedleType(),
-            [],
-            [new Parameter(typeof(UIntPtr[]).ToGneedleType())],
-            MethodFlags.Public);
-        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheUnsignedNativeValues)));
-
-        var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
-        var argument = new[] { (UIntPtr) 1, (UIntPtr) 2 };
-
-        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [argument]), Is.SameAs(argument),
-                    "the member whose constraint names a collection of the signed native values was not called for an array of the unsigned ones.");
+        TheIdentityOfAConstrainedMemberIsCalled("MethodInjectionConstrainedToACollectionOfTheNativeValuesAssembly", typeof(IList<IntPtr>), typeof(UIntPtr[]),
+                                               nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheUnsignedNativeValues), new[] { (UIntPtr) 1, (UIntPtr) 2 },
+                                               "the member whose constraint names a collection of the signed native values was not called for an array of the unsigned ones.");
     }
 
     [Test]

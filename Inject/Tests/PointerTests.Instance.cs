@@ -24,7 +24,7 @@ public partial class PointerTests
     {
         var asm = Assembly.Create("InstancePointerAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
             [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
@@ -43,7 +43,7 @@ public partial class PointerTests
     {
         var asm = Assembly.Create("InstanceFieldAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Get)));
@@ -59,7 +59,7 @@ public partial class PointerTests
     {
         var asm = Assembly.Create("InstanceFieldAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_Set)));
@@ -75,7 +75,7 @@ public partial class PointerTests
     {
         var asm = Assembly.Create("InstancePropertyAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_Get)));
@@ -92,7 +92,7 @@ public partial class PointerTests
     {
         var asm = Assembly.Create("InstancePropertyAssembly");
         var handler = (AssemblyHandler) asm.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(HelperClass).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
         method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceProperty_Set)));
@@ -177,7 +177,7 @@ public partial class PointerTests
         // definition of the constraint, and the instantiation which the constraint names is what the parameter of the
         // member stands for, so the member is found and called on that instantiation rather than refused.
         var assembly = Assembly.Create("InstanceConstraintInstantiationAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod(
             "Run",
             typeof(int).ToGneedleType(),
@@ -350,7 +350,7 @@ public partial class PointerTests
     private static (Assembly Assembly, TypeHandler Host, MethodHandler Method) NewInstanceHost(string assemblyName, Type[] parameters, bool isStatic = false)
     {
         var assembly = Assembly.Create(assemblyName);
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [],
             parameters.Select(type => new Parameter(type.ToGneedleType())).ToArray(),
             MethodFlags.Public | (isStatic ? MethodFlags.Static : 0));
@@ -379,7 +379,7 @@ public partial class PointerTests
     private static (Assembly Assembly, TypeHandler Host, MethodHandler Method) NewInstanceHostOfAGenericMember(string assemblyName)
     {
         var assembly = Assembly.Create(assemblyName);
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod(
             "Run",
             typeof(M_0).ToGneedleType(),
@@ -400,7 +400,7 @@ public partial class PointerTests
     private static (Assembly Assembly, TypeHandler Host, MethodHandler Method) NewInstanceHostOfAGenericMemberOfABodyOfAGreaterArity(string assemblyName)
     {
         var assembly = Assembly.Create(assemblyName);
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         var method = (MethodHandler) host.AddMethod(
             "Run",
             typeof(M_0).ToGneedleType(),

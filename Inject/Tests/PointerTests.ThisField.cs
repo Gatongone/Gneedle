@@ -26,7 +26,7 @@ public partial class PointerTests
     private static TypeHandler NewHostWithField(string fieldName, bool isStatic, string assemblyName = "MemberInjectionAssembly")
     {
         var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         var attrs = FieldAttributes.Public | (isStatic ? FieldAttributes.Static : 0);
         host.Source.Fields.Add(new FieldDefinition(fieldName, attrs, host.Source.Module.TypeSystem.Int32));
         return host;

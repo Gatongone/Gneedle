@@ -58,7 +58,7 @@ public class AttributeTests
         // attribute to it would decorate the attribute class with itself and leave the handled type untouched.
         var assembly = Assembly.Create("AttributeSelfAssembly");
         var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
 
         host.AddAttribute<MarkerAttribute>("hello");
 
@@ -130,7 +130,7 @@ public class AttributeTests
         // The attribute class is declared by another module, so the constructor has to be imported before it can be
         // written. This is the test which proves the produced image is well formed with the attribute on it.
         var assembly = Assembly.Create("AttributeReadableAssembly");
-        var host = (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(assembly);
         host.AddAttribute<MarkerAttribute>("hello");
 
         using var stream = new MemoryStream();
@@ -154,7 +154,7 @@ public class AttributeTests
     {
         var assembly = Assembly.Create("FieldAttributeAssembly");
         var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.Source.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
         var field = host.GetField("Value")!;
 
@@ -185,7 +185,7 @@ public class AttributeTests
     {
         var assembly = Assembly.Create("PropertyAttributeAssembly");
         var handler = (AssemblyHandler) assembly.Handler;
-        var host = (TypeHandler) handler.AddClass("Host", Ns, ClassFlags.Public).GetHandler();
+        var host = AddAHost(handler);
         host.Source.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, host.Source.Module.TypeSystem.Int32));
         var property = host.GetProperty("Prop")!;
 
