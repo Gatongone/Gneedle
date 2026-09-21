@@ -288,8 +288,15 @@ internal static class TokenParsing
         /// <exception cref="ArgumentException">Thrown when a token of the reference names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal MethodReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
         {
-            methodReference.DeclaringType = methodReference.DeclaringType.ParseGenericTokens(provider, module);
-            methodReference.ReturnType    = methodReference.ReturnType.ParseGenericTokens(provider, module);
+            // The declaring type of an instantiation of a method belongs to the method which it instantiates rather than
+            // to the reference, which holds that method alone: reading the declaring type of a specification is what
+            // finds the method, and writing it is refused, so a call which names a method through an instantiation of it
+            // was refused before the rest of the reference was read. Both the reading and the writing go through the
+            // method which the specification instantiates, and what is written back is what was read, so a reference
+            // whose declaring type holds no token of the provider is left as it was.
+            var declared = methodReference is MethodSpecification specification ? specification.ElementMethod : methodReference;
+            declared.DeclaringType = declared.DeclaringType.ParseGenericTokens(provider, module);
+            methodReference.ReturnType = methodReference.ReturnType.ParseGenericTokens(provider, module);
             foreach (var parameter in methodReference.Parameters)
             {
                 parameter.ParameterType = parameter.ParameterType.ParseGenericTokens(provider, module);
