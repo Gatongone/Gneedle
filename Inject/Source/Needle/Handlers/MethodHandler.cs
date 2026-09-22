@@ -1151,6 +1151,11 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <exception cref="ArgumentException">Thrown when the reference reaches a type which the compiler wrote.</exception>
     private void RefuseTheCompilersOwnType(TypeReference? type, string reference)
     {
+        // What the carrying wrote keeps the name the compiler wrote, brackets and all, so the name alone no longer
+        // tells a type of the compiler's own which the weaving holds the instructions of from one which it does not:
+        // what the carrying wrote is read as a type the weaving has, and only what it did not write is refused.
+        if (m_Carried?.HoldsType(type) == true) return;
+
         for (var at = type; at is {IsNested: true}; at = at.DeclaringType)
         {
             if (!at.Name.StartsWith("<", StringComparison.Ordinal)) continue;
@@ -1179,6 +1184,10 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <exception cref="ArgumentException">Thrown when the member is one which the compiler wrote for a body of the template's own.</exception>
     private void RefuseTheCompilersOwnMember(MemberReference member, MethodDefinition targetDef)
     {
+        // A member which the carrying wrote is one whose instructions the weaving holds, under the name the compiler
+        // wrote it with, so it is not refused for the name alone.
+        if (m_Carried?.HoldsMember(member) == true) return;
+
         if (!member.Name.StartsWith("<", StringComparison.Ordinal)) return;
 
         // The body of a lambda and the body of a local function are named `<Method>b__...` and `<Method>g__...` by the

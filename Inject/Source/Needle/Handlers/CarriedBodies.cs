@@ -42,6 +42,14 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     private readonly List<MethodDefinition> m_MemberCopies = [];
 
     /// <summary>
+    /// The same copies, by the full name of the member each was written from.<para/>
+    /// The key is the name of the original rather than the name of the copy, because a copy is declared by the type
+    /// which is woven and its own full name names that type: what a body of the template names is the member the
+    /// compiler wrote, which is what is looked up here.
+    /// </summary>
+    private readonly Dictionary<string, MethodDefinition> m_MemberTypes = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// What each copy was written from, by the full name of the original, which the body of the copy is written out of.
     /// </summary>
     private readonly Dictionary<string, TypeDefinition> m_Originals = new(StringComparer.Ordinal);
@@ -227,6 +235,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         m_MemberOriginals[looseDefinition.FullName] = looseDefinition;
         var copy = DeclareMethod(looseDefinition, into);
         m_MemberCopies.Add(copy);
+        m_MemberTypes[looseDefinition.FullName] = copy;
         m_Bodies.Add(new Body(looseDefinition, copy));
         pending.Enqueue(looseDefinition);
 
@@ -468,11 +477,16 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <returns>The member of the copy, or null.</returns>
     private MethodReference? TheCopyOf(MethodReference called)
     {
-        var loose = m_MemberCopies.Find(copy => copy.FullName == called.FullName);
-        if (loose is not null) return loose;
+        if (m_MemberTypes.TryGetValue(called.FullName, out var loose)) return loose;
 
         var holder = called.DeclaringType;
-        if (holder is null || !m_Types.TryGetValue(holder.GetElementType().FullName, out var copy)) return null;
+        if (holder is null || !m_Types.TryGetValue(holder.GetElementType().FullName, out var copy))
+        {
+            // A member of a type the carry did not write is not a member of a copy, but a specification of it may still
+            // name a type which the carry wrote: the stub of an async body hands the builder the state machine as the
+            // argument of the member which starts it, and the builder belongs to the framework.
+            return TheSpecification(called);
+        }
 
         var open = copy.Methods.Single(candidate => candidate.Name == called.Name && candidate.Parameters.Count == called.Parameters.Count);
 
@@ -497,6 +511,32 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         var instantiated = new GenericInstanceMethod(reference);
         foreach (var argument in specification.GenericArguments) instantiated.GenericArguments.Add(TypeOf(argument));
+        return instantiated;
+    }
+
+    /// <summary>
+    /// A specification of a member the carry did not write, with the arguments of it re-pointed where one of them
+    /// names a type which the carry wrote, or null when none of them does.
+    /// </summary>
+    /// <param name="called">The member which is asked about.</param>
+    /// <returns>The specification with its arguments re-pointed, or null.</returns>
+    private MethodReference? TheSpecification(MethodReference called)
+    {
+        if (called is not GenericInstanceMethod specification) return null;
+
+        var changed = false;
+        var carried = new TypeReference[specification.GenericArguments.Count];
+        for (var index = 0; index < carried.Length; index++)
+        {
+            var argument = specification.GenericArguments[index];
+            carried[index] = TheCopyOf(argument) ?? argument;
+            changed |= !ReferenceEquals(carried[index], argument);
+        }
+
+        if (!changed) return null;
+
+        var instantiated = new GenericInstanceMethod(specification.ElementMethod);
+        foreach (var argument in carried) instantiated.GenericArguments.Add(argument);
         return instantiated;
     }
 

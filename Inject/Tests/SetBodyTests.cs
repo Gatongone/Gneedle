@@ -185,6 +185,17 @@ public static class ConstructTemplates
     {
         yield return value;
     }
+
+    /// <summary>
+    /// A template which holds a lambda and names a member which the type being woven does not declare, so that what the
+    /// compiler wrote for the lambda is carried and the parse of the body is what refuses the template: what a refusal
+    /// leaves behind is read with the carrying of a template which was carried and then refused.
+    /// </summary>
+    public static int HoldsALambdaAndNamesNoMember(int value)
+    {
+        Func<int, int> add = x => x + 1;
+        return This.Method<Func<int, int>>("NothingOfThatName")(add(value));
+    }
 }
 
 /// <summary>
@@ -558,62 +569,46 @@ public class SetBodyTests
     }
 
     [Test]
-    public void SetBody_Of_A_Template_Which_Holds_A_Lambda_Throws()
+    public void SetBody_Of_A_Template_Which_Holds_A_Lambda_Is_Woven_And_Run()
     {
         // A lambda is a method of a type which the compiler writes beside the template, and which is private to the
-        // assembly the template was compiled into: the weaving refuses it rather than writing a member which fails
-        // when it is run.
-        var (_, host) = NewCalc();
-        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-            MethodFlags.Public | MethodFlags.Static);
+        // assembly the template was compiled into. The type is carried onto the type being woven, which is what reaches
+        // the private members of that type, and the member is run rather than read: what the carrying got wrong is
+        // answered by the runtime rather than by the shape of the body.
+        var woven = NewProbeOf("SetBodyLambdaAssembly", nameof(ConstructTemplates.Lambda), typeof(int).ToGneedleType());
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Lambda))!));
-
-        Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
+        Assert.That(woven.Invoke(null, [41]), Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
     [Test]
-    public void SetBody_Of_A_Template_Which_Holds_A_Lambda_Which_Captured_Throws()
+    public void SetBody_Of_A_Template_Which_Holds_A_Lambda_Which_Captured_Is_Woven_And_Run()
     {
-        var (_, host) = NewCalc();
-        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-            MethodFlags.Public | MethodFlags.Static);
+        // What the lambda captured is held by the type the compiler wrote for it, and that field is carried with the
+        // type: the copy of it holds the value the template wrote there.
+        var woven = NewProbeOf("SetBodyCapturingLambdaAssembly", nameof(ConstructTemplates.LambdaWhichCaptured), typeof(int).ToGneedleType());
 
-        Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LambdaWhichCaptured))!));
+        Assert.That(woven.Invoke(null, [41]), Is.EqualTo(42), "the value which the template captured was not carried with the type.");
     }
 
     [Test]
-    public void SetBody_Of_A_Template_Which_Holds_A_Local_Function_Throws()
+    public void SetBody_Of_A_Template_Which_Holds_A_Local_Function_Is_Woven_And_Run()
     {
-        // A local function which captures nothing is written as a method of the type which holds the template, so the
-        // member which names it is a member of a type which the template's own assembly declares rather than one which
-        // the compiler wrote: it is refused by the name of the member rather than by the name of the type which holds it.
-        var (_, host) = NewCalc();
-        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-            MethodFlags.Public | MethodFlags.Static);
+        // A local function which captures nothing is written as a method of the type which holds the template, so there
+        // is no type to move for it and the member is moved on its own. It is the cheaper of the two moves.
+        var woven = NewProbeOf("SetBodyLocalFunctionAssembly", nameof(ConstructTemplates.LocalFunction), typeof(int).ToGneedleType());
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunction))!));
-
-        Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
-        Assert.That(thrown!.Message, Does.Contain("calls a member"),
-            "the refusal did not name the member which the template calls rather than the type which holds it.");
+        Assert.That(woven.Invoke(null, [21]), Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
     [Test]
-    public void SetBody_Of_A_Template_Which_Holds_A_Local_Function_Which_Captured_Throws()
+    public void SetBody_Of_A_Template_Which_Holds_A_Local_Function_Which_Captured_Is_Woven_And_Run()
     {
         // A local function which captured is written as a method of a type which the compiler writes beside the
-        // template, which the walk of the type which declares the member refuses, rather than as a method of the type
-        // which declares the template.
-        var (_, host) = NewCalc();
-        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-            MethodFlags.Public | MethodFlags.Static);
+        // template rather than as a method of the type which declares it, so the type is carried and the member of it
+        // with it.
+        var woven = NewProbeOf("SetBodyCapturingLocalFunctionAssembly", nameof(ConstructTemplates.LocalFunctionWhichCaptured), typeof(int).ToGneedleType());
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.LocalFunctionWhichCaptured))!));
-
-        Assert.That(thrown!.Message, Does.Contain("the weaving cannot carry it"));
-        Assert.That(thrown!.Message, Does.Contain("names a type"),
-            "the refusal did not name the type which the compiler wrote for the body.");
+        Assert.That(woven.Invoke(null, [41]), Is.EqualTo(42), "the value which the template captured was not carried with the type.");
     }
 
     [Test]
@@ -650,35 +645,26 @@ public class SetBodyTests
     }
 
     [Test]
-    public void SetBody_Of_A_Template_Which_Is_Async_Throws()
+    public void SetBody_Of_A_Template_Which_Is_Async_Is_Woven_And_Awaited()
     {
-        // The body of an async method is the stub which starts a state machine, whose MoveNext holds what was written,
-        // so what the weaving would carry is the stub rather than the body which the template was written with: the
-        // refusal names the type of the machine which the stub calls, which is a type of the compiler's own.
-        var (_, host) = NewCalc();
-        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-            MethodFlags.Public | MethodFlags.Static);
+        // The body of an async method is the stub which starts a state machine, whose MoveNext holds what was written:
+        // the machine is carried onto the type being woven and its MoveNext is woven there, so what the member is run
+        // through is the state machine the copy holds rather than the one which was left behind.
+        var woven = NewProbeOf("SetBodyAsyncAssembly", nameof(ConstructTemplates.Async), typeof(Task<int>).ToGneedleType());
+        var awaited = (Task<int>) woven.Invoke(null, [41])!;
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Async))!));
-
-        Assert.That(thrown!.Message, Does.Contain("names a type"),
-            $"the refusal does not name the type which the stub of the state machine calls: {thrown.Message}");
+        Assert.That(awaited.GetAwaiter().GetResult(), Is.EqualTo(42), "the member which was woven did not hand back what the template hands back.");
     }
 
     [Test]
-    public void SetBody_Of_A_Template_Which_Yields_Throws()
+    public void SetBody_Of_A_Template_Which_Yields_Is_Woven_And_Enumerated()
     {
-        // An iterator is the other body which the compiler writes as a state machine of its own: the method which holds
-        // it starts the machine, and the instructions which were written live in the MoveNext of the type beside it, so
-        // what the weaving would carry is the stub rather than the body which the template was written with.
-        var (_, host) = NewCalc();
-        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
-            MethodFlags.Public | MethodFlags.Static);
+        // An iterator is the other body which the compiler writes as a state machine of its own: the copies of what the
+        // machine holds are what the woven member runs, and what it yields is what the template yields.
+        var woven = NewProbeOf("SetBodyIteratorAssembly", nameof(ConstructTemplates.Iterator), typeof(IEnumerable<int>).ToGneedleType());
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Iterator))!));
-
-        Assert.That(thrown!.Message, Does.Contain("names a type"),
-            $"the refusal does not name the type which the stub of the state machine calls: {thrown.Message}");
+        Assert.That(((IEnumerable<int>) woven.Invoke(null, [41])!).ToArray(), Is.EqualTo(new[] {41}),
+            "the member which was woven did not produce what the template produces.");
     }
 
     /// <summary>
@@ -693,6 +679,26 @@ public class SetBodyTests
         var host = AddAHost(assembly, "Calc");
         var intType = typeof(int).ToGneedleType();
         var method = host.AddMethod("Probe", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+
+        method.SetBody(typeof(ConstructTemplates).GetMethod(templateName)!);
+
+        return assembly.Load().GetType($"{NS}.Calc")!.GetMethod("Probe")!;
+    }
+
+    /// <summary>
+    /// Weave a template of <see cref="ConstructTemplates"/> into <c>public static {returnType} Probe(int value)</c> of an
+    /// assembly of its own, and hand back the method of the type which was woven, so that what it computes can be run.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test gives one of its own.</param>
+    /// <param name="templateName">Name of the template of <see cref="ConstructTemplates"/> which is woven.</param>
+    /// <param name="returnType">The type which the woven member hands back, which is the type the template hands back.</param>
+    /// <returns>The method which was woven.</returns>
+    private static MethodInfo NewProbeOf(string assemblyName, string templateName, IType returnType)
+    {
+        var assembly = Assembly.Create(assemblyName);
+        var host = AddAHost(assembly, "Calc");
+        var intType = typeof(int).ToGneedleType();
+        var method = host.AddMethod("Probe", returnType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
         method.SetBody(typeof(ConstructTemplates).GetMethod(templateName)!);
 
@@ -734,7 +740,9 @@ public class SetBodyTests
     {
         // A method which is added carries a body of its own before it is given one, and the template is parsed into the
         // body which takes its place: the parse is the step which refuses a template, so what the member holds when a
-        // template is refused is what tells whether the refusal left the member as it was.
+        // template is refused is what tells whether the refusal left the member as it was. The template here is one
+        // whose carrying succeeds and whose parse is refused, which is what tells the carrying to take back what it
+        // wrote as well.
         var (_, host) = NewCalc();
         var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
@@ -742,16 +750,20 @@ public class SetBodyTests
         var body = source.Body;
         var instructions = body.Instructions.ToArray();
 
-        Assert.Throws<ArgumentException>(() => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.Lambda))!));
+        Assert.Throws<ArgumentException>(
+            () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.HoldsALambdaAndNamesNoMember))!));
 
         // The body is the one the member held rather than a new one which the template wrote what it could into, and
-        // nothing of the template is in it: no variable and no handler of it is left where the body was replaced.
+        // nothing of the template is in it: no variable and no handler of it is left where the body was replaced. What
+        // the carrying wrote is taken back off as well, so the type declares nothing of the compiler's own.
         Assert.That(source.Body, Is.SameAs(body));
         Assert.Multiple(() =>
         {
             Assert.That(source.Body.Instructions, Is.EqualTo(instructions));
             Assert.That(source.Body.Variables, Is.Empty);
             Assert.That(source.Body.ExceptionHandlers, Is.Empty);
+            Assert.That(host.Source.NestedTypes, Is.Empty,
+                "the type which was woven declares the copy of a type which the compiler wrote, which the refused weaving left behind.");
         });
     }
 

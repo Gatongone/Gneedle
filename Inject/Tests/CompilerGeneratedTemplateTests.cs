@@ -272,58 +272,69 @@ public class CarriedGenericClosureFixture<T>
 public class CompilerGeneratedTemplateTests
 {
     /// <summary>
-    /// Weave the template into a member of the signature it has, and hand back what the weaving said of it.<para/>
-    /// The member is woven rather than the template alone, because a refusal is raised while the body is carried and
-    /// not while the template is read: what is read here is the refusal and not a lookup of the template.
+    /// Weave a template into a member of the signature it has, run that member, and hand back what it computed.<para/>
+    /// The carrying here is the weaving's own: no move is written by hand, and what is read is what the weaving does
+    /// with a template which holds a construct the compiler wrote. The member is run rather than read, because a body
+    /// which reads back correctly is not yet a body which runs, and what a carrying got wrong is answered by the
+    /// runtime rather than by the shape of the body. The assembly is one of this test's own, because two assemblies of
+    /// one name cannot be loaded into one run.
     /// </summary>
-    private static string RefusalOf(MethodInfo template)
+    private static object? WovenAndRun(MethodInfo template, IType returnType, Parameter[] parameters, params object?[] arguments)
     {
         var (_, host, _) = NewHost($"CompilerGenerated{template.Name}{Guid.NewGuid():N}");
+        var run = host.AddMethod("Run", returnType, [], parameters, MethodFlags.Public | MethodFlags.Static);
 
-        // The member hands back an int and takes one, which is the signature every template above has: SetBody adopts
-        // the return type of the template, so what is read here is the refusal rather than a mismatch.
-        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        run.SetBody(template);
 
-        var refusal = Assert.Throws<ArgumentException>(() => run.SetBody(template));
-        Assert.That(refusal, Is.Not.Null, $"'{template.Name}' was woven rather than refused.");
-
-        return refusal!.Message;
+        var woven = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!.GetMethod("Run")!;
+        return woven.Invoke(null, arguments);
     }
 
-    [Test]
-    public void A_Template_Which_Holds_A_Lambda_Is_Refused()
-        => Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsALambda))),
-            Does.Contain("names a type which the compiler wrote"));
+    /// <summary>
+    /// The parameters which every template above but the ones which yield and await is written with.
+    /// </summary>
+    private static Parameter[] OneValue => [new Parameter(typeof(int).ToGneedleType())];
 
     [Test]
-    public void A_Template_Which_Holds_A_Capturing_Lambda_Is_Refused()
-        => Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsACapturingLambda))),
-            Does.Contain("names a type which the compiler wrote"));
+    public void A_Template_Which_Holds_A_Lambda_Is_Woven()
+        => Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsALambda)),
+                typeof(int).ToGneedleType(), OneValue, 41),
+            Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
 
     [Test]
-    public void A_Template_Which_Holds_A_Local_Function_Is_Refused()
+    public void A_Template_Which_Holds_A_Capturing_Lambda_Is_Woven()
+        => Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsACapturingLambda)),
+                typeof(int).ToGneedleType(), OneValue, 41),
+            Is.EqualTo(42), "the value which the template captured was not written where the template read it.");
+
+    [Test]
+    public void A_Template_Which_Holds_A_Local_Function_Is_Woven()
     {
-        // This is the one of the five which the other refusal answers for. A lambda, an iterator and an async body are
-        // each written into a type of their own which is nested in what declares the template, so the reference to one
-        // of them names a type which the compiler wrote. A local function which captured nothing is not: it is a
-        // private method of the type which declares the template, and what the reference names is the member.
-        //
-        // The two are carried the same way and are not reached the same way. There is no type to move for the local
-        // function, which is the cheaper of the two moves and the one the other four are not.
-        Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsALocalFunction))),
-            Does.Contain("calls a member which the compiler wrote"));
+        // The one of the five which holds no type of its own: a local function which captured nothing is a private
+        // method of the type which declares the template, so there is no type to move for it and the member is moved on
+        // its own. It is the cheaper of the two moves and the one the other four are not.
+        Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsALocalFunction)),
+                typeof(int).ToGneedleType(), OneValue, 41),
+            Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
     [Test]
-    public void A_Template_Which_Is_An_Iterator_Is_Refused()
-        => Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Yields))),
-            Does.Contain("names a type which the compiler wrote"));
+    public void A_Template_Which_Is_An_Iterator_Is_Woven_And_Enumerated()
+    {
+        var produced = ((IEnumerable<int>) WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Yields)),
+            typeof(IEnumerable<int>).ToGneedleType(), OneValue, 7)!).ToArray();
+
+        Assert.That(produced, Is.EqualTo(new[] {7, 8}), "the member which was woven did not produce what the template produces.");
+    }
 
     [Test]
-    public void A_Template_Which_Is_An_Async_Body_Is_Refused()
-        => Assert.That(RefusalOf(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Awaits))),
-            Does.Contain("names a type which the compiler wrote"));
+    public void A_Template_Which_Is_An_Async_Body_Is_Woven_And_Awaited()
+    {
+        var awaited = (Task<int>) WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Awaits)),
+            typeof(Task<int>).ToGneedleType(), OneValue, 5)!;
+
+        Assert.That(awaited.GetAwaiter().GetResult(), Is.EqualTo(5), "the member which was woven did not hand back what the template hands back.");
+    }
 
     [Test]
     public void A_Template_Which_Calls_A_Generic_Method_Is_Woven()
