@@ -185,7 +185,7 @@ partial class MethodHandler
                 }
                 else
                 {
-                    filter.Replace(read, CreateReceiver(receiverIns, targetDef));
+                    filter.Replace(read, CreateReceiver(receiverIns, targetDef, read, filter));
                 }
 
                 filter.Replace(accessor, Instruction.Create(accessorDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetMethodReference(accessorDef, namedInstance)));
@@ -197,7 +197,7 @@ partial class MethodHandler
         if (takesAReceiver && !instanceIsComputed)
         {
             // ldstr {property_name} -> the argument which holds the instance the property is read off
-            filter.Replace(currentIndex, CreateReceiver(receiverIns, targetDef));
+            filter.Replace(currentIndex, CreateReceiver(receiverIns, targetDef, currentIndex, filter));
         }
         else
         {
