@@ -1212,11 +1212,13 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
-    /// Refuse a reference into a type which the compiler wrote for a body of the template's own.<para/>
+    /// Refuse a reference into a type which the compiler wrote for a body of the template's own, which the carrying did
+    /// not write a copy of.<para/>
     /// A lambda, a local function, an async body and an iterator body are each a method of a type which the compiler
-    /// writes beside the template, and which is nested inside what declares it with a name the compiler writes. The
-    /// instructions of the template are carried, but such a method is not: the woven member would reach into the
-    /// assembly the template was compiled into, at a type which is private to it, and fail when it ran rather than here.
+    /// writes beside the template, and which is nested inside what declares it with a name the compiler writes. What
+    /// such a type holds is carried onto the type being woven, so a reference to one the carrying wrote is not refused
+    /// here; what reaches this is a reference the carrying never saw, which the woven member would reach into at a type
+    /// which is private to the assembly the template was compiled into, and fail when it ran rather than here.
     /// </summary>
     /// <param name="type">The type which the reference names, or which declares the member it names.</param>
     /// <param name="reference">The reference itself, which the message names.</param>
@@ -1237,10 +1239,12 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
-    /// Refuse a member which the compiler wrote for a body of the template's own.<para/>
+    /// Refuse a member which the compiler wrote for a body of the template's own, which the carrying did not write a
+    /// copy of.<para/>
     /// A local function which captured nothing is not a type of its own the way a lambda is: it is a method of the type
     /// which declares the template, named with the bracket which no identifier of C# holds. Its body is a body of the
-    /// template's, so carrying the call to it carries a call into a member which the weaving has no instructions of.
+    /// template's, so the carrying writes a copy of it onto the type being woven, and a call of one the carrying wrote
+    /// is not refused here; what reaches this is a member whose instructions the carrying could not read.
     /// </summary>
     /// <remarks>
     /// The bracket alone is not what makes such a member one of the template's: the compiler writes members under that
