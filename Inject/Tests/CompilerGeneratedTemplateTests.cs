@@ -326,11 +326,6 @@ public class CompilerGeneratedTemplateTests
             Does.Contain("names a type which the compiler wrote"));
 
     [Test]
-    [Ignore("Blocked by a fault of the weaver rather than by this proposal: a call of a generic method throws. "
-        + "TokenParsing.ParseGenericTokens assigns DeclaringType unconditionally, and the setter of a "
-        + "MethodSpecification throws, because the declaring type of an instantiation is read of the method it "
-        + "instantiates. The method handles a GenericInstanceMethod below that line and never reaches it. "
-        + "TokenParsing.cs:291.")]
     public void A_Template_Which_Calls_A_Generic_Method_Is_Woven()
     {
         // Nothing here is a construct the compiler carried out of the template: the call names a generic method of the
@@ -640,9 +635,12 @@ public class CompilerGeneratedTemplateTests
         private object? Imported(object? operand)
             => operand switch
             {
-                MethodReference method => module.ImportReference(method),
                 FieldReference field   => module.ImportReference(field),
-                TypeReference type     => module.ImportReference(type),
+                // A type is written as the copy of it where the move carried one, which is the reading which every other
+                // operand goes through as well: a token of a type the compiler wrote is an operand of this shape, and an
+                // operand which named the original would leave the body pointing at what the move left behind.
+                TypeReference type     => TypeOf(type),
+                MethodReference method => module.ImportReference(method),
                 _                      => operand
             };
 
@@ -668,18 +666,54 @@ public class CompilerGeneratedTemplateTests
             var holder = called.DeclaringType;
             var declaring = holder?.GetElementType().FullName;
 
-            if (declaring is null || !Types.TryGetValue(declaring, out var copy)) return module.ImportReference(called);
+            // A member of a type which was not carried is not a member of a copy, but a specification of it may still
+            // name a type which was: the stub of an async body hands the builder the state machine as the argument of the
+            // member which starts it, and the builder belongs to the framework. Those arguments are re-pointed here as
+            // well, which is what keeps the call from naming the machine which was left behind.
+            if (declaring is null || !Types.TryGetValue(declaring, out var copy)) return Pointed(called);
 
             var open = copy.Methods.Single(candidate => candidate.Name == called.Name && candidate.Parameters.Count == called.Parameters.Count);
 
             // The declaring type of a call into a type which the compiler wrote is written as the instantiation the
             // call makes of it rather than as the definition, and a type which was carried out of a generic one is
-            // generic itself: the copy is reached through the instantiation of the copy, and a reference to the open
-            // method of it is not IL the runtime reads.
+            // generic itself: the call is written against the instantiation of the copy, which is what the declaring
+            // type of the reference is for, and a reference which named the open copy instead is not IL the runtime
+            // reads.
             if (holder is not GenericInstanceType instance) return open;
 
-            var instantiated = new GenericInstanceMethod(open);
-            foreach (var argument in instance.GenericArguments) instantiated.GenericArguments.Add(TypeOf(argument));
+            var reference = new MethodReference(open.Name, TypeOf(open.ReturnType), TypeOf(instance))
+            {
+                HasThis           = open.HasThis,
+                ExplicitThis      = open.ExplicitThis,
+                CallingConvention = open.CallingConvention
+            };
+
+            foreach (var parameter in open.Parameters)
+            {
+                reference.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, TypeOf(parameter.ParameterType)));
+            }
+
+            // A member which is generic in its own right is the one case where what is named is not the member but a
+            // specification of it, and what that one instantiates is the member rather than the type it is declared by:
+            // the declaring type above is the same either way, and the arguments of the specification are re-pointed as
+            // well, because what one of them names may be a type the move carried in its turn.
+            if (called is not GenericInstanceMethod specification) return reference;
+
+            var instantiated = new GenericInstanceMethod(reference);
+            foreach (var argument in specification.GenericArguments) instantiated.GenericArguments.Add(TypeOf(argument));
+            return instantiated;
+        }
+
+        /// <summary>
+        /// A member of a type which the move did not carry, as the module which is being written holds it: the member
+        /// itself, and the arguments of a specification of it re-pointed where one of them names a type which was.
+        /// </summary>
+        private MethodReference Pointed(MethodReference called)
+        {
+            if (called is not GenericInstanceMethod specification) return module.ImportReference(called);
+
+            var instantiated = new GenericInstanceMethod(module.ImportReference(specification.ElementMethod));
+            foreach (var argument in specification.GenericArguments) instantiated.GenericArguments.Add(TypeOf(argument));
             return instantiated;
         }
 
@@ -733,6 +767,12 @@ public class CompilerGeneratedTemplateTests
                 foreach (var argument in instantiation.GenericArguments) instance.GenericArguments.Add(TypeOf(argument));
                 return instance;
             }
+
+            // A type which was carried stands for the type it was carried out of, so a reference which names the
+            // original names the copy: what is carried reaches what it carries, and a copy which still named the type it
+            // came from would leave the body pointing at what the move left behind. The definition which was carried is
+            // a type of the module which is being written, so nothing of it is imported.
+            if (Types.TryGetValue(reference.FullName, out var carried)) return carried;
 
             return module.ImportReference(reference);
         }
@@ -1053,11 +1093,6 @@ public class CompilerGeneratedTemplateTests
 
     [Test]
     [NonParallelizable]
-    [Ignore("Blocked as the two above are. The stub of an async body hands the state machine to the builder as the type "
-        + "argument of Start<TStateMachine>, which is a generic instance method and is refused for the fault of "
-        + "TokenParsing.cs:291; and the move here re-points the type the call is declared by and not the type it is "
-        + "instantiated with, so even once the call is carried the call would name the machine which was left behind. "
-        + "Neither of those is the move which Tier 3 turns on, and neither is read by this.")]
     public void A_Template_Which_Is_An_Async_Body_Whose_State_Machine_Was_Carried_Is_Woven_And_Awaited()
     {
         var (result, reported) = CarriedThenWoven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.Awaits), CARRIED_ASYNC_TYPE);
@@ -1071,11 +1106,6 @@ public class CompilerGeneratedTemplateTests
 
     [Test]
     [NonParallelizable]
-    [Ignore("Blocked by the same fault as the generic call above, and this is the second of the three tiers which it "
-        + "stands in front of: the stub of a lambda of a generic template reaches the type which the compiler wrote "
-        + "through an instantiation of it, so every call of it is a GenericInstanceMethod and TokenParsing.cs:291 "
-        + "throws on the first one. The move itself is written and reads back; what cannot be read is the weaving of "
-        + "it. Nothing here is tested until that fault is answered.")]
     public void The_Lambda_Of_A_Generic_Template_Is_Carried_And_Its_Parameter_Re_Parented()
     {
         // Tier 1 where the type the compiler wrote is generic over the type which declares the template, so the copy
@@ -1098,7 +1128,12 @@ public class CompilerGeneratedTemplateTests
             });
         }
 
-        Assert.That(Ran(result, CARRIED_GENERIC_CLOSURE_TYPE, "Run", 41), Is.EqualTo(41),
+        // The type is closed before the member is called, because the runtime refuses a late bound call of a member of a
+        // type which holds generic parameters: what the type declares is the parameter which the copy re-parented onto
+        // itself, so the member belongs to the type which the parameter is instantiated with rather than to the open one.
+        var run = AssemblyLoader.LoadFromBytes(result).GetType(CARRIED_GENERIC_CLOSURE_TYPE)!.MakeGenericType(typeof(int)).GetMethod("Run")!;
+
+        Assert.That(run.Invoke(null, [41]), Is.EqualTo(41),
             "the member which was woven did not compute what the template computes.");
     }
 }
