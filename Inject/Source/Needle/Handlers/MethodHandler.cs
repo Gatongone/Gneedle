@@ -842,20 +842,20 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <exception cref="ArgumentException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
     private Instruction CreateLdarg(int slot, MethodDefinition templateDef)
     {
-        var parameter = GetParameterAt(slot, templateDef);
-
         // A macro form carries the slot in the opcode rather than as an operand, so the macro is chosen by the slot
         // which the argument holds in the member being woven, which is not the position of the parameter: the receiver
         // of an instance member takes the slot ahead of the first of them. A slot which no macro holds is loaded
         // through the operand form, which names the parameter itself and leaves the slot of it to be written from the
-        // parameter, where the one form of the slot is settled rather than written twice.
+        // parameter, where the one form of the slot is settled rather than written twice. The parameter is read for
+        // that form alone, because the slot which a macro carries is the receiver of a member as often as a parameter
+        // of one, and a receiver names no parameter.
         return GetShiftedSlot(slot, templateDef) switch
         {
             0 => Instruction.Create(OpCodes.Ldarg_0),
             1 => Instruction.Create(OpCodes.Ldarg_1),
             2 => Instruction.Create(OpCodes.Ldarg_2),
             3 => Instruction.Create(OpCodes.Ldarg_3),
-            _ => Instruction.Create(OpCodes.Ldarg, parameter)
+            _ => Instruction.Create(OpCodes.Ldarg, GetParameterAt(slot, templateDef))
         };
     }
 
