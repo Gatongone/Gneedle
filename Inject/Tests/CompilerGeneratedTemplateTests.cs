@@ -214,6 +214,38 @@ public sealed class CarriedInjectorAttribute : Attribute, IMethodInjector
 }
 
 /// <summary>
+/// The type whose member carries the injector above, and which declares the template which is woven into it.<para/>
+/// The template belongs to the type being woven, so the instance it reaches is the instance of that member, and the
+/// lambda the template holds captures that instance, which is what makes the compiler write it into a field of the
+/// type it writes for the lambda.
+/// </summary>
+public class CarriedInstanceFixture
+{
+    /// <summary>
+    /// The value which the woven member adds, which is read off the instance rather than captured by the lambda.
+    /// </summary>
+    public int Offset = 1;
+
+    /// <summary>
+    /// The member which the injector above weaves.
+    /// </summary>
+    [CarriedInjector]
+    public int Run(int value) => -1;
+
+    /// <summary>
+    /// The template which is woven into the member above, which reaches the field of the instance it belongs to both
+    /// ways at once: the lambda reads the field itself, which is what makes the compiler hold that instance in the type
+    /// it writes for the lambda, and it reaches the same field through a placeholder, which is what the weaving has to
+    /// write against that instance rather than against the receiver of the lambda.
+    /// </summary>
+    public int ReachesTheInstanceFromALambda(int value)
+    {
+        Func<int, int> add = x => x + Offset + This.Field<int>(nameof(Offset)).Get();
+        return add(value);
+    }
+}
+
+/// <summary>
 /// The type whose member carries the injector above, and onto which the type which the compiler wrote for the lambda is
 /// carried by the tests below.
 /// </summary>
@@ -440,6 +472,29 @@ public class CompilerGeneratedTemplateTests
 
         Assert.That(refusal!.Message, Does.Contain("can reach no instance of the member being woven"),
             $"the refusal does not say that the body reaches no instance: {refusal.Message}");
+    }
+
+    /// <summary>
+    /// The type whose member is woven and which declares the template which is woven into it.
+    /// </summary>
+    private const string CARRIED_INSTANCE_TYPE = "Gneedle.Inject.Test.CarriedInstanceFixture";
+
+    [Test]
+    [NonParallelizable]
+    public void A_Template_Of_The_Type_Being_Woven_Reaches_Its_Instance_From_A_Lambda()
+    {
+        // The instance which the placeholder reaches is not the receiver of the lambda: the compiler holds it in a field
+        // of the type it wrote for the lambda, and the weaving reads the member off that instance rather than off the
+        // lambda. The field is read by the lambda itself as well, so what the member computes is the value it was given
+        // with the field added twice.
+        var (result, reported) = Woven(CARRIED_INSTANCE_TYPE, nameof(CarriedInstanceFixture.ReachesTheInstanceFromALambda), CARRIED_INSTANCE_TYPE);
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        var type = AssemblyLoader.LoadFromBytes(result).GetType(CARRIED_INSTANCE_TYPE)!;
+        var instance = Activator.CreateInstance(type);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [41]), Is.EqualTo(43),
+            "the placeholder which reaches the instance of the member being woven from a lambda was not woven.");
     }
 
     [Test]
@@ -1029,6 +1084,33 @@ public class CompilerGeneratedTemplateTests
         try
         {
             var (changed, result) = Injections.Apply(AssemblyLoader.LoadFromBytes(modified), modified, reportError: reported.Add);
+            Assert.That(changed, Is.True,
+                $"the member which carries the injector was woven by nothing.{Environment.NewLine}{string.Join(Environment.NewLine, reported)}");
+
+            return (result, reported);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(Carried.VARIABLE, null);
+        }
+    }
+
+    /// <summary>
+    /// Weave the assembly of these tests once with the injector of the type which is named turned on, carrying nothing
+    /// by hand, and hand back the image which was woven and what the run reported.<para/>
+    /// The carrying is the weaving's own for the tests which read it: what a template which is declared in the type
+    /// being woven needs cannot be written by hand here, because the instance it reaches is the one the member being
+    /// woven was made with.
+    /// </summary>
+    private static (byte[] Result, List<string> Reported) Woven(string holder, string template, string intoType)
+    {
+        var image = File.ReadAllBytes(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        var reported = new List<string>();
+
+        Environment.SetEnvironmentVariable(Carried.VARIABLE, $"{intoType}|{template}|{holder}");
+        try
+        {
+            var (changed, result) = Injections.Apply(AssemblyLoader.LoadFromBytes(image), image, reportError: reported.Add);
             Assert.That(changed, Is.True,
                 $"the member which carries the injector was woven by nothing.{Environment.NewLine}{string.Join(Environment.NewLine, reported)}");
 
