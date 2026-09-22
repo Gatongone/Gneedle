@@ -247,7 +247,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         if (member.DeclaringType?.GetElementType().FullName != template.DeclaringType.FullName) return;
         if (member is not MethodReference loose) return;
 
-        var looseDefinition = ResolveOrNull(loose)
+        var looseDefinition = loose.ResolveOrNull()
             ?? throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN, member.FullName, template.FullName));
         if (!looseDefinition.HasBody)
         {
@@ -308,7 +308,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         // captured, which is written where it is read rather than carried, and the type it belongs to stands.
         if (ReferenceEquals(element, template.DeclaringType)) return;
 
-        var from = ResolveOrNull(element)
+        var from = element.ResolveOrNull()
             ?? throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, element.FullName, template.FullName));
         if (!m_Originals.Add(from.FullName)) return;
         var copy = Declare(from);
@@ -381,41 +381,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         }
 
         return copy;
-    }
-
-    /// <summary>
-    /// The type which <paramref name="reference"/> names, or null where the assembly which declares it cannot be read.
-    /// </summary>
-    /// <remarks>
-    /// A reference is resolved to read the instructions of what it names, and the assembly which declares it may be one
-    /// which cannot be read at all: that is a type which cannot be carried rather than a fault of the carrying, so it is
-    /// answered with null and refused by the caller by the name of what it names.
-    /// </remarks>
-    /// <param name="reference">The reference which is resolved.</param>
-    /// <returns>The type which it names, or null.</returns>
-    private static TypeDefinition? ResolveOrNull(TypeReference reference)
-    {
-        try
-        {
-            return reference.Resolve();
-        }
-        catch (AssemblyResolutionException)
-        {
-            return null;
-        }
-    }
-
-    /// <inheritdoc cref="ResolveOrNull(TypeReference)"/>
-    private static MethodDefinition? ResolveOrNull(MethodReference reference)
-    {
-        try
-        {
-            return reference.Resolve();
-        }
-        catch (AssemblyResolutionException)
-        {
-            return null;
-        }
     }
 
     /// <summary>
@@ -502,7 +467,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             if (hops.Length != 1) return [];
 
             chain.Add(hops[0]);
-            at = ResolveOrNull(hops[0].FieldType.GetElementType());
+            at = hops[0].FieldType.GetElementType().ResolveOrNull();
         }
 
         return [];

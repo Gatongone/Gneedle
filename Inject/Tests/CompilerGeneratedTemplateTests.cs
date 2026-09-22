@@ -938,18 +938,20 @@ public class CompilerGeneratedTemplateTests
     [Test]
     public void A_Copy_Which_Names_A_Type_Of_Its_Own_Assembly_Keeps_That_Type()
     {
-        // What a body the compiler wrote reaches may be a type of another assembly than the one which is woven, and the
-        // carrying writes what it reaches as it stands: the field of the copy names the type the template captured,
-        // which is a type of the assembly which is woven here, so nothing is referenced and the image still reads.
+        // What a body the compiler wrote reaches may be a type which the assembly being woven declares itself, and the
+        // carrying writes what the type of the template names as it stands: the field of the copy names the type the
+        // template captured, which is the very type of this module rather than a reference of another one which happens
+        // to be called that. The two are told apart by the definition and not by the name, which is the same for both.
         var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.CapturesATypeOfItsOwnAssembly), CARRIED_CLOSURE_TYPE);
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
         using var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result));
         var carried = read.MainModule.GetType(CARRIED_CLOSURE_TYPE)!.NestedTypes.Single();
+        var captured = carried.Fields.Single(field => field.Name == "captured");
 
-        Assert.That(carried.Fields.Single(field => field.Name == "captured").FieldType.FullName,
-            Is.EqualTo("Gneedle.Inject.Test.Captured"),
-            "the field of the copy does not name the type the template captured.");
+        Assert.That(captured.FieldType.Resolve(),
+            Is.SameAs(read.MainModule.GetType("Gneedle.Inject.Test.Captured")),
+            "the field of the copy names a type of another module rather than the type which the template captured.");
     }
 
     [Test]

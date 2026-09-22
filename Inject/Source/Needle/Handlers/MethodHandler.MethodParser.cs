@@ -925,24 +925,6 @@ partial class MethodHandler
     }
 
     /// <summary>
-    /// The member which a reference to one stands for, or null where the assembly which declares the type of it is not
-    /// there to be read, or where the type does not hold the member which the reference names.
-    /// </summary>
-    /// <param name="reference">The reference to the member.</param>
-    /// <returns>The definition of the member, or null where this read does not tell it.</returns>
-    private static MethodDefinition? ResolveOrNull(MethodReference reference)
-    {
-        try
-        {
-            return reference.Resolve();
-        }
-        catch (AssemblyResolutionException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Where the delegate which a local holds is invoked, which is every read of the local together with the instruction
     /// which invokes the delegate that the read is the receiver of.<para/>
     /// What the weaving writes for the symbol stands where each read stood and the delegate is never built, so a local
@@ -995,7 +977,7 @@ partial class MethodHandler
             // which is not there, and one which the type it is declared by does not hold, are ones which this read cannot
             // tell it of: a count of the arguments which stands one short of the values the call takes is a body the
             // runtime refuses to run, so the weave is refused by name rather than left to that count.
-            if (ResolveOrNull(callMethod) is not { } called)
+            if (callMethod.ResolveOrNull() is not { } called)
             {
                 throw new ArgumentException(string.Format(ErrorMessages.INVALID_CALLED_MEMBER, callMethod.FullName, Source.FullName));
             }
