@@ -208,8 +208,10 @@ public sealed class CarriedInjectorAttribute : Attribute, IMethodInjector
         var parts = wanted.Split('|');
         if (parts[0] != method.DeclaringType!.FullName) return;
 
-        var holder = parts.Length > 2 ? typeof(GenericCompilerGeneratedTemplates<>).Assembly.GetType(parts[2])! : typeof(CompilerGeneratedTemplates);
-        handler.SetBody(holder.GetMethod(parts[1])!);
+        var holder = parts.Length > 2 ? typeof(GenericCompilerGeneratedTemplates<>).Assembly.GetType(parts[2]) : typeof(CompilerGeneratedTemplates);
+        Assert.That(holder, Is.Not.Null, $"the variable names no type of the assembly of these tests: {string.Join("|", parts)}");
+
+        handler.SetBody(holder!.GetMethod(parts[1])!);
     }
 }
 
