@@ -677,16 +677,7 @@ public class SetBodyTests
     /// <param name="templateName">Name of the template of <see cref="ConstructTemplates"/> which is woven.</param>
     /// <returns>The method which was woven.</returns>
     private static MethodInfo NewProbe(string templateName)
-    {
-        var assembly = Assembly.Create($"SetBody{templateName}Assembly");
-        var host = AddAHost(assembly, "Calc");
-        var intType = typeof(int).ToGneedleType();
-        var method = host.AddMethod("Probe", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
-
-        method.SetBody(typeof(ConstructTemplates).GetMethod(templateName)!);
-
-        return assembly.Load().GetType($"{NS}.Calc")!.GetMethod("Probe")!;
-    }
+        => NewProbeOf($"SetBody{templateName}Assembly", templateName, typeof(int).ToGneedleType());
 
     /// <summary>
     /// Weave a template of <see cref="ConstructTemplates"/> into <c>public static {returnType} Probe(int value)</c> of an
