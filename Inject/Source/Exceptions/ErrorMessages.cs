@@ -250,17 +250,17 @@ internal static class ErrorMessages
 
     /// <summary>
     /// The template names a type which the compiler wrote for a body of the template's own — a lambda, a local
-    /// function, an async body or an iterator — which holds that body as a method of its own rather than as
-    /// instructions of the template. The placeholders are the reference which names it and the member.
+    /// function, an async body or an iterator — which the carrying could not read, so that what such a type holds was
+    /// not carried onto the type being woven. The placeholders are the reference which names it and the member.
     /// </summary>
-    internal const string TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN = "The template names a type which the compiler wrote for a body of the template's own, which is a lambda, a local function, an async body or an iterator: what such a type holds is a method of its own rather than instructions of the template, so the weaving cannot carry it. Reference: {0}, Method: {1}.";
+    internal const string TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN = "The template names a type which the compiler wrote for a body of the template's own, which is a lambda, a local function, an async body or an iterator, and what that type holds could not be read: the instructions which carry a body of the compiler's own onto the type being woven are not there, and a member written against a type which was left behind fails when it is run. Reference: {0}, Method: {1}.";
 
     /// <summary>
     /// The template calls a member which the compiler wrote as the body of a lambda or of a local function of the
-    /// template's own, which is written on the type which declares the template rather than as a type of its own. The
-    /// placeholders are the reference which names it and the member.
+    /// template's own, which is written on the type which declares the template rather than as a type of its own, and
+    /// which the carrying could not read. The placeholders are the reference which names it and the member.
     /// </summary>
-    internal const string TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN = "The template calls a member which the compiler wrote for a body of the template's own, which is the body of a lambda or of a local function written inside the template: what such a member holds is a body of its own rather than instructions of the template, so the weaving cannot carry it. Reference: {0}, Method: {1}.";
+    internal const string TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN = "The template calls a member which the compiler wrote for a body of the template's own, which is the body of a lambda or of a local function written inside the template, and what that member holds could not be read: the instructions which carry a body of the compiler's own onto the type being woven are not there, and a member written against a type which was left behind fails when it is run. Reference: {0}, Method: {1}.";
 
     /// <summary>
     /// The template belongs to an instance and reads it, which is the template's own receiver rather than an argument

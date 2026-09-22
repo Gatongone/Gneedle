@@ -58,12 +58,15 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     private readonly Dictionary<string, (MethodDefinition From, MethodDefinition Copy)> m_Methods = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// What each copy was written from, by the full name of the original, which the body of the copy is written out of.
+    /// The full name of every type the carry wrote a copy of, which is what tells a type which is still to be carried
+    /// from one which was carried already: what is carried reaches what it carries, so the walk of it comes back to a
+    /// type it has read.
     /// </summary>
-    private readonly Dictionary<string, TypeDefinition> m_Originals = new(StringComparer.Ordinal);
+    private readonly HashSet<string> m_Originals = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// <inheritdoc cref="m_Originals"/>
+    /// The same for the members which the compiler wrote on the type which declares the template, by the full name of
+    /// the member each copy was written from, which the body of that copy is written out of.
     /// </summary>
     private readonly Dictionary<string, MethodDefinition> m_MemberOriginals = new(StringComparer.Ordinal);
 
@@ -192,8 +195,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
     /// <summary>
     /// Append the copies to the type which is woven, under the lock of the module, which is the write which makes them
-    /// types of the module: a body of one names a member of itself, and the carrying of that body imports what it
-    /// names.
+    /// types of the module and is made where every other write of that table is made.
     /// </summary>
     internal void Attach()
     {
@@ -246,7 +248,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         if (member.DeclaringType?.GetElementType().FullName != template.DeclaringType.FullName) return;
         if (member is not MethodReference loose) return;
 
-        var looseDefinition = loose.Resolve()
+        var looseDefinition = ResolveOrNull(loose)
             ?? throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN, member.FullName, template.FullName));
         if (!looseDefinition.HasBody)
         {
@@ -304,11 +306,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         // captured, which is written where it is read rather than carried, and the type it belongs to stands.
         if (ReferenceEquals(element, template.DeclaringType)) return;
 
-        var from = element.Resolve()
+        var from = ResolveOrNull(element)
             ?? throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, element.FullName, template.FullName));
-        if (m_Originals.ContainsKey(from.FullName)) return;
-
-        m_Originals[from.FullName] = from;
+        if (!m_Originals.Add(from.FullName)) return;
         var copy = Declare(from);
         m_Copies.Add(copy);
 
@@ -379,6 +379,41 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         }
 
         return copy;
+    }
+
+    /// <summary>
+    /// The type which <paramref name="reference"/> names, or null where the assembly which declares it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// A reference is resolved to read the instructions of what it names, and the assembly which declares it may be one
+    /// which cannot be read at all: that is a type which cannot be carried rather than a fault of the carrying, so it is
+    /// answered with null and refused by the caller by the name of what it names.
+    /// </remarks>
+    /// <param name="reference">The reference which is resolved.</param>
+    /// <returns>The type which it names, or null.</returns>
+    private static TypeDefinition? ResolveOrNull(TypeReference reference)
+    {
+        try
+        {
+            return reference.Resolve();
+        }
+        catch (AssemblyResolutionException)
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc cref="ResolveOrNull(TypeReference)"/>
+    private static MethodDefinition? ResolveOrNull(MethodReference reference)
+    {
+        try
+        {
+            return reference.Resolve();
+        }
+        catch (AssemblyResolutionException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -459,7 +494,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             if (hops.Length != 1) return [];
 
             chain.Add(hops[0]);
-            at = hops[0].FieldType.GetElementType().Resolve();
+            at = ResolveOrNull(hops[0].FieldType.GetElementType());
         }
 
         return [];
