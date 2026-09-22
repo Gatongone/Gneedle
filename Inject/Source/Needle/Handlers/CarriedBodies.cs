@@ -661,7 +661,12 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
     /// <summary>
     /// A specification of a member the carry did not write, with the arguments of it re-pointed where one of them
-    /// names a type which the carry wrote, or null when none of them does.
+    /// names a type which the carry wrote, or null when none of them does.<para/>
+    /// What is answered here is whether there is anything of a copy in the reference at all, which is what tells a
+    /// caller that it may be written as it stands; what is written where there is not, which is the reference imported
+    /// into the module being woven, is <see cref="Pointed"/>. The two are one question asked twice on purpose: the
+    /// first is asked of every operand of a body, and the import of one which names nothing of a copy is work which is
+    /// not done for it.
     /// </summary>
     /// <param name="called">The member which is asked about.</param>
     /// <returns>The specification with its arguments re-pointed, or null.</returns>
