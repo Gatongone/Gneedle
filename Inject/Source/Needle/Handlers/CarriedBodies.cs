@@ -42,15 +42,16 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     private readonly List<MethodDefinition> m_MemberCopies = [];
 
     /// <summary>
-    /// The same copies, by the full name of the member each was written from.<para/>
-    /// The key is the name of the original rather than the name of the copy, because a copy is declared by the type
-    /// which is woven and its own full name names that type: what a body of the template names is the member the
-    /// compiler wrote, which is what is looked up here.
+    /// The same copies, by the key which <see cref="TheKeyOf"/> makes of the member each was written from: the type
+    /// which declares it, the name of it and how many parameters it takes.<para/>
+    /// What a body of the template names is the member the compiler wrote rather than the copy, and the reference it
+    /// holds names the instantiation of a generic type where the definition is what was carried: the key is made of
+    /// the element type so that the two are one member to the lookup.
     /// </summary>
     private readonly Dictionary<string, MethodDefinition> m_MemberTypes = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Every method of every type which was carried, by the full name of the method each was written from, which is
+    /// Every method of every type which was carried, by the key which <see cref="TheKeyOf"/> makes of it, which is
     /// what tells a body the template reaches from one it does not.
     /// </summary>
     private readonly Dictionary<string, (MethodDefinition From, MethodDefinition Copy)> m_Methods = new(StringComparer.Ordinal);
@@ -63,8 +64,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     private readonly HashSet<string> m_Originals = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The same for the members which the compiler wrote on the type which declares the template, by the full name of
-    /// the member each copy was written from, which the body of that copy is written out of.
+    /// The same for the members which the compiler wrote on the type which declares the template, by the key which
+    /// <see cref="TheKeyOf"/> makes of each, which the body of that copy is written out of.
     /// </summary>
     private readonly Dictionary<string, MethodDefinition> m_MemberOriginals = new(StringComparer.Ordinal);
 
@@ -521,7 +522,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <returns>The copy of the method.</returns>
     private MethodDefinition DeclareMethod(MethodDefinition from, TypeDefinition holder)
     {
-        var copy = new MethodDefinition(from.Name, from.Attributes, TypeOf(from.ReturnType))
+        // The signature is written after the parameters of the method are registered rather than beside them, because a
+        // parameter of the method is what the return type and the parameters below name: a local function which is
+        // generic in its own right declares one, and its own return type may be it.
+        var copy = new MethodDefinition(from.Name, from.Attributes, holder.Module.TypeSystem.Void)
         {
             DeclaringType     = holder,
             HasThis           = from.HasThis,
@@ -535,6 +539,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             copy.GenericParameters.Add(declared);
             m_Parameters[$"{from.FullName}/{parameter.Position}"] = declared;
         }
+
+        copy.ReturnType = TypeOf(from.ReturnType);
 
         foreach (var parameter in from.Parameters)
         {
@@ -646,7 +652,17 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     {
         // The key names the type which declares the member rather than the member itself, because the reference a body
         // holds names the instantiation of a generic type where the definition is what was carried.
-        if (m_MemberTypes.TryGetValue(TheKeyOf(called.DeclaringType, called.Name, called.Parameters.Count), out var loose)) return loose;
+        if (m_MemberTypes.TryGetValue(TheKeyOf(called.DeclaringType, called.Name, called.Parameters.Count), out var loose))
+        {
+            // A member which the compiler wrote may be generic in its own right, and the call names it through the
+            // instantiation it makes of it while what the carrying wrote is the open member: what is written is the
+            // instantiation of the copy, because a call of the open member is a body the runtime does not run.
+            if (called is not GenericInstanceMethod looseSpecification) return loose;
+
+            var instantiatedLoose = new GenericInstanceMethod(loose);
+            foreach (var argument in looseSpecification.GenericArguments) instantiatedLoose.GenericArguments.Add(TypeOf(argument));
+            return instantiatedLoose;
+        }
 
         var holder = called.DeclaringType;
         if (holder is null || !m_Types.TryGetValue(holder.GetElementType().FullName, out var copy))
