@@ -803,11 +803,11 @@ public class CompilerGeneratedTemplateTests
     }
 
     [Test]
-    public void A_Body_Which_Names_A_Type_Outside_The_Assembly_Being_Woven_Leaves_A_Reference_To_It()
+    public void A_Copy_Which_Names_A_Type_Of_Its_Own_Assembly_Keeps_That_Type()
     {
-        // What a body the compiler wrote reaches may leave the assembly the template was compiled into, and the carrying
-        // writes what it reaches as it stands: the field of the copy names the type the template captured, which is a
-        // type of the assembly which is woven here, so nothing is referenced and the image still reads.
+        // What a body the compiler wrote reaches may be a type of another assembly than the one which is woven, and the
+        // carrying writes what it reaches as it stands: the field of the copy names the type the template captured,
+        // which is a type of the assembly which is woven here, so nothing is referenced and the image still reads.
         var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.CapturesATypeOfItsOwnAssembly), CARRIED_CLOSURE_TYPE);
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
