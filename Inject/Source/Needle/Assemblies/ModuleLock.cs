@@ -102,4 +102,29 @@ internal static class ModuleLock
     {
         lock (Of(module)) module.Types.Add(type);
     }
+
+    /// <summary>
+    /// Append a type which the module declares to the type which declares it, under the lock of that module.<para/>
+    /// A type which is declared by another one is a type of the module like any other, so the lock which holds the
+    /// writes of the module's type table is the one which holds this one as well.
+    /// </summary>
+    /// <param name="module">The module which declares both types.</param>
+    /// <param name="declaring">The type which the appended type is declared by.</param>
+    /// <param name="type">The type which is appended.</param>
+    internal static void DeclareNested(ModuleDefinition module, TypeDefinition declaring, TypeDefinition type)
+    {
+        lock (Of(module)) declaring.NestedTypes.Add(type);
+    }
+
+    /// <summary>
+    /// Take a type which the module declares back off the type which declares it, under the lock of that module,
+    /// which is the write which undoes <see cref="DeclareNested"/>.
+    /// </summary>
+    /// <param name="module">The module which declares both types.</param>
+    /// <param name="declaring">The type which the removed type is declared by.</param>
+    /// <param name="type">The type which is removed.</param>
+    internal static void UndeclareNested(ModuleDefinition module, TypeDefinition declaring, TypeDefinition type)
+    {
+        lock (Of(module)) declaring.NestedTypes.Remove(type);
+    }
 }

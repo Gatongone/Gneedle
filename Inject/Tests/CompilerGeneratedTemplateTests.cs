@@ -452,9 +452,11 @@ public class CompilerGeneratedTemplateTests
         }
 
         /// <summary>
-        /// The name a copy is declared with, which is the name of the original with the brackets of it taken out: the
-        /// name of a type the compiler wrote is not one an identifier of C# holds, and a name which is not whole is one
-        /// which a second copy of the same name would be told from by nothing.
+        /// The name a copy is declared with.<para/>
+        /// The brackets of the name the compiler wrote are replaced, because the weaving refuses a type which is named
+        /// as the compiler names one: the name is what tells a type of the compiler's own which the weaving holds no
+        /// instructions of from a type it does, and this move writes its copies by hand rather than the weaving making
+        /// them. A copy which keeps the compiler's name is refused until the weaving carries one itself.
         /// </summary>
         private static string NameOf(TypeDefinition from) => from.Name.Replace('<', '_').Replace('>', '_').Replace('|', '_');
 
