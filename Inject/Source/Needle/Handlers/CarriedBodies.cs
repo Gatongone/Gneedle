@@ -142,7 +142,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                     if (member is MethodReference pointed
                         && m_Methods.TryGetValue(TheKeyOf(member.DeclaringType, pointed.Name, pointed.Parameters.Count), out var pointedAt))
                     {
-                        AddBody(pointedAt.From, pointedAt.Copy);
+                        AddBody(pointedAt.Copy);
                     }
 
                     continue;
@@ -191,7 +191,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <returns>Whether the carry wrote it, so that the weaving holds the instructions of what it holds.</returns>
     internal bool HoldsMember(MemberReference? member)
         => member is not null
-           && (m_MemberCopies.Exists(copy => ReferenceEquals(copy, member)) || m_MemberTypes.ContainsKey(member.FullName));
+           && (m_MemberCopies.Exists(copy => ReferenceEquals(copy, member))
+               || m_MemberTypes.ContainsKey(TheKeyOf(member.DeclaringType, member.Name, member is MethodReference called ? called.Parameters.Count : 0)));
 
     /// <summary>
     /// Append the copies to the type which is woven, under the lock of the module, which is the write which makes them
@@ -225,7 +226,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         {
             into.Methods.Remove(copy);
         }
-
     }
 
     /// <summary>
@@ -255,9 +255,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_HOLDS_NO_BODY, looseDefinition.FullName));
         }
 
-        if (m_MemberOriginals.ContainsKey(looseDefinition.FullName)) return;
+        var key = TheKeyOf(looseDefinition.DeclaringType, looseDefinition.Name, looseDefinition.Parameters.Count);
+        if (m_MemberOriginals.ContainsKey(key)) return;
 
-        m_MemberOriginals[looseDefinition.FullName] = looseDefinition;
+        m_MemberOriginals[key] = looseDefinition;
         var copy = DeclareMethod(looseDefinition, into);
 
         // A member which the type being woven already declares under that name and with that many parameters is the one
@@ -266,8 +267,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         // a type which the runtime refuses to load. The copy takes the number after the name, as a type copy does.
         copy.Name = AMemberNameWhich(copy);
         m_MemberCopies.Add(copy);
-        m_MemberTypes[looseDefinition.FullName] = copy;
-        AddBody(looseDefinition, copy);
+        m_MemberTypes[key] = copy;
+        AddBody(copy);
         pending.Enqueue(looseDefinition);
     }
 
@@ -375,7 +376,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             // the two are one type to the lookup, and the name of a method alone tells two of one name apart by nothing.
             m_Methods[TheKeyOf(from, method.Name, method.Parameters.Count)] = (method, methodCopy);
 
-            if (reachedByTheRuntime) AddBody(method, methodCopy);
+            if (reachedByTheRuntime) AddBody(methodCopy);
         }
 
         return copy;
@@ -432,13 +433,12 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <summary>
     /// Record that a body the compiler wrote is one which the template reaches, and so is woven.
     /// </summary>
-    /// <param name="from">The body the compiler wrote.</param>
-    /// <param name="copy">The copy of it.</param>
-    private void AddBody(MethodDefinition from, MethodDefinition copy)
+    /// <param name="copy">The copy of the body the compiler wrote.</param>
+    private void AddBody(MethodDefinition copy)
     {
         if (m_Bodies.Exists(body => ReferenceEquals(body.Copy, copy))) return;
 
-        m_Bodies.Add(new Body(from, copy));
+        m_Bodies.Add(new Body(copy));
     }
 
     /// <summary>
@@ -461,15 +461,19 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     }
 
     /// <summary>
+    /// The name the compiler gives the field which holds the instance a body of its own was written in.
+    /// </summary>
+    private const string INSTANCE_FIELD = "<>4__this";
+
+    /// <summary>
     /// The fields which are read, one after the next, to load an instance of the type being woven out of the receiver
     /// of a body of the compiler's own, or nothing when that body reaches no such instance.
     /// </summary>
     /// <remarks>
     /// The instance a body was written in is a field of the type the compiler wrote for it, which the compiler names
-    /// <c>&lt;&gt;4__this</c> when that instance is one of the type the template was declared in. A type written inside
-    /// another one holds that one rather than the instance, and the walk follows it: the hop is taken only where exactly
-    /// one field of the type holds a type which was carried, because a hop taken wrongly reads a member of another
-    /// instance rather than refusing.
+    /// <c>&lt;&gt;4__this</c>. A type written inside another one holds that one rather than the instance, and the walk
+    /// follows it: the hop is taken only where exactly one field of the type holds a type which was carried, because a
+    /// hop taken wrongly reads a member of another instance rather than refusing.
     /// </remarks>
     /// <param name="holder">The type the compiler wrote, which declares the body.</param>
     /// <returns>The fields of the chain, in the order they are read.</returns>
@@ -483,7 +487,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         for (var at = holder; at is not null && walked.Add(at.FullName);)
         {
-            var instance = at.Fields.FirstOrDefault(field => field.FieldType.GetElementType().FullName == into.FullName);
+            // The field which holds the instance is the one the compiler names for what it holds, and a type which holds
+            // one may hold a local it captured of the same type beside it: the name tells the instance from the local,
+            // which would be read as the instance otherwise.
+            var instance = at.Fields.FirstOrDefault(field => field.Name == INSTANCE_FIELD);
             if (instance is not null)
             {
                 chain.Add(instance);
@@ -588,6 +595,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             };
         }
 
+        // Whether the locals of the body are zeroed before it runs is a property of the body rather than of what it
+        // holds, and the body which is written is one of those: what the compiler wrote it for is carried with it.
+        copy.Body.InitLocals = from.Body.InitLocals;
+
         foreach (var handler in from.Body.ExceptionHandlers)
         {
             copy.Body.ExceptionHandlers.Add(new ExceptionHandler(handler.HandlerType)
@@ -633,7 +644,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <returns>The member of the copy, or null.</returns>
     internal MethodReference? TheCopyOf(MethodReference called)
     {
-        if (m_MemberTypes.TryGetValue(called.FullName, out var loose)) return loose;
+        // The key names the type which declares the member rather than the member itself, because the reference a body
+        // holds names the instantiation of a generic type where the definition is what was carried.
+        if (m_MemberTypes.TryGetValue(TheKeyOf(called.DeclaringType, called.Name, called.Parameters.Count), out var loose)) return loose;
 
         var holder = called.DeclaringType;
         if (holder is null || !m_Types.TryGetValue(holder.GetElementType().FullName, out var copy))
@@ -745,9 +758,11 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         if (reference is GenericParameter parameter && OwnerOf(parameter) is { } owner)
         {
-            // A parameter which no copy of what declared it stands for is imported: a parameter of the template's own
-            // method is one of those - what the woven member declares in its place is not held here - and the import
-            // resolves it against the context it stands in, which is the body it is read out of.
+            // A parameter which no copy of what declared it stands for is imported, which answers with the parameter
+            // itself where the module which declares it is the one being written: a parameter of the template's own
+            // method is one of those, and what the member being woven declares in its place is not held here. A
+            // parameter of another module is one which the import has no context to resolve against, and it throws
+            // rather than refusing by a name.
             return m_Parameters.TryGetValue($"{owner}/{parameter.Position}", out var declared)
                 ? declared
                 : ModuleLock.Import(module, reference);
@@ -844,18 +859,13 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
     /// <summary>
     /// One body which the carry wrote, which is woven in its own right rather than as instructions of the template: the
-    /// member the compiler wrote, the copy of it, and the chain of fields which loads the instance of the member being
-    /// woven out of the receiver of the copy.
+    /// copy of the member the compiler wrote, and the chain of fields which loads the instance of the member being
+    /// woven out of the receiver of that copy.
     /// </summary>
-    internal sealed class Body(MethodDefinition from, MethodDefinition copy)
+    internal sealed class Body(MethodDefinition copy)
     {
         /// <summary>
-        /// The member which the compiler wrote, which the body of the copy is written from.
-        /// </summary>
-        internal MethodDefinition From { get; } = from;
-
-        /// <summary>
-        /// The copy of it, which the weaving is written into.
+        /// The copy of the member which the compiler wrote, which the weaving is written into.
         /// </summary>
         internal MethodDefinition Copy { get; } = copy;
 
@@ -865,8 +875,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         /// </summary>
         /// <remarks>
         /// A lambda which captured a variable is a method of a type which holds what it captured, and the instance it
-        /// was written in is a field of that type. The name the compiler gives that field is read here rather than the
-        /// field being found by its type, because what the field holds is what tells one display class from another.
+        /// was written in is a field of that type. The field is found by the type it holds rather than by the name the
+        /// compiler gives it, because a type written inside another one holds that one rather than the instance, and
+        /// the chain of them is what the walk follows.
         /// </remarks>
         internal IReadOnlyList<FieldReference> Receiver => m_Receiver;
 

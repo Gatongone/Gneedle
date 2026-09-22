@@ -705,8 +705,9 @@ public class AroundBodyTests
         var thrown = Assert.Throws<ArgumentException>(
             () => run.AroundBody(typeof(ProceedInALambdaTemplates).GetMethod(nameof(ProceedInALambdaTemplates.ProceedsFromInsideALambda))!));
 
-        Assert.That(thrown!.Message, Does.Contain("proceeds into the body which was taken over from a body of its own"),
-            $"the refusal does not say that the call proceeds from a body of the compiler's own: {thrown.Message}");
+        Assert.That(thrown!.Message, Does.Contain("A body which the compiler wrote for a body of the template's own")
+                                    .And.Contain("proceeds into the body which was taken over from the member being woven"),
+            $"the refusal does not say that a body of the compiler's own proceeds: {thrown.Message}");
     }
 
     [Test]

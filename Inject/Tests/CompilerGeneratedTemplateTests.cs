@@ -132,6 +132,18 @@ public static class CompilerGeneratedTemplates
     }
 
     /// <summary>
+    /// A template which holds a lambda and names a generic parameter of the type it is woven into at the second
+    /// position, which a member of a type that declares one parameter does not hold: the return type of a template is
+    /// read after its body is parsed, so what the carrying wrote is what a refusal there has to take back off.
+    /// </summary>
+    public static T_1 HoldsALambdaAndNamesASecondParameter(int value)
+    {
+        Func<int, int> add = x => x + 1;
+        GC.KeepAlive(add(value));
+        return null!;
+    }
+
+    /// <summary>
     /// A lambda written inside a lambda, where the inner one captured what the outer one holds as well as a local of
     /// its own, which is what makes the compiler write a type for the one of them.
     /// </summary>
@@ -558,6 +570,30 @@ public class CompilerGeneratedTemplateTests
 
         Assert.That(Ran(result, CARRIED_OWN_LOCAL_FUNCTION_TYPE, "Run", 21), Is.EqualTo(42),
             "the member which was woven did not compute what the template computes.");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void A_Template_Which_Is_Refused_After_It_Was_Carried_Leaves_The_Type_As_It_Was()
+    {
+        // The return type of a template is read after its body was parsed, so a template which names a token at a
+        // position the member being woven does not declare is refused after the carrying of it succeeded: what the
+        // carrying wrote onto the type being woven is taken back off there as well, which is what the type declaring
+        // nothing of the compiler's own reads.
+        var intType = typeof(int).ToGneedleType();
+        var (_, host, _) = NewHost($"CompilerGeneratedRefusedAfterTheCarrying{Guid.NewGuid():N}");
+        var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+
+        Assert.Throws<ArgumentException>(
+            () => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.HoldsALambdaAndNamesASecondParameter))));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(host.Source.NestedTypes, Is.Empty,
+                "the type which was woven declares the copy of a type which the compiler wrote, which the refused weaving left behind.");
+            Assert.That(host.Source.Methods.Any(method => method.Name.IndexOf(">b__", StringComparison.Ordinal) >= 0), Is.False,
+                "the type which was woven declares the copy of a member which the compiler wrote, which the refused weaving left behind.");
+        });
     }
 
     [Test]

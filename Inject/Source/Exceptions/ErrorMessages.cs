@@ -279,7 +279,7 @@ internal static class ErrorMessages
     /// from the member, which it cannot be handed the arguments of. The placeholders are the reference which names the
     /// call and the member being woven.
     /// </summary>
-    internal const string PROCEED_IN_A_BODY_OF_ITS_OWN = "The template proceeds into the body which was taken over from a body of its own, which is a lambda, a local function, an iterator or an async body: the arguments which the call hands over are the arguments of the template, which the member being woven was given, and such a body is written with arguments of its own rather than with them. Reference: {0}, Method: {1}.";
+    internal const string PROCEED_IN_A_BODY_OF_ITS_OWN = "A body which the compiler wrote for a body of the template's own, which is a lambda, a local function, an iterator or an async body, proceeds into the body which was taken over from the member being woven: the arguments which the call hands over are the arguments of the template, which the member was given, and such a body is written with arguments of its own rather than with them. Reference: {0}, Method: {1}.";
 
     /// <summary>
     /// A body which the compiler wrote for a body of the template's own reaches a member of an instance, and the field

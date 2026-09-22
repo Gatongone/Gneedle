@@ -405,6 +405,8 @@ internal sealed partial class MethodHandler : IMethodHandler
         // type, the body which the member held is moved onto it, and the body which the template was parsed into takes
         // the place of that body. The return type is deliberately left alone: the template keeps the signature of the
         // member, which was checked above, so parsing it as SetBody does would only write an equal type again.
+        // What was carried is dropped here, which is where nothing else can refuse it.
+        m_Carried = null;
         Source.DeclaringType.Methods.Add(generated);
         MoveBodyTo(generated, Source);
         Source.Body = woven;
@@ -480,7 +482,9 @@ internal sealed partial class MethodHandler : IMethodHandler
             throw;
         }
 
-        m_Carried = null;
+        // What was carried is left held for the caller, which is what takes it back off where a step after the parse
+        // refuses: the return type is read after this returns, and a template which names a token at a position the
+        // member being woven does not declare is refused there. The caller drops it once nothing else can refuse.
         return woven;
     }
 
@@ -914,7 +918,11 @@ internal sealed partial class MethodHandler : IMethodHandler
             // is the instance of the member being woven. A local function which reaches an instance without being one -
             // which the compiler writes as a static member of that type - holds no such instance, and the member is
             // reached through the fields of the chain below or refused with it.
-            if (carried.Copy.DeclaringType is { } holder && !carried.Copy.IsStatic && ReferenceEquals(holder, Source.DeclaringType))
+            // The instance such a body is written against is the instance of the member being woven where that instance
+            // is one of the type the template was declared in: a template of another type reads members of that type
+            // off the woven instance, and a member which belongs to no instance holds no receiver at all.
+            if (carried.Copy.DeclaringType is { } holder && !carried.Copy.IsStatic && !Source.IsStatic
+                && ReferenceEquals(holder, Source.DeclaringType) && IsDeclaredInTheWovenType(templateDef))
             {
                 return Instruction.Create(OpCodes.Ldarg_0);
             }
