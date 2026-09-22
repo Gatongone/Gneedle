@@ -148,6 +148,20 @@ public static class CompilerGeneratedTemplates
     }
 
     /// <summary>
+    /// A template which holds a local function which is generic in its own right and hands back what it was given.<para/>
+    /// The member the compiler wrote for it declares a parameter of its own and its return type is that parameter, so
+    /// the signature of a copy of it is written after the parameters it declares; and the call names the member through
+    /// the instantiation it makes of it, so what is written is the instantiation of the copy rather than the open
+    /// member, which is a call the runtime does not run.
+    /// </summary>
+    public static int CallsAGenericLocalFunction(int value)
+    {
+        return Identity(value);
+
+        static T Identity<T>(T item) => item;
+    }
+
+    /// <summary>
     /// A lambda written inside a lambda, where the inner one captured what the outer one holds as well as a local of
     /// its own, which is what makes the compiler write a type for the one of them.
     /// </summary>
@@ -224,7 +238,7 @@ public sealed class CarriedInjectorAttribute : Attribute, IMethodInjector
         var parts = wanted.Split('|');
         if (parts[0] != method.DeclaringType!.FullName) return;
 
-        var holder = parts.Length > 2 ? typeof(GenericCompilerGeneratedTemplates<>).Assembly.GetType(parts[2]) : typeof(CompilerGeneratedTemplates);
+        var holder = typeof(GenericCompilerGeneratedTemplates<>).Assembly.GetType(parts[2]);
         Assert.That(holder, Is.Not.Null, $"the variable names no type of the assembly of these tests: {string.Join("|", parts)}");
 
         handler.SetBody(holder!.GetMethod(parts[1])!);
@@ -598,6 +612,17 @@ public class CompilerGeneratedTemplateTests
             Assert.That(host.Source.Methods.Any(method => method.Name.IndexOf(">b__", StringComparison.Ordinal) >= 0), Is.False,
                 "the type which was woven declares the copy of a member which the compiler wrote, which the refused weaving left behind.");
         });
+    }
+
+    [Test]
+    public void A_Template_Which_Holds_A_Generic_Local_Function_Is_Woven_And_Run()
+    {
+        // What the compiler wrote is a member of the type being woven which declares a parameter of its own, and its
+        // return type is that parameter: the copy of it is signed after those are declared, and the call of it is the
+        // instantiation the template names rather than the open member.
+        Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericLocalFunction)),
+                typeof(int).ToGneedleType(), OneValue, 41),
+            Is.EqualTo(41), "the member which was woven did not compute what the template computes.");
     }
 
     [Test]
