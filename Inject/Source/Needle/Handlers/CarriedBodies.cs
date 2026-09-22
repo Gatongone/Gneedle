@@ -19,8 +19,10 @@ namespace Gneedle.Inject;
 /// What is carried reaches what it carries: the body of a lambda holds the pointer to a lambda written inside it, and
 /// that pointer names a type the compiler wrote just as the pointer of the template does. Every copy is therefore
 /// declared before any body of one is written, and a type which a copy names is read for a copy in its turn.<para/>
-/// The copy keeps the name the compiler wrote, brackets and all, because that name is what tells it from the type it
-/// was carried out of. A name which the type being woven already holds is taken by the copy of the number after it.
+/// The copy keeps the name the compiler wrote, brackets and all, and is told from the type it was written from by where
+/// it stands rather than by what it is called: the type the compiler wrote is nested in the type which declares the
+/// template, and the copy of it in the type which is woven. A name which the latter already holds is taken by the copy
+/// of the number after it.
 /// </remarks>
 internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into)
 {
@@ -81,10 +83,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// </summary>
     private readonly List<Body> m_Bodies = [];
 
-    /// <summary>
-    /// Whether the carry wrote nothing at all, which is the case of a template which holds no construct the compiler
-    /// moved out of it.
-    /// </summary>
     /// <summary>
     /// The bodies which the carry wrote, which are woven before the body of the template is.
     /// </summary>
@@ -316,7 +314,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         // What a type is written against is carried as well: a field of a display class names what the lambda captured,
         // and a state machine is reached through the interfaces it implements.
-        foreach (var parameter in from.GenericParameters) Reached(parameter, pending, template);
         Reached(from.BaseType, pending, template);
         foreach (var implementation in from.Interfaces) Reached(implementation.InterfaceType, pending, template);
         foreach (var field in from.Fields) Reached(field.FieldType, pending, template);
