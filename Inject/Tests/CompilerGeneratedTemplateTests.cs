@@ -1,6 +1,5 @@
 using System.Reflection;
 using Mono.Cecil;
-using Mono.Cecil.Cil;
 using OpCodes = Mono.Cecil.Cil.OpCodes;
 using TypeAttributes = Mono.Cecil.TypeAttributes;
 
@@ -200,6 +199,20 @@ public static class CompilerGeneratedTemplates
     }
 
     /// <summary>
+    /// A template which holds a local function which is generic in its own right and constrains the parameter it
+    /// declares, so that what the copy of that parameter is constrained to is read.<para/>
+    /// What a parameter is constrained to is a part of what the copy of it is: a body which reaches a member of an
+    /// interface through a parameter of its own is a body the runtime reads as having that interface, and a copy whose
+    /// parameter declares none is a member the runtime refuses to load.
+    /// </summary>
+    public static int CallsAConstrainedLocalFunction(int value)
+    {
+        return Identity(value) + 1;
+
+        static T Identity<T>(T item) where T : IComparable => item;
+    }
+
+    /// <summary>
     /// A lambda written inside a lambda, where the inner one captured what the outer one holds as well as a local of
     /// its own, which is what makes the compiler write a type for the one of them.
     /// </summary>
@@ -329,6 +342,25 @@ public class CarriedInstanceFixture
         return Twice(value);
 
         int Twice(int number) => number + Offset + This.Field<int>(nameof(Offset)).Get();
+    }
+
+    /// <summary>
+    /// The same, of a lambda which is an async body.<para/>
+    /// The machine the compiler writes for it holds the display class of the lambda in the field it names for the
+    /// receiver, and that display class holds the instance: what the field holds is read as well as its name, because
+    /// the name alone is given to the field which holds the receiver of any body - and a member of the type being worn
+    /// read off the display class is a member of another instance, which the runtime does not refuse and which computes
+    /// the wrong value.
+    /// </summary>
+    public int ReachesTheInstanceFromAnAsyncLambda(int value)
+    {
+        Func<Task<int>> body = async () =>
+        {
+            await Task.Yield();
+            return This.Field<int>(nameof(Offset)).Get() + Offset + value;
+        };
+
+        return body().GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -653,6 +685,23 @@ public class CompilerGeneratedTemplateTests
 
     [Test]
     [NonParallelizable]
+    public void A_Template_Of_The_Type_Being_Woven_Reaches_Its_Instance_From_An_Async_Lambda()
+    {
+        // The field the compiler names for the receiver of a body holds the receiver of that body, which for the machine
+        // of an async lambda is the display class of the lambda: what it holds is read as well as its name, so that the
+        // member is reached through the instance rather than through the display class of another one.
+        var (result, reported) = Woven(CARRIED_INSTANCE_TYPE, nameof(CarriedInstanceFixture.ReachesTheInstanceFromAnAsyncLambda), CARRIED_INSTANCE_TYPE);
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        var type = AssemblyLoader.LoadFromBytes(result).GetType(CARRIED_INSTANCE_TYPE)!;
+        var instance = Activator.CreateInstance(type);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [41]), Is.EqualTo(43),
+            "the placeholder which reaches the instance of the member being woven from an async lambda was not woven.");
+    }
+
+    [Test]
+    [NonParallelizable]
     public void A_Template_Of_The_Type_Being_Woven_Reaches_Its_Instance_Through_A_Nested_Lambda()
     {
         // The instance is reached through a chain of fields rather than through one, because the body the compiler
@@ -707,11 +756,17 @@ public class CompilerGeneratedTemplateTests
         var (_, host, _) = NewHost($"CompilerGeneratedRefusedAfterTheCarrying{Guid.NewGuid():N}");
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
-        Assert.Throws<ArgumentException>(
+        var thrown = Assert.Throws<ArgumentException>(
             () => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.HoldsALambdaAndNamesASecondParameter))));
 
         Assert.Multiple(() =>
         {
+            // The refusal names the token, which is what tells the return type being read after the body from the body
+            // itself being refused: a body which was refused was refused before anything was carried, so the two
+            // assertions below would hold for it as well.
+            Assert.That(thrown!.Message, Does.Contain("T_1"),
+                $"the template was refused by something other than the token of its return type: {thrown.Message}");
+
             Assert.That(host.Source.NestedTypes, Is.Empty,
                 "the type which was woven declares the copy of a type which the compiler wrote, which the refused weaving left behind.");
             Assert.That(host.Source.Methods.Any(method => method.Name.IndexOf(">g__", StringComparison.Ordinal) >= 0), Is.False,
@@ -803,6 +858,29 @@ public class CompilerGeneratedTemplateTests
         var awaited = (Task<int>) Ran(result, CARRIED_ASYNC_TYPE, "Run", 41)!;
 
         Assert.That(awaited.GetAwaiter().GetResult(), Is.EqualTo(42), "the member which was woven did not hand back what the template hands back.");
+    }
+
+    [Test]
+    public void A_Constraint_Of_A_Parameter_Of_A_Member_The_Compiler_Wrote_Is_Carried_With_It()
+    {
+        // A member the compiler wrote declares a parameter of its own and constrains it, and the copy of that member
+        // declares the parameter and what it is constrained to: a copy whose parameter declared a constraint which was
+        // left behind is a member the runtime refuses to load.
+        var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.CallsAConstrainedLocalFunction), CARRIED_LOCAL_FUNCTION_TYPE);
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
+        {
+            var copy = read.MainModule.GetType(CARRIED_LOCAL_FUNCTION_TYPE)!
+                           .Methods.Single(method => method.Name.IndexOf(">g__", StringComparison.Ordinal) >= 0);
+
+            Assert.That(copy.GenericParameters.Single().Constraints.Select(constraint => constraint.ConstraintType.FullName),
+                Is.EqualTo(new[] {"System.IComparable"}),
+                "the constraint of the parameter is not carried with the copy of the member which declares it.");
+        }
+
+        Assert.That(Ran(result, CARRIED_LOCAL_FUNCTION_TYPE, "Run", 41), Is.EqualTo(42),
+            "the member which was woven did not compute what the template computes.");
     }
 
     [Test]
@@ -1061,6 +1139,7 @@ public class CompilerGeneratedTemplateTests
     }
 
     [Test]
+    [NonParallelizable]
     public void A_Copy_Which_Names_A_Type_Of_Its_Own_Assembly_Keeps_That_Type()
     {
         // What a body the compiler wrote reaches may be a type which the assembly being woven declares itself, and the
@@ -1077,6 +1156,23 @@ public class CompilerGeneratedTemplateTests
         Assert.That(captured.FieldType.Resolve(),
             Is.SameAs(read.MainModule.GetType("Gneedle.Inject.Test.Captured")),
             "the field of the copy names a type of another module rather than the type which the template captured.");
+    }
+
+    [Test]
+    public void A_Copy_Which_Names_A_Type_Of_Another_Assembly_References_It()
+    {
+        // The same, of a body the compiler wrote which the assembly being woven does not declare, which is the case of
+        // every weave which is not an assembly weaving itself: the copy names the type as the template named it, and
+        // the assembly which is written is given a reference to the one which declares it.
+        var intType = typeof(int).ToGneedleType();
+        var (_, host, _) = NewHost($"CompilerGeneratedAcrossAnAssembly{Guid.NewGuid():N}");
+        var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+
+        run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CapturesATypeOfItsOwnAssembly)));
+
+        Assert.That(host.Source.Module.AssemblyReferences.Select(reference => reference.Name),
+            Does.Contain(typeof(CompilerGeneratedTemplates).Assembly.GetName().Name),
+            "the assembly being woven names no reference to the one which declares the type its body reaches.");
     }
 
     [Test]
