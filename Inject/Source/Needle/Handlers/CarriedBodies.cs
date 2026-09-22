@@ -85,8 +85,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// Whether the carry wrote nothing at all, which is the case of a template which holds no construct the compiler
     /// moved out of it.
     /// </summary>
-    internal bool IsEmpty => m_Copies.Count == 0 && m_MemberCopies.Count == 0;
-
     /// <summary>
     /// The bodies which the carry wrote, which are woven before the body of the template is.
     /// </summary>
@@ -96,10 +94,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// Carry everything the compiler wrote for the bodies of a template onto the type which is woven.
     /// </summary>
     /// <param name="template">The template whose bodies are carried.</param>
-    /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
-    /// <exception cref="ArgumentException">Thrown when a body reaches an instance which the carrying cannot write, or a
-    /// member which holds no body to copy.</exception>
-    internal void Carry(MethodDefinition template, object? closure)
+    /// <exception cref="ArgumentException">Thrown when a body which the compiler wrote cannot be read, or holds no body
+    /// to copy.</exception>
+    internal void Carry(MethodDefinition template)
     {
         // The parameters of the type which declares the template are named by the parameters of the type being woven,
         // by the position they hold: the two stand for the same types, and a copy of a type the compiler wrote has to
@@ -112,7 +109,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             }
         }
 
-        var held = closure?.GetType();
         var pending = new Queue<MethodDefinition>();
         pending.Enqueue(template);
 
@@ -129,7 +125,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                 // names: the stub of an iterator boxes the state machine, and the token of a type may stand in a body.
                 if (operand is TypeReference named)
                 {
-                    Reached(named, pending, held, template);
+                    Reached(named, pending, template);
                     continue;
                 }
 
@@ -138,7 +134,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
                 if (TheCompilersOwn(member.DeclaringType))
                 {
-                    Reached(member.DeclaringType, pending, held, template);
+                    Reached(member.DeclaringType, pending, template);
 
                     // The body which the operand names is woven, and the others are not: what a type holds is what the
                     // pointer to one of its bodies reaches, and a body nothing points at holds nothing of the template.
@@ -150,7 +146,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                     continue;
                 }
 
-                CarryTheMember(member, template, pending, held);
+                CarryTheMember(member, template, pending);
             }
         }
 
@@ -237,8 +233,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <param name="member">The member which a body named.</param>
     /// <param name="template">The template which is carried.</param>
     /// <param name="pending">The bodies which are still to be read.</param>
-    /// <param name="held">The type of the instance which holds what the template captured, or null.</param>
-    private void CarryTheMember(MemberReference member, MethodDefinition template, Queue<MethodDefinition> pending, Type? held)
+    private void CarryTheMember(MemberReference member, MethodDefinition template, Queue<MethodDefinition> pending)
     {
         if (!member.Name.StartsWith("<", StringComparison.Ordinal)) return;
         if (member.Name.IndexOf(">b__", StringComparison.Ordinal) < 0 && member.Name.IndexOf(">g__", StringComparison.Ordinal) < 0) return;
@@ -260,8 +255,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         m_MemberTypes[looseDefinition.FullName] = copy;
         AddBody(looseDefinition, copy);
         pending.Enqueue(looseDefinition);
-
-        _ = held;
     }
 
     /// <summary>
@@ -269,10 +262,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// </summary>
     /// <param name="reached">The type which a body or a signature named.</param>
     /// <param name="pending">The bodies which are still to be read.</param>
-    /// <param name="held">The type of the instance which holds what the template captured, or null.</param>
     /// <param name="template">The template which is carried.</param>
-    /// <exception cref="ArgumentException">Thrown when the type is the one which holds what the template captured.</exception>
-    private void Reached(TypeReference reached, Queue<MethodDefinition> pending, Type? held, MethodDefinition template)
+    /// <exception cref="ArgumentException">Thrown when the type is one which cannot be read.</exception>
+    private void Reached(TypeReference reached, Queue<MethodDefinition> pending, MethodDefinition template)
     {
         var element = reached.GetElementType();
         if (!TheCompilersOwn(element)) return;
@@ -281,14 +273,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         // wrote for it: what the body of a template of that kind reads through its receiver is what the template
         // captured, which is written where it is read rather than carried, and the type it belongs to stands.
         if (ReferenceEquals(element, template.DeclaringType)) return;
-
-        // The instance which the delegate of the template holds belongs to the run of the weaving rather than to the
-        // assembly being woven, so what it holds reaches the assembly only as a constant, and a body of the template's
-        // own which reads it through that instance is refused rather than carried.
-        if (held is not null && element.FullName == held.FullName)
-        {
-            throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_READS_THE_CAPTURE, held.FullName, template.FullName));
-        }
 
         var from = element.Resolve()
             ?? throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, element.FullName, template.FullName));
@@ -300,15 +284,15 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         // What a type is written against is carried as well: a field of a display class names what the lambda captured,
         // and a state machine is reached through the interfaces it implements.
-        foreach (var parameter in from.GenericParameters) Reached(parameter, pending, held, template);
-        Reached(from.BaseType, pending, held, template);
-        foreach (var implementation in from.Interfaces) Reached(implementation.InterfaceType, pending, held, template);
-        foreach (var field in from.Fields) Reached(field.FieldType, pending, held, template);
+        foreach (var parameter in from.GenericParameters) Reached(parameter, pending, template);
+        Reached(from.BaseType, pending, template);
+        foreach (var implementation in from.Interfaces) Reached(implementation.InterfaceType, pending, template);
+        foreach (var field in from.Fields) Reached(field.FieldType, pending, template);
 
         foreach (var method in from.Methods)
         {
-            Reached(method.ReturnType, pending, held, template);
-            foreach (var parameter in method.Parameters) Reached(parameter.ParameterType, pending, held, template);
+            Reached(method.ReturnType, pending, template);
+            foreach (var parameter in method.Parameters) Reached(parameter.ParameterType, pending, template);
             pending.Enqueue(method);
         }
     }
