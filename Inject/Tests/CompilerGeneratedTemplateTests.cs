@@ -246,6 +246,33 @@ public class CarriedInstanceFixture
 }
 
 /// <summary>
+/// The type whose member carries the injector above, and which declares a template whose local function the compiler
+/// writes on that same type.<para/>
+/// A local function which captured nothing is a member of the type which declares the template rather than a type of
+/// its own, so the copy of it is declared by the type being woven where the compiler wrote the original: the two are
+/// members of one name and one signature unless the copy takes a name of its own, and a type which declares two of
+/// those is a type the runtime refuses to load.
+/// </summary>
+public class CarriedOwnLocalFunctionFixture
+{
+    /// <summary>
+    /// The member which the injector above weaves.
+    /// </summary>
+    [CarriedInjector]
+    public static int Run(int value) => -1;
+
+    /// <summary>
+    /// The template which is woven into the member above, whose local function the compiler writes on this type.
+    /// </summary>
+    public static int ReachesALocalFunctionOfItsOwnType(int value)
+    {
+        return Twice(value);
+
+        static int Twice(int number) => number * 2;
+    }
+}
+
+/// <summary>
 /// The type whose member carries the injector above, and onto which the type which the compiler wrote for the lambda is
 /// carried by the tests below.
 /// </summary>
@@ -501,6 +528,33 @@ public class CompilerGeneratedTemplateTests
     }
 
     [Test]
+    [NonParallelizable]
+    public void A_Local_Function_Of_The_Type_Being_Woven_Is_Carried_Under_A_Name_Of_Its_Own()
+    {
+        // The compiler writes the local function on the type which declares the template, which is the type being woven
+        // here, so the copy of it would be a second member of that name and that signature: the type would not load, and
+        // what is read is that it does - the member is run - and that the type declares the copy apart from the member
+        // the compiler wrote.
+        var (result, reported) = Woven(CARRIED_OWN_LOCAL_FUNCTION_TYPE,
+            nameof(CarriedOwnLocalFunctionFixture.ReachesALocalFunctionOfItsOwnType), CARRIED_OWN_LOCAL_FUNCTION_TYPE);
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
+        {
+            var carried = read.MainModule.GetType(CARRIED_OWN_LOCAL_FUNCTION_TYPE)!
+                              .Methods.Where(method => method.Name.IndexOf(">g__", StringComparison.Ordinal) >= 0).ToArray();
+
+            Assert.That(carried, Has.Length.EqualTo(2),
+                $"the type does not declare the member the compiler wrote and the copy of it: {string.Join(", ", carried.Select(method => method.Name))}");
+            Assert.That(carried.Select(method => method.Name).Distinct().Count(), Is.EqualTo(2),
+                "the copy was declared under the name of the member the compiler wrote, so the type declares it twice.");
+        }
+
+        Assert.That(Ran(result, CARRIED_OWN_LOCAL_FUNCTION_TYPE, "Run", 21), Is.EqualTo(42),
+            "the member which was woven did not compute what the template computes.");
+    }
+
+    [Test]
     public void A_Template_Which_Calls_A_Generic_Method_Is_Woven()
     {
         // Nothing here is a construct the compiler carried out of the template: the call names a generic method of the
@@ -536,6 +590,9 @@ public class CompilerGeneratedTemplateTests
 
     /// <inheritdoc cref="TEMPLATES_TYPE"/>
     private const string CARRIED_ASYNC_TYPE = "Gneedle.Inject.Test.CarriedAsyncFixture";
+
+    /// <inheritdoc cref="TEMPLATES_TYPE"/>
+    private const string CARRIED_OWN_LOCAL_FUNCTION_TYPE = "Gneedle.Inject.Test.CarriedOwnLocalFunctionFixture";
 
     /// <summary>
     /// The type which declares the generic template, and the generic type which its lambda is carried onto, which are

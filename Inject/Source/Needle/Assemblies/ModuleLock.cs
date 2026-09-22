@@ -15,7 +15,10 @@ namespace Gneedle.Inject;
 /// the module it writes. The imports among them are made through this class, so that the lock is named where the rule is
 /// rather than at each of the places which import, and the writes which are not an import - the reference of the
 /// standard which the importer of Cecil appends from inside an import, the references which an assembly is appended and
-/// dropped by, and the types which a weave declares and takes away - take the same lock where they stand.
+/// dropped by, and the types which a weave declares and takes away - take the same lock where they stand.<para/>
+/// The members which a type declares are not among those two tables, and the weaving adds one to a type of the module
+/// without this lock, as it always has: what is held here is what tells one type from another, and a member is named
+/// within the type which declares it rather than by the module.
 /// </summary>
 /// <remarks>
 /// The lock is of one module rather than of the whole library, so that the weavings of two assemblies, which are two
