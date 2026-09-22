@@ -301,6 +301,26 @@ public class CarriedInstanceFixture
         Func<int, int> add = x => x + Offset + one + This.Field<int>(nameof(Offset)).Get();
         return add(value);
     }
+
+    /// <summary>
+    /// The same, of a lambda written inside a lambda which captured a local of its own: the inner one captures what
+    /// the outer holds as well as a local of the outer lambda's body, and the instance is reached through the type the
+    /// compiler writes for the outer one.<para/>
+    /// A type written inside another one holds that one rather than the instance, so the chain of fields which leads
+    /// from the receiver of the inner body to the instance is longer than one, where the template above leads to it in
+    /// one field.
+    /// </summary>
+    public int ReachesTheInstanceFromANestedLambda(int value)
+    {
+        var one = 1;
+        Func<int> outer = () =>
+        {
+            var two = 2;
+            Func<int> inner = () => one + two + Offset + This.Field<int>(nameof(Offset)).Get();
+            return inner();
+        };
+        return outer() + value;
+    }
 }
 
 /// <summary>
@@ -583,6 +603,23 @@ public class CompilerGeneratedTemplateTests
 
         Assert.That(type.GetMethod("Run")!.Invoke(instance, [41]), Is.EqualTo(44),
             "the placeholder which reaches the instance of the member being woven from a lambda was not woven.");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void A_Template_Of_The_Type_Being_Woven_Reaches_Its_Instance_Through_A_Nested_Lambda()
+    {
+        // The instance is reached through a chain of fields rather than through one, because the body the compiler
+        // wrote is a method of a type written inside another one: what holds the instance is a field of the outer type,
+        // which the inner one holds in a field of its own.
+        var (result, reported) = Woven(CARRIED_INSTANCE_TYPE, nameof(CarriedInstanceFixture.ReachesTheInstanceFromANestedLambda), CARRIED_INSTANCE_TYPE);
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        var type = AssemblyLoader.LoadFromBytes(result).GetType(CARRIED_INSTANCE_TYPE)!;
+        var instance = Activator.CreateInstance(type);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [41]), Is.EqualTo(46),
+            "the placeholder which reaches the instance through a chain of fields was not woven.");
     }
 
     [Test]
