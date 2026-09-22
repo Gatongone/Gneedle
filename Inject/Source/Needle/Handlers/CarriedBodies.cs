@@ -12,8 +12,10 @@ namespace Gneedle.Inject;
 /// </summary>
 /// <remarks>
 /// A copy is a nested type of the type being woven rather than a type of the module, because what a carried body
-/// reaches are the members of the type the template was written in, private ones included, and only a nested type
-/// reaches those.<para/>
+/// reaches are the members of that type, private ones included, and only a type nested in it reaches those. What a
+/// body reaches of the type the template was written in is read as it stands where the two are the same type, and
+/// where they are not the carrying reads the type the body is declared by rather than the one the template is - which
+/// is a hole of it, named where a template reaches such a type.<para/>
 /// What is carried reaches what it carries: the body of a lambda holds the pointer to a lambda written inside it, and
 /// that pointer names a type the compiler wrote just as the pointer of the template does. Every copy is therefore
 /// declared before any body of one is written, and a type which a copy names is read for a copy in its turn.<para/>
@@ -85,6 +87,29 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     internal IReadOnlyList<Body> Bodies => m_Bodies;
 
     /// <summary>
+    /// The template which is being carried, which is what a refusal names while the carrying runs and which is the one
+    /// type a reference to the compiler's own is not carried for.<para/>
+    /// It is held rather than handed down, because a type is read for a copy from the reading of a signature as well as
+    /// from the walk of a body, and the walk of a signature begins inside the declaration of another copy.
+    /// </summary>
+    private MethodDefinition? m_Template;
+
+    /// <summary>
+    /// The bodies which the carrying has still to read, which are the methods of every type it took and of every member
+    /// the compiler wrote on the type which declares the template.
+    /// </summary>
+    private readonly Queue<MethodDefinition> m_Pending = new();
+
+    /// <summary>
+    /// Whether the template which was carried is declared by the type which is woven.<para/>
+    /// What a body the compiler wrote holds at its receiver is an instance of the type the template was declared in,
+    /// and where that type is the one being woven the two instances are one: what a member of an instance which stands
+    /// inside such a body reaches is the instance of the member being woven. A template of any other type is written
+    /// against an instance of that type, which the member being woven is not.
+    /// </summary>
+    internal bool OfTheWovenType { get; private set; }
+
+    /// <summary>
     /// Carry everything the compiler wrote for the bodies of a template onto the type which is woven.
     /// </summary>
     /// <param name="template">The template whose bodies are carried.</param>
@@ -103,12 +128,14 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             }
         }
 
-        var pending = new Queue<MethodDefinition>();
-        pending.Enqueue(template);
+        OfTheWovenType = ReferenceEquals(template.DeclaringType, into);
 
-        while (pending.Count > 0)
+        m_Template = template;
+        m_Pending.Enqueue(template);
+
+        while (m_Pending.Count > 0)
         {
-            var method = pending.Dequeue();
+            var method = m_Pending.Dequeue();
             if (!method.HasBody) continue;
 
             foreach (var instruction in method.Body.Instructions)
@@ -119,7 +146,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                 // names: the stub of an iterator boxes the state machine, and the token of a type may stand in a body.
                 if (operand is TypeReference named)
                 {
-                    Reached(named, pending, template);
+                    Reached(named);
                     continue;
                 }
 
@@ -128,7 +155,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
                 if (TheCompilersOwn(member.DeclaringType))
                 {
-                    Reached(member.DeclaringType, pending, template);
+                    Reached(member.DeclaringType);
 
                     // The body which the operand names is woven, and the others are not: what a type holds is what the
                     // pointer to one of its bodies reaches, and a body nothing points at holds nothing of the template.
@@ -141,22 +168,38 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                     continue;
                 }
 
-                CarryTheMember(member, template, pending);
+                CarryTheMember(member, template);
             }
         }
 
         // Every copy is given the body of what it was written from, whether or not the template reaches it: a type whose
         // method holds no instructions is a type the runtime refuses to load, and what the template does not reach is
         // re-pointed and left rather than woven.
-        foreach (var method in m_Methods.Values)
+        // The list is read until nothing new is added to it, because writing the body of a copy names types as well -
+        // a local of a state machine is one of those - and a type the body of a copy names is carried while that body
+        // is written. What was written is held by the key of what it was written from, which names the type which
+        // declares it as well, so the two lists are told apart there.
+        var written = new HashSet<string>(StringComparer.Ordinal);
+        while (true)
         {
-            CarryTheBody(method.From, method.Copy);
+            var methods = m_Methods.Where(entry => !written.Contains(entry.Key)).ToArray();
+            var members = m_MemberMethods.Where(entry => !written.Contains(entry.Key)).ToArray();
+            if (methods.Length == 0 && members.Length == 0) break;
+
+            foreach (var method in methods)
+            {
+                written.Add(method.Key);
+                CarryTheBody(method.Value.From, method.Value.Copy);
+            }
+
+            foreach (var member in members)
+            {
+                written.Add(member.Key);
+                CarryTheBody(member.Value.From, member.Value.Copy);
+            }
         }
 
-        foreach (var member in m_MemberMethods.Values)
-        {
-            CarryTheBody(member.From, member.Copy);
-        }
+        m_Template = null;
 
         ReadTheChains();
     }
@@ -233,8 +276,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// </remarks>
     /// <param name="member">The member which a body named.</param>
     /// <param name="template">The template which is carried.</param>
-    /// <param name="pending">The bodies which are still to be read.</param>
-    private void CarryTheMember(MemberReference member, MethodDefinition template, Queue<MethodDefinition> pending)
+    private void CarryTheMember(MemberReference member, MethodDefinition template)
     {
         if (!member.Name.StartsWith("<", StringComparison.Ordinal)) return;
         if (member.Name.IndexOf(">b__", StringComparison.Ordinal) < 0 && member.Name.IndexOf(">g__", StringComparison.Ordinal) < 0) return;
@@ -261,7 +303,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         m_MemberCopies.Add(copy);
         m_MemberMethods[key] = (looseDefinition, copy);
         AddBody(copy);
-        pending.Enqueue(looseDefinition);
+        m_Pending.Enqueue(looseDefinition);
     }
 
     /// <summary>
@@ -288,10 +330,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// Declare the copy of a type the compiler wrote, when the type is one of those, and follow what that type holds.
     /// </summary>
     /// <param name="reached">The type which a body or a signature named.</param>
-    /// <param name="pending">The bodies which are still to be read.</param>
-    /// <param name="template">The template which is carried.</param>
     /// <exception cref="ArgumentException">Thrown when the type is one which cannot be read.</exception>
-    private void Reached(TypeReference reached, Queue<MethodDefinition> pending, MethodDefinition template)
+    private void Reached(TypeReference reached)
     {
         var element = reached.GetElementType();
         if (!TheCompilersOwn(element)) return;
@@ -299,7 +339,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         // The type which declares the template is the type the template is a member of rather than a body the compiler
         // wrote for it: what the body of a template of that kind reads through its receiver is what the template
         // captured, which is written where it is read rather than carried, and the type it belongs to stands.
-        if (ReferenceEquals(element, template.DeclaringType)) return;
+        if (m_Template is not { } template || ReferenceEquals(element, template.DeclaringType)) return;
 
         var from = element.ResolveOrNull()
             ?? throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, element.FullName, template.FullName));
@@ -309,15 +349,15 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         // What a type is written against is carried as well: a field of a display class names what the lambda captured,
         // and a state machine is reached through the interfaces it implements.
-        Reached(from.BaseType, pending, template);
-        foreach (var implementation in from.Interfaces) Reached(implementation.InterfaceType, pending, template);
-        foreach (var field in from.Fields) Reached(field.FieldType, pending, template);
+        Reached(from.BaseType);
+        foreach (var implementation in from.Interfaces) Reached(implementation.InterfaceType);
+        foreach (var field in from.Fields) Reached(field.FieldType);
 
         foreach (var method in from.Methods)
         {
-            Reached(method.ReturnType, pending, template);
-            foreach (var parameter in method.Parameters) Reached(parameter.ParameterType, pending, template);
-            pending.Enqueue(method);
+            Reached(method.ReturnType);
+            foreach (var parameter in method.Parameters) Reached(parameter.ParameterType);
+            m_Pending.Enqueue(method);
         }
     }
 
@@ -343,6 +383,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             copy.GenericParameters.Add(declared);
             m_Parameters[$"{from.FullName}/{parameter.Position}"] = declared;
         }
+
+        CarryTheConstraints(from, copy);
 
         foreach (var implementation in from.Interfaces)
         {
@@ -374,6 +416,35 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         }
 
         return copy;
+    }
+
+    /// <summary>
+    /// Declare on <paramref name="copy"/> the constraints of every generic parameter which <paramref name="from"/>
+    /// declares.<para/>
+    /// What a parameter is constrained to is a part of what the copy of it is: a body which calls a member of an
+    /// interface through a parameter of its own is a body the runtime reads as having that interface, and a copy whose
+    /// parameter declares none is a member which the runtime refuses to load. The constraints are read once every
+    /// parameter stands, because one of them may name another parameter of the same type or method.
+    /// </summary>
+    /// <param name="from">The type or the method whose parameters are copied.</param>
+    /// <param name="copy">The copy whose parameters were declared.</param>
+    private void CarryTheConstraints(MethodDefinition from, MethodDefinition copy)
+        => CarryTheConstraints(from.GenericParameters, copy.GenericParameters);
+
+    /// <inheritdoc cref="CarryTheConstraints(MethodDefinition, MethodDefinition)"/>
+    private void CarryTheConstraints(TypeDefinition from, TypeDefinition copy)
+        => CarryTheConstraints(from.GenericParameters, copy.GenericParameters);
+
+    /// <inheritdoc cref="CarryTheConstraints(MethodDefinition, MethodDefinition)"/>
+    private void CarryTheConstraints(Mono.Collections.Generic.Collection<GenericParameter> from, Mono.Collections.Generic.Collection<GenericParameter> copy)
+    {
+        for (var position = 0; position < from.Count; position++)
+        {
+            foreach (var constraint in from[position].Constraints)
+            {
+                copy[position].Constraints.Add(new GenericParameterConstraint(TypeOf(constraint.ConstraintType)));
+            }
+        }
     }
 
     /// <summary>
@@ -499,6 +570,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         }
 
         copy.ReturnType = TypeOf(from.ReturnType);
+        CarryTheConstraints(from, copy);
 
         foreach (var parameter in from.Parameters)
         {
@@ -756,10 +828,25 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             return instance;
         }
 
+        // An array, a pointer and a byref are types of their own which name another type, and what they name may be one
+        // the carry wrote: the element is read as the copy of it and the shape around it stands as it was written. What
+        // is not read is the modifier, the pin and the function pointer, whose names are read as those of any other
+        // type - the shape of a type which a body of the compiler's own holds is not one a template writes by hand.
+        if (reference is ArrayType array) return new ArrayType(TypeOf(array.ElementType), array.Rank);
+        if (reference is PointerType pointer) return new PointerType(TypeOf(pointer.ElementType));
+        if (reference is ByReferenceType byref) return new ByReferenceType(TypeOf(byref.ElementType));
+
         // A type the carry wrote stands for the type it was written from, so a reference which names the original names
         // the copy: what is carried reaches what it carries, and a copy which still named the type it came from would
         // leave the body pointing at what the move left behind. A copy is a type of the module which is being written.
         if (m_Types.TryGetValue(reference.FullName, out var carried)) return carried;
+
+        // A type the compiler wrote which is named before the walk has reached it is carried here rather than imported.
+        // What names one is the signature of a copy - a field, a parameter, the local of a body - and those are written
+        // before the walk reaches what they name: a copy which named the type the compiler wrote would be a member of
+        // the assembly being woven pointing at a private type of the assembly the template came from.
+        Reached(reference);
+        if (m_Types.TryGetValue(reference.FullName, out carried)) return carried;
 
         return ModuleLock.Import(module, reference);
     }

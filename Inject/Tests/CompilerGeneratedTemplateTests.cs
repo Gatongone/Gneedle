@@ -72,7 +72,7 @@ public static class CompilerGeneratedTemplates
     /// compiled into rather than nested inside what declares it, and the carrying reads the types it writes beside a
     /// template - which are nested - rather than those.
     /// </summary>
-    public static int CallsAGenericMethod(int value) => Enumerable.First(Enumerable.Repeat(value, 1));
+    public static int CallsAGenericMethod(int value) => Enumerable.First(Enumerable.Repeat(value + 1, 1));
 
     /// <summary>
     /// A lambda which captured two locals rather than one, so that the type the compiler wrote for it holds more than
@@ -143,8 +143,10 @@ public static class CompilerGeneratedTemplates
     public static T_1 HoldsALambdaAndNamesASecondParameter(int value)
     {
         Func<int, int> add = x => x + 1;
-        GC.KeepAlive(add(value));
+        GC.KeepAlive(add(value) + Twice(value));
         return null!;
+
+        static int Twice(int number) => number * 2;
     }
 
     /// <summary>
@@ -156,7 +158,7 @@ public static class CompilerGeneratedTemplates
     /// </summary>
     public static int CallsAGenericLocalFunction(int value)
     {
-        return Identity(value);
+        return Identity(value) + 1;
 
         static T Identity<T>(T item) => item;
     }
@@ -181,6 +183,20 @@ public static class CompilerGeneratedTemplates
         // the values is a plain array, which the weaving carries as it carries any other.
         IEnumerable<int> numbers = [value, value + 1];
         return numbers.Sum();
+    }
+
+    /// <summary>
+    /// An async body which holds a lambda that captured a local.<para/>
+    /// The type the compiler writes for the machine holds the type it writes for the lambda, and the walk reaches a
+    /// type named by a signature after the members which name it are written: what the walk reached first is named by a
+    /// signature of what it reached second.
+    /// </summary>
+    public static async Task<int> AwaitsALambdaWhichCaptured(int value)
+    {
+        var one = 1;
+        Func<int, int> add = x => x + one;
+        await Task.Yield();
+        return add(value);
     }
 
     /// <summary>
@@ -300,6 +316,19 @@ public class CarriedInstanceFixture
         var one = 1;
         Func<int, int> add = x => x + Offset + one + This.Field<int>(nameof(Offset)).Get();
         return add(value);
+    }
+
+    /// <summary>
+    /// The same, of a local function which captured nothing but reads the instance it was written in.<para/>
+    /// The compiler writes such a member on the type which declares the template rather than on a type of its own, and
+    /// an instance one of those is written against an instance of that type: what stands in its receiver is the
+    /// instance of the member being woven, where the template belongs to the type being woven.
+    /// </summary>
+    public int ReachesTheInstanceFromALocalFunction(int value)
+    {
+        return Twice(value);
+
+        int Twice(int number) => number + Offset + This.Field<int>(nameof(Offset)).Get();
     }
 
     /// <summary>
@@ -607,6 +636,23 @@ public class CompilerGeneratedTemplateTests
 
     [Test]
     [NonParallelizable]
+    public void A_Template_Of_The_Type_Being_Woven_Reaches_Its_Instance_From_A_Local_Function()
+    {
+        // A local function which reads the instance it was written in is a member of the type which declares the
+        // template rather than of a type of its own, and the instance it reads is the instance of the member being
+        // woven: what the placeholder reaches is read off that instance rather than off a type the compiler wrote.
+        var (result, reported) = Woven(CARRIED_INSTANCE_TYPE, nameof(CarriedInstanceFixture.ReachesTheInstanceFromALocalFunction), CARRIED_INSTANCE_TYPE);
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        var type = AssemblyLoader.LoadFromBytes(result).GetType(CARRIED_INSTANCE_TYPE)!;
+        var instance = Activator.CreateInstance(type);
+
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [41]), Is.EqualTo(43),
+            "the placeholder which reaches the instance of the member being woven from a local function was not woven.");
+    }
+
+    [Test]
+    [NonParallelizable]
     public void A_Template_Of_The_Type_Being_Woven_Reaches_Its_Instance_Through_A_Nested_Lambda()
     {
         // The instance is reached through a chain of fields rather than through one, because the body the compiler
@@ -668,7 +714,7 @@ public class CompilerGeneratedTemplateTests
         {
             Assert.That(host.Source.NestedTypes, Is.Empty,
                 "the type which was woven declares the copy of a type which the compiler wrote, which the refused weaving left behind.");
-            Assert.That(host.Source.Methods.Any(method => method.Name.IndexOf(">b__", StringComparison.Ordinal) >= 0), Is.False,
+            Assert.That(host.Source.Methods.Any(method => method.Name.IndexOf(">g__", StringComparison.Ordinal) >= 0), Is.False,
                 "the type which was woven declares the copy of a member which the compiler wrote, which the refused weaving left behind.");
         });
     }
@@ -678,10 +724,11 @@ public class CompilerGeneratedTemplateTests
     {
         // What the compiler wrote is a member of the type being woven which declares a parameter of its own, and its
         // return type is that parameter: the copy of it is signed after those are declared, and the call of it is the
-        // instantiation the template names rather than the open member.
+        // instantiation the template names rather than the open member. What it computes tells a call which reached
+        // the instantiation from one which reached the open member, which is a body the runtime refuses to run.
         Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericLocalFunction)),
                 typeof(int).ToGneedleType(), OneValue, 41),
-            Is.EqualTo(41), "the member which was woven did not compute what the template computes.");
+            Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
     /// <summary>
@@ -713,10 +760,49 @@ public class CompilerGeneratedTemplateTests
         Assert.Multiple(() =>
         {
             Assert.That(RefusalOf(nameof(CompilerGeneratedTemplates.WrapsAValueInAnAnonymousObject)),
-                Does.Contain("names a type which the compiler wrote"), "the type of an anonymous object was not refused.");
+                Does.Contain("at the top level of the assembly it was compiled into"), "the type of an anonymous object was not refused.");
             Assert.That(RefusalOf(nameof(CompilerGeneratedTemplates.SumsACollectionExpression)),
-                Does.Contain("names a type which the compiler wrote"), "the type a collection expression stands in was not refused.");
+                Does.Contain("at the top level of the assembly it was compiled into"), "the type a collection expression stands in was not refused.");
         });
+    }
+
+    /// <summary>
+    /// Every type which a carried copy names which the compiler wrote rather than the copy of it, which is what tells a
+    /// member of the assembly being woven pointing at a private type of the assembly the template came from.
+    /// </summary>
+    /// <param name="read">The image which was woven.</param>
+    /// <param name="type">The type whose copies are read.</param>
+    /// <returns>The names of the type the compiler wrote which a copy still names.</returns>
+    private static string[] Strays(AssemblyDefinition read, string type)
+        => read.MainModule.GetType(type)!.NestedTypes
+               .SelectMany(copy => copy.Fields.Select(field => field.FieldType)
+                                      .Concat(copy.Methods.SelectMany(method => method.Body.Variables.Select(variable => variable.VariableType))))
+               .Select(reference => reference.Resolve())
+               .Where(declared => declared?.DeclaringType?.FullName == TEMPLATES_TYPE)
+               .Select(declared => declared!.FullName)
+               .Distinct()
+               .ToArray();
+
+    [Test]
+    [NonParallelizable]
+    public void A_Lambda_Which_A_Carried_Body_Holds_Is_Carried_With_It()
+    {
+        // The type the compiler writes for the machine of an async body holds the one it wrote for a lambda which
+        // captured, and a type named by a signature is reached after the members which name it are written: what the
+        // walk reached first is named by a signature of what it reached second, and the field of the copy names the
+        // copy of that type rather than the one the compiler wrote.
+        var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.AwaitsALambdaWhichCaptured), CARRIED_ASYNC_TYPE);
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
+        {
+            Assert.That(Strays(read, CARRIED_ASYNC_TYPE), Is.Empty,
+                "a type of a copy names a type the compiler wrote rather than the copy of it.");
+        }
+
+        var awaited = (Task<int>) Ran(result, CARRIED_ASYNC_TYPE, "Run", 41)!;
+
+        Assert.That(awaited.GetAwaiter().GetResult(), Is.EqualTo(42), "the member which was woven did not hand back what the template hands back.");
     }
 
     [Test]
@@ -724,10 +810,12 @@ public class CompilerGeneratedTemplateTests
     {
         // Nothing here is a construct the compiler carried out of the template: the call names a generic method of the
         // framework through the instantiation it makes of it, which is a shape any template may write. What the member
-        // computes is what tells a call which was carried from one written against the instantiation of another.
+        // computes is what tells a call which was carried from one written against the instantiation of another, which
+        // is why the template adds one rather than handing its argument back: a member whose call was dropped hands the
+        // argument back as well.
         Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericMethod)),
                 typeof(int).ToGneedleType(), OneValue, 41),
-            Is.EqualTo(41), "the member which was woven did not compute what the template computes.");
+            Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
     /// <summary>
@@ -823,10 +911,9 @@ public class CompilerGeneratedTemplateTests
     [NonParallelizable]
     public void The_Type_Which_The_Compiler_Wrote_A_Lambda_Into_Can_Be_Carried_Onto_Another_Type()
     {
-        // Tier 1 of the proposal is one move: the type which the compiler wrote for the body of a lambda goes onto the
-        // type being woven, and every operand which named a member of it names the copy. What is read here is whether
-        // that move is mechanical - whether an assembly which was written that way still reads, and holds no reference
-        // of the body to the type which was moved.
+        // What the compiler wrote for the body of a lambda goes onto the type being woven, and every operand which
+        // named a member of it names the copy. What is read here is whether that move is whole - whether the assembly
+        // which is written still reads, and holds no reference of the body to the type which was moved.
         var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.RunsACapturingLambda), CARRIED_CLOSURE_TYPE);
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
@@ -922,12 +1009,13 @@ public class CompilerGeneratedTemplateTests
     [NonParallelizable]
     public void A_Template_Which_Is_An_Iterator_Whose_State_Machine_Was_Carried_Is_Woven_And_Enumerated()
     {
-        // Tier 2 of the proposal, and the largest thing which tells it from Tier 1: the body of the template is not the
-        // stub the member is given but the MoveNext of a state machine, and what is carried is a type whose method holds
-        // a switch, a region which protects instructions and locals of its own.
+        // What the compiler wrote for an iterator is a state machine, and the body which holds the instructions of the
+        // template is the MoveNext of it rather than the stub the member is given: what is carried is a type whose
+        // method holds a switch, a region which protects instructions, and locals of its own.
         //
-        // What is read here is the move rather than the parsing of MoveNext: the weaving is handed the stub, which is
-        // what the member holds, because the move is what the proposal turns on and it is the move which is in doubt.
+        // What is read is the whole of it: the weaving is handed the stub which the member holds, it carries the
+        // machine and weaves the MoveNext of the copy, and the member which comes out is enumerated. What the sequence
+        // is tells the two apart, because the MoveNext of the machine switches on a field the copy holds.
         var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.Yields), CARRIED_STATE_MACHINE_TYPE);
 
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
@@ -996,19 +1084,27 @@ public class CompilerGeneratedTemplateTests
     public void A_Template_Which_Is_An_Async_Body_Whose_State_Machine_Was_Carried_Is_Woven_And_Awaited()
     {
         var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.Awaits), CARRIED_ASYNC_TYPE);
-        Assert.Multiple(() =>
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
         {
-            Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
-            Assert.That(((Task<int>) Ran(result, CARRIED_ASYNC_TYPE, "Run", 5)!).GetAwaiter().GetResult(), Is.EqualTo(5),
-                "the member which was woven did not hand back what the template hands back.");
-        });
+            // What the stub of an async body declares is a local of the machine the compiler wrote, and the woven member
+            // declares the copy of it: a local which named the machine of the template would be a member of the assembly
+            // being woven pointing at a private type of the assembly the template came from, which is a member the
+            // runtime refuses to load where that assembly is not there.
+            Assert.That(Strays(read, CARRIED_ASYNC_TYPE), Is.Empty,
+                "a type of a copy names a type the compiler wrote rather than the copy of it.");
+        }
+
+        Assert.That(((Task<int>) Ran(result, CARRIED_ASYNC_TYPE, "Run", 5)!).GetAwaiter().GetResult(), Is.EqualTo(5),
+            "the member which was woven did not hand back what the template hands back.");
     }
 
     [Test]
     [NonParallelizable]
     public void The_Lambda_Of_A_Generic_Template_Is_Carried_And_Its_Parameter_Re_Parented()
     {
-        // Tier 1 where the type the compiler wrote is generic over the type which declares the template, so the copy
+        // The same, where the type the compiler wrote is generic over the type which declares the template: the copy
         // declares a parameter of its own and every reference to the original names the copy of it. This is the move
         // which CreateProceedMethod already makes for the method it generates, one level down: a generic parameter
         // belongs to the type which declares it, so a copy which was added to another type declares its own.

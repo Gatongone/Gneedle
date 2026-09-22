@@ -256,6 +256,15 @@ internal static class ErrorMessages
     internal const string TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN = "The template names a type which the compiler wrote for a body of the template's own, which is a lambda, a local function, an async body or an iterator, and what that type holds could not be read: the instructions which carry a body of the compiler's own onto the type being woven are not there, and a member written against a type which was left behind fails when it is run. Reference: {0}, Method: {1}.";
 
     /// <summary>
+    /// The template reaches a type which the compiler wrote at the top level of the assembly it was compiled into,
+    /// which is the type of an anonymous object or the one a collection expression which is not an array stands in.
+    /// Such a type is internal to that assembly, so a member woven into another one would reach a type it cannot run,
+    /// and the carrying does not read a type of that kind. The placeholders are the reference which names it and the
+    /// member.
+    /// </summary>
+    internal const string TEMPLATE_REACHES_A_TYPE_OF_THE_TOP_LEVEL = "The template reaches a type which the compiler wrote at the top level of the assembly it was compiled into, which is the type of an anonymous object or the one which a collection expression stands in, and no copy of such a type is carried: it is internal to the assembly the template was compiled into, so a member woven into another one would reach a type it cannot run. Reference: {0}, Method: {1}.";
+
+    /// <summary>
     /// The template calls a member which the compiler wrote as the body of a lambda or of a local function of the
     /// template's own, which is written on the type which declares the template rather than as a type of its own, and
     /// which the carrying could not read. The placeholders are the reference which names it and the member.

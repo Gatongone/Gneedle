@@ -727,11 +727,11 @@ public class AroundBodyTests
                 $"the refusal does not say that a body of the compiler's own proceeds: {thrown.Message}");
 
             // The refusal is raised while one of the bodies the compiler wrote is woven, which is after the carrying, so
-            // what the carrying wrote is taken back off as it is where the parse of the body is what refuses.
+            // what the carrying wrote is taken back off as it is where the parse of the body is what refuses. The method
+            // which the body that was taken over is moved onto is declared by the type only once the parse has run, so
+            // whether it is there says nothing of what a refusal took back.
             Assert.That(hostType.NestedTypes, Is.Empty,
                 "the type which was woven declares the copy of a type which the compiler wrote, which the refused weaving left behind.");
-            Assert.That(hostType.Methods.Any(method => method.Name == "<Run>k__Proceed"), Is.False,
-                "the type which was woven declares the method which the body that was taken over was moved onto.");
         });
     }
 
