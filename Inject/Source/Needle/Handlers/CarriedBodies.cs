@@ -577,12 +577,25 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// The field of a copy which a reference names, or null where the carry wrote no copy of the type which declares
     /// the field.
     /// </summary>
+    /// <remarks>
+    /// The declaring type of a field of a generic type is written as the instantiation the reference names rather than
+    /// as the definition, so the field of the copy is written against that instantiation as well: what a reference to a
+    /// member of a generic type is written as wherever one is reached.
+    /// </remarks>
     /// <param name="field">The field which is asked about.</param>
     /// <returns>The field of the copy, or null.</returns>
     private FieldReference? TheCopyOf(FieldReference field)
-        => field.DeclaringType is not null && m_Types.TryGetValue(field.DeclaringType.GetElementType().FullName, out var copy)
-            ? copy.Fields.Single(candidate => candidate.Name == field.Name)
-            : null;
+    {
+        if (field.DeclaringType is null || !m_Types.TryGetValue(field.DeclaringType.GetElementType().FullName, out var copy))
+        {
+            return null;
+        }
+
+        var open = copy.Fields.Single(candidate => candidate.Name == field.Name);
+        if (field.DeclaringType is not GenericInstanceType instance) return open;
+
+        return new FieldReference(open.Name, TypeOf(open.FieldType), TypeOf(instance));
+    }
 
     /// <summary>
     /// The member of a copy which a reference names, or null where the carry wrote no copy of what declares it.
