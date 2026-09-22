@@ -1118,10 +1118,17 @@ internal sealed partial class MethodHandler : IMethodHandler
                 // and the name would be left on the stack ahead of the call which is written in its place.
                 throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, nameof(Proceed) + "." + nameof(Proceed.Method)));
             }
-            else
+            else if (m_CarriedBody is null)
             {
                 ParseMethod(nameof(Proceed) + "." + nameof(Proceed.Method),
                     MemberSymbols.Proceed | MemberSymbols.Method, currentIndex, null, filter, targetDef);
+            }
+            else
+            {
+                // The call proceeds into the body which was taken over, and a body which the compiler wrote for a body
+                // of the template's own is written with arguments of its own rather than with the arguments of the
+                // template, which is what the call hands over: it is refused here as the call which names them is.
+                throw new ArgumentException(string.Format(ErrorMessages.PROCEED_IN_A_BODY_OF_ITS_OWN, proceedCall.FullName, Source.FullName));
             }
         }
         else

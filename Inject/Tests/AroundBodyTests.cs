@@ -159,6 +159,15 @@ public static class ProceedInALambdaTemplates
         Func<int> proceed = () => Proceed.Invoke<int>();
         return proceed() + value;
     }
+
+    /// <summary>
+    /// The same, of the symbol which names the body that was taken over with a signature of its own.
+    /// </summary>
+    public static int ReachesTheProceedFromInsideALambda(int value)
+    {
+        Func<int> proceed = () => Proceed.Method<Func<int>>()();
+        return proceed() + value;
+    }
 }
 
 /// <summary>
@@ -707,10 +716,42 @@ public class AroundBodyTests
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
 
-        var thrown = Assert.Throws<ArgumentException>(() => run.AroundBody(typeof(ProceedInALambdaTemplates).GetMethod(nameof(ProceedInALambdaTemplates.ProceedsFromInsideALambda))!));
+        var hostType = host.Source;
+        var thrown = Assert.Throws<ArgumentException>(
+            () => run.AroundBody(typeof(ProceedInALambdaTemplates).GetMethod(nameof(ProceedInALambdaTemplates.ProceedsFromInsideALambda))!));
 
-        Assert.That(thrown!.Message, Does.Contain("A body which the compiler wrote for a body of the template's own")
+        Assert.Multiple(() =>
+        {
+            Assert.That(thrown!.Message, Does.Contain("A body which the compiler wrote for a body of the template's own")
                                          .And.Contain("proceeds into the body which was taken over from the member being woven"),
+                $"the refusal does not say that a body of the compiler's own proceeds: {thrown.Message}");
+
+            // The refusal is raised while one of the bodies the compiler wrote is woven, which is after the carrying, so
+            // what the carrying wrote is taken back off as it is where the parse of the body is what refuses.
+            Assert.That(hostType.NestedTypes, Is.Empty,
+                "the type which was woven declares the copy of a type which the compiler wrote, which the refused weaving left behind.");
+            Assert.That(hostType.Methods.Any(method => method.Name == "<Run>k__Proceed"), Is.False,
+                "the type which was woven declares the method which the body that was taken over was moved onto.");
+        });
+    }
+
+    /// <summary>
+    /// The same, of a template whose lambda reaches the body which was taken over through
+    /// <see cref="Proceed.Method{TMethod}"/> rather than through <see cref="Proceed.Invoke{TResult}"/>.
+    /// </summary>
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Reaches_The_Proceed_From_Inside_A_Lambda_Throws()
+    {
+        var assembly = Assembly.Create("AroundBodyProceedMethodInALambdaAssembly");
+        var host = AddAHost(assembly);
+        var intType = typeof(int).ToGneedleType();
+        var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+        run.SetBody(DefaultMethodBody.WithDefaultReturn);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => run.AroundBody(typeof(ProceedInALambdaTemplates).GetMethod(nameof(ProceedInALambdaTemplates.ReachesTheProceedFromInsideALambda))!));
+
+        Assert.That(thrown!.Message, Does.Contain("A body which the compiler wrote for a body of the template's own"),
             $"the refusal does not say that a body of the compiler's own proceeds: {thrown.Message}");
     }
 
