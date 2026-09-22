@@ -831,11 +831,20 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     }
 
     /// <summary>
-    /// Whether a type is one which the compiler wrote for a body of a template's own, which is a type the compiler
-    /// declared inside another one under a name which opens with the bracket no identifier of C# holds.
+    /// Whether a type is one which the compiler wrote beside the template, which is a type it declared inside another
+    /// one under a name which opens with the bracket no identifier of C# holds.
     /// </summary>
     /// <param name="type">The type which is asked about.</param>
-    /// <returns>Whether it is a type the compiler wrote.</returns>
+    /// <returns>Whether it is a type the compiler wrote beside the template.</returns>
+    /// <remarks>
+    /// What is read is the type which stands beside the template rather than every type the compiler writes: the type
+    /// of an anonymous object, and the one a collection expression stands in, are written at the top level of the
+    /// assembly the template was compiled into. A template which reaches one of those reaches an <c>internal</c> type
+    /// of that assembly, which a member woven into another one cannot run, and the carrying neither writes a copy of it
+    /// nor refuses it. That is a hole of the carrying rather than of the shape read here, and a carrying which read the
+    /// types at the top level as well would have to read what a parameter of such a type is named, which is a bracket
+    /// as well and is no type at all.
+    /// </remarks>
     private static bool TheCompilersOwn(TypeReference? type)
         => type is {IsNested: true} && type.Name.StartsWith("<", StringComparison.Ordinal);
 
