@@ -1122,8 +1122,14 @@ internal sealed partial class MethodHandler : IMethodHandler
                 RefuseANameWhichIsNotWritten(methodRef, currentIndex, filter);
                 RefuseTheCompilersOwnType(methodRef.DeclaringType, methodRef.FullName);
                 RefuseTheCompilersOwnMember(methodRef, targetDef);
-                var importedMethod = ModuleLock.Import(Source.Module, methodRef).ParseGenericTokens(Source, Source.Module);
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedMethod));
+
+                // What the carrying wrote stands for what the body named, and what it wrote is a member of the type
+                // being woven rather than a reference of another module: it is written where it stands. The body of the
+                // template is not written to for it, because that body is a member of the assembly being woven as well
+                // and is read again by a weave of another member of it, which would then read what this one wrote.
+                var pointedMethod = m_Carried?.TheCopyOf(methodRef);
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode,
+                    pointedMethod ?? ModuleLock.Import(Source.Module, methodRef).ParseGenericTokens(Source, Source.Module)));
                 break;
             // The parameter of the template is matched to the parameter of the same position rather than to the one of
             // the same name: they are the parameters of two different methods, and the name which the template gave its
@@ -1141,8 +1147,9 @@ internal sealed partial class MethodHandler : IMethodHandler
             // It may also hold a declaring type which stands for the type of another assembly, which is replaced below.
             case FieldReference fieldRef:
                 RefuseTheCompilersOwnType(fieldRef.DeclaringType, fieldRef.FullName);
-                var importedField = ModuleLock.Import(Source.Module, fieldRef).ParseGenericTokens(Source, Source.Module);
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedField));
+                var pointedField = m_Carried?.TheCopyOf(fieldRef);
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode,
+                    pointedField ?? ModuleLock.Import(Source.Module, fieldRef).ParseGenericTokens(Source, Source.Module)));
                 break;
             // We need to find the variable with the same index in source method definition, and replace the operand with it.
             // The local of a body which the compiler wrote is a local of the copy of that body, which the carrying
@@ -1154,7 +1161,8 @@ internal sealed partial class MethodHandler : IMethodHandler
             // The type may hold generic parameter tokens itself, just like box Gneedle.Inject.T_0.
             case TypeReference typeRef:
                 RefuseTheCompilersOwnType(typeRef, typeRef.FullName);
-                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, typeRef.ParseGenericTokens(Source, Source.Module)));
+                filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode,
+                    m_Carried?.TheCopyOf(typeRef) ?? typeRef.ParseGenericTokens(Source, Source.Module)));
                 break;
         }
     }
@@ -1318,9 +1326,14 @@ internal sealed partial class MethodHandler : IMethodHandler
             // The token of a generic parameter is read against the member being woven rather than against the body it
             // stands in, because a token names a parameter of that member however deep in a body of the compiler's own
             // it was written. If the variable type holds such a token, get the actual generic parameter type.
+            // A local of a body the compiler wrote is the exception: its type names the copy of what it was written
+            // from already, which the carrying made, and reading it again would import the type which was carried and
+            // leave the local of the woven body naming the type the compiler wrote.
             var typeRef = emptied.Contains(i)
                 ? into.Module.TypeSystem.Object
-                : srcVariables[i].VariableType.ParseGenericTokens(Source, into.Module);
+                : m_CarriedBody is null
+                    ? srcVariables[i].VariableType.ParseGenericTokens(Source, into.Module)
+                    : srcVariables[i].VariableType;
             desVariables.Add(new VariableDefinition(typeRef));
         }
     }

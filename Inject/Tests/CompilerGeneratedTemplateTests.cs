@@ -690,6 +690,14 @@ public class CompilerGeneratedTemplateTests
 
         Assert.That(Ran(result, CARRIED_CLOSURE_TYPE, "Run", 41), Is.EqualTo(42),
             "the member which was woven did not compute what the template computes.");
+
+        // The template is a member of the assembly which was woven as well, and the carrying does not write to it: what
+        // it names is what the compiler wrote, so the template still runs. A carrying which re-pointed the body of the
+        // template at the copies would leave it naming a private type of another one, which the runtime refuses to run,
+        // and a second weave of the same template would read what the first one wrote.
+        Assert.That(AssemblyLoader.LoadFromBytes(result).GetType(TEMPLATES_TYPE)!
+                        .GetMethod(nameof(CompilerGeneratedTemplates.RunsACapturingLambda))!.Invoke(null, [41]),
+            Is.EqualTo(42), "the body of the template was written to, so what it names is a type it cannot reach.");
     }
 
     [Test]
