@@ -275,6 +275,46 @@ internal static class ErrorMessages
     internal const string STATIC_MEMBER_REACHES_AN_INSTANCE_MEMBER = "The member which the template reaches belongs to an instance, and the member being woven is static and belongs to none: the first argument of it stands where that instance would be loaded from, which the template was handed for something else. An instance which a static member reaches a member of is one it was handed, which is what Instance names. Method: {0}.";
 
     /// <summary>
+    /// A body which the compiler wrote for a body of the template's own proceeds into the body which was taken over
+    /// from the member, which it cannot be handed the arguments of. The placeholders are the reference which names the
+    /// call and the member being woven.
+    /// </summary>
+    internal const string PROCEED_IN_A_BODY_OF_ITS_OWN = "The template proceeds into the body which was taken over from a body of its own, which is a lambda, a local function, an iterator or an async body: the arguments which the call hands over are the arguments of the template, which the member being woven was given, and such a body is written with arguments of its own rather than with them. Reference: {0}, Method: {1}.";
+
+    /// <summary>
+    /// A body which the compiler wrote for a body of the template's own reaches a member of an instance, and the type
+    /// which the compiler wrote for it holds no instance of the member being woven: the body captured none. The
+    /// placeholders are the reference which reached the member and the member being woven.
+    /// </summary>
+    internal const string A_BODY_OF_ITS_OWN_REACHES_NO_INSTANCE = "The template reaches a member of an instance from a body of its own, which is a lambda, a local function, an iterator or an async body, and that body can reach no instance of the member being woven: the compiler writes the instance a body belongs to into a field of the type it writes for that body, and no such field is there, because the body captured no instance. Method: {0}.";
+
+    /// <summary>
+    /// A body which the compiler wrote for a body of the template's own reaches a member of an instance, and the
+    /// instance it reaches is one of a type other than the type being woven. The placeholders are the type of that
+    /// instance, the reference which reached the member, and the member being woven.
+    /// </summary>
+    internal const string A_BODY_OF_ITS_OWN_REACHES_ANOTHER_INSTANCE = "The template reaches a member of an instance from a body of its own, which is a lambda, a local function, an iterator or an async body, and the instance it reaches is one of {0} rather than one of the type being woven: the field which holds it was written from the instance of the template, which is another type. Reference: {1}, Method: {2}.";
+
+    /// <summary>
+    /// A body which the compiler wrote for a body of the template's own reads what the template captured through the
+    /// instance which the delegate of the template holds, which belongs to the run of the weaving rather than to the
+    /// assembly being woven. The placeholders are the type of that instance and the member being woven.
+    /// </summary>
+    internal const string A_BODY_OF_ITS_OWN_READS_THE_CAPTURE = "The template captured a value of {0} and a body of its own reads it through the instance which the delegate of the template holds, which belongs to the run of the weaving rather than to the assembly being woven: what a carried body reads is written where it is read, and a value which the delegate holds reaches the assembly only as a constant. Method: {1}.";
+
+    /// <summary>
+    /// A body which the compiler wrote for a body of the template's own, and which holds no body to copy. The
+    /// placeholder is the member which the compiler wrote.
+    /// </summary>
+    internal const string A_BODY_OF_ITS_OWN_HOLDS_NO_BODY = "The template reaches a member which the compiler wrote for a body of its own, and that member holds no body to copy: there are no instructions of it to carry. Member: {0}.";
+
+    /// <summary>
+    /// A body which the compiler wrote for a body of the template's own holds an instruction whose operand is of a kind
+    /// the carrying does not write. The placeholders are the instruction and the member which the compiler wrote it in.
+    /// </summary>
+    internal const string A_BODY_OF_ITS_OWN_HOLDS_AN_OPERAND = "The body which the compiler wrote for a body of the template's own holds an instruction whose operand the carrying cannot write. Instruction: {0}, Member: {1}.";
+
+    /// <summary>
     /// The template holds no body to copy, which a member which is abstract, or which is a pinvoke, or which an
     /// interface declares does. The placeholder is the template.
     /// </summary>

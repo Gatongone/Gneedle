@@ -39,6 +39,23 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     private object? m_TemplateClosure;
 
+    /// <summary>
+    /// The types and the members which the compiler wrote for the bodies of the template's own, which the carrying has
+    /// moved onto the type being woven, or null while no template is being parsed.<para/>
+    /// The copy of a type the compiler wrote keeps the name of the original, so the name alone no longer tells a type
+    /// which the weaving holds the instructions of from one which it does not: what was carried is held here, and the
+    /// refusals ask it.
+    /// </summary>
+    private CarriedBodies? m_Carried;
+
+    /// <summary>
+    /// The body of the compiler's own which is being woven, or null while the body of the template itself is.<para/>
+    /// A body of the compiler's own is woven in its own right rather than as instructions of the template, so the
+    /// questions the parsing asks of a body - which argument a slot names, which local, which receiver - are asked of
+    /// the copy rather than of the member being woven.
+    /// </summary>
+    private CarriedBodies.Body? m_CarriedBody;
+
     /// <inheritdoc/>
     public MethodFlags Flags => Source.ToMethodFlags();
 
@@ -400,36 +417,88 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         // The instructions are read before the body of the member is swapped, because the member may be the template
         // itself, and the parse reads those instructions for as long as it runs.
-        var instructions = templateDef.Body.Instructions;
-        var previous = Source.Body;
-        var woven = new MethodBody(Source);
+        MethodBody woven;
 
-        // Every read and write of the body of the member for as long as the parse runs reaches the new body rather than
-        // the one which the member holds, which is what leaves the member as it was when the parse is refused. The
-        // parse is the only thing which runs in the meanwhile, so nothing else is written to the body which is left
-        // behind: a step which is added to the weave belongs after this call rather than inside it.
-        Source.Body = woven;
+        // What the compiler wrote for the bodies of this template is carried onto the type being woven before the body
+        // of the template is read, because what that body names is the copy rather than the type the compiler wrote,
+        // and because a body of the compiler's own is woven in its own right. A carrying which is refused leaves the
+        // type declaring nothing of the compiler's own, as the parse below leaves the member holding what it held.
+        m_Carried = new CarriedBodies(Source.Module, Source.DeclaringType);
         try
         {
-            // Copy target method variables to source.
-            CopyVariables(templateDef, Source, HandleLocals(instructions));
+            m_Carried.Carry(templateDef, closure);
+            m_Carried.Attach();
+
+            // What the compiler wrote is woven before the template which reaches it, because a body of the compiler's
+            // own is a body of its own rather than instructions of the template. None of them is woven with the
+            // closure of the template held, which is what makes the inlining of a capture inert for one of them: what
+            // a body of the compiler's own reads through the type it belongs to is a real field of that type.
+            foreach (var body in m_Carried.Bodies)
+            {
+                m_CarriedBody = body;
+                try
+                {
+                    body.Copy.Body = WeaveTheBody(body.Copy.Body, body.Copy, body.Copy);
+                }
+                finally
+                {
+                    m_CarriedBody = null;
+                }
+            }
 
             m_TemplateClosure = closure;
-            ParseBody(instructions, templateDef);
+            try
+            {
+                woven = WeaveTheBody(templateDef.Body, templateDef, Source);
+            }
+            finally
+            {
+                // The closure is dropped whether the parse wrote it or was refused, so that a parse which runs next
+                // reads what it is given rather than what a parse which failed was given.
+                m_TemplateClosure = null;
+            }
         }
         catch
         {
-            Source.Body = previous;
+            m_Carried.Detach();
+            m_Carried = null;
             throw;
         }
-        finally
+
+        m_Carried = null;
+        return woven;
+    }
+
+    /// <summary>
+    /// Weave one body into the method which takes it: the instructions of <paramref name="from"/> are read and the body
+    /// which is written takes the place of the body which <paramref name="into"/> holds.<para/>
+    /// Every read and write of the body of <paramref name="into"/> for as long as the parse runs reaches the new body
+    /// rather than the one which the member holds, which is what leaves the member as it was when the parse is refused.
+    /// The parse is the only thing which runs in the meanwhile, so nothing else is written to the body which is left
+    /// behind: a step which is added to a weave belongs after this call rather than inside it.
+    /// </summary>
+    /// <param name="from">The body whose instructions and regions are read.</param>
+    /// <param name="targetDef">The method those instructions belong to, which names the arguments and the locals.</param>
+    /// <param name="into">The method whose body the woven body takes the place of.</param>
+    /// <returns>The body which was woven, which the member does not hold yet.</returns>
+    private MethodBody WeaveTheBody(MethodBody from, MethodDefinition targetDef, MethodDefinition into)
+    {
+        var previous = into.Body;
+        var woven = new MethodBody(into);
+
+        into.Body = woven;
+        try
         {
-            // The closure is dropped whether the parse wrote it or was refused, so that a parse which runs next reads
-            // what it is given rather than what a parse which failed was given.
-            m_TemplateClosure = null;
+            CopyVariables(from, into, HandleLocals(from.Instructions));
+            ParseBody(from, targetDef, into);
+        }
+        catch
+        {
+            into.Body = previous;
+            throw;
         }
 
-        Source.Body = previous;
+        into.Body = previous;
         return woven;
     }
 
@@ -513,10 +582,14 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// Parse the method body. We need to translate the instructions in target method body to make them work in source method body,
     /// and then apply the translated instructions to source method body.
     /// </summary>
-    /// <param name="instructions">The instructions in target method body to parse.</param>
+    /// <param name="from">The body whose instructions and regions are parsed, which is the body of the template or the
+    /// body which the compiler wrote for one of its own.</param>
     /// <param name="targetDef">The target method definition to check when parsing instructions.</param>
-    private void ParseBody(Mono.Collections.Generic.Collection<Instruction> instructions, MethodDefinition targetDef)
+    /// <param name="into">The method whose body the woven body takes the place of, which is the member being woven for
+    /// the template and the copy of it for a body of the compiler's own.</param>
+    private void ParseBody(MethodBody from, MethodDefinition targetDef, MethodDefinition into)
     {
+        var instructions = from.Instructions;
         var filter = new InstructionFilter(instructions);
 
         // Translate the accessor codes to standard IL codes.
@@ -532,8 +605,11 @@ internal sealed partial class MethodHandler : IMethodHandler
 
             // Replace Ldarg. Every form of the load is translated rather than the two which carry the first slot, because
             // each of them names an argument of the template, and what the member being woven holds at that slot is
-            // another argument whenever the two do not agree on belonging to an instance.
-            if (instruction.TryGetLdargIndex(!targetDef.IsStatic, out var slot))
+            // another argument whenever the two do not agree on belonging to an instance. A body which the compiler
+            // wrote for a body of the template's own holds the arguments of its own, which the copy of it declares in
+            // the same order and which the carrying re-pointed every operand of, so a load of one stands where it was
+            // written and is not translated.
+            if (m_CarriedBody is null && instruction.TryGetLdargIndex(!targetDef.IsStatic, out var slot))
             {
                 filter.Replace(index, CreateLdarg(slot, targetDef));
                 continue;
@@ -547,9 +623,9 @@ internal sealed partial class MethodHandler : IMethodHandler
         }
 
         // Apply translations to body.
-        filter.ApplyTo(Source.Body.Instructions);
+        filter.ApplyTo(into.Body.Instructions);
 
-        CarryExceptionHandlers(instructions, targetDef, filter);
+        CarryExceptionHandlers(from.ExceptionHandlers, filter, into);
     }
 
     /// <summary>
@@ -559,13 +635,13 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// weaving wrote for it. The types which are caught are imported, so that a region which catches a type of another
     /// assembly is written against that assembly in the body which is woven, as every other operand is.
     /// </summary>
-    /// <param name="instructions">The instructions of the body which was parsed.</param>
-    /// <param name="targetDef">The template which the instructions belong to.</param>
+    /// <param name="handlers">The regions of the body which was parsed.</param>
     /// <param name="filter">The instruction filter which wrote the body.</param>
+    /// <param name="into">The method whose body the woven body takes the place of.</param>
     /// <exception cref="InvalidILException">Thrown when a region begins at an instruction which the body does not hold.</exception>
-    private void CarryExceptionHandlers(Mono.Collections.Generic.Collection<Instruction> instructions, MethodDefinition targetDef, InstructionFilter filter)
+    private void CarryExceptionHandlers(Mono.Collections.Generic.Collection<ExceptionHandler> handlers, InstructionFilter filter, MethodDefinition into)
     {
-        foreach (var handler in targetDef.Body.ExceptionHandlers)
+        foreach (var handler in handlers)
         {
             var carried = new ExceptionHandler(handler.HandlerType)
             {
@@ -589,10 +665,10 @@ internal sealed partial class MethodHandler : IMethodHandler
                 || (handler.HandlerEnd != null && carried.HandlerEnd == null)
                 || (handler.FilterStart != null && carried.FilterStart == null))
             {
-                throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, "$" + instructions.Count));
+                throw new InvalidILException(string.Format(ErrorMessages.INVALID_IL, "$" + filter.Target.Length));
             }
 
-            Source.Body.ExceptionHandlers.Add(carried);
+            into.Body.ExceptionHandlers.Add(carried);
         }
     }
 
@@ -809,6 +885,22 @@ internal sealed partial class MethodHandler : IMethodHandler
             return CreateLdarg(slot, templateDef);
         }
 
+        // What a body of the compiler's own holds in its receiver is the value the compiler put there: the type it
+        // wrote for a lambda which captured, or the state machine of a body which yields or awaits. The instance of the
+        // member being woven is not that value, and the body reaches it through the field the compiler wrote for it, so
+        // a body which captured no instance reaches it nowhere.
+        if (m_CarriedBody is { } carried)
+        {
+            // A local function which captured nothing is a member of the type which declares the template rather than of
+            // a type of its own, and its copy is a member of the type being woven: its receiver is one of that type.
+            if (carried.Copy.DeclaringType is { } holder && ReferenceEquals(holder, Source.DeclaringType))
+            {
+                return Instruction.Create(OpCodes.Ldarg_0);
+            }
+
+            throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_REACHES_NO_INSTANCE, Source.FullName));
+        }
+
         // The instance which the member is reached through is the one which the member being woven belongs to, and a
         // member which is static belongs to none: the slot which `this` takes holds its first argument instead, so the
         // member would be called on a value the template was handed for something else.
@@ -829,6 +921,12 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <exception cref="ArgumentException">Thrown when the template reads its own instance.</exception>
     private int GetShiftedSlot(int slot, MethodDefinition templateDef)
     {
+        // A body which the compiler wrote for a body of the template's own holds the arguments of its own: the copy of
+        // it declares the same parameters in the same order as the member which the compiler wrote, and the position an
+        // argument holds in the body is the position it holds in the copy. Nothing is shifted for one of those, and a
+        // load of its receiver is a load of the receiver of the copy, which the carrying re-pointed.
+        if (m_CarriedBody is { } carried) return carried.Copy.IsStatic ? slot : slot - 1;
+
         // What the template reads at the slot of its own receiver is that receiver rather than an argument, and no
         // member can be given it: a static member holds no such argument, and an instance one holds another instance in
         // its place. A lambda which captures a variable is an instance method of the type which holds the capture, so a
@@ -858,6 +956,19 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <exception cref="ArgumentException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
     private ParameterDefinition GetParameterAt(int slot, MethodDefinition templateDef)
     {
+        // The parameter which an argument of a body of the compiler's own holds is a parameter of the copy of that
+        // body, which is what the carrying re-pointed every operand of it to.
+        if (m_CarriedBody is { } carried)
+        {
+            var at = carried.Copy.IsStatic ? slot : slot - 1;
+            if (at < 0 || at >= carried.Copy.Parameters.Count)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, at, Source.FullName));
+            }
+
+            return carried.Copy.Parameters[at];
+        }
+
         var position = GetShiftedSlot(slot, templateDef) - (Source.IsStatic ? 0 : 1);
         if (position < 0 || position >= Source.Parameters.Count)
         {
@@ -988,7 +1099,10 @@ internal sealed partial class MethodHandler : IMethodHandler
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, importedField));
                 break;
             // We need to find the variable with the same index in source method definition, and replace the operand with it.
-            case VariableDefinition varDef:
+            // The local of a body which the compiler wrote is a local of the copy of that body, which the carrying
+            // re-pointed: it already names the local it belongs to, and the member being woven may hold an unrelated one
+            // at that position, so the operand is left as it stands for a body of that kind.
+            case VariableDefinition varDef when m_CarriedBody is null:
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, Source.Body.Variables[varDef.Index]));
                 break;
             // The type may hold generic parameter tokens itself, just like box Gneedle.Inject.T_0.
@@ -1126,18 +1240,19 @@ internal sealed partial class MethodHandler : IMethodHandler
     }
 
     /// <summary>
-    /// Parse the field member, and replace the instruction with the one to get the field reference.
+    /// Copy the locals of one body into the body which is being written, so that every operand which names a local of
+    /// the first names the local of the second which stands at the same position.
     /// </summary>
-    /// <param name="from">The source method definition to copy variables from.</param>
-    /// <param name="to">The target method definition to copy variables to.</param>
+    /// <param name="from">The body whose locals are copied.</param>
+    /// <param name="into">The method whose body takes them.</param>
     /// <param name="emptied">Index of the locals which the weaving empties, which are the ones which <see cref="HandleLocals"/> names.</param>
-    private static void CopyVariables(MethodDefinition from, MethodDefinition to, ISet<int> emptied)
+    private void CopyVariables(MethodBody from, MethodDefinition into, ISet<int> emptied)
     {
-        var srcVariables = from.Body.Variables;
+        var srcVariables = from.Variables;
         if (srcVariables == null) return;
 
-        var desVariables = to.Body.Variables;
-        to.Body.Variables.Clear();
+        var desVariables = into.Body.Variables;
+        desVariables.Clear();
 
         for (var i = 0; i < srcVariables.Count; i++)
         {
@@ -1145,11 +1260,12 @@ internal sealed partial class MethodHandler : IMethodHandler
             // is declared with is one of the weaver: copying that type would leave the assembly being woven referring to
             // the weaver for a type which nothing of it names, so the local is copied as a type which every assembly
             // holds instead.
-            // If the variable type holds a generic parameter token which could be parsed from Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20],
-            // then get the actual generic parameter type.
+            // The token of a generic parameter is read against the member being woven rather than against the body it
+            // stands in, because a token names a parameter of that member however deep in a body of the compiler's own
+            // it was written. If the variable type holds such a token, get the actual generic parameter type.
             var typeRef = emptied.Contains(i)
-                ? to.Module.TypeSystem.Object
-                : srcVariables[i].VariableType.ParseGenericTokens(to, to.Module);
+                ? into.Module.TypeSystem.Object
+                : srcVariables[i].VariableType.ParseGenericTokens(Source, into.Module);
             desVariables.Add(new VariableDefinition(typeRef));
         }
     }

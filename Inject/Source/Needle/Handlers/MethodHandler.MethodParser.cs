@@ -14,6 +14,14 @@ partial class MethodHandler
     /// <exception cref="ArgumentException">Thrown when the template proceeds without a body being woven around, or when the type which the call hands back is not the one which the member hands back.</exception>
     private void ParseProceedInvoke(int callIndex, MethodReference call, InstructionFilter filter, MethodDefinition targetDef)
     {
+        // The arguments which this call hands over are the arguments of the template, which the member being woven was
+        // given, and a body which the compiler wrote for a body of the template's own is written with arguments of its
+        // own rather than with them: the call is refused rather than written against values which are not there.
+        if (m_CarriedBody is not null)
+        {
+            throw new ArgumentException(string.Format(ErrorMessages.PROCEED_IN_A_BODY_OF_ITS_OWN, call.FullName, Source.FullName));
+        }
+
         // The body which was taken over is what the call stands for, and a template which proceeds without one being
         // taken over is a mistake of its own rather than a member which could not be found.
         if (m_ProceedMethod is not { } proceed)
