@@ -1238,7 +1238,13 @@ internal sealed partial class MethodHandler : IMethodHandler
         // what the carrying wrote is read as a type the weaving has, and only what it did not write is refused.
         if (m_Carried?.HoldsType(type) == true) return;
 
-        for (var at = type; at is {IsNested: true}; at = at.DeclaringType)
+        // The type itself is read as well as the types it is declared inside, rather than the nested chain alone: the
+        // compiler writes a type beside the template for some of what a body holds, which the carrying reads, and a
+        // type at the top level of the assembly for others - the type of an anonymous object, and the one a collection
+        // expression stands in - which it does not. The latter is internal to the assembly the template was compiled
+        // into, so a member woven into another one would reach a type it cannot run, and it is refused here rather than
+        // written.
+        for (var at = type; at is not null; at = at.DeclaringType)
         {
             if (!at.Name.StartsWith("<", StringComparison.Ordinal)) continue;
 

@@ -162,6 +162,28 @@ public static class CompilerGeneratedTemplates
     }
 
     /// <summary>
+    /// A template which holds an anonymous object, whose type the compiler writes at the top level of the assembly
+    /// rather than beside the template, so that the carrying does not read it and the weaving refuses it.
+    /// </summary>
+    public static int WrapsAValueInAnAnonymousObject(int value)
+    {
+        var wrapped = new {Number = value + 1};
+        return wrapped.Number;
+    }
+
+    /// <summary>
+    /// A template which holds a collection expression, whose type the compiler writes at the top level of the assembly
+    /// rather than beside the template.
+    /// </summary>
+    public static int SumsACollectionExpression(int value)
+    {
+        // What it is collected into is what makes the compiler write a type of its own for the expression: an array of
+        // the values is a plain array, which the weaving carries as it carries any other.
+        IEnumerable<int> numbers = [value, value + 1];
+        return numbers.Sum();
+    }
+
+    /// <summary>
     /// A lambda written inside a lambda, where the inner one captured what the outer one holds as well as a local of
     /// its own, which is what makes the compiler write a type for the one of them.
     /// </summary>
@@ -623,6 +645,41 @@ public class CompilerGeneratedTemplateTests
         Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericLocalFunction)),
                 typeof(int).ToGneedleType(), OneValue, 41),
             Is.EqualTo(41), "the member which was woven did not compute what the template computes.");
+    }
+
+    /// <summary>
+    /// Weave a template of the fixture into a member of int, which the weaving is expected to refuse, and hand back
+    /// what it said.
+    /// </summary>
+    /// <param name="templateName">Name of the template which is woven.</param>
+    /// <returns>The report of the refusal.</returns>
+    private static string RefusalOf(string templateName)
+    {
+        var intType = typeof(int).ToGneedleType();
+        var (_, host, _) = NewHost($"CompilerGeneratedRefused{Guid.NewGuid():N}");
+        var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+
+        var refused = Assert.Catch(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), templateName)));
+        Assert.That(refused, Is.TypeOf<ArgumentException>(),
+            $"'{templateName}' was refused by {refused?.GetType().Name ?? "nothing"}: {refused?.Message ?? "it was woven"}");
+
+        return refused!.Message;
+    }
+
+    [Test]
+    public void A_Template_Which_Reaches_A_Type_Written_At_The_Top_Level_Is_Refused()
+    {
+        // The type of an anonymous object, and the one a collection expression stands in, are written at the top level
+        // of the assembly the template was compiled into rather than beside it, so the carrying does not read them: a
+        // member which reached one would reach a type which is internal to that assembly and fail when it ran, and it
+        // is refused here rather than written.
+        Assert.Multiple(() =>
+        {
+            Assert.That(RefusalOf(nameof(CompilerGeneratedTemplates.WrapsAValueInAnAnonymousObject)),
+                Does.Contain("names a type which the compiler wrote"), "the type of an anonymous object was not refused.");
+            Assert.That(RefusalOf(nameof(CompilerGeneratedTemplates.SumsACollectionExpression)),
+                Does.Contain("names a type which the compiler wrote"), "the type a collection expression stands in was not refused.");
+        });
     }
 
     [Test]
