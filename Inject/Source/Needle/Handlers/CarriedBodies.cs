@@ -138,7 +138,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
                     // The body which the operand names is woven, and the others are not: what a type holds is what the
                     // pointer to one of its bodies reaches, and a body nothing points at holds nothing of the template.
-                    if (member is MethodReference pointed && m_Methods.TryGetValue(pointed.FullName, out var pointedAt))
+                    if (member is MethodReference pointed
+                        && m_Methods.TryGetValue(TheKeyOf(member.DeclaringType, pointed.Name, pointed.Parameters.Count), out var pointedAt))
                     {
                         AddBody(pointedAt.From, pointedAt.Copy);
                     }
@@ -251,10 +252,34 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         m_MemberOriginals[looseDefinition.FullName] = looseDefinition;
         var copy = DeclareMethod(looseDefinition, into);
+
+        // A member which the type being woven already declares under that name and with that many parameters is the one
+        // the compiler wrote for a template of that type itself, which stands on it: a template declared in the type it
+        // is woven into has that member already, and a type which declares two methods of one name and one signature is
+        // a type which the runtime refuses to load. The copy takes the number after the name, as a type copy does.
+        copy.Name = AMemberNameWhich(copy);
         m_MemberCopies.Add(copy);
         m_MemberTypes[looseDefinition.FullName] = copy;
         AddBody(looseDefinition, copy);
         pending.Enqueue(looseDefinition);
+    }
+
+    /// <summary>
+    /// The name a copy of a member takes on the type which is woven, which is the name the compiler wrote unless that
+    /// type already declares a member of it with the same number of parameters, or a copy of this carrying does.
+    /// </summary>
+    /// <param name="copy">The copy which is named.</param>
+    /// <returns>The name of the copy.</returns>
+    private string AMemberNameWhich(MethodDefinition copy)
+    {
+        var name = copy.Name;
+        for (var index = 1; into.Methods.Any(method => method.Name == name && method.Parameters.Count == copy.Parameters.Count)
+            || m_MemberCopies.Any(method => method.Name == name); index++)
+        {
+            name = $"{copy.Name}_{index}";
+        }
+
+        return name;
     }
 
     /// <summary>
@@ -340,13 +365,30 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         {
             var methodCopy = DeclareMethod(method, copy);
             copy.Methods.Add(methodCopy);
-            m_Methods[method.FullName] = (method, methodCopy);
+
+            // The key names the type which declares the method rather than the method itself, because the reference
+            // which a body holds names the instantiation of a generic type where the definition is what was carried:
+            // the two are one type to the lookup, and the name of a method alone tells two of one name apart by nothing.
+            m_Methods[TheKeyOf(from, method.Name, method.Parameters.Count)] = (method, methodCopy);
 
             if (reachedByTheRuntime) AddBody(method, methodCopy);
         }
 
         return copy;
     }
+
+    /// <summary>
+    /// The key which tells a member of a carried type apart, which is the type which declares it, the name of it, and
+    /// how many parameters it takes.<para/>
+    /// The type is read as its element type, because the reference a body holds names the instantiation of a generic
+    /// type while the definition is what was carried: the two are one type to the lookup.
+    /// </summary>
+    /// <param name="declaring">The type which declares the member, or a reference to an instantiation of it.</param>
+    /// <param name="name">Name of the member.</param>
+    /// <param name="parameters">Number of parameters the member takes.</param>
+    /// <returns>The key of the member.</returns>
+    private static string TheKeyOf(TypeReference? declaring, string name, int parameters)
+        => $"{declaring?.GetElementType().FullName}::{name}/{parameters}";
 
     /// <summary>
     /// Record that a body the compiler wrote is one which the template reaches, and so is woven.
