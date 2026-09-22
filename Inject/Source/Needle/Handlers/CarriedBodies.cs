@@ -317,18 +317,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <param name="copy">The copy which is named.</param>
     /// <returns>The name of the copy.</returns>
     private string AMemberNameWhich(MethodDefinition copy)
-    {
-        var name = copy.Name;
-        for (var index = 1;
-            into.Methods.Any(method => method.Name == name && method.Parameters.Count == copy.Parameters.Count)
-            || m_MemberCopies.Any(method => method.Name == name);
-            index++)
-        {
-            name = $"{copy.Name}_{index}";
-        }
-
-        return name;
-    }
+        => ANameWhichIsFree(copy.Name, name => m_MemberCopies.Any(method => method.Name == name)
+                                               || into.Methods.Any(method => method.Name == name
+                                                                             && method.Parameters.Count == copy.Parameters.Count));
 
     /// <summary>
     /// Declare the copy of a type the compiler wrote, when the type is one of those, and follow what that type holds.
@@ -938,14 +929,26 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <param name="from">The type which is copied.</param>
     /// <returns>The name of the copy.</returns>
     private string Taken(TypeDefinition from)
+        => ANameWhichIsFree(from.Name, name => m_Copies.Exists(copy => copy.Name == name)
+                                               || into.NestedTypes.Any(nested => nested.Name == name));
+
+    /// <summary>
+    /// The name which a copy takes, which is the name it was written from unless that name is taken on the type which
+    /// is woven: two types of one name which one type declares are a type the runtime refuses to load, and so are two
+    /// members of one name and one signature.
+    /// </summary>
+    /// <param name="name">The name which the compiler wrote.</param>
+    /// <param name="isTaken">Whether a name is one which the type being woven it was taken on already holds.</param>
+    /// <returns>The name of the copy.</returns>
+    private static string ANameWhichIsFree(string name, Func<string, bool> isTaken)
     {
-        var name = from.Name;
-        for (var index = 1; m_Copies.Exists(copy => copy.Name == name) || into.NestedTypes.Any(nested => nested.Name == name); index++)
+        var free = name;
+        for (var index = 1; isTaken(free); index++)
         {
-            name = $"{from.Name}_{index}";
+            free = $"{name}_{index}";
         }
 
-        return name;
+        return free;
     }
 
     /// <summary>
