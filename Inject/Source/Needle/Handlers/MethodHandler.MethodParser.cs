@@ -280,7 +280,7 @@ partial class MethodHandler
                 }
                 else
                 {
-                    filter.Replace(read, CreateReceiver(receiverIns, targetDef));
+                    filter.Replace(read, CreateReceiver(receiverIns, targetDef, read, filter));
                 }
 
                 filter.Replace(invocation, Instruction.Create(methodDef.IsVirtual ? OpCodes.Callvirt : OpCodes.Call, GetCallableReference(methodDef, arguments, namedInstance)));
@@ -302,7 +302,7 @@ partial class MethodHandler
             // the value which the template named it stands: only the load of an argument has to be written there.
             if (!methodDef.IsStatic && !instanceIsComputed)
             {
-                filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef));
+                filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef, callIndex, filter));
             }
 
             // Skip `call [Gneedle.Inject]Gneedle.Inject.This::Method<class {delegate_type}>({parameter_types})`
@@ -346,7 +346,7 @@ partial class MethodHandler
                 // the member is taken.
                 if (!instanceIsComputed)
                 {
-                    filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef));
+                    filter.Insert(callIndex, CreateReceiver(receiverIns, targetDef, callIndex, filter));
                 }
             }
             else

@@ -373,7 +373,53 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     {
         if (m_Bodies.Exists(body => ReferenceEquals(body.Copy, copy))) return;
 
-        m_Bodies.Add(new Body(from, copy));
+        var body = new Body(from, copy);
+        if (copy.DeclaringType is { } holder)
+        {
+            foreach (var field in TheFieldsWhichReachTheInstance(holder)) body.ReachedBy(field);
+        }
+
+        m_Bodies.Add(body);
+    }
+
+    /// <summary>
+    /// The fields which are read, one after the next, to load an instance of the type being woven out of the receiver
+    /// of a body of the compiler's own, or nothing when that body reaches no such instance.
+    /// </summary>
+    /// <remarks>
+    /// The instance a body was written in is a field of the type the compiler wrote for it, which the compiler names
+    /// <c>&lt;&gt;4__this</c> when that instance is one of the type the template was declared in. A type written inside
+    /// another one holds that one rather than the instance, and the walk follows it: the hop is taken only where exactly
+    /// one field of the type holds a type which was carried, because a hop taken wrongly reads a member of another
+    /// instance rather than refusing.
+    /// </remarks>
+    /// <param name="holder">The type the compiler wrote, which declares the body.</param>
+    /// <returns>The fields of the chain, in the order they are read.</returns>
+    private List<FieldReference> TheFieldsWhichReachTheInstance(TypeDefinition holder)
+    {
+        var chain = new List<FieldReference>();
+
+        // A type which a field of the chain names may be the type the walk started at, which the metadata of a
+        // hand-written assembly can hold: the walk stops where it has been rather than following such a field forever.
+        var walked = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var at = holder; at is not null && walked.Add(at.FullName);)
+        {
+            var instance = at.Fields.FirstOrDefault(field => field.FieldType.GetElementType().FullName == into.FullName);
+            if (instance is not null)
+            {
+                chain.Add(instance);
+                return chain;
+            }
+
+            var hops = at.Fields.Where(field => m_Copies.Exists(copy => ReferenceEquals(copy, field.FieldType.GetElementType()))).ToArray();
+            if (hops.Length != 1) return [];
+
+            chain.Add(hops[0]);
+            at = hops[0].FieldType.GetElementType().Resolve();
+        }
+
+        return [];
     }
 
     /// <summary>

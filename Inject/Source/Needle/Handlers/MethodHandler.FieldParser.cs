@@ -206,7 +206,7 @@ partial class MethodHandler
                 }
                 else
                 {
-                    filter.Replace(read, CreateReceiver(receiverIns, targetDef));
+                    filter.Replace(read, CreateReceiver(receiverIns, targetDef, read, filter));
                 }
 
                 filter.Replace(accessor, AccessorOf(accessorIsGet));
@@ -218,7 +218,7 @@ partial class MethodHandler
         if (!isStatic && !instanceIsComputed)
         {
             // ldstr {field_name} -> the argument which holds the instance the field is read off
-            filter.Replace(currentIndex, CreateReceiver(receiverIns, targetDef));
+            filter.Replace(currentIndex, CreateReceiver(receiverIns, targetDef, currentIndex, filter));
         }
         else
         {

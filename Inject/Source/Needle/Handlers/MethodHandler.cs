@@ -875,10 +875,13 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="instanceIns">The instruction of the template which loads the instance, or null when the template
     /// named none of its own.</param>
     /// <param name="templateDef">The template which the instance is read out of.</param>
+    /// <param name="index">Index of the instruction which the receiver is written for, which the fields of a chain
+    /// which leads to it are written before.</param>
+    /// <param name="filter">The filter which writes the body.</param>
     /// <returns>The instruction which loads the receiver.</returns>
     /// <exception cref="ArgumentException">Thrown when the member being woven is static, and therefore holds no receiver
     /// for a member of an instance which the template reached through <c>This</c> or <c>Base</c>.</exception>
-    private Instruction CreateReceiver(Instruction? instanceIns, MethodDefinition templateDef)
+    private Instruction CreateReceiver(Instruction? instanceIns, MethodDefinition templateDef, int index, InstructionFilter filter)
     {
         if (instanceIns is { } ins && ins.TryGetLdargIndex(!templateDef.IsStatic, out var slot))
         {
@@ -898,7 +901,22 @@ internal sealed partial class MethodHandler : IMethodHandler
                 return Instruction.Create(OpCodes.Ldarg_0);
             }
 
-            throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_REACHES_NO_INSTANCE, Source.FullName));
+            // What the body reaches at its receiver is the type the compiler wrote rather than the instance of the member
+            // being woven, and that instance lies behind the fields the carrying found: each of them is read before the
+            // one after it, and the last is the value the member is reached through.
+            if (carried.Receiver.Count == 0)
+            {
+                throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_REACHES_NO_INSTANCE, Source.FullName));
+            }
+
+            var receiver = Instruction.Create(OpCodes.Ldarg_0);
+            foreach (var field in carried.Receiver)
+            {
+                filter.Insert(index, receiver);
+                receiver = Instruction.Create(OpCodes.Ldfld, field);
+            }
+
+            return receiver;
         }
 
         // The instance which the member is reached through is the one which the member being woven belongs to, and a
@@ -933,6 +951,16 @@ internal sealed partial class MethodHandler : IMethodHandler
         // template written as one is a template of this kind.
         if (!templateDef.IsStatic && slot == 0)
         {
+            // A template which is declared in the type being woven is written against the instance of that type, which
+            // is the instance of the member being woven as well: what such a template loads at its own receiver is that
+            // instance, and it stands where it was written. A template given as the delegate which holds it reads the
+            // instance the delegate was made from, which is not the instance of the member, and a template which is
+            // declared in another type is written against one of that type: both are refused.
+            if (m_TemplateClosure is null && !Source.IsStatic && IsDeclaredInTheWovenType(templateDef))
+            {
+                return 0;
+            }
+
             throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_READS_ITS_OWN_INSTANCE, Source.FullName));
         }
 
@@ -940,6 +968,21 @@ internal sealed partial class MethodHandler : IMethodHandler
         // belongs to an instance and the other does not: the receiver of the one which does takes the first slot.
         return slot + (Source.IsStatic ? 0 : 1) - (templateDef.IsStatic ? 0 : 1);
     }
+
+    /// <summary>
+    /// Whether the type which declares <paramref name="templateDef"/> is the type being woven: an instance of the type
+    /// being woven is an instance of that type, which is what makes the receiver of a template of one the receiver of
+    /// the member being woven.
+    /// </summary>
+    /// <remarks>
+    /// Only the type being woven itself is read, and not a base type of it: a base type is a type of another assembly
+    /// as often as not, and resolving one here reads an assembly in the middle of a parse. A template of a base type
+    /// is left refused until what it needs is read.
+    /// </remarks>
+    /// <param name="templateDef">The template which is asked about.</param>
+    /// <returns>Whether the template belongs to the type being woven.</returns>
+    private bool IsDeclaredInTheWovenType(MethodDefinition templateDef)
+        => ReferenceEquals(Source.DeclaringType, templateDef.DeclaringType);
 
     /// <summary>
     /// The parameter which the template reads or writes at a slot, which is the parameter of the member being woven that
