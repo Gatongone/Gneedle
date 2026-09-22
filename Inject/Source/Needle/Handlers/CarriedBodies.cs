@@ -165,7 +165,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         }
 
         ReadTheChains();
-        Repoint(template);
     }
 
     /// <summary>
@@ -176,7 +175,12 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     internal bool HoldsType(TypeReference? type)
     {
         var element = type?.GetElementType();
-        return element is not null && m_Copies.Exists(copy => ReferenceEquals(copy, element));
+        if (element is null) return false;
+
+        // A body of the template is read as the compiler wrote it - the carrying does not write to it, because that body
+        // is a member of the assembly being woven and another weave of it reads it again - so what reaches the refusals
+        // is the type the compiler wrote as often as the copy of it which the carrying made.
+        return m_Copies.Exists(copy => ReferenceEquals(copy, element)) || m_Types.ContainsKey(element.FullName);
     }
 
     /// <summary>
@@ -185,7 +189,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <param name="member">The member which is asked about.</param>
     /// <returns>Whether the carry wrote it, so that the weaving holds the instructions of what it holds.</returns>
     internal bool HoldsMember(MemberReference? member)
-        => member is not null && m_MemberCopies.Exists(copy => ReferenceEquals(copy, member));
+        => member is not null
+           && (m_MemberCopies.Exists(copy => ReferenceEquals(copy, member)) || m_MemberTypes.ContainsKey(member.FullName));
 
     /// <summary>
     /// Append the copies to the type which is woven, under the lock of the module, which is the write which makes them
@@ -220,6 +225,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         {
             into.Methods.Remove(copy);
         }
+
     }
 
     /// <summary>
@@ -565,29 +571,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     }
 
     /// <summary>
-    /// Point every operand of the body of the template at what the carry wrote in place of what it named.<para/>
-    /// What the carry did not write is left exactly as the compiler wrote it: the body of the template is read by the
-    /// weaving, which imports what it writes and replaces what it stands for, and an operand imported here would name
-    /// the weaver in an assembly which does not.
-    /// </summary>
-    /// <param name="body">The body whose operands are re-pointed, which is the body of the template.</param>
-    private void Repoint(MethodDefinition body)
-    {
-        if (!body.HasBody) return;
-
-        foreach (var instruction in body.Body.Instructions)
-        {
-            instruction.Operand = instruction.Operand switch
-            {
-                FieldReference field   => TheCopyOf(field) ?? instruction.Operand,
-                MethodReference called => TheCopyOf(called) ?? instruction.Operand,
-                TypeReference type     => TheCopyOf(type) ?? instruction.Operand,
-                _                      => instruction.Operand
-            };
-        }
-    }
-
-    /// <summary>
     /// The field of a copy which a reference names, or null where the carry wrote no copy of the type which declares
     /// the field.
     /// </summary>
@@ -598,7 +581,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// </remarks>
     /// <param name="field">The field which is asked about.</param>
     /// <returns>The field of the copy, or null.</returns>
-    private FieldReference? TheCopyOf(FieldReference field)
+    internal FieldReference? TheCopyOf(FieldReference field)
     {
         if (field.DeclaringType is null || !m_Types.TryGetValue(field.DeclaringType.GetElementType().FullName, out var copy))
         {
@@ -616,7 +599,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// </summary>
     /// <param name="called">The member which is asked about.</param>
     /// <returns>The member of the copy, or null.</returns>
-    private MethodReference? TheCopyOf(MethodReference called)
+    internal MethodReference? TheCopyOf(MethodReference called)
     {
         if (m_MemberTypes.TryGetValue(called.FullName, out var loose)) return loose;
 
@@ -676,7 +659,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         if (!changed) return null;
 
-        var instantiated = new GenericInstanceMethod(specification.ElementMethod);
+        // What the specification instantiates belongs to the module the template was read out of, so it is imported
+        // into the one which is being written: the same as every other member which the carrying did not write.
+        var instantiated = new GenericInstanceMethod(ModuleLock.Import(module, specification.ElementMethod));
         foreach (var argument in carried) instantiated.GenericArguments.Add(argument);
         return instantiated;
     }
@@ -686,7 +671,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// </summary>
     /// <param name="type">The type which is asked about.</param>
     /// <returns>The copy of it, or null.</returns>
-    private TypeReference? TheCopyOf(TypeReference type)
+    internal TypeReference? TheCopyOf(TypeReference type)
         => m_Types.ContainsKey(type.GetElementType().FullName) ? TypeOf(type) : null;
 
     /// <summary>
