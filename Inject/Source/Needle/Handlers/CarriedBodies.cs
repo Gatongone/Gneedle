@@ -713,6 +713,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         if (reference is GenericParameter parameter && OwnerOf(parameter) is { } owner)
         {
+            // A parameter which no copy of what declared it stands for is imported: a parameter of the template's own
+            // method is one of those - what the woven member declares in its place is not held here - and the import
+            // resolves it against the context it stands in, which is the body it is read out of.
             return m_Parameters.TryGetValue($"{owner}/{parameter.Position}", out var declared)
                 ? declared
                 : ModuleLock.Import(module, reference);

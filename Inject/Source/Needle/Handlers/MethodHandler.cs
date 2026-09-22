@@ -310,8 +310,23 @@ internal sealed partial class MethodHandler : IMethodHandler
         // The template is parsed into a body of its own, and the return type is parsed before that body is handed over:
         // the member holds what it held until every step which can refuse the template has run, so a template which
         // cannot be woven leaves the member as it was rather than half of the one which was to replace it.
-        var woven = ParseIntoABodyOfItsOwn(targetDef, closure);
-        ParseReturnType(targetDef.ReturnType);
+        MethodBody woven;
+        try
+        {
+            woven = ParseIntoABodyOfItsOwn(targetDef, closure);
+            ParseReturnType(targetDef.ReturnType);
+        }
+        catch
+        {
+            // What the carrying wrote is taken back off whether it was the parse or the return type which refused: the
+            // return type is read after the parse, and a template which names a token at a position the member being
+            // woven does not declare is refused there rather than in the parse.
+            m_Carried?.Detach();
+            m_Carried = null;
+            throw;
+        }
+
+        m_Carried = null;
         Source.Body = woven;
     }
 
@@ -895,8 +910,11 @@ internal sealed partial class MethodHandler : IMethodHandler
         if (m_CarriedBody is { } carried)
         {
             // A local function which captured nothing is a member of the type which declares the template rather than of
-            // a type of its own, and its copy is a member of the type being woven: its receiver is one of that type.
-            if (carried.Copy.DeclaringType is { } holder && ReferenceEquals(holder, Source.DeclaringType))
+            // a type of its own, and an instance one of those is written against an instance of that type: its receiver
+            // is the instance of the member being woven. A local function which reaches an instance without being one -
+            // which the compiler writes as a static member of that type - holds no such instance, and the member is
+            // reached through the fields of the chain below or refused with it.
+            if (carried.Copy.DeclaringType is { } holder && !carried.Copy.IsStatic && ReferenceEquals(holder, Source.DeclaringType))
             {
                 return Instruction.Create(OpCodes.Ldarg_0);
             }

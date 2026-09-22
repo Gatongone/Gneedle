@@ -240,7 +240,11 @@ public class CarriedInstanceFixture
     /// </summary>
     public int ReachesTheInstanceFromALambda(int value)
     {
-        Func<int, int> add = x => x + Offset + This.Field<int>(nameof(Offset)).Get();
+        // The local is what makes the compiler write a type for the lambda and hold the instance in a field of it: a
+        // lambda which captures the instance alone is a method of the type it was written in, and its receiver is the
+        // instance already.
+        var one = 1;
+        Func<int, int> add = x => x + Offset + one + This.Field<int>(nameof(Offset)).Get();
         return add(value);
     }
 }
@@ -516,14 +520,14 @@ public class CompilerGeneratedTemplateTests
         // The instance which the placeholder reaches is not the receiver of the lambda: the compiler holds it in a field
         // of the type it wrote for the lambda, and the weaving reads the member off that instance rather than off the
         // lambda. The field is read by the lambda itself as well, so what the member computes is the value it was given
-        // with the field added twice.
+        // with the field added twice and the local the lambda captured added once.
         var (result, reported) = Woven(CARRIED_INSTANCE_TYPE, nameof(CarriedInstanceFixture.ReachesTheInstanceFromALambda), CARRIED_INSTANCE_TYPE);
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
         var type = AssemblyLoader.LoadFromBytes(result).GetType(CARRIED_INSTANCE_TYPE)!;
         var instance = Activator.CreateInstance(type);
 
-        Assert.That(type.GetMethod("Run")!.Invoke(instance, [41]), Is.EqualTo(43),
+        Assert.That(type.GetMethod("Run")!.Invoke(instance, [41]), Is.EqualTo(44),
             "the placeholder which reaches the instance of the member being woven from a lambda was not woven.");
     }
 
@@ -776,12 +780,12 @@ public class CompilerGeneratedTemplateTests
     [NonParallelizable]
     public void A_Carried_Type_Whose_Name_The_Target_Already_Holds_Is_Declared_Under_Another()
     {
-        // What a copy is declared under is a name of the type being woven, which may already be taken: the name of a
-        // type the compiler wrote is not one an identifier of C# holds, and the brackets of it are taken out, so the
-        // name a copy takes is a name a member of the type being woven may hold already.
+        // What a copy is declared under is the name the compiler wrote, which the type being woven may already hold:
+        // the type which was carried here is nested in the type which declares the template as well, and a type of that
+        // name is put beside it, so the name is taken and the copy has to take one of its own.
         var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.RunsACapturingLambda), CARRIED_CLOSURE_TYPE,
             module => module.GetType(CARRIED_CLOSURE_TYPE)!
-                            .NestedTypes.Add(new TypeDefinition("", "_c__DisplayClass1_0", TypeAttributes.NestedPrivate, module.TypeSystem.Object)));
+                            .NestedTypes.Add(new TypeDefinition("", "<>c__DisplayClass1_0", TypeAttributes.NestedPrivate, module.TypeSystem.Object)));
 
         Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
 
@@ -789,8 +793,9 @@ public class CompilerGeneratedTemplateTests
         {
             var names = read.MainModule.GetType(CARRIED_CLOSURE_TYPE)!.NestedTypes.Select(nested => nested.Name).ToArray();
 
-            Assert.That(names, Does.Contain("_c__DisplayClass1_0"), "the type which was there already was taken away.");
-            Assert.That(names.Length, Is.EqualTo(2), $"the copy was not declared under a name of its own: {string.Join(", ", names)}");
+            Assert.That(names, Does.Contain("<>c__DisplayClass1_0"), "the type which was there already was taken away.");
+            Assert.That(names, Does.Contain("<>c__DisplayClass1_0_1"),
+                $"the copy was not declared under a name of its own: {string.Join(", ", names)}");
         }
 
         Assert.That(Ran(result, CARRIED_CLOSURE_TYPE, "Run", 41), Is.EqualTo(42),
