@@ -14,8 +14,9 @@ namespace Gneedle.Inject;
 /// Every reference to <c>Widget</c> is turned into a reference to the <c>Widget</c> which the assembly named
 /// <c>Gneedle.Test.Generated</c> declares.
 /// </example>
+/// <param name="name">Assembly name</param>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
-public class FromAssemblyAttribute : Attribute
+public class FromAssemblyAttribute(string name) : Attribute
 {
     /// <summary>
     /// Full name of the attribute, which is used to find it in the metadata of a module.
@@ -25,8 +26,5 @@ public class FromAssemblyAttribute : Attribute
     /// <summary>
     /// Name of the assembly which declares the real type.
     /// </summary>
-    public readonly string Name;
-
-    /// <param name="name">Assembly name</param>
-    public FromAssemblyAttribute(string name) => Name = name;
+    public readonly string Name = name;
 }

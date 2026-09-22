@@ -1,5 +1,3 @@
-using Mono.Cecil.Cil;
-
 namespace Gneedle.Inject;
 
 /// <summary>
@@ -191,8 +189,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <returns>Whether the carry wrote it, so that the weaving holds the instructions of what it holds.</returns>
     internal bool HoldsMember(MemberReference? member)
         => member is not null
-           && (m_MemberCopies.Exists(copy => ReferenceEquals(copy, member))
-               || m_MemberTypes.ContainsKey(TheKeyOf(member.DeclaringType, member.Name, member is MethodReference called ? called.Parameters.Count : 0)));
+            && (m_MemberCopies.Exists(copy => ReferenceEquals(copy, member))
+                || m_MemberTypes.ContainsKey(TheKeyOf(member.DeclaringType, member.Name, member is MethodReference called ? called.Parameters.Count : 0)));
 
     /// <summary>
     /// Append the copies to the type which is woven, under the lock of the module, which is the write which makes them
@@ -281,8 +279,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     private string AMemberNameWhich(MethodDefinition copy)
     {
         var name = copy.Name;
-        for (var index = 1; into.Methods.Any(method => method.Name == name && method.Parameters.Count == copy.Parameters.Count)
-            || m_MemberCopies.Any(method => method.Name == name); index++)
+        for (var index = 1;
+            into.Methods.Any(method => method.Name == name && method.Parameters.Count == copy.Parameters.Count)
+            || m_MemberCopies.Any(method => method.Name == name);
+            index++)
         {
             name = $"{copy.Name}_{index}";
         }
@@ -584,14 +584,14 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
             placed[instruction].Operand = instruction.Operand switch
             {
-                Instruction branch          => placed[branch],
-                Instruction[] table         => table.Select(target => placed[target]).ToArray(),
-                VariableDefinition variable => copy.Body.Variables[variable.Index],
+                Instruction branch           => placed[branch],
+                Instruction[] table          => table.Select(target => placed[target]).ToArray(),
+                VariableDefinition variable  => copy.Body.Variables[variable.Index],
                 ParameterDefinition argument => copy.Parameters[argument.Index],
-                FieldReference field        => Point(field),
-                MethodReference called      => Point(called),
-                TypeReference type          => TypeOf(type),
-                _                           => instruction.Operand
+                FieldReference field         => Point(field),
+                MethodReference called       => Point(called),
+                TypeReference type           => TypeOf(type),
+                _                            => instruction.Operand
             };
         }
 
@@ -698,8 +698,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         for (var index = 0; index < carried.Length; index++)
         {
             var argument = specification.GenericArguments[index];
-            carried[index] = TheCopyOf(argument) ?? argument;
-            changed |= !ReferenceEquals(carried[index], argument);
+            carried[index] =  TheCopyOf(argument) ?? argument;
+            changed        |= !ReferenceEquals(carried[index], argument);
         }
 
         if (!changed) return null;
@@ -838,23 +838,23 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     private static Instruction CopyOf(Instruction instruction, MethodDefinition from)
         => instruction.Operand switch
         {
-            null                          => Instruction.Create(instruction.OpCode),
-            Instruction branch            => Instruction.Create(instruction.OpCode, branch),
-            Instruction[] table           => Instruction.Create(instruction.OpCode, table),
-            VariableDefinition variable   => Instruction.Create(instruction.OpCode, variable),
-            ParameterDefinition argument  => Instruction.Create(instruction.OpCode, argument),
-            FieldReference field          => Instruction.Create(instruction.OpCode, field),
-            MethodReference method        => Instruction.Create(instruction.OpCode, method),
-            TypeReference type            => Instruction.Create(instruction.OpCode, type),
-            CallSite site                 => Instruction.Create(instruction.OpCode, site),
-            string text                   => Instruction.Create(instruction.OpCode, text),
-            sbyte number                  => Instruction.Create(instruction.OpCode, number),
-            byte number                   => Instruction.Create(instruction.OpCode, number),
-            int number                    => Instruction.Create(instruction.OpCode, number),
-            long number                   => Instruction.Create(instruction.OpCode, number),
-            float number                  => Instruction.Create(instruction.OpCode, number),
-            double number                 => Instruction.Create(instruction.OpCode, number),
-            _ => throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_HOLDS_AN_OPERAND, instruction, from.FullName))
+            null                         => Instruction.Create(instruction.OpCode),
+            Instruction branch           => Instruction.Create(instruction.OpCode, branch),
+            Instruction[] table          => Instruction.Create(instruction.OpCode, table),
+            VariableDefinition variable  => Instruction.Create(instruction.OpCode, variable),
+            ParameterDefinition argument => Instruction.Create(instruction.OpCode, argument),
+            FieldReference field         => Instruction.Create(instruction.OpCode, field),
+            MethodReference method       => Instruction.Create(instruction.OpCode, method),
+            TypeReference type           => Instruction.Create(instruction.OpCode, type),
+            CallSite site                => Instruction.Create(instruction.OpCode, site),
+            string text                  => Instruction.Create(instruction.OpCode, text),
+            sbyte number                 => Instruction.Create(instruction.OpCode, number),
+            byte number                  => Instruction.Create(instruction.OpCode, number),
+            int number                   => Instruction.Create(instruction.OpCode, number),
+            long number                  => Instruction.Create(instruction.OpCode, number),
+            float number                 => Instruction.Create(instruction.OpCode, number),
+            double number                => Instruction.Create(instruction.OpCode, number),
+            _                            => throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_HOLDS_AN_OPERAND, instruction, from.FullName))
         };
 
     /// <summary>

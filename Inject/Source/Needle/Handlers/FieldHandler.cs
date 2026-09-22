@@ -3,7 +3,7 @@ namespace Gneedle.Inject;
 /// <summary>
 /// Handler for a field definition, providing access to the underlying Cecil field.
 /// </summary>
-internal class FieldHandler(FieldDefinition fieldDef, TypeHandler declaringTypeHandler) : IFieldHandler, IAttributeContainer
+internal class FieldHandler(FieldDefinition fieldDef, TypeHandler declaringTypeHandler) : IFieldHandler
 {
     /// <summary>
     /// The underlying Cecil field definition.

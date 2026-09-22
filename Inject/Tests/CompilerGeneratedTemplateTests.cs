@@ -66,9 +66,13 @@ public static class CompilerGeneratedTemplates
 
     /// <summary>
     /// A body which calls a generic method, which is a shape the weaver carries whatever the compiler did with the body
-    /// of the template: the call names the method through the instantiation it makes of it.
+    /// of the template: the call names the method through the instantiation it makes of it.<para/>
+    /// What it is called on is a sequence of the framework rather than one the compiler writes for a collection
+    /// expression: a type the compiler writes for one of those stands at the top level of the assembly the template was
+    /// compiled into rather than nested inside what declares it, and the carrying reads the types it writes beside a
+    /// template - which are nested - rather than those.
     /// </summary>
-    public static int CallsAGenericMethod(int value) => Enumerable.First([value]);
+    public static int CallsAGenericMethod(int value) => Enumerable.First(Enumerable.Repeat(value, 1));
 
     /// <summary>
     /// A lambda which captured two locals rather than one, so that the type the compiler wrote for it holds more than
@@ -600,13 +604,11 @@ public class CompilerGeneratedTemplateTests
     public void A_Template_Which_Calls_A_Generic_Method_Is_Woven()
     {
         // Nothing here is a construct the compiler carried out of the template: the call names a generic method of the
-        // framework through the instantiation it makes of it, which is a shape any template may write.
-        var (_, host, _) = NewHost($"CompilerGeneratedAGenericCall{Guid.NewGuid():N}");
-        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
-
-        Assert.DoesNotThrow(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericMethod))),
-            "the call of a generic method was refused rather than carried.");
+        // framework through the instantiation it makes of it, which is a shape any template may write. What the member
+        // computes is what tells a call which was carried from one written against the instantiation of another.
+        Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericMethod)),
+                typeof(int).ToGneedleType(), OneValue, 41),
+            Is.EqualTo(41), "the member which was woven did not compute what the template computes.");
     }
 
     /// <summary>
@@ -776,14 +778,25 @@ public class CompilerGeneratedTemplateTests
     public void The_Local_Function_Is_Carried_As_A_Member_Rather_Than_As_A_Type()
     {
         // A local function which captured nothing is not a type of its own: it is a member of the type which declares
-        // the template, which is the other shape the move has, and the cheaper of the two.
+        // the template, so what the carrying writes is a member of the type being woven rather than a nested type of
+        // it, which is the other shape the move has.
         var (result, reported) = Woven(TEMPLATES_TYPE, nameof(CompilerGeneratedTemplates.RunsALocalFunction), CARRIED_LOCAL_FUNCTION_TYPE);
-        Assert.Multiple(() =>
+        Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
+
+        using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result)))
         {
-            Assert.That(reported, Is.Empty, string.Join(Environment.NewLine, reported));
-            Assert.That(Ran(result, CARRIED_LOCAL_FUNCTION_TYPE, "Run", 41), Is.EqualTo(42),
-                "the member which was woven did not compute what the template computes.");
-        });
+            var woven = read.MainModule.GetType(CARRIED_LOCAL_FUNCTION_TYPE)!;
+            Assert.Multiple(() =>
+            {
+                Assert.That(woven.Methods.Any(method => method.Name.IndexOf(">g__", StringComparison.Ordinal) >= 0),
+                    Is.True, "the copy of the local function is not a member of the type which was woven.");
+                Assert.That(woven.NestedTypes, Is.Empty,
+                    "the copy of the local function was declared as a type of the type which was woven.");
+            });
+        }
+
+        Assert.That(Ran(result, CARRIED_LOCAL_FUNCTION_TYPE, "Run", 41), Is.EqualTo(42),
+            "the member which was woven did not compute what the template computes.");
     }
 
     [Test]

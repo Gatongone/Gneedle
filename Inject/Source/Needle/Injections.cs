@@ -435,8 +435,8 @@ public static class Injections
             if (!HoldsInjector(assemblyHandler.Assembly.Source.CustomAttributes, InjectorInterfaces.AssemblyInjectorNames)) return false;
 
             var injectors = TheInjectorsWhich(assembly, static attribute => attribute is IAssemblyInjector)
-                           .Cast<IAssemblyInjector>()
-                           .ToArray();
+                            .Cast<IAssemblyInjector>()
+                            .ToArray();
             if (injectors.Length == 0) return false;
             foreach (var injector in injectors)
             {
@@ -570,8 +570,8 @@ public static class Injections
             if (methodHandler is MethodHandler {Source: { } methodDefinition} && !HoldsInjector(methodDefinition.CustomAttributes, InjectorInterfaces.MethodInjectorNames)) return false;
 
             if (TheInjectorsWhich(methodInfo, static attribute => attribute is IMethodInjector)
-                    .Cast<IMethodInjector>()
-                    .ToArray() is not {Length: > 0} injectors) return false;
+                .Cast<IMethodInjector>()
+                .ToArray() is not {Length: > 0} injectors) return false;
 
             // The assembly is written back only when something was injected into it, so an injector which found nothing
             // to inject into is not counted as a change: the member it names was reported instead.
@@ -605,8 +605,8 @@ public static class Injections
             if (fieldHandler is FieldHandler {Source: { } fieldDefinition} && !HoldsInjector(fieldDefinition.CustomAttributes, InjectorInterfaces.FieldInjectorNames)) return false;
 
             if (TheInjectorsWhich(fieldInfo, static attribute => attribute is IFieldInjector)
-                    .Cast<IFieldInjector>()
-                    .ToArray() is not {Length: > 0} injectors) return false;
+                .Cast<IFieldInjector>()
+                .ToArray() is not {Length: > 0} injectors) return false;
 
             var injected = false;
             foreach (var injector in injectors)
@@ -638,8 +638,8 @@ public static class Injections
             if (propertyHandler is PropertyHandler {Source: { } propertyDefinition} && !HoldsInjector(propertyDefinition.CustomAttributes, InjectorInterfaces.PropertyInjectorNames)) return false;
 
             if (TheInjectorsWhich(propertyInfo, static attribute => attribute is IPropertyInjector)
-                    .Cast<IPropertyInjector>()
-                    .ToArray() is not {Length: > 0} injectors) return false;
+                .Cast<IPropertyInjector>()
+                .ToArray() is not {Length: > 0} injectors) return false;
 
             var injected = false;
             foreach (var injector in injectors)

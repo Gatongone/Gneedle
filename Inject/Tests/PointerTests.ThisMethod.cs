@@ -155,7 +155,6 @@ public partial class PointerTests
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
         Assert.Multiple(() =>
         {
-
             // The delegate Invoke must be rewritten to a direct call to Add, and no delegate
             // construction (ldftn/newobj) should remain.
             Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
@@ -383,7 +382,7 @@ public partial class PointerTests
         Assert.Multiple(() =>
         {
             Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
-                    "the call stands on the definition of the member rather than on an instantiation of it.");
+                "the call stands on the definition of the member rather than on an instantiation of it.");
             Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(method.Source.GenericParameters[1]),
                 "the call does not name the parameter of the body which the name of the parameter of the member ties it to.");
         });
@@ -444,7 +443,7 @@ public partial class PointerTests
         Assert.Multiple(() =>
         {
             Assert.That(call, Is.InstanceOf<GenericInstanceMethod>(),
-                    "the call stands on the definition of the member rather than on an instantiation of it.");
+                "the call stands on the definition of the member rather than on an instantiation of it.");
             Assert.That(((GenericInstanceMethod) call!).GenericArguments.Single(), Is.SameAs(host.Source.GenericParameters[0]),
                 "the call does not name the parameter of the type which named the parameter of the member, which is "
                 + "the one the parameter of the member bears the name of rather than the one the member declares.");
@@ -654,7 +653,7 @@ public partial class PointerTests
             Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
                     && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
                 "the reads of the local were not both rewritten to a direct call to Add.");
-            Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.False,
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference {Name: "Invoke"}), Is.False,
                 "an invocation of the delegate was left standing rather than folded.");
             Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
         });
@@ -685,7 +684,7 @@ public partial class PointerTests
             Assert.That(ins.Count(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
                     && ((MethodReference) i.Operand).Name == "Add"), Is.EqualTo(2),
                 "the symbols were not both rewritten to a direct call to Add.");
-            Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.False,
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference {Name: "Invoke"}), Is.False,
                 "an invocation of the delegate was left standing rather than folded.");
         });
         var assembly = host.AssemblyHandler.Assembly;
@@ -716,7 +715,7 @@ public partial class PointerTests
         {
             Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
                 "the delegate was not built into the local which holds it.");
-            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference {Name: "Invoke"}), Is.EqualTo(1),
                 "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
         });
         var assembly = host.AssemblyHandler.Assembly;
@@ -748,7 +747,7 @@ public partial class PointerTests
         {
             Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
                 "the delegate was not built into the local which holds it.");
-            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference {Name: "Invoke"}), Is.EqualTo(1),
                 "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
         });
         var assembly = host.AssemblyHandler.Assembly;
@@ -783,7 +782,7 @@ public partial class PointerTests
         {
             Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.True,
                 "the delegate was not built into the local which holds it.");
-            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference { Name: "Invoke" }), Is.EqualTo(1),
+            Assert.That(ins.Count(i => i.OpCode == OpCodes.Callvirt && i.Operand is MethodReference {Name: "Invoke"}), Is.EqualTo(1),
                 "the invocation was folded into a call of the member rather than left standing on the delegate of the local.");
         });
         var assembly = host.AssemblyHandler.Assembly;

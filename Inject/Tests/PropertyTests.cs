@@ -237,7 +237,6 @@ public class PropertyTests
             .GetHandler();
         Assert.Multiple(() =>
         {
-
             // The body of the template, rather than the one which reads the backing field.
             Assert.That(Holds(GetterOf(host), OpCodes.Ldc_I4_S), Is.True);
             Assert.That(Holds(GetterOf(host), OpCodes.Ldfld), Is.False);
@@ -255,7 +254,6 @@ public class PropertyTests
             .GetHandler();
         Assert.Multiple(() =>
         {
-
             // The body of the template, rather than the one which writes the backing field.
             Assert.That(Holds(SetterOf(host), OpCodes.Stsfld), Is.True);
             Assert.That(Holds(SetterOf(host), OpCodes.Stfld), Is.False);

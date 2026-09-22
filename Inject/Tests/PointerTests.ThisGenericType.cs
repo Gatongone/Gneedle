@@ -123,7 +123,7 @@ public partial class PointerTests
         Assert.Multiple(() =>
         {
             Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
-                    "the member is not called where the delegate was invoked.");
+                "the member is not called where the delegate was invoked.");
             Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
                 "the member was built into a delegate rather than called.");
             Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
@@ -150,7 +150,7 @@ public partial class PointerTests
         Assert.Multiple(() =>
         {
             Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
-                    "the member is not called where the delegate was invoked.");
+                "the member is not called where the delegate was invoked.");
             Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Ldftn), Is.False,
                 "the member was built into a delegate rather than called.");
             Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
@@ -340,13 +340,11 @@ public partial class PointerTests
     /// <summary>
     /// Add the method which the templates of the tests below call to the generic base type.
     /// </summary>
-    /// <param name="baseDef">The generic base type which the host derives from through a middle type.</param>
-    /// <param name="mod">The module which the type is declared in.</param>
     /// <summary>
     /// Add the member <c>T Echo(T value)</c> to the type which the chain of base types ends at, which names the
     /// parameter that the type declares rather than a type.
     /// </summary>
-    /// <param name="baseDef">The definition of the base type.</param>
+    /// <param name="baseDef">The definition of the base type which the host derives from through a middle type.</param>
     /// <param name="mod">The module which the type belongs to.</param>
     private static void AddEchoToTheGenericBase(TypeDefinition baseDef, ModuleDefinition mod)
     {
@@ -383,7 +381,7 @@ public partial class PointerTests
         {
             Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
                 "the member is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
-            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] {"System.Int32"}),
                 "the instantiation which the call names is not the one which the chain of base types hands down.");
         });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
@@ -457,7 +455,7 @@ public partial class PointerTests
         Assert.Multiple(() =>
         {
             Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the base rather than on the instantiation which the body's own type derives from.");
+                "the member is called on the definition of the base rather than on the instantiation which the body's own type derives from.");
             Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
                 "the member is not called on the instantiation which the base was declared with.");
         });
@@ -484,7 +482,7 @@ public partial class PointerTests
         Assert.Multiple(() =>
         {
             Assert.That(call!.DeclaringType, Is.InstanceOf<GenericInstanceType>(),
-                    "the member is called on the definition of the base rather than on the instantiation which the type derives from.");
+                "the member is called on the definition of the base rather than on the instantiation which the type derives from.");
             Assert.That(((GenericInstanceType) call.DeclaringType).GenericArguments.Single().FullName, Is.EqualTo(typeof(int).FullName),
                 "the member is not called on the instantiation which the base was declared with.");
         });
@@ -509,7 +507,7 @@ public partial class PointerTests
         {
             Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
                 "the member is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
-            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] {"System.Int32"}),
                 "the instantiation which the call names is not the one which the chain of base types hands down.");
         });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
@@ -530,7 +528,7 @@ public partial class PointerTests
         {
             Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
                 "the field is read off the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
-            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] {"System.Int32"}),
                 "the instantiation which the read names is not the one which the chain of base types hands down.");
         });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
@@ -561,7 +559,7 @@ public partial class PointerTests
         {
             Assert.That(declaring, Is.InstanceOf<GenericInstanceType>(),
                 "the accessor is called on the definition of the type which declares it, which stands open where the chain of base types names an instantiation of it.");
-            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] { "System.Int32" }),
+            Assert.That(((GenericInstanceType) declaring).GenericArguments.Select(argument => argument.FullName), Is.EqualTo(new[] {"System.Int32"}),
                 "the instantiation which the call names is not the one which the chain of base types hands down.");
         });
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
