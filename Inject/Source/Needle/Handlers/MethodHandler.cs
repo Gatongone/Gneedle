@@ -426,7 +426,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         m_Carried = new CarriedBodies(Source.Module, Source.DeclaringType);
         try
         {
-            m_Carried.Carry(templateDef, closure);
+            m_Carried.Carry(templateDef);
             m_Carried.Attach();
 
             // What the compiler wrote is woven before the template which reaches it, because a body of the compiler's
@@ -943,7 +943,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // it declares the same parameters in the same order as the member which the compiler wrote, and the position an
         // argument holds in the body is the position it holds in the copy. Nothing is shifted for one of those, and a
         // load of its receiver is a load of the receiver of the copy, which the carrying re-pointed.
-        if (m_CarriedBody is { } carried) return carried.Copy.IsStatic ? slot : slot - 1;
+        if (m_CarriedBody is not null) return slot;
 
         // What the template reads at the slot of its own receiver is that receiver rather than an argument, and no
         // member can be given it: a static member holds no such argument, and an instance one holds another instance in
@@ -1130,7 +1130,10 @@ internal sealed partial class MethodHandler : IMethodHandler
             // own takes no part in it. The opcode is kept, because the load or store is an instruction of the member
             // being woven, which accounts for its receiver by itself. The forms of ldarg never reach here: each of them
             // is translated by ParseBody, which reaches the macro forms as well.
-            case ParameterDefinition parameterDef:
+            // The position of a parameter is not the slot it holds, which is what GetParameterAt answers for: a parameter
+            // of a body which the compiler wrote is the parameter of the copy of that body, which the carrying
+            // re-pointed this operand to already, so the operand stands as it is for a body of that kind.
+            case ParameterDefinition parameterDef when m_CarriedBody is null:
                 var parameter = GetParameterAt(parameterDef.Index, targetDef);
                 filter.Replace(currentIndex, Instruction.Create(currentIns.OpCode, parameter));
                 break;

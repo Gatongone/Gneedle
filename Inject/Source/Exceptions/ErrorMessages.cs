@@ -282,25 +282,12 @@ internal static class ErrorMessages
     internal const string PROCEED_IN_A_BODY_OF_ITS_OWN = "The template proceeds into the body which was taken over from a body of its own, which is a lambda, a local function, an iterator or an async body: the arguments which the call hands over are the arguments of the template, which the member being woven was given, and such a body is written with arguments of its own rather than with them. Reference: {0}, Method: {1}.";
 
     /// <summary>
-    /// A body which the compiler wrote for a body of the template's own reaches a member of an instance, and the type
-    /// which the compiler wrote for it holds no instance of the member being woven: the body captured none. The
-    /// placeholders are the reference which reached the member and the member being woven.
+    /// A body which the compiler wrote for a body of the template's own reaches a member of an instance, and the field
+    /// which that body holds its instance in is not one of the member being woven: either the body captured no instance
+    /// and holds no such field, or the instance it holds is one of another type, which is the case of a template
+    /// declared in a type other than the one it is woven into. The placeholder is the member being woven.
     /// </summary>
-    internal const string A_BODY_OF_ITS_OWN_REACHES_NO_INSTANCE = "The template reaches a member of an instance from a body of its own, which is a lambda, a local function, an iterator or an async body, and that body can reach no instance of the member being woven: the compiler writes the instance a body belongs to into a field of the type it writes for that body, and no such field is there, because the body captured no instance. Method: {0}.";
-
-    /// <summary>
-    /// A body which the compiler wrote for a body of the template's own reaches a member of an instance, and the
-    /// instance it reaches is one of a type other than the type being woven. The placeholders are the type of that
-    /// instance, the reference which reached the member, and the member being woven.
-    /// </summary>
-    internal const string A_BODY_OF_ITS_OWN_REACHES_ANOTHER_INSTANCE = "The template reaches a member of an instance from a body of its own, which is a lambda, a local function, an iterator or an async body, and the instance it reaches is one of {0} rather than one of the type being woven: the field which holds it was written from the instance of the template, which is another type. Reference: {1}, Method: {2}.";
-
-    /// <summary>
-    /// A body which the compiler wrote for a body of the template's own reads what the template captured through the
-    /// instance which the delegate of the template holds, which belongs to the run of the weaving rather than to the
-    /// assembly being woven. The placeholders are the type of that instance and the member being woven.
-    /// </summary>
-    internal const string A_BODY_OF_ITS_OWN_READS_THE_CAPTURE = "The template captured a value of {0} and a body of its own reads it through the instance which the delegate of the template holds, which belongs to the run of the weaving rather than to the assembly being woven: what a carried body reads is written where it is read, and a value which the delegate holds reaches the assembly only as a constant. Method: {1}.";
+    internal const string A_BODY_OF_ITS_OWN_REACHES_NO_INSTANCE = "The template reaches a member of an instance from a body of its own, which is a lambda, a local function, an iterator or an async body, and that body can reach no instance of the member being woven: the compiler writes the instance a body belongs to into a field of the type it writes for that body, and that field is either not there, because the body captured no instance, or holds an instance of the type the template was declared in rather than one of the type being woven. Method: {0}.";
 
     /// <summary>
     /// A body which the compiler wrote for a body of the template's own, and which holds no body to copy. The
