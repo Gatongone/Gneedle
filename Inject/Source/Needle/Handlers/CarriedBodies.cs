@@ -369,7 +369,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <returns>The copy of it, which is declared by the type being woven.</returns>
     private TypeDefinition Declare(TypeDefinition from)
     {
-        var copy = new TypeDefinition("", Taken(from), from.Attributes, TypeOf(from.BaseType))
+        var copy = new TypeDefinition("", Taken(from), from.Attributes, into.Module.TypeSystem.Object)
         {
             DeclaringType = into
         };
@@ -385,6 +385,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         }
 
         CarryTheConstraints(from, copy);
+
+        // The base type is read after the parameters of the copy stand, as the signature of a method is written after
+        // them: it may name one of them, which no copy stands for while the type is being declared.
+        copy.BaseType = TypeOf(from.BaseType);
 
         foreach (var implementation in from.Interfaces)
         {
@@ -705,6 +709,11 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             return TheSpecification(called);
         }
 
+        // What the copy declares is looked for by the name of the member and how many parameters it takes, which is not
+        // the whole of a signature: the machine of an iterator declares two members called `get_Current` which take
+        // none, and the two differ in the type they hand back. The reading refuses to choose between them rather than
+        // writing a call of whichever it found first, so a body which reached one of those is refused by the library
+        // rather than woven into a member which fails when it runs.
         var open = copy.Methods.Single(candidate => candidate.Name == called.Name && candidate.Parameters.Count == called.Parameters.Count);
 
         // The declaring type of a call into a type which the compiler wrote is written as the instantiation the call
