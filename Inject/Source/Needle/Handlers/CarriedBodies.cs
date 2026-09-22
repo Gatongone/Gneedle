@@ -50,6 +50,12 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     private readonly Dictionary<string, MethodDefinition> m_MemberTypes = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Every method of every type which was carried, by the full name of the method each was written from, which is
+    /// what tells a body the template reaches from one it does not.
+    /// </summary>
+    private readonly Dictionary<string, (MethodDefinition From, MethodDefinition Copy)> m_Methods = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// What each copy was written from, by the full name of the original, which the body of the copy is written out of.
     /// </summary>
     private readonly Dictionary<string, TypeDefinition> m_Originals = new(StringComparer.Ordinal);
@@ -133,6 +139,14 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                 if (TheCompilersOwn(member.DeclaringType))
                 {
                     Reached(member.DeclaringType, pending, held, template);
+
+                    // The body which the operand names is woven, and the others are not: what a type holds is what the
+                    // pointer to one of its bodies reaches, and a body nothing points at holds nothing of the template.
+                    if (member is MethodReference pointed && m_Methods.TryGetValue(pointed.FullName, out var pointedAt))
+                    {
+                        AddBody(pointedAt.From, pointedAt.Copy);
+                    }
+
                     continue;
                 }
 
@@ -140,9 +154,17 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             }
         }
 
-        foreach (var body in m_Bodies)
+        // Every copy is given the body of what it was written from, whether or not the template reaches it: a type whose
+        // method holds no instructions is a type the runtime refuses to load, and what the template does not reach is
+        // re-pointed and left rather than woven.
+        foreach (var method in m_Methods.Values)
         {
-            CarryTheBody(body.From, body.Copy);
+            CarryTheBody(method.From, method.Copy);
+        }
+
+        foreach (var member in m_MemberTypes)
+        {
+            CarryTheBody(m_MemberOriginals[member.Key], member.Value);
         }
 
         Repoint(template);
@@ -236,7 +258,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         var copy = DeclareMethod(looseDefinition, into);
         m_MemberCopies.Add(copy);
         m_MemberTypes[looseDefinition.FullName] = copy;
-        m_Bodies.Add(new Body(looseDefinition, copy));
+        AddBody(looseDefinition, copy);
         pending.Enqueue(looseDefinition);
 
         _ = held;
@@ -324,14 +346,34 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             copy.Fields.Add(new FieldDefinition(field.Name, field.Attributes, TypeOf(field.FieldType)));
         }
 
+        // A type which implements an interface is reached by the runtime through it rather than by an operand: the state
+        // machine which a body that yields or awaits is written into is started by a call of a builder of the framework,
+        // which calls the MoveNext of the machine without anything naming it. Every body of such a type is woven. A type
+        // which implements none - the type which holds the lambdas of a type, and the type which holds what one of them
+        // captured - is reached by the pointer to a body of it, and only the bodies which are pointed at are woven.
+        var reachedByTheRuntime = from.HasInterfaces;
         foreach (var method in from.Methods)
         {
             var methodCopy = DeclareMethod(method, copy);
             copy.Methods.Add(methodCopy);
-            m_Bodies.Add(new Body(method, methodCopy));
+            m_Methods[method.FullName] = (method, methodCopy);
+
+            if (reachedByTheRuntime) AddBody(method, methodCopy);
         }
 
         return copy;
+    }
+
+    /// <summary>
+    /// Record that a body the compiler wrote is one which the template reaches, and so is woven.
+    /// </summary>
+    /// <param name="from">The body the compiler wrote.</param>
+    /// <param name="copy">The copy of it.</param>
+    private void AddBody(MethodDefinition from, MethodDefinition copy)
+    {
+        if (m_Bodies.Exists(body => ReferenceEquals(body.Copy, copy))) return;
+
+        m_Bodies.Add(new Body(from, copy));
     }
 
     /// <summary>

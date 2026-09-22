@@ -94,6 +94,44 @@ public static class CompilerGeneratedTemplates
     }
 
     /// <summary>
+    /// The member which the lambda of the template below reaches through a placeholder, which is a member of the type
+    /// being woven: the weaving writes it there before the template which reaches it is woven.
+    /// </summary>
+    public static int Twice(int value) => value * 2;
+
+    /// <summary>
+    /// A lambda whose body reaches a member of the type being woven through a placeholder. The placeholder stands
+    /// inside the body which the compiler wrote for the lambda rather than in the template, so resolving it is what
+    /// reading the carried body rather than re-pointing it is for.
+    /// </summary>
+    public static int ReachesAStaticMemberFromALambda(int value)
+    {
+        Func<int, int> twice = x => This.Method<Func<int, int>>("Twice")(x);
+        return twice(value);
+    }
+
+    /// <summary>
+    /// An async body which reaches a member of the type being woven through a placeholder. The placeholder stands in the
+    /// <c>MoveNext</c> of the state machine which the compiler wrote, which is the body which is carried, and the state
+    /// machine is the receiver of that body rather than the member being woven.
+    /// </summary>
+    public static async Task<int> AwaitsAStaticMember(int value)
+    {
+        await Task.Yield();
+        return This.Method<Func<int, int>>("Twice")(value);
+    }
+
+    /// <summary>
+    /// A lambda which reaches a member of an instance of the type being woven through a placeholder, which the body the
+    /// compiler wrote for it reaches through the field the compiler writes that instance into.
+    /// </summary>
+    public static int ReachesAnInstanceMemberFromALambda(int value)
+    {
+        Func<int, int> twice = x => This.Method<Func<int, int>>("InstanceTwice")(x);
+        return twice(value);
+    }
+
+    /// <summary>
     /// A lambda written inside a lambda, where the inner one captured what the outer one holds as well as a local of
     /// its own, which is what makes the compiler write a type for the one of them.
     /// </summary>
@@ -334,6 +372,74 @@ public class CompilerGeneratedTemplateTests
             typeof(Task<int>).ToGneedleType(), OneValue, 5)!;
 
         Assert.That(awaited.GetAwaiter().GetResult(), Is.EqualTo(5), "the member which was woven did not hand back what the template hands back.");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void A_Placeholder_Inside_A_Lambda_Is_Woven_Where_It_Stands()
+    {
+        // The body of the lambda is carried onto the type being woven and is read there, so a placeholder which stands
+        // inside it is resolved where it stands: the call it makes names a member of that type, and the member computes
+        // what the template computes. Nothing of the placeholder is left in the body which was woven.
+        var intType = typeof(int).ToGneedleType();
+        var (_, host, _) = NewHost($"CompilerGeneratedInALambda{Guid.NewGuid():N}");
+
+        host.AddMethod("Twice", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static)
+            .SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Twice)));
+
+        var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+        run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.ReachesAStaticMemberFromALambda)));
+
+        // What the member computes is what tells whether the placeholder was woven: a placeholder which was left in the
+        // body of the copy throws when it is reached, which is the run below.
+        var woven = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!.GetMethod("Run")!;
+
+        Assert.That(woven.Invoke(null, [21]), Is.EqualTo(42), "the placeholder which stands inside the lambda was not woven.");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void A_Placeholder_Inside_An_Async_Body_Is_Woven_Where_It_Stands()
+    {
+        // The body which is carried here is the MoveNext of the state machine, whose receiver is the machine rather than
+        // the member being woven: a placeholder which reaches a member which belongs to no instance needs no receiver,
+        // so it is woven where it stands and the machine the copy holds is what runs it.
+        var intType = typeof(int).ToGneedleType();
+        var (_, host, _) = NewHost($"CompilerGeneratedInAnAsyncBody{Guid.NewGuid():N}");
+
+        host.AddMethod("Twice", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static)
+            .SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Twice)));
+
+        var run = host.AddMethod("Run", typeof(Task<int>).ToGneedleType(), [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+        run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.AwaitsAStaticMember)));
+
+        var woven = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!.GetMethod("Run")!;
+        var awaited = (Task<int>) woven.Invoke(null, [21])!;
+
+        Assert.That(awaited.GetAwaiter().GetResult(), Is.EqualTo(42), "the placeholder which stands inside the state machine was not woven.");
+    }
+
+    [Test]
+    [NonParallelizable]
+    public void A_Placeholder_Which_Needs_The_Instance_Inside_A_Lambda_Is_Refused()
+    {
+        // The instance which the member being woven belongs to is not the receiver of the body the compiler wrote for a
+        // lambda, and a lambda which captured nothing holds no field to read it out of: the placeholder is refused
+        // rather than written against the receiver of that body, which is a value of another type.
+        var intType = typeof(int).ToGneedleType();
+        var (_, host, _) = NewHost($"CompilerGeneratedInALambdaForAnInstance{Guid.NewGuid():N}");
+
+        // The member the placeholder names belongs to an instance of the type being woven, which is what the body of the
+        // lambda would have to reach it through.
+        host.AddMethod("InstanceTwice", intType, [], [new Parameter(intType)], MethodFlags.Public)
+            .SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Twice)));
+
+        var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+        var refusal = Assert.Throws<ArgumentException>(
+            () => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.ReachesAnInstanceMemberFromALambda))));
+
+        Assert.That(refusal!.Message, Does.Contain("can reach no instance of the member being woven"),
+            $"the refusal does not say that the body reaches no instance: {refusal.Message}");
     }
 
     [Test]
