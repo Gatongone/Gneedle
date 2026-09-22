@@ -164,6 +164,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             CarryTheBody(m_MemberOriginals[member.Key], member.Value);
         }
 
+        ReadTheChains();
         Repoint(template);
     }
 
@@ -399,13 +400,26 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     {
         if (m_Bodies.Exists(body => ReferenceEquals(body.Copy, copy))) return;
 
-        var body = new Body(from, copy);
-        if (copy.DeclaringType is { } holder)
+        m_Bodies.Add(new Body(from, copy));
+    }
+
+    /// <summary>
+    /// Read the chain of fields which an instance of the member being woven is reached out of, for every body which is
+    /// woven.
+    /// </summary>
+    /// <remarks>
+    /// The chain is read once the whole of what is carried is known rather than as each body is found, because a field
+    /// of the chain names a type which is carried in its turn: which copies stand where is not settled until nothing is
+    /// left to carry, and a walk which ran earlier would miss a hop which the carrying made after it.
+    /// </remarks>
+    private void ReadTheChains()
+    {
+        foreach (var body in m_Bodies)
         {
+            if (body.Copy.DeclaringType is not { } holder) continue;
+
             foreach (var field in TheFieldsWhichReachTheInstance(holder)) body.ReachedBy(field);
         }
-
-        m_Bodies.Add(body);
     }
 
     /// <summary>

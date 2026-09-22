@@ -187,14 +187,17 @@ public static class ConstructTemplates
     }
 
     /// <summary>
-    /// A template which holds a lambda and names a member which the type being woven does not declare, so that what the
-    /// compiler wrote for the lambda is carried and the parse of the body is what refuses the template: what a refusal
-    /// leaves behind is read with the carrying of a template which was carried and then refused.
+    /// A template which holds a lambda and a local function and names a member which the type being woven does not
+    /// declare, so that what the compiler wrote for both of them is carried and the parse of the body is what refuses
+    /// the template: what a refusal leaves behind is read with the carrying of a template which was carried and then
+    /// refused, of a type and of a member of the type being woven both.
     /// </summary>
     public static int HoldsALambdaAndNamesNoMember(int value)
     {
         Func<int, int> add = x => x + 1;
-        return This.Method<Func<int, int>>("NothingOfThatName")(add(value));
+        return This.Method<Func<int, int>>("NothingOfThatName")(add(value) + Twice(value));
+
+        static int Twice(int number) => number * 2;
     }
 }
 
@@ -764,6 +767,8 @@ public class SetBodyTests
             Assert.That(source.Body.ExceptionHandlers, Is.Empty);
             Assert.That(host.Source.NestedTypes, Is.Empty,
                 "the type which was woven declares the copy of a type which the compiler wrote, which the refused weaving left behind.");
+            Assert.That(host.Source.Methods.Any(method => method.Name.IndexOf(">g__", StringComparison.Ordinal) >= 0), Is.False,
+                "the type which was woven declares the copy of a member which the compiler wrote, which the refused weaving left behind.");
         });
     }
 
