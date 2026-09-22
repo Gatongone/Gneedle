@@ -10,12 +10,12 @@ public class ConstraintTests
 {
     private static TypeHandler NewClass()
     {
-        var handler = (AssemblyHandler)Assembly.Create("ConstraintTestAssembly").Handler;
-        return (TypeHandler)handler.AddClass("Host", NS, ClassFlags.Public).GetHandler();
+        var handler = (AssemblyHandler) Assembly.Create("ConstraintTestAssembly").Handler;
+        return (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public).GetHandler();
     }
 
     private static GenericParameter SingleGenericParameterOf(IMethodHandler method)
-        => ((MethodHandler)method).Source.GenericParameters.Single();
+        => ((MethodHandler) method).Source.GenericParameters.Single();
 
     #region Flag presets (construction only)
 
@@ -140,26 +140,26 @@ public class ConstraintTests
     [Test]
     public void AddStruct_Generic_With_Type_Constraint_Adds_Constraint()
     {
-        var handler = (AssemblyHandler)Assembly.Create("StructConstraintAssembly").Handler;
+        var handler = (AssemblyHandler) Assembly.Create("StructConstraintAssembly").Handler;
         var structHandler = handler
                             .AddStruct("Wrapper", NS, StructFlags.Public)
                             .WithGenericParameter("T", Constraint.FromType<IDisposable>())
                             .GetHandler();
 
-        var gp = ((StructHandler)structHandler).Source.GenericParameters.Single();
+        var gp = ((StructHandler) structHandler).Source.GenericParameters.Single();
         Assert.That(gp.Constraints.Any(c => c.ConstraintType.Name == nameof(IDisposable)), Is.True);
     }
 
     [Test]
     public void AddStruct_Generic_With_Class_Flag_Sets_ReferenceTypeConstraint()
     {
-        var handler = (AssemblyHandler)Assembly.Create("StructFlagAssembly").Handler;
+        var handler = (AssemblyHandler) Assembly.Create("StructFlagAssembly").Handler;
         var structHandler = handler
                             .AddStruct("Wrapper", NS, StructFlags.Public)
                             .WithGenericParameter("T", Constraint.Class)
                             .GetHandler();
 
-        var gp = ((StructHandler)structHandler).Source.GenericParameters.Single();
+        var gp = ((StructHandler) structHandler).Source.GenericParameters.Single();
         Assert.That(gp.HasReferenceTypeConstraint, Is.True);
     }
 

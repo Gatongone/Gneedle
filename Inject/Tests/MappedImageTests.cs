@@ -25,8 +25,8 @@ public class MappedImageTests
     /// </summary>
     private const int SIGNATURE_SIZE = 4;
 
-    private const int FILE_HEADER_SIZE    = 20;
-    private const int OPTIONAL_HEADER32   = 224;
+    private const int FILE_HEADER_SIZE  = 20;
+    private const int OPTIONAL_HEADER32 = 224;
 
     [Test]
     public void An_Image_Is_Measured_To_The_End_Of_Its_Last_Section()
@@ -64,7 +64,7 @@ public class MappedImageTests
     public void An_Image_Which_Names_More_Sections_Than_A_Loader_Accepts_Is_Refused()
     {
         var header = ReadHeader(ReadImage());
-        PutShort(header, FileHeaderOf(header) + 2, unchecked((short)0xFFFF));
+        PutShort(header, FileHeaderOf(header) + 2, unchecked((short) 0xFFFF));
 
         Assert.That(CachedAssemblyResolver.TryMeasureImage(header, header.Length, out _), Is.False,
             "an image which names more sections than a loader accepts was measured.");

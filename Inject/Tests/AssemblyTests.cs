@@ -16,7 +16,7 @@ public class AssemblyTests
     /// Add a type which the assembly holds, and hand back the handler of it.
     /// </summary>
     private static TypeHandler NewHost(Assembly assembly)
-        => (TypeHandler)((AssemblyHandler)assembly.Handler).AddClass("Host", NS, ClassFlags.Public).GetHandler();
+        => (TypeHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", NS, ClassFlags.Public).GetHandler();
 
     #region In memory
 
@@ -193,7 +193,7 @@ public class AssemblyTests
         {
             using (var assembly = Assembly.Read(path))
             {
-                ((AssemblyHandler)assembly.Handler).AddClass("Added", NS, ClassFlags.Public).GetHandler();
+                ((AssemblyHandler) assembly.Handler).AddClass("Added", NS, ClassFlags.Public).GetHandler();
                 assembly.SaveTo(path);
             }
 
@@ -203,7 +203,7 @@ public class AssemblyTests
             Assert.Multiple(() =>
             {
                 Assert.That(reread.MainModule.GetType($"{NS}.Added"), Is.Not.Null,
-                            "the type which was described is not in the file which the assembly was written back to.");
+                    "the type which was described is not in the file which the assembly was written back to.");
                 Assert.That(reread.MainModule.GetType($"{NS}.Host"), Is.Not.Null,
                     "the type which the file held is not in it after the assembly was written back over it.");
             });
@@ -235,11 +235,11 @@ public class AssemblyTests
 
             using (var assembly = Assembly.Read(path))
             {
-                ((AssemblyHandler)assembly.Handler).AddClass("Added", NS, ClassFlags.Public).GetHandler();
+                ((AssemblyHandler) assembly.Handler).AddClass("Added", NS, ClassFlags.Public).GetHandler();
                 assembly.SaveTo(path);
             }
 
-            using var reread = AssemblyDefinition.ReadAssembly(path, new ReaderParameters { ReadSymbols = false });
+            using var reread = AssemblyDefinition.ReadAssembly(path, new ReaderParameters {ReadSymbols = false});
             Assert.That(reread.MainModule.GetType($"{NS}.Added"), Is.Not.Null,
                 "the type which was described is not in the file which the assembly was written back to.");
 
@@ -263,7 +263,7 @@ public class AssemblyTests
     private static Dictionary<string, string> Bodies(string path)
     {
         var bodies = new Dictionary<string, string>();
-        using var assembly = AssemblyDefinition.ReadAssembly(path, new ReaderParameters { ReadSymbols = false });
+        using var assembly = AssemblyDefinition.ReadAssembly(path, new ReaderParameters {ReadSymbols = false});
         foreach (var type in assembly.MainModule.GetTypes())
         {
             foreach (var method in type.Methods.Where(method => method.HasBody))

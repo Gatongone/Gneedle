@@ -143,7 +143,7 @@ namespace Gneedle.Inject.Test
             setter.Body.Instructions.Add(Instruction.Create(OpCodes.Stsfld, backing));
             setter.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
             stub.Methods.Add(setter);
-            stub.Properties.Add(new PropertyDefinition(nameof(Stub.Property), PropertyAttributes.None, module.TypeSystem.Int32) { GetMethod = getter, SetMethod = setter });
+            stub.Properties.Add(new PropertyDefinition(nameof(Stub.Property), PropertyAttributes.None, module.TypeSystem.Int32) {GetMethod = getter, SetMethod = setter});
 
             AddAnInstanceConstructor(stub, module);
 
@@ -162,7 +162,7 @@ namespace Gneedle.Inject.Test
             // nested type which the compiler emits holds no namespace of its own, so this one holds none either: the
             // last segment of the name of `Namespace.Outer/Inner` is the simple name.
             var outer = new TypeDefinition(NS, nameof(OuterStub), TypeAttributes.Public | TypeAttributes.Class, module.TypeSystem.Object);
-            var inner = new TypeDefinition(string.Empty, nameof(OuterStub.Inner), TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) { DeclaringType = outer };
+            var inner = new TypeDefinition(string.Empty, nameof(OuterStub.Inner), TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) {DeclaringType = outer};
             inner.Fields.Add(new FieldDefinition(nameof(OuterStub.Inner.Field), FieldAttributes.Public | FieldAttributes.Static, module.TypeSystem.Int32));
             outer.NestedTypes.Add(inner);
             module.Types.Add(outer);
@@ -199,7 +199,7 @@ namespace Gneedle.Inject.Test
         {
             var assembly = NewTarget();
             var host = AddAHost(assembly);
-            var method = (MethodHandler)host.AddMethod("Run", typeof(int).ToGneedleType(), [], parameterTypes ?? [],
+            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], parameterTypes ?? [],
                 MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(templateName)!);
             return method;
@@ -254,7 +254,7 @@ namespace Gneedle.Inject.Test
             var type = method.Source.ReturnType;
 
             Assert.That(type, Is.InstanceOf<GenericInstanceType>());
-            var argument = ((GenericInstanceType)type).GenericArguments[0];
+            var argument = ((GenericInstanceType) type).GenericArguments[0];
             Assert.Multiple(() =>
             {
                 Assert.That(argument.FullName, Is.EqualTo($"{NS}.{nameof(Stub)}"));
@@ -302,7 +302,7 @@ namespace Gneedle.Inject.Test
             // them apart: importing the template method references the template assembly either way.
             var assembly = NewTarget();
             var host = AddAHost(assembly);
-            var method = (MethodHandler)host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(nameof(Templates.CallStubMethod))!);
 
             using var stream = new MemoryStream();
@@ -320,7 +320,7 @@ namespace Gneedle.Inject.Test
             // a full name. Executing the produced method is the strongest form of that check.
             var assembly = NewTarget();
             var host = AddAHost(assembly);
-            var method = (MethodHandler)host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(nameof(Templates.CallStubMethod))!);
 
             var loaded = assembly.Load();
@@ -363,7 +363,7 @@ namespace Gneedle.Inject.Test
         public void WithBaseType_Replaces_The_Stub()
         {
             var assembly = NewTarget();
-            var host = (ClassHandler)((AssemblyHandler)assembly.Handler).AddClass("Host", NS, ClassFlags.Public)
+            var host = (ClassHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", NS, ClassFlags.Public)
                                                                           .WithBaseType(typeof(Stub))
                                                                           .GetHandler();
 
@@ -374,7 +374,7 @@ namespace Gneedle.Inject.Test
         public void WithInterface_Replaces_The_Stub()
         {
             var assembly = NewTarget();
-            var host = (ClassHandler)((AssemblyHandler)assembly.Handler).AddClass("Host", NS, ClassFlags.Public)
+            var host = (ClassHandler) ((AssemblyHandler) assembly.Handler).AddClass("Host", NS, ClassFlags.Public)
                                                                           .WithInterface(typeof(IStub))
                                                                           .GetHandler();
 
@@ -387,7 +387,7 @@ namespace Gneedle.Inject.Test
         {
             var assembly = NewTarget();
             var host = AddAHost(assembly);
-            var method = (MethodHandler)host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(Stub).ToGneedleType())],
+            var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(Stub).ToGneedleType())],
                 MethodFlags.Public | MethodFlags.Static);
 
             var parameter = method.Source.Parameters[0].ParameterType;
@@ -436,7 +436,7 @@ namespace Gneedle.Inject.Test
             var dependencyType = AddAHost(dependency, "Dependency");
 
             var assembly = NewTarget();
-            ((AssemblyHandler)assembly.Handler).GetCecilType(dependencyType.Source);
+            ((AssemblyHandler) assembly.Handler).GetCecilType(dependencyType.Source);
 
             var definition = FromAssembly.ResolveTypeFromAssembly(assembly.Source.MainModule, "InMemoryDependencyAssembly", $"{NS}.Dependency");
 
@@ -454,7 +454,7 @@ namespace Gneedle.Inject.Test
             // assembly over on .NET 5 and later, so such an assembly cannot be read back at all.
             var path = TempFiles.NewPath("gneedle-file", ".dll");
             var dependency = Assembly.Create("FileDependencyAssembly");
-            ((AssemblyHandler)dependency.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
+            ((AssemblyHandler) dependency.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
             dependency.SaveTo(path);
 
             try
@@ -487,7 +487,7 @@ namespace Gneedle.Inject.Test
             // file system: the resolver finds it through the image of the assembly which is loaded in the process.
             var path = TempFiles.NewPath("gneedle-bytes", ".dll");
             var dependency = Assembly.Create("BytesDependencyAssembly");
-            ((AssemblyHandler)dependency.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
+            ((AssemblyHandler) dependency.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
             dependency.SaveTo(path);
 
             var bytes = File.ReadAllBytes(path);
@@ -505,7 +505,7 @@ namespace Gneedle.Inject.Test
         {
             var path = TempFiles.NewPath("gneedle-loader", ".dll");
             var produced = Assembly.Create("LoaderProbeAssembly");
-            ((AssemblyHandler)produced.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
+            ((AssemblyHandler) produced.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
             produced.SaveTo(path);
 
             var expected = File.ReadAllBytes(path);
@@ -525,7 +525,7 @@ namespace Gneedle.Inject.Test
             // The assembly is loaded by the test rather than by the loader, which is the case Remember is for.
             var path = TempFiles.NewPath("gneedle-remember", ".dll");
             var produced = Assembly.Create("RememberProbeAssembly");
-            ((AssemblyHandler)produced.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
+            ((AssemblyHandler) produced.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
             produced.SaveTo(path);
 
             var expected = File.ReadAllBytes(path);
@@ -550,7 +550,7 @@ namespace Gneedle.Inject.Test
             // where both would find the image.
             var path = TempFiles.NewPath("gneedle-loader", ".dll");
             var dependency = Assembly.Create("LoaderDependencyAssembly");
-            ((AssemblyHandler)dependency.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
+            ((AssemblyHandler) dependency.Handler).AddClass("Dependency", NS, ClassFlags.Public).GetHandler();
             dependency.SaveTo(path);
 
             var bytes = File.ReadAllBytes(path);

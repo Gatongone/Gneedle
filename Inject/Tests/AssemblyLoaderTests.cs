@@ -63,7 +63,7 @@ public class AssemblyLoaderTests
             var loader = weaverOfTheContext.GetType(typeof(AssemblyLoader).FullName!)!;
             var image = File.ReadAllBytes(targetPath);
 
-            var loaded = (System.Reflection.Assembly)loader.GetMethod(nameof(AssemblyLoader.LoadFromBytes))!.Invoke(null, [image])!;
+            var loaded = (System.Reflection.Assembly) loader.GetMethod(nameof(AssemblyLoader.LoadFromBytes))!.Invoke(null, [image])!;
 
             // Every type of the image is read, which is what the weaving does with the assembly it was handed.
             var types = loaded.GetTypes();

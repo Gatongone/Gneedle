@@ -93,7 +93,7 @@ public partial class PointerTests
         {
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "get_Prop"), Is.EqualTo(2), "the getter was not called exactly twice.");
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "set_Prop"), Is.EqualTo(1), "the setter was not called exactly once.");
-            Assert.That(ins.Any(i => i.Operand is MemberReference { DeclaringType.Namespace: "Gneedle.Inject" }), Is.False,
+            Assert.That(ins.Any(i => i.Operand is MemberReference {DeclaringType.Namespace: "Gneedle.Inject"}), Is.False,
                 "the handle which the template holds was left in the body.");
         });
         DoesNotReferToTheWeaver(host);

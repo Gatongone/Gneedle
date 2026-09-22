@@ -137,11 +137,10 @@ public partial class PointerTests
         var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandle), MethodFlags.Public);
         Assert.Multiple(() =>
         {
-
             // The two reads are the one which the write is given and the one which the member hands back.
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(2), "the field was not read exactly twice.");
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
-            Assert.That(ins.Any(i => i.Operand is MemberReference { DeclaringType.Namespace: "Gneedle.Inject" }), Is.False,
+            Assert.That(ins.Any(i => i.Operand is MemberReference {DeclaringType.Namespace: "Gneedle.Inject"}), Is.False,
                 "the handle which the template holds was left in the body.");
         });
 
@@ -167,7 +166,6 @@ public partial class PointerTests
         var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleAndTheFieldItself), MethodFlags.Public);
         Assert.Multiple(() =>
         {
-
             // The three reads are the ones of the write, of the member which is handed back and of the name which is read.
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldfld), Is.EqualTo(3), "the field was not read exactly three times.");
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Stfld), Is.EqualTo(1), "the field was not written exactly once.");
