@@ -335,8 +335,10 @@ public class CarriedGenericClosureFixture<T>
 
 /// <summary>
 /// What the weaver does with a template which holds a construct the compiler carried out of it.<para/>
-/// The constructs are read one by one rather than through one case, because which of the two refusals answers for each
-/// of them is a question about the shape the compiler wrote and not about the construct which was written.
+/// The constructs are read one by one rather than through one case, because the shape the compiler wrote differs with
+/// each of them - a type of its own for a lambda which captured, a member of the type which declares the template for a
+/// local function which captured nothing, a state machine for an iterator and for an async body - and what the carrying
+/// does with one shape is not what it does with another.
 /// </summary>
 [TestFixture]
 public class CompilerGeneratedTemplateTests
@@ -361,7 +363,8 @@ public class CompilerGeneratedTemplateTests
     }
 
     /// <summary>
-    /// The parameters which every template above but the ones which yield and await is written with.
+    /// The parameters which every template above is written with: each takes one value and hands one back, whatever it
+    /// does with it, and the two which yield and await are woven with the same argument as the rest.
     /// </summary>
     private static Parameter[] OneValue => [new Parameter(typeof(int).ToGneedleType())];
 
