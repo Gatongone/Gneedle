@@ -42,13 +42,13 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     private readonly List<MethodDefinition> m_MemberCopies = [];
 
     /// <summary>
-    /// The same copies, by the key which <see cref="TheKeyOf"/> makes of the member each was written from: the type
-    /// which declares it, the name of it and how many parameters it takes.<para/>
+    /// The same copies, with what each was written from, by the key which <see cref="TheKeyOf"/> makes of it: the type
+    /// which declares the member, the name of it and how many parameters it takes.<para/>
     /// What a body of the template names is the member the compiler wrote rather than the copy, and the reference it
     /// holds names the instantiation of a generic type where the definition is what was carried: the key is made of
     /// the element type so that the two are one member to the lookup.
     /// </summary>
-    private readonly Dictionary<string, MethodDefinition> m_MemberTypes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (MethodDefinition From, MethodDefinition Copy)> m_MemberMethods = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Every method of every type which was carried, by the key which <see cref="TheKeyOf"/> makes of it, which is
@@ -62,12 +62,6 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// type it has read.
     /// </summary>
     private readonly HashSet<string> m_Originals = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The same for the members which the compiler wrote on the type which declares the template, by the key which
-    /// <see cref="TheKeyOf"/> makes of each, which the body of that copy is written out of.
-    /// </summary>
-    private readonly Dictionary<string, MethodDefinition> m_MemberOriginals = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The generic parameters of the types which were carried, which are the ones their copies declare in their place.
@@ -159,9 +153,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             CarryTheBody(method.From, method.Copy);
         }
 
-        foreach (var member in m_MemberTypes)
+        foreach (var member in m_MemberMethods.Values)
         {
-            CarryTheBody(m_MemberOriginals[member.Key], member.Value);
+            CarryTheBody(member.From, member.Copy);
         }
 
         ReadTheChains();
@@ -191,7 +185,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     internal bool HoldsMember(MemberReference? member)
         => member is not null
             && (m_MemberCopies.Exists(copy => ReferenceEquals(copy, member))
-                || m_MemberTypes.ContainsKey(TheKeyOf(member.DeclaringType, member.Name, member is MethodReference called ? called.Parameters.Count : 0)));
+                || m_MemberMethods.ContainsKey(TheKeyOf(member.DeclaringType, member.Name, member is MethodReference called ? called.Parameters.Count : 0)));
 
     /// <summary>
     /// Append the copies to the type which is woven, under the lock of the module, which is the write which makes them
@@ -255,9 +249,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         }
 
         var key = TheKeyOf(looseDefinition.DeclaringType, looseDefinition.Name, looseDefinition.Parameters.Count);
-        if (m_MemberOriginals.ContainsKey(key)) return;
+        if (m_MemberMethods.ContainsKey(key)) return;
 
-        m_MemberOriginals[key] = looseDefinition;
         var copy = DeclareMethod(looseDefinition, into);
 
         // A member which the type being woven already declares under that name and with that many parameters is the one
@@ -266,7 +259,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         // a type which the runtime refuses to load. The copy takes the number after the name, as a type copy does.
         copy.Name = AMemberNameWhich(copy);
         m_MemberCopies.Add(copy);
-        m_MemberTypes[key] = copy;
+        m_MemberMethods[key] = (looseDefinition, copy);
         AddBody(copy);
         pending.Enqueue(looseDefinition);
     }
@@ -617,8 +610,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     {
         // The key names the type which declares the member rather than the member itself, because the reference a body
         // holds names the instantiation of a generic type where the definition is what was carried.
-        if (m_MemberTypes.TryGetValue(TheKeyOf(called.DeclaringType, called.Name, called.Parameters.Count), out var loose))
+        if (m_MemberMethods.TryGetValue(TheKeyOf(called.DeclaringType, called.Name, called.Parameters.Count), out var carried))
         {
+            var loose = carried.Copy;
+
             // A member which the compiler wrote may be generic in its own right, and the call names it through the
             // instantiation it makes of it while what the carrying wrote is the open member: what is written is the
             // instantiation of the copy, because a call of the open member is a body the runtime does not run.
