@@ -139,6 +139,23 @@ public static class GenericAroundTemplates
 }
 
 /// <summary>
+/// A template which calls the body that was taken over from inside a body the compiler wrote.<para/>
+/// The call which proceeds hands the body that was taken over the arguments of the template, and a body the compiler
+/// wrote for a lambda is written with arguments of its own rather than with them, so the call is refused.
+/// </summary>
+public static class ProceedInALambdaTemplates
+{
+    /// <summary>
+    /// The template, whose lambda holds the call which proceeds.
+    /// </summary>
+    public static int ProceedsFromInsideALambda(int value)
+    {
+        Func<int> proceed = () => Proceed.Invoke<int>();
+        return proceed() + value;
+    }
+}
+
+/// <summary>
 /// A template which belongs to an instance of a type which the sources name, which reads a member of that instance
 /// rather than a variable of the method it is written in.
 /// </summary>
@@ -671,6 +688,25 @@ public class AroundBodyTests
             () => one.AroundBody(typeof(InstanceFieldTemplates).GetMethod(nameof(InstanceFieldTemplates.ReadsItsOwnField))!));
 
         Assert.That(thrown!.Message, Does.Contain("instance which it belongs to"));
+    }
+
+    [Test]
+    public void AroundBody_Of_A_Template_Which_Proceeds_From_Inside_A_Lambda_Throws()
+    {
+        // The call which proceeds hands the body that was taken over the arguments of the template, and the body the
+        // compiler wrote for the lambda is written with arguments of its own: the call is refused rather than written
+        // against values which are not there.
+        var assembly = Assembly.Create("AroundBodyProceedInALambdaAssembly");
+        var host = AddAHost(assembly);
+        var intType = typeof(int).ToGneedleType();
+        var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+        run.SetBody(DefaultMethodBody.WithDefaultReturn);
+
+        var thrown = Assert.Throws<ArgumentException>(
+            () => run.AroundBody(typeof(ProceedInALambdaTemplates).GetMethod(nameof(ProceedInALambdaTemplates.ProceedsFromInsideALambda))!));
+
+        Assert.That(thrown!.Message, Does.Contain("proceeds into the body which was taken over from a body of its own"),
+            $"the refusal does not say that the call proceeds from a body of the compiler's own: {thrown.Message}");
     }
 
     [Test]
