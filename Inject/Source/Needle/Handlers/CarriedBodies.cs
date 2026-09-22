@@ -157,12 +157,15 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                 {
                     Reached(member.DeclaringType);
 
-                    // The body which the operand names is woven, and the others are not: what a type holds is what the
-                    // pointer to one of its bodies reaches, and a body nothing points at holds nothing of the template.
+                    // The body which the operand names is copied and woven, and the others are not: what a type holds is
+                    // what the pointer to one of its bodies reaches, and a body nothing points at holds nothing of the
+                    // template - so a member of one which names nothing the carrying could write stays where it stands
+                    // rather than being carried.
                     if (member is MethodReference pointed
-                        && m_Methods.TryGetValue(TheKeyOf(member.DeclaringType, pointed.Name, pointed.Parameters.Count), out var pointedAt))
+                        && pointed.ResolveOrNull() is { } pointedAt
+                        && m_Originals.Contains(pointedAt.DeclaringType.FullName))
                     {
-                        AddBody(pointedAt.Copy);
+                        DeclareTheBodyOf(pointedAt.DeclaringType, pointedAt);
                     }
 
                     continue;
@@ -231,8 +234,9 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                 || m_MemberMethods.ContainsKey(TheKeyOf(member.DeclaringType, member.Name, member is MethodReference called ? called.Parameters.Count : 0)));
 
     /// <summary>
-    /// Append the copies to the type which is woven, under the lock of the module, which is the write which makes them
-    /// types of the module and is made where every other write of that table is made.
+    /// Append the copies to the type which is woven: the nested ones under the lock of the module, which is the write
+    /// which makes them types of the module, and the members among the members of that type, which are appended without
+    /// it as every other member the weaving adds is.
     /// </summary>
     internal void Attach()
     {
@@ -353,17 +357,50 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         foreach (var implementation in from.Interfaces) Reached(implementation.InterfaceType);
         foreach (var field in from.Fields) Reached(field.FieldType);
 
-        foreach (var method in from.Methods)
-        {
-            Reached(method.ReturnType);
-            foreach (var parameter in method.Parameters) Reached(parameter.ParameterType);
-            m_Pending.Enqueue(method);
-        }
+        // The constructor of the type is copied with it whether or not anything names it, because what it writes are the
+        // fields which the copy holds: the type which holds the lambdas of a type caches the delegate of a lambda which
+        // captured nothing in a field of its own, and a copy which left that constructor behind holds nothing there.
+        if (from.Methods.FirstOrDefault(method => method.Name == ".cctor") is { } initialiser) DeclareTheBodyOf(from, initialiser);
+
+        // A type which implements an interface is reached by the runtime through it rather than by an operand: the state
+        // machine which a body that yields or awaits is written into is started by a call of a builder of the framework,
+        // which calls the MoveNext of the machine without anything naming it. Every body of such a type is copied and
+        // woven. A type which implements none - the type which holds the lambdas of a type, and the type which holds
+        // what one of them captured - is reached by the pointer to a body of it, and a body of it is copied when it is
+        // pointed at.
+        if (!from.HasInterfaces) return;
+
+        foreach (var method in from.Methods) DeclareTheBodyOf(from, method);
+    }
+
+    /// <summary>
+    /// Declare the copy of one method of a type which was carried, with its signature, and record that its body is to
+    /// be written.<para/>
+    /// A copy need not be whole: nothing names the members which nothing reached, so a type of the compiler's own
+    /// which only the body of an unreached method named stays where it stands rather than being carried, which is what
+    /// the type of an anonymous object at the top level of the assembly is.
+    /// </summary>
+    /// <param name="from">The type which the method belongs to, which was carried.</param>
+    /// <param name="method">The method which is copied.</param>
+    private void DeclareTheBodyOf(TypeDefinition from, MethodDefinition method)
+    {
+        var key = TheKeyOf(from, method.Name, method.Parameters.Count);
+        if (m_Methods.ContainsKey(key)) return;
+
+        var copy = DeclareMethod(method, m_Types[from.FullName]);
+        copy.DeclaringType.Methods.Add(copy);
+        m_Methods[key] = (method, copy);
+        AddBody(copy);
+
+        Reached(method.ReturnType);
+        foreach (var parameter in method.Parameters) Reached(parameter.ParameterType);
+        m_Pending.Enqueue(method);
     }
 
     /// <summary>
     /// Declare the copy of a type the compiler wrote, with everything of it which is not a body: what the runtime
-    /// reaches a type by, which is its base type and its interfaces, its fields, and the signature of its methods.
+    /// reaches a type by, which is its base type and its interfaces, and its fields. Its methods are declared where
+    /// the walk reaches them, which is what <see cref="Reached"/> does.
     /// </summary>
     /// <param name="from">The type which is copied.</param>
     /// <returns>The copy of it, which is declared by the type being woven.</returns>
@@ -400,25 +437,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             copy.Fields.Add(new FieldDefinition(field.Name, field.Attributes, TypeOf(field.FieldType)));
         }
 
-        // A type which implements an interface is reached by the runtime through it rather than by an operand: the state
-        // machine which a body that yields or awaits is written into is started by a call of a builder of the framework,
-        // which calls the MoveNext of the machine without anything naming it. Every body of such a type is woven. A type
-        // which implements none - the type which holds the lambdas of a type, and the type which holds what one of them
-        // captured - is reached by the pointer to a body of it, and only the bodies which are pointed at are woven.
-        var reachedByTheRuntime = from.HasInterfaces;
-        foreach (var method in from.Methods)
-        {
-            var methodCopy = DeclareMethod(method, copy);
-            copy.Methods.Add(methodCopy);
-
-            // The key names the type which declares the method rather than the method itself, because the reference
-            // which a body holds names the instantiation of a generic type where the definition is what was carried:
-            // the two are one type to the lookup, and the name of a method alone tells two of one name apart by nothing.
-            m_Methods[TheKeyOf(from, method.Name, method.Parameters.Count)] = (method, methodCopy);
-
-            if (reachedByTheRuntime) AddBody(methodCopy);
-        }
-
+        // The methods of the type are not declared here: which of them are copied is what the walk of what the type
+        // holds decides, and a copy need not be whole. See Reached, which declares them.
         return copy;
     }
 
@@ -449,6 +469,28 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
                 copy[position].Constraints.Add(new GenericParameterConstraint(TypeOf(constraint.ConstraintType)));
             }
         }
+    }
+
+    /// <summary>
+    /// Refuse a type which the compiler wrote and which no copy stands for.<para/>
+    /// The names the compiler gives the types it writes open with the bracket no identifier of C# holds, and the types
+    /// the carrying wrote are read by it: what stands here is a type of that kind which was not read - the type of an
+    /// anonymous object, or the one a collection expression stands in, which the compiler writes at the top level of
+    /// the assembly rather than beside the template. A member written against one names a type which is internal to
+    /// that assembly, so it is refused rather than written.
+    /// </summary>
+    /// <param name="reference">The type which the reference names, or which declares the member it names, or null.</param>
+    /// <exception cref="ArgumentException">Thrown when the type is one the compiler wrote and no copy stands for.</exception>
+    private void RefuseATypeWrittenAtTheTopLevel(TypeReference? reference)
+    {
+        if (reference is null || !reference.Name.StartsWith("<", StringComparison.Ordinal)) return;
+
+        // The type which declares the template is one of those names and is not carried, and it stands: what the body
+        // of a template reads through its receiver is the instance of that type rather than a member of a copy of it.
+        if (ReferenceEquals(reference.GetElementType(), m_Template?.DeclaringType)) return;
+        if (m_Types.ContainsKey(reference.GetElementType().FullName)) return;
+
+        throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_REACHES_A_TYPE_OF_THE_TOP_LEVEL, reference.FullName, m_Template!.FullName));
     }
 
     /// <summary>
@@ -505,9 +547,13 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// </summary>
     /// <remarks>
     /// The instance a body was written in is a field of the type the compiler wrote for it, which the compiler names
-    /// <c>&lt;&gt;4__this</c>. A type written inside another one holds that one rather than the instance, and the walk
-    /// follows it: the hop is taken only where exactly one field of the type holds a type which was carried, because a
-    /// hop taken wrongly reads a member of another instance rather than refusing.
+    /// <c>&lt;&gt;4__this</c>, and what that field holds is an instance of the type the body was written in: the name
+    /// alone tells nothing, because the compiler gives a field of that name to the type it writes for every body which
+    /// has a receiver, and what it holds there is the receiver of that body - for the machine of an async lambda, the
+    /// display class of the lambda rather than the instance of the member being woven. The field is therefore read for
+    /// the type it holds as well, and one which holds a type the carry wrote is followed as a hop in its turn.
+    /// A hop is taken only where exactly one field of the type holds a type which was carried, because a hop taken
+    /// wrongly reads a member of another instance rather than refusing.
     /// </remarks>
     /// <param name="holder">The type the compiler wrote, which declares the body.</param>
     /// <returns>The fields of the chain, in the order they are read.</returns>
@@ -521,10 +567,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         for (var at = holder; at is not null && walked.Add(at.FullName);)
         {
-            // The field which holds the instance is the one the compiler names for what it holds, and a type which holds
-            // one may hold a local it captured of the same type beside it: the name tells the instance from the local,
-            // which would be read as the instance otherwise.
-            var instance = at.Fields.FirstOrDefault(field => field.Name == INSTANCE_FIELD);
+            // What the field holds is read as well as its name, because the two together are what tells the instance of
+            // the member being woven from the receiver of a body which is written inside it.
+            var instance = at.Fields.FirstOrDefault(field => field.Name == INSTANCE_FIELD
+                                                             && field.FieldType.GetElementType().FullName == into.FullName);
             if (instance is not null)
             {
                 chain.Add(instance);
@@ -710,10 +756,14 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         }
 
         // What the copy declares is looked for by the name of the member and how many parameters it takes, which is not
-        // the whole of a signature: the machine of an iterator declares two members called `get_Current` which take
-        // none, and the two differ in the type they hand back. The reading refuses to choose between them rather than
-        // writing a call of whichever it found first, so a body which reached one of those is refused by the library
-        // rather than woven into a member which fails when it runs.
+        // the whole of a signature: two members of one name and one count which differ in the types they take or hand
+        // back are told apart by nothing here. The reading refuses to choose between them rather than writing a call of
+        // whichever it found first, so a body which reached one of those is refused - by the library rather than by the
+        // runtime, which is the difference that matters - instead of being woven into a member which fails when it runs.
+        // What the compiler writes beside a template declares no two members of one name and one count: an
+        // implementation of an interface which is explicit carries the name of the interface in its own name, which is
+        // what tells the two `get_Current` of an iterator's machine apart. So nothing reaches that refusal today, and
+        // what it guards is the shape of the lookup rather than a case which is there.
         var open = copy.Methods.Single(candidate => candidate.Name == called.Name && candidate.Parameters.Count == called.Parameters.Count);
 
         // The declaring type of a call into a type which the compiler wrote is written as the instantiation the call
@@ -801,6 +851,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <returns>The member which the woven body names.</returns>
     private MethodReference Pointed(MethodReference called)
     {
+        RefuseATypeWrittenAtTheTopLevel(called.DeclaringType);
+
         if (called is not GenericInstanceMethod specification) return ModuleLock.Import(module, called);
 
         var instantiated = new GenericInstanceMethod(ModuleLock.Import(module, specification.ElementMethod));
@@ -856,6 +908,11 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         // the assembly being woven pointing at a private type of the assembly the template came from.
         Reached(reference);
         if (m_Types.TryGetValue(reference.FullName, out carried)) return carried;
+
+        // A type the compiler wrote which no copy of stands for is one the carrying does not read, and what it writes
+        // instead is a reference to a type which is internal to the assembly the template came from: it is refused
+        // here, where every operand of every copy passes, as it is where the weaving reads the body of the template.
+        RefuseATypeWrittenAtTheTopLevel(reference);
 
         return ModuleLock.Import(module, reference);
     }
@@ -961,9 +1018,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         /// </summary>
         /// <remarks>
         /// A lambda which captured a variable is a method of a type which holds what it captured, and the instance it
-        /// was written in is a field of that type. The field is found by the type it holds rather than by the name the
-        /// compiler gives it, because a type written inside another one holds that one rather than the instance, and
-        /// the chain of them is what the walk follows.
+        /// was written in is a field of that type, which the compiler names for what it holds. The name is not what the
+        /// field is read for alone, because it is given to the field which holds the receiver of any body: a field of
+        /// that name is the one whose type is the type being woven, and one whose type is a type which was carried is
+        /// followed in its turn.
         /// </remarks>
         internal IReadOnlyList<FieldReference> Receiver => m_Receiver;
 
