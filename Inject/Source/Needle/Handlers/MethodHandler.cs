@@ -918,11 +918,13 @@ internal sealed partial class MethodHandler : IMethodHandler
             // is the instance of the member being woven. A local function which reaches an instance without being one -
             // which the compiler writes as a static member of that type - holds no such instance, and the member is
             // reached through the fields of the chain below or refused with it.
-            // The instance such a body is written against is the instance of the member being woven where that instance
-            // is one of the type the template was declared in: a template of another type reads members of that type
-            // off the woven instance, and a member which belongs to no instance holds no receiver at all.
-            if (carried.Copy.DeclaringType is { } holder && !carried.Copy.IsStatic && !Source.IsStatic
-                && ReferenceEquals(holder, Source.DeclaringType) && IsDeclaredInTheWovenType(templateDef))
+            // The receiver of a member copy which the compiler wrote on the type being woven is one of that type, which
+            // is what a local function is: what stands in its receiver is an instance of the type being woven, and that
+            // is the instance of the member being woven where the template was declared in that same type - which is
+            // what the carrying read. A copy of a type the compiler wrote holds an instance of that type instead, which
+            // is not the instance of the member, so those are reached through the chain below.
+            if (carried.Copy.DeclaringType is { } holder && ReferenceEquals(holder, Source.DeclaringType)
+                && !carried.Copy.IsStatic && !Source.IsStatic && m_Carried?.OfTheWovenType == true)
             {
                 return Instruction.Create(OpCodes.Ldarg_0);
             }
@@ -1255,13 +1257,21 @@ internal sealed partial class MethodHandler : IMethodHandler
         {
             if (!at.Name.StartsWith("<", StringComparison.Ordinal)) continue;
 
-            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, reference, Source.FullName));
+            // The type itself is told from the types it is declared inside, because the two are refused for different
+            // reasons: a type the compiler wrote beside the template is one the carrying reads, and what reaches here
+            // is one whose instructions could not be read, while a type it wrote at the top level of the assembly is
+            // one the carrying does not read at all.
+            var message = ReferenceEquals(at, type) && !at.IsNested
+                ? ErrorMessages.TEMPLATE_REACHES_A_TYPE_OF_THE_TOP_LEVEL
+                : ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN;
+
+            throw new ArgumentException(string.Format(message, reference, Source.FullName));
         }
     }
 
     /// <summary>
     /// Refuse a member which the compiler wrote for a body of the template's own, which the carrying did not write a
-    /// copy of.<para/>
+    /// copy of and did not refuse.<para/>
     /// A local function which captured nothing is not a type of its own the way a lambda is: it is a method of the type
     /// which declares the template, named with the bracket which no identifier of C# holds. Its body is a body of the
     /// template's, so the carrying writes a copy of it onto the type being woven, and a call of one the carrying wrote
@@ -1299,8 +1309,9 @@ internal sealed partial class MethodHandler : IMethodHandler
         // The declaring type of a member of a generic type is written as the instantiation which the call names rather
         // than as the definition which the member was written on, and the two are one type to the comparison: what the
         // reference has to be is a member of the type which declares the template, whichever of the two forms the call
-        // wrote it in. A body of the compiler's own which captured is written on a type beside the template instead,
-        // which the walk of the declaring type refuses before this one is asked.
+        // wrote it in. A body of the compiler's own which captured is written on a type beside the template instead, and
+        // what refuses that one is the carrying, which could not read it: a member the carrying wrote a copy of, and one
+        // the carrying refused, both return before this is asked, so what reaches here is the last guard of the two.
         if (member.DeclaringType?.GetElementType().FullName != targetDef.DeclaringType.FullName) return;
 
         throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN, member.FullName, Source.FullName));
@@ -1369,13 +1380,18 @@ internal sealed partial class MethodHandler : IMethodHandler
             // The token of a generic parameter is read against the member being woven rather than against the body it
             // stands in, because a token names a parameter of that member however deep in a body of the compiler's own
             // it was written. If the variable type holds such a token, get the actual generic parameter type.
+            // What the type of a local names is read for a copy as well, because the body of a template is not the only
+            // thing the compiler wrote a type for: the local of the stub which an async body leaves behind is the state
+            // machine itself, and a local of the woven body which named the machine the compiler wrote would be a member
+            // of the assembly being woven pointing at a private type of the assembly the template came from.
             // A local of a body the compiler wrote is the exception: its type names the copy of what it was written
             // from already, which the carrying made, and reading it again would import the type which was carried and
             // leave the local of the woven body naming the type the compiler wrote.
             var typeRef = emptied.Contains(i)
                 ? into.Module.TypeSystem.Object
                 : m_CarriedBody is null
-                    ? srcVariables[i].VariableType.ParseGenericTokens(Source, into.Module)
+                    ? m_Carried?.TheCopyOf(srcVariables[i].VariableType)
+                      ?? srcVariables[i].VariableType.ParseGenericTokens(Source, into.Module)
                     : srcVariables[i].VariableType;
             desVariables.Add(new VariableDefinition(typeRef));
         }
