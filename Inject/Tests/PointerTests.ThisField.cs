@@ -13,6 +13,63 @@ using static TestFixtures;
 public partial class PointerTests
 {
     /// <summary>
+    /// Create a host which declares two int fields, <c>Left</c> and <c>Right</c>, which is what a template whose value
+    /// reads one of them and writes the other is woven into.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to build, which a test which runs its host gives one of its own.</param>
+    private static TypeHandler NewHostWithTwoFields(string assemblyName)
+    {
+        var host = NewHostWithField("Left", isStatic: false, assemblyName);
+        host.Source.Fields.Add(new FieldDefinition("Right", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
+        return host;
+    }
+
+    [Test]
+    public void A_Field_Which_Is_Written_From_A_Value_Computed_Along_A_Branch_Writes_The_Field_It_Names()
+    {
+        // The value which is written is computed by a branch, and the accessor of the field which that value reads
+        // stands inside the branch: the placeholder of the write is reached with the value it is written with, and the
+        // accessor which belongs to it is the one which stands past the branch, where the two paths meet again. The
+        // walk of the accessors read the instructions in a row, so the branch ended it and the first accessor of the
+        // body was written for the one which was looked for: the placeholder of the write took the accessor of the read
+        // which stands inside the branch, the field which was named was never written, and a call of the weaver was
+        // left in the body.
+        var host = NewHostWithTwoFields("TheFieldWrittenFromAConditionAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(void).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteTheLeftFieldFromACondition)));
+
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld && ((FieldReference) i.Operand).Name == "Left"), Is.True,
+                "the field which the template writes was not written.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldfld && ((FieldReference) i.Operand).Name == "Right"), Is.True,
+                "the field which the value reads was not read.");
+            Assert.That(ins.Any(i => i.Operand is MemberReference member && member.DeclaringType?.Namespace == "Gneedle.Inject"), Is.False,
+                "a placeholder was left in the woven body.");
+        });
+
+        AddAnInstanceConstructor(host);
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
+        var instance = Activator.CreateInstance(type)!;
+        var run = type.GetMethod("Run")!;
+
+        // The arm which reaches the read of the other field is the one which tells a body which computed its value
+        // along the branch from one which took the value it was handed.
+        run.Invoke(instance, [-5]);
+        Assert.That(type.GetField("Left")!.GetValue(instance), Is.EqualTo(1),
+                    "the value was not computed from the field which the branch reads.");
+        run.Invoke(instance, [7]);
+        Assert.That(type.GetField("Left")!.GetValue(instance), Is.EqualTo(7),
+                    "the value of the other arm was not written.");
+    }
+
+    /// <summary>
     /// Create a host which declares a field of the given name, which is static when it is asked for.
     /// </summary>
     /// <param name="fieldName">Name of the field which the host declares.</param>
