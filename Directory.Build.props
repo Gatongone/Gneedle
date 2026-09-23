@@ -1,47 +1,11 @@
 <Project>
-
-    <!-- What every project of the tree is built with, which the build reads for each project of it without a project
-         naming it: the language every file is written in, the model of the nullability of the values, the usings which
-         a file which names nothing of its own is given, and the four checks which are held to rather than reported.
-
-         A check which is written here rather than in each project is what makes it a convention of the tree: what a
-         file may hold is asked of the build once, and a project cannot be added which is built under other rules than
-         the ones the files of the tree are written for. -->
-
     <PropertyGroup>
-        <!-- The version of the language which the files of the tree are written in, which is written out rather than
-             left at the one the SDK carries: the extension members of C# 14 are what the weaver is written with, and a
-             build which read them under another version would report them rather than what they hold. -->
-        <LangVersion>14</LangVersion>
-
-        <!-- The model of the nullability of the values, which every project is written for: a reference which may be
-             absent is the one which says so. -->
+        <LangVersion>15</LangVersion>
         <Nullable>enable</Nullable>
-
-        <!-- The usings which a file which names none of its own is given, which are the namespaces the files of the tree
-             are written against: the names of the framework are read without a file writing them out, and only what is
-             not one of them is named. -->
         <ImplicitUsings>enable</ImplicitUsings>
-
-        <!-- The comments of the sources are written beside the assembly they describe, so that whoever refers to it reads
-             the comment of a member where the call is written. A member which carries none is reported by the build: a
-             library of this tree is published with its comments, and one which is missing is a member a reader cannot
-             find out about. The tests document nothing of their own - what a test asserts is its name and what it
-             reports - and they turn that report off for themselves. -->
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-
-        <!-- The style which the editor of this repository is configured with is enforced by the build, so that a file
-             which is written in another one is told where it stands rather than where it is read. -->
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-
-        <!-- What those checks report is what the build holds to: a warning of the analysis, of the style or of the
-             compiler is a file which does not meet the conventions of the tree, and the build which produced it is a
-             build which is not to be taken as one which passed. The first of the two is what the property above turns
-             on for the analyses, and it is the second which makes it a rule of the build: a property which names the
-             analyses alone holds only the diagnostics which are already enabled, which is none of them in a tree which
-             is written for no analysis in particular. -->
         <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     </PropertyGroup>
-
 </Project>

@@ -48,9 +48,16 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          # 5.0 runs the tests which are built for net5.0. Every other framework is built and run by the SDK of the
-          # runner, which is the newest one it carries.
+          # The runtime which the tests built for net5.0 are run by, which no runner carries any more. The two steps of
+          # this are the ones the workflow which holds every pull request and every push to the branch the releases are
+          # cut from asks for, and for the reason written out there.
           dotnet-version: 5.0.x
+
+      - name: Set up the SDK which the tree is built with
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
 
       - name: Set up Node
         uses: actions/setup-node@v5

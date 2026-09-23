@@ -38,9 +38,28 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          # 5.0 runs the tests which are built for net5.0. Every other framework is built and run by the SDK of the
-          # runner, which is the newest one it carries.
+          # The runtime which the tests built for net5.0 are run by, which no runner carries any more. The SDK which
+          # builds them is the one below, and the two are separate programs of one installation: what this asks for is
+          # the shared framework, and what a project is built with is the newest SDK the installation holds, since
+          # nothing here pins one.
+          #
+          # It is not raised with the SDK below, because a shared framework of a version is what a test built for that
+          # version is run by: a leg of net5.0 run on a framework of another version is not the leg which a consumer of
+          # the package runs, and the suites of this tree read what the framework writes as much as what it runs.
           dotnet-version: 5.0.x
+
+      - name: Set up the SDK which the tree is built with
+        uses: actions/setup-dotnet@v5
+        with:
+          # The newest SDK, which is what the whole tree is built with: it is written for the language of C# 14, and
+          # the SDK of a runner is older than that for as long as the release of this one is newer than the image.
+          #
+          # A preview is what this asks for because the channel is one: 11.0 is a release candidate which is supported
+          # for production, and asking for the stable quality of it is asking for a version which is not published yet.
+          # The quality applies to every version of one `dotnet-version`, which is why the runtime above is a step of
+          # its own rather than a second line of this one.
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
 
       - name: Test the script which writes the version into the files
         # The version is written into every file which names one, and the readmes are read by whoever is deciding what
