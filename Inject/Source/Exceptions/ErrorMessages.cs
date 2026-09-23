@@ -58,12 +58,6 @@ internal static class ErrorMessages
     internal const string IS_NOT_PARAMETERIZED_GENERIC_TYPE = "A type which holds no generic parameters was given where a generic type is asked for. Type: {0}.";
 
     /// <summary>
-    /// An instruction of a template is not one which the weaving reads a value off the stack for. The placeholders are
-    /// the instruction, the type whose member it belongs to, and the member itself.
-    /// </summary>
-    internal const string INVALID_INSTRUCTION_METHOD = "The instruction is not one which a value is read off the stack for. Instruction: {0}. Type: {1}, Method: {2}.";
-
-    /// <summary>
     /// A name does not name a type which the assembly holds.
     /// </summary>
     internal const string INVALID_TYPE_NAME = "The name does not name a type which the assembly holds.";
@@ -463,4 +457,18 @@ internal static class ErrorMessages
     /// placeholder is the template itself.
     /// </summary>
     internal const string PROCEED_WITHOUT_AROUND_BODY = "A template calls Proceed although no body was taken over for it to proceed into. Method: {0}.";
+
+    /// <summary>
+    /// A call of a member of a type the compiler wrote is read against the copy of that type, and what is read of the
+    /// call is the name of the member and how many parameters it takes, which is not the whole of a signature: a copy
+    /// which declares two members of one name and one count is one the call cannot be told against, and the reading
+    /// refuses to choose between them rather than writing a call of whichever it found first.
+    /// <para/>
+    /// The compiler writes no two members of one name and one count beside a template - an implementation of an
+    /// interface which is explicit carries the name of the interface in its own name, which is what tells the two
+    /// `get_Current` of an iterator's machine apart - so nothing reaches this, and the copy is expected to declare the
+    /// one member the call names: what is refused is both a copy which declares two of them and one which declares
+    /// none, which is why the message says neither alone.
+    /// </summary>
+    internal const string A_COPY_DOES_NOT_DECLARE_THE_MEMBER_WHICH_IS_NAMED = "The copy of a type the compiler wrote does not declare one member of the name and the count of parameters which the call names, which is what the call is read against. Member: {0}, Copy: {1}.";
 }

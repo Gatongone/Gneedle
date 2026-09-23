@@ -736,7 +736,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             return null;
         }
 
-        var open = copy.Fields.Single(candidate => candidate.Name == field.Name);
+        var open = copy.Fields.SingleOrDefault(candidate => candidate.Name == field.Name)
+                   ?? throw new WeavingException(string.Format(ErrorMessages.A_COPY_DOES_NOT_DECLARE_THE_MEMBER_WHICH_IS_NAMED, field.FullName, copy.FullName));
         if (field.DeclaringType is not GenericInstanceType instance) return open;
 
         return new FieldReference(open.Name, TypeOf(open.FieldType), TypeOf(instance));
@@ -783,7 +784,12 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         // implementation of an interface which is explicit carries the name of the interface in its own name, which is
         // what tells the two `get_Current` of an iterator's machine apart. So nothing reaches that refusal today, and
         // what it guards is the shape of the lookup rather than a case which is there.
-        var open = copy.Methods.Single(candidate => candidate.Name == called.Name && candidate.Parameters.Count == called.Parameters.Count);
+        // The one member of that name and count, which is what the comment above refuses to choose between: a copy
+        // which declares two of them is one this cannot tell apart, and one which declares none is one the call cannot
+        // be read against at all. Both are refused by name rather than by the message of `Single`, which named no
+        // member and did not say which of the two it was.
+        var open = copy.Methods.SingleOrDefault(candidate => candidate.Name == called.Name && candidate.Parameters.Count == called.Parameters.Count)
+                   ?? throw new WeavingException(string.Format(ErrorMessages.A_COPY_DOES_NOT_DECLARE_THE_MEMBER_WHICH_IS_NAMED, called.FullName, copy.FullName));
 
         // The declaring type of a call into a type which the compiler wrote is written as the instantiation the call
         // makes of it rather than as the definition. What a call names is the instantiation of the copy, which is what

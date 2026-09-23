@@ -980,15 +980,12 @@ partial class MethodHandler
         if (StackWalk.LeavesAValueInPlaceOfTheOneItIsHanded(ins) && paramStack.Types.Count > 0) paramStack.Pop(1);
 
         // When the instruction push any variable to the method stack, it should be appended to the parameters stack.
+        // The answer and the type are one, so the type is there wherever the answer is true: the check which stood
+        // here for a type which is not was one the answer had already made. The reading's contract is written where
+        // the reading is, and what the compiler wants for it is the operator which says the caller read that.
         if (StackWalk.TryGetStackType(Context, ins, targetDef, out var type))
         {
-            // Sanity check.
-            if (type == null)
-            {
-                throw new WeavingException(string.Format(ErrorMessages.INVALID_INSTRUCTION_METHOD, ins, new TypeName(Source.DeclaringType), Source.Name));
-            }
-
-            paramStack.Push(ins, type);
+            paramStack.Push(ins, type!);
         }
         // The final case is stloc/ldloc pattern.
         // We got stloc operand from previous instructions, and we push ldloc operand with same index to the parameters stack.

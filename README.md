@@ -55,14 +55,12 @@ dotnet add package Gneedle.Aspect
 Or, in the project file:
 
 ```xml
-
 <PackageReference Include="Gneedle.Aspect" Version="0.0.3"/>
 ```
 
 `Gneedle.Inject` is a dependency of it, so the weaver that the task weaves with is installed along with it. It is also the package to reference on its own, and the only one, when you drive the weaving yourself or when you write an injector, because the interfaces that one implements are declared in it:
 
 ```xml
-
 <PackageReference Include="Gneedle.Inject" Version="0.0.3"/>
 ```
 
@@ -341,7 +339,6 @@ Two properties change what is done with a project, and they answer different que
 | `KeepWeaver` | `true/false`     | `false`  | `true` keeps the attributes that the injectors were read from, and the reference to the weaver that they name, in the assembly. `false` takes both back out, which is what leaves the woven assembly standing alone.                                       |
 
 ```xml
-
 <PropertyGroup>
     <!-- Nothing is woven into this project. -->
     <Aspect>disable</Aspect>
@@ -349,7 +346,6 @@ Two properties change what is done with a project, and they answer different que
 ```
 
 ```xml
-
 <PropertyGroup>
     <!-- The attributes are kept in the assembly, and the reference to the weaver with them. -->
     <KeepWeaver>true</KeepWeaver>
