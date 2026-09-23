@@ -818,15 +818,29 @@ internal static class StackWalk
         }
 
         /// <summary>
-        /// Take the value which was pushed last off the stack.
+        /// Take the value which was pushed last off the stack, where the walk holds one.
         /// </summary>
-        /// <returns>The instruction which pushed the value and the type of it.</returns>
-        public (Instruction Ins, TypeReference Type) Pop()
+        /// <remarks>
+        /// A value which nothing pushed is one the walk reaches a store with, and the store it is reached at is the one
+        /// which hands back the value rather than the one which takes it: what the first instruction of a handler
+        /// stores is the exception the runtime handed over, and no instruction of the body pushed it.
+        /// </remarks>
+        /// <param name="ins">The instruction which pushed the value, or null where the stack holds none.</param>
+        /// <param name="type">The type of the value, or null where the stack holds none.</param>
+        /// <returns>Whether the stack held a value, which the store of an exception the runtime handed over does not.</returns>
+        public bool TryPop(out Instruction? ins, out TypeReference? type)
         {
-            var result = (Ins[Ins.Count - 1], Types[Types.Count - 1]);
+            if (Ins.Count == 0)
+            {
+                ins = null;
+                type = null;
+                return false;
+            }
+
+            (ins, type) = (Ins[Ins.Count - 1], Types[Types.Count - 1]);
             Ins.RemoveAt(Ins.Count - 1);
             Types.RemoveAt(Types.Count - 1);
-            return result;
+            return true;
         }
     }
 }

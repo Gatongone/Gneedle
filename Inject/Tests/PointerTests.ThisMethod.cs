@@ -164,6 +164,30 @@ public partial class PointerTests
         });
     }
 
+    [Test]
+    public void InvokeInstanceMethod_Of_A_Template_Whose_Locals_Are_Slotted_Past_Its_Body_Rewrites_To_Direct_Call()
+    {
+        // The slots which a body names are read into a cache which is held by slot, and the walk of the arguments is
+        // made over every instruction of the body: a cache sized by the number of instructions rather than by the
+        // number of slots is one which a slot past that count is read out of, and the read throws where the weave is
+        // read rather than where the body it writes is run.
+        var host = NewHostWithAdd(isVirtual: false);
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeInstanceMethodWithLocalsSlottedPastTheBody)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => (i.OpCode == OpCodes.Call || i.OpCode == OpCodes.Callvirt)
+                && ((MethodReference) i.Operand).Name == "Add"), Is.True, "the call of the member was not written.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False, "the delegate which the template built is still built.");
+        });
+    }
+
     /// <summary>
     /// Create a host which declares a real instance method <c>bool TryHalf(int, out int)</c>, which hands back half of
     /// the value it is given, and a real instance method <c>void BumpByRef(ref int)</c>, so that a template which hands

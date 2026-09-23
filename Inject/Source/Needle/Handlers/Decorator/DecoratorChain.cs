@@ -15,10 +15,10 @@ internal static class DecoratorChain
     /// <param name="builtHandler">The handler which the chain answered with where it built the member, or null while
     /// it has built none.</param>
     /// <param name="memberName">The name of the member which the chain describes.</param>
-    /// <exception cref="InvalidOperationException">Thrown when the member was already built.</exception>
+    /// <exception cref="WeavingException">Thrown when the member was already built.</exception>
     internal static void RefuseDescription(object? builtHandler, string memberName)
     {
         if (builtHandler == null) return;
-        throw new InvalidOperationException(string.Format(ErrorMessages.MEMBER_IS_ALREADY_BUILT, memberName));
+        throw new WeavingException(string.Format(ErrorMessages.MEMBER_IS_ALREADY_BUILT, memberName));
     }
 }

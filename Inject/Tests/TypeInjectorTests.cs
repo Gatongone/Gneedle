@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using TypeAttributes = Mono.Cecil.TypeAttributes;
 
 namespace Gneedle.Inject.Test;
 
@@ -243,4 +244,95 @@ public class TypeInjectorTests
     }
 
     #endregion
+
+    #region A type which is nested in another
+
+    [Test]
+    public void AddNestedClass_Declares_The_Class_In_The_Type_And_It_Reads_Back_With_The_Flags_It_Was_Declared_With()
+    {
+        // A nested class is declared with the same flags a class at the top of a module is, and the two are written
+        // into the metadata in forms which are not the same: what is read back of it here is what was declared, which
+        // is what tells the two halves of that apart from each other.
+        var handler = CreateHandler();
+        var outer = (IClassHandler) handler.AddClass("Outer", NS, ClassFlags.Public).GetHandler();
+        var inner = outer.AddNestedClass("Inner", ClassFlags.Private).GetHandler();
+
+        var def = ((ClassHandler) inner).Source;
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.IsNested, Is.True, "the class was not declared in the type.");
+            Assert.That(def.DeclaringType!.Name, Is.EqualTo("Outer"));
+            Assert.That(def.Attributes & TypeAttributes.VisibilityMask, Is.EqualTo(TypeAttributes.NestedPrivate),
+                "the visibility was not written in the nested form of it.");
+            Assert.That(inner.Flags, Is.EqualTo(ClassFlags.Private), "the flags do not read back as the ones declared with.");
+        });
+    }
+
+    [Test]
+    public void AddNestedStruct_Declares_The_Struct_In_The_Type_And_It_Reads_Back_With_The_Flags_It_Was_Declared_With()
+    {
+        var handler = CreateHandler();
+        var outer = (IClassHandler) handler.AddClass("Outer", NS, ClassFlags.Public).GetHandler();
+        var inner = outer.AddNestedStruct("Inner", StructFlags.Internal).GetHandler();
+
+        var def = ((StructHandler) inner).Source;
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.IsNested, Is.True, "the struct was not declared in the type.");
+            Assert.That(def.IsValueType, Is.True);
+            Assert.That(def.Attributes & TypeAttributes.VisibilityMask, Is.EqualTo(TypeAttributes.NestedAssembly),
+                "the visibility was not written in the nested form of it.");
+            Assert.That(inner.Flags, Is.EqualTo(StructFlags.Internal), "the flags do not read back as the ones declared with.");
+        });
+    }
+
+    [Test]
+    public void AddNestedEnum_Declares_The_Enum_In_The_Type_And_It_Reads_Back_With_The_Flags_It_Was_Declared_With()
+    {
+        var handler = CreateHandler();
+        var outer = (IClassHandler) handler.AddClass("Outer", NS, ClassFlags.Public).GetHandler();
+        var inner = outer.AddNestedEnum("Inner", EnumFlags.Public).GetHandler();
+
+        var def = ((EnumHandler) inner).Source;
+        Assert.Multiple(() =>
+        {
+            Assert.That(def.IsNested, Is.True, "the enum was not declared in the type.");
+            Assert.That(def.IsEnum, Is.True);
+            Assert.That(def.Attributes & TypeAttributes.VisibilityMask, Is.EqualTo(TypeAttributes.NestedPublic),
+                "the visibility was not written in the nested form of it.");
+            Assert.That(inner.Flags, Is.EqualTo(EnumFlags.Public), "the flags do not read back as the ones declared with.");
+        });
+    }
+
+    [Test]
+    public void AddNestedClass_Of_A_Name_Which_The_Type_Holds_Throws()
+    {
+        // The name a nested type is declared with is taken the same way the name of a type at the top of a module is,
+        // because what a name is looked up by is what the whole of it is rather than what its last part is.
+        var handler = CreateHandler();
+        var outer = (IClassHandler) handler.AddClass("Outer", NS, ClassFlags.Public).GetHandler();
+        outer.AddNestedClass("Inner").GetHandler();
+
+        Assert.Throws<WeavingException>(() => outer.AddNestedClass("Inner"));
+    }
+
+    #endregion
+    [Test]
+    public void An_Enum_Handler_Is_Not_A_Container_Which_A_Type_May_Be_Declared_In()
+    {
+        // A class and a struct are the two which C# lets a type stand in, and an enum is not one of them: it holds
+        // nothing but its values, and a nested type written inside one is refused by the compiler rather than written
+        // by it. What the shape refuses here is refused where a caller reaches for it rather than in an assembly which
+        // no C# consumer could have written.
+        var handler = CreateHandler();
+        var enumHandler = handler.AddEnum("E", NS, EnumFlags.Public).GetHandler();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(enumHandler, Is.Not.InstanceOf<INestedTypeContainer>(),
+                "the handler of an enum holds a shape which no enum can honour.");
+            Assert.That((IClassHandler) handler.AddClass("C", NS, ClassFlags.Public).GetHandler(), Is.InstanceOf<INestedTypeContainer>(),
+                "the handler of a class does not hold the shape which a class honours.");
+        });
+    }
 }
