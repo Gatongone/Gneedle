@@ -42,9 +42,44 @@ internal static class StackWalk
     /// <returns>True if the `call` instruction of `ValuableMember.Get` or `ValuableMember.Set` is found; otherwise, false.</returns>
     internal static bool TryGetNextGetOrSet(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index)
     {
-        if (TryWalkToTheAccessor(bodyInstructions, startIndex, out isGet, out index)) return true;
+        if (TryWalkToTheAccessor(bodyInstructions, startIndex, out isGet, out index, out var takenOffTheStack)) return true;
 
-        return TryGetFirstGetOrSet(bodyInstructions, startIndex, out isGet, out index);
+        // The value was taken off the stack by an instruction which is not an accessor, which is what a handle held in
+        // a local is: the caller reads what the reads of that local stand for, and what it is answered with here is the
+        // accessor which the name of the member stands for.
+        //
+        // An instruction which the walk cannot count is not that. It is one whose result cannot be told at all, and
+        // answering the first accessor of the body for it is what wrote the accessor of another value where this one
+        // belongs: a value which is computed along a branch has the accessor of the value in that branch standing ahead
+        // of its own, so the walk refuses, and what the caller does with a false is end the weaving by name.
+        return takenOffTheStack && TryGetFirstGetOrSet(bodyInstructions, startIndex, out isGet, out index);
+    }
+
+    /// <summary>
+    /// The first accessor of the body after the start index, which is what a value which was taken off the stack by an
+    /// instruction other than an accessor was answered with: what a handle held in a local stands for is read where the
+    /// reads of that local are, and the accessor of the name is the one it was reached by.
+    /// </summary>
+    /// <param name="bodyInstructions">The instruction collection to search.</param>
+    /// <param name="startIndex">The start index to search from.</param>
+    /// <param name="isGet">Output whether the accessor is `get` or `set`.</param>
+    /// <param name="index">Output the index of the `call` instruction if found.</param>
+    /// <returns>True if an accessor is found; otherwise, false.</returns>
+    private static bool TryGetFirstGetOrSet(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index)
+    {
+        isGet = false;
+
+        for (var i = startIndex; i < bodyInstructions.Count; i++)
+        {
+            if (!IsAnAccessor(bodyInstructions[i], out var accessorIsGet)) continue;
+
+            isGet = accessorIsGet;
+            index = i;
+            return true;
+        }
+
+        index = 0;
+        return false;
     }
 
     /// <summary>
@@ -62,34 +97,118 @@ internal static class StackWalk
     /// <param name="index">Output the index of the `call` instruction if found.</param>
     /// <returns>True if the `call` instruction of `ValuableMember.Get` or `ValuableMember.Set` is found; otherwise, false.</returns>
     internal static bool TryWalkToTheAccessor(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index)
+        => TryWalkToTheAccessor(bodyInstructions, startIndex, out isGet, out index, out _);
+
+    /// <summary>
+    /// The same, which also says whether the value was taken off the stack by an instruction which is not an accessor
+    /// rather than one the walk could not count: the two are what <see cref="TryGetNextGetOrSet"/> tells apart, since
+    /// the first of them is a handle which the template holds in a local and the second is a body nothing can be
+    /// written for.
+    /// </summary>
+    /// <inheritdoc cref="TryWalkToTheAccessor(IReadOnlyList{Instruction}, int, out bool, out int)"/>
+    private static bool TryWalkToTheAccessor(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index, out bool takenOffTheStack)
     {
-        // How many values stand on the stack above the one which the placeholder pushed. Every push counts up and every
-        // take counts down, and a count below zero is one which took the placeholder's value itself off the stack.
-        var above = 0;
-        for (var i = startIndex; i < bodyInstructions.Count; i++)
+        isGet = false;
+        index = 0;
+        takenOffTheStack = false;
+
+        if (startIndex >= bodyInstructions.Count) return false;
+
+        var at = new Dictionary<Instruction, int>(bodyInstructions.Count);
+        for (var i = 0; i < bodyInstructions.Count; i++) at[bodyInstructions[i]] = i;
+
+        // How many values stand on the stack above the one which the placeholder pushed, which is held for every
+        // instruction the walk reaches rather than for the instruction it stands at: the instructions are read as the
+        // graph which they are, because a value which is computed along a branch is one which no walk in a row can
+        // follow — the arms of the branch each leave a value for the placeholder, and where they meet again is where the
+        // accessor which the value belongs to stands.
+        //
+        // Two paths which reach one instruction with different counts are two which the count at the accessor cannot be
+        // told from, and the instruction alone does not say which of them was taken, so the walk refuses rather than
+        // answering with one of them.
+        var aboveAt = new int?[bodyInstructions.Count];
+        var pending = new Stack<(int At, int Above)>();
+
+        aboveAt[startIndex] = 0;
+        pending.Push((startIndex, 0));
+
+        var found = -1;
+        var foundIsGet = false;
+
+        while (pending.Count > 0)
         {
-            if (IsAnAccessor(bodyInstructions[i], out var accessorIsGet))
+            var (current, above) = pending.Pop();
+            var instruction = bodyInstructions[current];
+
+            if (IsAnAccessor(instruction, out var accessorIsGet))
             {
                 if (above == (accessorIsGet ? 0 : 1))
                 {
-                    isGet = accessorIsGet;
-                    index = i;
-                    return true;
+                    // The value is the receiver of this accessor, which takes it off the stack: the paths which reached
+                    // here are done with it, and every one of them has to have reached the accessor of the same kind.
+                    if (found >= 0 && (found != current || foundIsGet != accessorIsGet)) return false;
+
+                    found = current;
+                    foundIsGet = accessorIsGet;
+                    continue;
                 }
 
                 // The accessor of a value which is not this one: it takes the receiver off the stack and leaves the
                 // value which it reads there, or nothing at all where it writes one.
                 above += accessorIsGet ? 0 : -2;
+                if (above < 0)
+                {
+                    takenOffTheStack = true;
+                    continue;
+                }
+
+                if (!Reach(instruction, above)) return false;
                 continue;
             }
 
-            if (StackDelta(bodyInstructions[i]) is not { } delta || above + delta < 0) break;
-            above += delta;
+            // An instruction which the walk cannot count is one whose result cannot be told, and nothing is answered
+            // for it: what stands above the value at the accessor is what the walking is for, and a count which is not
+            // known where it was needed is one which is not known at the accessor either.
+            if (StackDelta(instruction) is not { } delta) return false;
+
+            // The value was taken off the stack by something which is not an accessor, which is a handle the template
+            // holds in a local: the walk which read the reads of that local answers for it, and this one stops here.
+            if (above + delta < 0)
+            {
+                takenOffTheStack = true;
+                continue;
+            }
+
+            if (!Reach(instruction, above + delta)) return false;
         }
 
-        isGet = false;
-        index = 0;
-        return false;
+        if (found < 0) return false;
+
+        isGet = foundIsGet;
+        index = found;
+        return true;
+
+        // Carry the count to every instruction the one which was read may leave for, and refuse where one of them is
+        // reached a second time with another count.
+        bool Reach(Instruction instruction, int above)
+        {
+            foreach (var successor in SuccessorsOf(instruction))
+            {
+                if (!at.TryGetValue(successor, out var successorAt)) continue;
+
+                if (aboveAt[successorAt] is { } seen)
+                {
+                    if (seen != above) return false;
+
+                    continue;
+                }
+
+                aboveAt[successorAt] = above;
+                pending.Push((successorAt, above));
+            }
+
+            return true;
+        }
     }
 
     /// <summary>
@@ -133,31 +252,6 @@ internal static class StackWalk
         }
 
         return stores == 1 ? accessors : null;
-    }
-
-    /// <summary>
-    /// The first accessor of the body after the start index, which is what the value of a placeholder stood for before
-    /// the accessors were told apart from each other.
-    /// </summary>
-    /// <param name="bodyInstructions">The instruction collection to search.</param>
-    /// <param name="startIndex">The start index to search from.</param>
-    /// <param name="isGet">Output whether the accessor is `get` or `set`.</param>
-    /// <param name="index">Output the index of the `call` instruction if found.</param>
-    /// <returns>True if an accessor is found; otherwise, false.</returns>
-    internal static bool TryGetFirstGetOrSet(IReadOnlyList<Instruction> bodyInstructions, int startIndex, out bool isGet, out int index)
-    {
-        isGet = false;
-        for (var i = startIndex; i < bodyInstructions.Count; i++)
-        {
-            if (!IsAnAccessor(bodyInstructions[i], out var accessorIsGet)) continue;
-
-            isGet = accessorIsGet;
-            index = i;
-            return true;
-        }
-
-        index = 0;
-        return false;
     }
 
     /// <summary>
@@ -271,6 +365,22 @@ internal static class StackWalk
                 var taken = method.Parameters.Count + (method.HasThis && code != Code.Newobj ? 1 : 0);
                 var left = code == Code.Newobj || method.ReturnType.MetadataType != MetadataType.Void ? 1 : 0;
                 return (taken, left);
+
+            // The branches, which take the values they are decided by and leave nothing. What a walk in a row makes of
+            // one is nothing at all, which is why it used to end at the first of them: the count is what a walk which
+            // follows the instructions as the graph they are reads to know what stands above the value it started at.
+            case Code.Br or Code.Br_S or Code.Leave or Code.Leave_S:
+                return (0, 0);
+
+            case Code.Brtrue or Code.Brtrue_S or Code.Brfalse or Code.Brfalse_S or Code.Switch:
+                return (1, 0);
+
+            case Code.Beq or Code.Beq_S or Code.Bne_Un or Code.Bne_Un_S
+              or Code.Bge or Code.Bge_S or Code.Bge_Un or Code.Bge_Un_S
+              or Code.Bgt or Code.Bgt_S or Code.Bgt_Un or Code.Bgt_Un_S
+              or Code.Ble or Code.Ble_S or Code.Ble_Un or Code.Ble_Un_S
+              or Code.Blt or Code.Blt_S or Code.Blt_Un or Code.Blt_Un_S:
+                return (2, 0);
 
             default:
                 return null;

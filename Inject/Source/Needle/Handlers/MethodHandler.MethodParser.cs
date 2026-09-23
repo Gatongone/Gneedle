@@ -849,9 +849,12 @@ partial class MethodHandler
                 // An instruction which takes more values than the ones which stand above it took that value, and one
                 // which the walk cannot count is one whose result cannot be told: either way the invocation is made on
                 // something other than the value which the symbol left.
+                // The count of an instruction is read off the same table the walk of the accessors reads it off, which
+                // is where the branches stand as well: two tables which answer for the same instruction are two which
+                // disagree the day one of them is changed.
                 var effect = ins.OpCode == OpCodes.Nop
                     ? (Taken: 0, Left: 0)
-                    : BranchEffect(ins) ?? StackWalk.StackEffect(ins);
+                    : StackWalk.StackEffect(ins);
                 if (effect is not { } counted) return false;
                 if (counted.Taken > above) return false;
                 var left = above + counted.Left - counted.Taken;
@@ -881,28 +884,6 @@ partial class MethodHandler
         // The values which a branch takes off the stack, which the walk counts before it hands the branch to the
         // instructions it leaves for: the effect of every other instruction is read off the instruction itself, and a
         // branch is counted from the case which it stands for rather than from the member it names.
-        (int Taken, int Left)? BranchEffect(Instruction ins)
-        {
-            switch (ins.OpCode.Code)
-            {
-                case Code.Br or Code.Br_S or Code.Leave or Code.Leave_S:
-                    return (0, 0);
-
-                case Code.Brtrue or Code.Brtrue_S or Code.Brfalse or Code.Brfalse_S or Code.Switch:
-                    return (1, 0);
-
-                case Code.Beq or Code.Beq_S or Code.Bne_Un or Code.Bne_Un_S
-                  or Code.Bge or Code.Bge_S or Code.Bge_Un or Code.Bge_Un_S
-                  or Code.Bgt or Code.Bgt_S or Code.Bgt_Un or Code.Bgt_Un_S
-                  or Code.Ble or Code.Ble_S or Code.Ble_Un or Code.Ble_Un_S
-                  or Code.Blt or Code.Blt_S or Code.Blt_Un or Code.Blt_Un_S:
-                    return (2, 0);
-
-                default:
-                    return null;
-            }
-        }
-
         // Whether the top of the stack holds the arguments which a call of a member is made with, which are the values
         // which were pushed last.
         bool TopOfStackMatches(MethodReference callMethod)

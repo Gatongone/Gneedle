@@ -160,6 +160,15 @@ public partial class PointerTests
         public static void AddTheFirstElementOfAnArrayToTheField()
             => This.Field<int>("Value").Set(This.Field<int>("Value").Get() + new[] {1}[0]);
 
+        /// <summary>
+        /// The value which is written is computed along a branch, and the field which is read to compute it stands
+        /// inside that branch: the accessor of the read stands between the placeholder of the write and the accessor
+        /// which writes it, and the two are reached along paths which meet again rather than in a row.<para/>
+        /// Both of the fields the template names are declared by the host, which is <c>Left</c> and <c>Right</c>.
+        /// </summary>
+        public static void WriteTheLeftFieldFromACondition(int value)
+            => This.Field<int>("Left").Set(value < 0 ? This.Field<int>("Right").Get() + 1 : value);
+
         // Two of the cases begin where the name of a member stands rather than where a value is loaded, and the
         // compiler writes the switch as a table of the instructions the cases begin at.
         public static int ReadAFieldPerCase(int value)
