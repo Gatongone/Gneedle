@@ -17,7 +17,7 @@ public interface IAttributeContainer
     /// </summary>
     /// <param name="attributeType">The type of the attribute.</param>
     /// <param name="arguments">The arguments of the constructor which is called.</param>
-    /// <exception cref="ArgumentException">Thrown when the attribute type holds no constructor which takes the arguments.</exception>
+    /// <exception cref="WeavingException">Thrown when the attribute type holds no constructor which takes the arguments.</exception>
     void AddAttribute(IType attributeType, params object[] arguments);
 }
 
@@ -43,11 +43,11 @@ public static class AttributeExtensions
         public bool ContainsAttribute<TAttribute>() where TAttribute : Attribute => container.ContainsAttribute(typeof(TAttribute));
 
         /// <inheritdoc cref="IAttributeContainer.AddAttribute(IType,object[])"/>
-        /// <exception cref="ArgumentException">Thrown when the type is not an attribute, or when it holds no constructor which takes the arguments.</exception>
+        /// <exception cref="WeavingException">Thrown when the type is not an attribute, or when it holds no constructor which takes the arguments.</exception>
         public void AddAttribute(Type attributeType, params object[] arguments)
         {
             if (!typeof(Attribute).IsAssignableFrom(attributeType))
-                throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_ASSIGN_TO_TARGET_TYPE, typeof(Attribute)));
+                throw new WeavingException(string.Format(ErrorMessages.TYPE_CANNOT_ASSIGN_TO_TARGET_TYPE, typeof(Attribute)));
             container.AddAttribute(attributeType.ToGneedleType(), arguments);
         }
 
@@ -56,7 +56,7 @@ public static class AttributeExtensions
         /// </summary>
         /// <param name="arguments">The arguments of the constructor which is called.</param>
         /// <typeparam name="TAttribute">The type of the attribute.</typeparam>
-        /// <exception cref="ArgumentException">Thrown when the attribute type holds no constructor which takes the arguments.</exception>
+        /// <exception cref="WeavingException">Thrown when the attribute type holds no constructor which takes the arguments.</exception>
         public void AddAttribute<TAttribute>(params object[] arguments) where TAttribute : Attribute => container.AddAttribute(typeof(TAttribute), arguments);
     }
 }

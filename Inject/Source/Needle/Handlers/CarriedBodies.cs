@@ -121,7 +121,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// Carry everything the compiler wrote for the bodies of a template onto the type which is woven.
     /// </summary>
     /// <param name="template">The template whose bodies are carried.</param>
-    /// <exception cref="ArgumentException">Thrown when a body which the compiler wrote cannot be read, or holds no body
+    /// <exception cref="WeavingException">Thrown when a body which the compiler wrote cannot be read, or holds no body
     /// to copy.</exception>
     internal void Carry(MethodDefinition template)
     {
@@ -296,10 +296,10 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         if (member is not MethodReference loose) return;
 
         var looseDefinition = loose.ResolveOrNull()
-            ?? throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN, member.FullName, template.FullName));
+            ?? throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN, member.FullName, template.FullName));
         if (!looseDefinition.HasBody)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_HOLDS_NO_BODY, looseDefinition.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_HOLDS_NO_BODY, looseDefinition.FullName));
         }
 
         var key = TheKeyOf(looseDefinition.DeclaringType, looseDefinition.Name, looseDefinition.Parameters.Count);
@@ -333,7 +333,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// Declare the copy of a type the compiler wrote, when the type is one of those, and follow what that type holds.
     /// </summary>
     /// <param name="reached">The type which a body or a signature named.</param>
-    /// <exception cref="ArgumentException">Thrown when the type is one which cannot be read.</exception>
+    /// <exception cref="WeavingException">Thrown when the type is one which cannot be read.</exception>
     private void Reached(TypeReference reached)
     {
         var element = reached.GetElementType();
@@ -345,7 +345,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         if (m_Template is not { } template || ReferenceEquals(element, template.DeclaringType)) return;
 
         var from = element.ResolveOrNull()
-            ?? throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, element.FullName, template.FullName));
+            ?? throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN, element.FullName, template.FullName));
         if (!m_Originals.Add(from.FullName)) return;
         var copy = Declare(from);
         m_Copies.Add(copy);
@@ -479,7 +479,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// that assembly, so it is refused rather than written.
     /// </summary>
     /// <param name="reference">The type which the reference names, or which declares the member it names, or null.</param>
-    /// <exception cref="ArgumentException">Thrown when the type is one the compiler wrote and no copy stands for.</exception>
+    /// <exception cref="WeavingException">Thrown when the type is one the compiler wrote and no copy stands for.</exception>
     private void RefuseATypeWrittenAtTheTopLevel(TypeReference? reference)
     {
         if (reference is null || !reference.Name.StartsWith("<", StringComparison.Ordinal)) return;
@@ -489,7 +489,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         if (ReferenceEquals(reference.GetElementType(), m_Template?.DeclaringType)) return;
         if (m_Types.ContainsKey(reference.GetElementType().FullName)) return;
 
-        throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_REACHES_A_TYPE_OF_THE_TOP_LEVEL, reference.FullName, m_Template!.FullName));
+        throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_REACHES_A_TYPE_OF_THE_TOP_LEVEL, reference.FullName, m_Template!.FullName));
     }
 
     /// <summary>
@@ -1077,7 +1077,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     /// <param name="instruction">The instruction which is copied.</param>
     /// <param name="from">The method whose body holds it, which the report of an operand the carrying cannot write names.</param>
     /// <returns>The copy of the instruction.</returns>
-    /// <exception cref="ArgumentException">Thrown when the operand is of a kind the carrying does not write.</exception>
+    /// <exception cref="WeavingException">Thrown when the operand is of a kind the carrying does not write.</exception>
     private static Instruction CopyOf(Instruction instruction, MethodDefinition from)
         => instruction.Operand switch
         {
@@ -1097,7 +1097,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
             long number                  => Instruction.Create(instruction.OpCode, number),
             float number                 => Instruction.Create(instruction.OpCode, number),
             double number                => Instruction.Create(instruction.OpCode, number),
-            _                            => throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_HOLDS_AN_OPERAND, instruction, from.FullName))
+            _                            => throw new WeavingException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_HOLDS_AN_OPERAND, instruction, from.FullName))
         };
 
     /// <summary>

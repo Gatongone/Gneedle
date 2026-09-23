@@ -135,12 +135,12 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// Set the method body to call the base type's method with the same name and parameters.
     /// </summary>
     /// <param name="il">The IL processor of the source method body.</param>
-    /// <exception cref="ArgumentException">Thrown when the base type or method is not found.</exception>
+    /// <exception cref="WeavingException">Thrown when the base type or method is not found.</exception>
     private void SetBodyCallFromBase(ILProcessor il)
     {
         // Find the base type's method with the same name and parameter types.
         var baseType = Source.DeclaringType.BaseType;
-        if (baseType == null) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
+        if (baseType == null) throw new WeavingException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
 
         // No delegate describes the member which is called, so the value which it hands back names no parameter of it:
         // the member which a body calls from its base is the one which its name and its parameters name. The base is the
@@ -151,7 +151,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             Source.Name, [.. Source.Parameters.Select(p => p.ParameterType)], instance: baseType);
         if (baseMethod == null)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_METHOD, Source.Name));
         }
 
         // Load the receiver, then the arguments, call the base method, and return. The receiver of an instance is an
@@ -220,7 +220,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="handler">The handler of the method.</param>
     /// <param name="template">The delegate which the template was made into.</param>
-    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// <exception cref="WeavingException">Thrown when the template captured a value and the handler is not one which
     /// this library builds, which holds nothing to write the value into.</exception>
     public static void SetBody(IMethodHandler handler, Delegate template)
         => SetBody(handler, template.Method, template.Target);
@@ -232,7 +232,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="handler">The handler of the method.</param>
     /// <param name="method">The template which holds the body to copy.</param>
     /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
-    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// <exception cref="WeavingException">Thrown when the template captured a value and the handler is not one which
     /// this library builds, which holds nothing to write the value into.</exception>
     public static void SetBody(IMethodHandler handler, MethodInfo method, object? closure)
     {
@@ -243,7 +243,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // rather than read for the method alone, which would weave a body without the value which the template read.
             if (handler is not MethodHandler concrete)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.HANDLER_HOLDS_NO_CAPTURE, handler.GetType().FullName));
+                throw new WeavingException(string.Format(ErrorMessages.HANDLER_HOLDS_NO_CAPTURE, handler.GetType().FullName));
             }
 
             concrete.SetBody(method, closure);
@@ -258,7 +258,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="handler">The handler of the method.</param>
     /// <param name="template">The delegate which the template was made into.</param>
-    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// <exception cref="WeavingException">Thrown when the template captured a value and the handler is not one which
     /// this library builds, which holds nothing to write the value into.</exception>
     public static void AroundBody(IMethodHandler handler, Delegate template)
         => AroundBody(handler, template.Method, template.Target);
@@ -270,7 +270,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="handler">The handler of the method.</param>
     /// <param name="method">The template which holds the body to weave around.</param>
     /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
-    /// <exception cref="ArgumentException">Thrown when the template captured a value and the handler is not one which
+    /// <exception cref="WeavingException">Thrown when the template captured a value and the handler is not one which
     /// this library builds, which holds nothing to write the value into.</exception>
     public static void AroundBody(IMethodHandler handler, MethodInfo method, object? closure)
     {
@@ -281,7 +281,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // rather than read for the method alone, which would weave a body without the value which the template read.
             if (handler is not MethodHandler concrete)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.HANDLER_HOLDS_NO_CAPTURE, handler.GetType().FullName));
+                throw new WeavingException(string.Format(ErrorMessages.HANDLER_HOLDS_NO_CAPTURE, handler.GetType().FullName));
             }
 
             concrete.AroundBody(method, closure);
@@ -337,7 +337,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// which the method holds is moved to a generated method of the declaring type which the template calls.
     /// </summary>
     /// <param name="method">The template which holds the body to weave around.</param>
-    /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
+    /// <exception cref="WeavingException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
     public void AroundBody(MethodInfo method) => AroundBody(method, null);
 
     /// <summary>
@@ -346,7 +346,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="method">The template which holds the body to weave around.</param>
     /// <param name="closure">The instance which holds what the template captured, or null when there is none.</param>
-    /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
+    /// <exception cref="WeavingException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
     internal void AroundBody(MethodInfo method, object? closure)
     {
         var templateDef = DeclaringTypeHandler.AssemblyHandler.ResolveTemplate(method);
@@ -354,11 +354,11 @@ internal sealed partial class MethodHandler : IMethodHandler
         // Every check runs before anything is changed, so that a weave which cannot be done leaves the method as it was.
         if (Source.IsAbstract || Source.IsPInvokeImpl || Source.IsRuntime || Source.IsInternalCall || !Source.HasBody)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_TARGET_HAS_NO_BODY, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.AROUND_BODY_TARGET_HAS_NO_BODY, Source.FullName));
         }
 
-        if (Source.IsConstructor) throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_TARGET_IS_CONSTRUCTOR, Source.FullName));
-        if (m_ProceedMethod != null) throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_ALREADY_SET, Source.FullName));
+        if (Source.IsConstructor) throw new WeavingException(string.Format(ErrorMessages.AROUND_BODY_TARGET_IS_CONSTRUCTOR, Source.FullName));
+        if (m_ProceedMethod != null) throw new WeavingException(string.Format(ErrorMessages.AROUND_BODY_ALREADY_SET, Source.FullName));
 
         // The signature of the template is resolved against the method before it is compared, because a generic method is
         // matched through the M_[0-20] tokens of the template rather than through its own generic parameters: a template
@@ -369,18 +369,18 @@ internal sealed partial class MethodHandler : IMethodHandler
             || templateDef.Parameters.Where((parameter, index) => !TypeName.HasSameName(parameter.ParameterType.ParseGenericTokens(Source, Source.Module),
                 Source.Parameters[index].ParameterType)).Any())
         {
-            throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_PARAMETERS_MISMATCH, Source.FullName, templateDef.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.AROUND_BODY_PARAMETERS_MISMATCH, Source.FullName, templateDef.FullName));
         }
 
         if (!TypeName.HasSameName(templateDef.ReturnType.ParseGenericTokens(Source, Source.Module), Source.ReturnType))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_RETURN_TYPE_MISMATCH, Source.FullName, templateDef.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.AROUND_BODY_RETURN_TYPE_MISMATCH, Source.FullName, templateDef.FullName));
         }
 
         var name = $"<{Source.Name}>k__Proceed";
         if (Source.DeclaringType.Methods.Any(methodDef => methodDef.Name == name) || Source.DeclaringType.Fields.Any(field => field.Name == name))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.AROUND_BODY_GENERATED_NAME_OCCUPIED, name));
+            throw new WeavingException(string.Format(ErrorMessages.AROUND_BODY_GENERATED_NAME_OCCUPIED, name));
         }
 
         var generated = CreateProceedMethod(name);
@@ -429,7 +429,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // than for the member which it names.
         if (!templateDef.HasBody)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HAS_NO_BODY, templateDef.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_HAS_NO_BODY, templateDef.FullName));
         }
 
         // The instructions are read before the body of the member is swapped, because the member may be the template
@@ -706,7 +706,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="templateDef">The template which the instructions belong to.</param>
     /// <param name="filter">The instruction filter to replace the instructions.</param>
     /// <returns>Whether a captured value was written, which is false when the pair is not a read of one.</returns>
-    /// <exception cref="ArgumentException">Thrown when the template captured a value which cannot be written.</exception>
+    /// <exception cref="WeavingException">Thrown when the template captured a value which cannot be written.</exception>
     private bool TryInlineCapture(Mono.Collections.Generic.Collection<Instruction> instructions, int index, MethodDefinition templateDef, InstructionFilter filter)
     {
         if (m_TemplateClosure == null || index + 1 >= instructions.Count) return false;
@@ -740,7 +740,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             var member = captured?.GetType().GetField(field.Name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (member == null)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, field.Name, field.FieldType.FullName, Source.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, field.Name, field.FieldType.FullName, Source.FullName));
             }
 
             captured = member.GetValue(captured);
@@ -757,7 +757,7 @@ internal sealed partial class MethodHandler : IMethodHandler
 
         if (!TryCreateLiteral(fields[fields.Count - 1].FieldType, captured, out var literal))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, fields[fields.Count - 1].Name, fields[fields.Count - 1].FieldType.FullName, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_CANNOT_BE_WRITTEN, fields[fields.Count - 1].Name, fields[fields.Count - 1].FieldType.FullName, Source.FullName));
         }
 
         filter.Replace(index, literal!);
@@ -780,7 +780,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="filter">The instruction filter to replace the instructions.</param>
     /// <param name="index">Index of the instruction which is the load of the instance the capture belongs to.</param>
     /// <param name="reads">Number of the reads which follow it, which are the reads of the capture.</param>
-    /// <exception cref="ArgumentException">Thrown when the type is one which the weaver itself declares.</exception>
+    /// <exception cref="WeavingException">Thrown when the type is one which the weaver itself declares.</exception>
     private void WriteACapturedType(Type captured, FieldReference field, InstructionFilter filter, int index, int reads)
     {
         // The assembly being woven must not name the weaver: the attributes which the injectors are read from, and the
@@ -789,7 +789,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // where the injector which named it can be found.
         if (captured.Assembly == typeof(Injections).Assembly)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_NAMES_THE_WEAVER, field.Name, captured.FullName, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_CAPTURE_NAMES_THE_WEAVER, field.Name, captured.FullName, Source.FullName));
         }
 
         var token = DeclaringTypeHandler.AssemblyHandler.GetCecilType(captured).Reference;
@@ -858,7 +858,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// template takes the first slot when the template belongs to an instance.</param>
     /// <param name="templateDef">The template whose body names the slot.</param>
     /// <returns>The instruction which loads the argument in the member being woven.</returns>
-    /// <exception cref="ArgumentException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
+    /// <exception cref="WeavingException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
     private Instruction CreateLdarg(int slot, MethodDefinition templateDef)
     {
         // A macro form carries the slot in the opcode rather than as an operand, so the macro is chosen by the slot
@@ -898,7 +898,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// which leads to it are written before.</param>
     /// <param name="filter">The filter which writes the body.</param>
     /// <returns>The instruction which loads the receiver.</returns>
-    /// <exception cref="ArgumentException">Thrown when the member being woven is static, and therefore holds no receiver
+    /// <exception cref="WeavingException">Thrown when the member being woven is static, and therefore holds no receiver
     /// for a member of an instance which the template reached through <c>This</c> or <c>Base</c>.</exception>
     private Instruction CreateReceiver(Instruction? instanceIns, MethodDefinition templateDef, int index, InstructionFilter filter)
     {
@@ -934,7 +934,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             // one after it, and the last is the value the member is reached through.
             if (carried.Receiver.Count == 0)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_REACHES_NO_INSTANCE, Source.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.A_BODY_OF_ITS_OWN_REACHES_NO_INSTANCE, Source.FullName));
             }
 
             var receiver = Instruction.Create(OpCodes.Ldarg_0);
@@ -952,7 +952,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // member would be called on a value the template was handed for something else.
         if (Source.IsStatic)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.STATIC_MEMBER_REACHES_AN_INSTANCE_MEMBER, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.STATIC_MEMBER_REACHES_AN_INSTANCE_MEMBER, Source.FullName));
         }
 
         return Instruction.Create(OpCodes.Ldarg_0);
@@ -964,7 +964,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="slot">The slot which the template names.</param>
     /// <param name="templateDef">The template whose body names the slot.</param>
     /// <returns>The slot which the same argument holds in the member being woven.</returns>
-    /// <exception cref="ArgumentException">Thrown when the template reads its own instance.</exception>
+    /// <exception cref="WeavingException">Thrown when the template reads its own instance.</exception>
     private int GetShiftedSlot(int slot, MethodDefinition templateDef)
     {
         // A body which the compiler wrote for a body of the template's own holds the arguments of its own: the copy of
@@ -989,7 +989,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 return 0;
             }
 
-            throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_READS_ITS_OWN_INSTANCE, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_READS_ITS_OWN_INSTANCE, Source.FullName));
         }
 
         // The two hold the same arguments in the same order, so an argument moves by one slot exactly when one of them
@@ -1024,7 +1024,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="slot">The slot which the template names.</param>
     /// <param name="templateDef">The template whose body names the slot.</param>
     /// <returns>The parameter of the member being woven which holds the same argument.</returns>
-    /// <exception cref="ArgumentException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
+    /// <exception cref="WeavingException">Thrown when the template reads its own instance, or when the member being woven holds no such argument.</exception>
     private ParameterDefinition GetParameterAt(int slot, MethodDefinition templateDef)
     {
         // The parameter which an argument of a body of the compiler's own holds is a parameter of the copy of that
@@ -1034,7 +1034,7 @@ internal sealed partial class MethodHandler : IMethodHandler
             var at = carried.Copy.IsStatic ? slot : slot - 1;
             if (at < 0 || at >= carried.Copy.Parameters.Count)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, at, Source.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, at, Source.FullName));
             }
 
             return carried.Copy.Parameters[at];
@@ -1043,7 +1043,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         var position = GetShiftedSlot(slot, templateDef) - (Source.IsStatic ? 0 : 1);
         if (position < 0 || position >= Source.Parameters.Count)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, position, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_TEMPLATE_PARAMETER, position, Source.FullName));
         }
 
         return Source.Parameters[position];
@@ -1130,7 +1130,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 // The call proceeds into the body which was taken over, and a body which the compiler wrote for a body
                 // of the template's own is written with arguments of its own rather than with the arguments of the
                 // template, which is what the call hands over: it is refused here as the call which names them is.
-                throw new ArgumentException(string.Format(ErrorMessages.PROCEED_IN_A_BODY_OF_ITS_OWN, proceedCall.FullName, Source.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.PROCEED_IN_A_BODY_OF_ITS_OWN, proceedCall.FullName, Source.FullName));
             }
         }
         else
@@ -1213,7 +1213,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// <param name="member">The member which the call names.</param>
     /// <param name="currentIndex">Index of the instruction of the call.</param>
     /// <param name="filter">The instruction filter which holds the instructions.</param>
-    /// <exception cref="ArgumentException">Thrown when the name of the placeholder is not written where the call is.</exception>
+    /// <exception cref="WeavingException">Thrown when the name of the placeholder is not written where the call is.</exception>
     private void RefuseANameWhichIsNotWritten(MemberReference member, int currentIndex, InstructionFilter filter)
     {
         // Only the members which a template names with a string are read this way: the instance which is pushed and the
@@ -1224,7 +1224,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // The name is what the call follows, and it is read for a name which no load stands ahead of.
         if (currentIndex == 0 || filter.Target[currentIndex - 1].OpCode != OpCodes.Ldstr)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.NAME_IS_NOT_WRITTEN, member.FullName, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.NAME_IS_NOT_WRITTEN, member.FullName, Source.FullName));
         }
     }
 
@@ -1239,7 +1239,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </summary>
     /// <param name="type">The type which the reference names, or which declares the member it names.</param>
     /// <param name="reference">The reference itself, which the message names.</param>
-    /// <exception cref="ArgumentException">Thrown when the reference reaches a type which the compiler wrote.</exception>
+    /// <exception cref="WeavingException">Thrown when the reference reaches a type which the compiler wrote.</exception>
     private void RefuseTheCompilersOwnType(TypeReference? type, string reference)
     {
         // What the carrying wrote keeps the name the compiler wrote, brackets and all, so the name alone no longer
@@ -1265,7 +1265,7 @@ internal sealed partial class MethodHandler : IMethodHandler
                 ? ErrorMessages.TEMPLATE_REACHES_A_TYPE_OF_THE_TOP_LEVEL
                 : ErrorMessages.TEMPLATE_HOLDS_A_METHOD_OF_ITS_OWN;
 
-            throw new ArgumentException(string.Format(message, reference, Source.FullName));
+            throw new WeavingException(string.Format(message, reference, Source.FullName));
         }
     }
 
@@ -1288,7 +1288,7 @@ internal sealed partial class MethodHandler : IMethodHandler
     /// </remarks>
     /// <param name="member">The member which the reference names.</param>
     /// <param name="targetDef">The template which the reference is read out of.</param>
-    /// <exception cref="ArgumentException">Thrown when the member is one which the compiler wrote for a body of the template's own.</exception>
+    /// <exception cref="WeavingException">Thrown when the member is one which the compiler wrote for a body of the template's own.</exception>
     private void RefuseTheCompilersOwnMember(MemberReference member, MethodDefinition targetDef)
     {
         // A member which the carrying wrote is one whose instructions the weaving holds, under the name the compiler
@@ -1314,7 +1314,7 @@ internal sealed partial class MethodHandler : IMethodHandler
         // the carrying refused, both return before this is asked, so what reaches here is the last guard of the two.
         if (member.DeclaringType?.GetElementType().FullName != targetDef.DeclaringType.FullName) return;
 
-        throw new ArgumentException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN, member.FullName, Source.FullName));
+        throw new WeavingException(string.Format(ErrorMessages.TEMPLATE_HOLDS_A_BODY_OF_ITS_OWN, member.FullName, Source.FullName));
     }
 
     /// <summary>

@@ -39,10 +39,10 @@ partial class AssemblyHandler
     /// </summary>
     /// <param name="typeDefinition">The enum which is read.</param>
     /// <returns>The type which the values of the enum are read as.</returns>
-    /// <exception cref="ArgumentException">Thrown when the enum declares no field which holds the value of a member.</exception>
+    /// <exception cref="WeavingException">Thrown when the enum declares no field which holds the value of a member.</exception>
     private static TypeReference ValueFieldTypeOf(TypeDefinition typeDefinition)
         => typeDefinition.Fields.FirstOrDefault(field => field.Name == "value__")?.FieldType
-            ?? throw new ArgumentException(string.Format(ErrorMessages.ENUM_DECLARES_NO_VALUE_FIELD, typeDefinition.FullName));
+            ?? throw new WeavingException(string.Format(ErrorMessages.ENUM_DECLARES_NO_VALUE_FIELD, typeDefinition.FullName));
 
     /// <inheritdoc/>
     public ITypeHandler? GetType(string typeFullName)
@@ -109,12 +109,12 @@ partial class AssemblyHandler
     /// </summary>
     /// <param name="typeDef">The definition of the type which is declared.</param>
     /// <param name="fullName">The name which the type is declared with, which the refusal names.</param>
-    /// <exception cref="ArgumentException">Thrown when a type of that name was declared already.</exception>
+    /// <exception cref="WeavingException">Thrown when a type of that name was declared already.</exception>
     private void Reserve(TypeDefinition typeDef, string fullName)
     {
         if (!m_TypeCache.TryAdd(new TypeName(typeDef).ToString(), new CecilType(typeDef, typeDef)))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
+            throw new WeavingException(string.Format(ErrorMessages.TYPE_HAS_DEFINED, fullName));
         }
     }
 
@@ -173,7 +173,7 @@ partial class AssemblyHandler
     /// <param name="typeNamespace">Namespace of the enum.</param>
     /// <param name="enumFlags">Enum flags.</param>
     /// <returns>Decorator for describing the enum.</returns>
-    /// <exception cref="ArgumentException">Thrown when the type has been defined.</exception>
+    /// <exception cref="WeavingException">Thrown when the type has been defined.</exception>
     public EnumDecorator AddEnum(string typeName, string typeNamespace, EnumFlags enumFlags)
     {
         var fullName = $"{typeNamespace}.{typeName}";

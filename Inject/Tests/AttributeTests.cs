@@ -96,7 +96,7 @@ public class AttributeTests
         var host = NewHost("AttributeArgumentAssembly");
 
         // MarkerAttribute takes a single string, so an int names no constructor of it.
-        var thrown = Assert.Throws<ArgumentException>(() => host.AddAttribute<MarkerAttribute>(42));
+        var thrown = Assert.Throws<WeavingException>(() => host.AddAttribute<MarkerAttribute>(42));
 
         Assert.That(thrown.Message, Does.Contain(nameof(MarkerAttribute)), "the message does not name the attribute which holds no such constructor.");
     }
@@ -108,7 +108,7 @@ public class AttributeTests
         var host = NewHost("AttributeNullArgumentAssembly");
         object? argument = null;
 
-        var thrown = Assert.Throws<ArgumentException>(() => host.AddAttribute<MarkerAttribute>(argument!));
+        var thrown = Assert.Throws<WeavingException>(() => host.AddAttribute<MarkerAttribute>(argument!));
 
         Assert.That(thrown.Message, Does.Contain(nameof(MarkerAttribute)), "the message does not name the attribute which the null was given for.");
     }

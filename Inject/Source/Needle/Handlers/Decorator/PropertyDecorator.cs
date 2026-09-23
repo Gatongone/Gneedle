@@ -240,7 +240,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// </summary>
         /// <param name="method">The method which holds the body of the getter.</param>
         /// <returns>Result for chains calling.</returns>
-        /// <exception cref="ArgumentException">Thrown when the parameters or the return type of the method do not match the getter.</exception>
+        /// <exception cref="WeavingException">Thrown when the parameters or the return type of the method do not match the getter.</exception>
         /// <exception cref="InvalidOperationException">Thrown when the property was already built.</exception>
         IAccessorDecorator WithGetter(MethodInfo method);
 
@@ -259,7 +259,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
         /// </summary>
         /// <param name="method">The method which holds the body of the setter.</param>
         /// <returns>Result for chains calling.</returns>
-        /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the setter.</exception>
+        /// <exception cref="WeavingException">Thrown when the parameters of the method do not match the setter.</exception>
         /// <exception cref="InvalidOperationException">Thrown when the property was already built.</exception>
         IAccessorDecorator WithSetter(MethodInfo method);
     }

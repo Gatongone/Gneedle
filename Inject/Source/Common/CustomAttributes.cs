@@ -17,7 +17,7 @@ internal static class CustomAttributes
         /// Thrown when <c>arguments</c> is null, which is a caller who left the arguments out rather than one who gave
         /// none of them.
         /// </exception>
-        /// <exception cref="ArgumentException">
+        /// <exception cref="WeavingException">
         /// Thrown when one of the arguments is null, which names no constructor, or when the attribute doesn't contain
         /// any constructor which has argument types match with <c>arguments</c>.
         /// </exception>
@@ -35,7 +35,7 @@ internal static class CustomAttributes
             {
                 if (arguments[index] == null)
                 {
-                    throw new ArgumentException(string.Format(ErrorMessages.NULL_ATTRIBUTE_ARGUMENT, attributeDefinition.FullName, index));
+                    throw new WeavingException(string.Format(ErrorMessages.NULL_ATTRIBUTE_ARGUMENT, attributeDefinition.FullName, index));
                 }
 
                 argTypes[index] = arguments[index].GetType();
@@ -43,7 +43,7 @@ internal static class CustomAttributes
 
             // Get the constructor matches with argTypes.
             var method = attributeDefinition.Methods.FirstOrDefault(method => method.IsConstructor && method.Parameters.SameWith(argTypes));
-            if (method == null) throw new ArgumentException(string.Format(ErrorMessages.INVALID_PARAMETERS, attributeDefinition.FullName));
+            if (method == null) throw new WeavingException(string.Format(ErrorMessages.INVALID_PARAMETERS, attributeDefinition.FullName));
 
             // Create custom attribute and append arguments. The constructor is imported rather than used as it is, because
             // the attribute is declared by another assembly whenever the type which carries it is not the one which

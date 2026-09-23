@@ -141,7 +141,7 @@ public partial class PointerTests
         var host = NewHostWithField("PublicField", isStatic: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(HelperClass[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnElementOfAnArray))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAnElementOfAnArray))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
     }
@@ -222,7 +222,7 @@ public partial class PointerTests
             new Parameter(typeof(bool).ToGneedleType())
         ], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAValueWhichAConditionComputed))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceField_OfAValueWhichAConditionComputed))));
 
         Assert.That(thrown!.Message, Does.Contain("PublicField"));
     }

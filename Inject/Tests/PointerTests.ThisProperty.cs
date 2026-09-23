@@ -116,7 +116,7 @@ public partial class PointerTests
         var host = NewHostWithProperty("Prop", withGetter: false, withSetter: true, isVirtual: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
-        Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty))));
+        Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty))));
     }
 
     [Test]
@@ -125,7 +125,7 @@ public partial class PointerTests
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: false, isVirtual: false);
         var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty))));
+        Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty))));
     }
 
     /// <summary>

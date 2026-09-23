@@ -112,7 +112,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// written against, because the accessor is not a member which that field belongs to.
     /// </summary>
     /// <param name="body">The kind of body which the getter is given.</param>
-    /// <exception cref="ArgumentException">Thrown when the getter which the property holds is one which a body cannot be written for, or when the body has no getter form.</exception>
+    /// <exception cref="WeavingException">Thrown when the getter which the property holds is one which a body cannot be written for, or when the body has no getter form.</exception>
     public void SetGetter(DefaultPropertyBody body)
     {
         if (Source.GetMethod == null)
@@ -143,7 +143,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         // and the default property body with field operation only supports parameterless setter method.
         if (Source.GetMethod.Parameters.Count > 0)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INDEXER_TAKES_NO_FIELD_OPERATION, Name));
+            throw new WeavingException(string.Format(ErrorMessages.INDEXER_TAKES_NO_FIELD_OPERATION, Name));
         }
 
         // Default property body with field operation, which means the getter will return the value of a backing field,
@@ -185,7 +185,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// written against, because the accessor is not a member which that field belongs to.
     /// </summary>
     /// <param name="body">The kind of body which the setter is given.</param>
-    /// <exception cref="ArgumentException">Thrown when the setter which the property holds is one which a body cannot be written for, or when a body which operates on a field is asked for on an indexer.</exception>
+    /// <exception cref="WeavingException">Thrown when the setter which the property holds is one which a body cannot be written for, or when a body which operates on a field is asked for on an indexer.</exception>
     public void SetSetter(DefaultPropertyBody body)
     {
         if (Source.SetMethod == null)
@@ -219,7 +219,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         // "value" parameter; only an indexer setter adds an extra "index" parameter.
         if (m_Setter.Source.Parameters.Count > 1)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INDEXER_TAKES_NO_FIELD_OPERATION, Name));
+            throw new WeavingException(string.Format(ErrorMessages.INDEXER_TAKES_NO_FIELD_OPERATION, Name));
         }
 
         // Default property body with field operation, which means the getter will return the value of a backing field,
@@ -270,7 +270,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// member of two parameters describes an indexer whose index type is the type of its first parameter.
     /// </summary>
     /// <param name="body">The member whose body the setter is given.</param>
-    /// <exception cref="ArgumentException">Thrown when the member takes more than the value and the index, or when its last parameter is not the type of the property.</exception>
+    /// <exception cref="WeavingException">Thrown when the member takes more than the value and the index, or when its last parameter is not the type of the property.</exception>
     public void SetSetter(MethodInfo body) => SetSetter(body, null);
 
     /// <summary>
@@ -287,7 +287,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             || (paramLength == 1 && !TypeName.HasSameName(body.GetParameters()[0].ParameterType, Source.PropertyType))
             || (paramLength == 2 && !TypeName.HasSameName(body.GetParameters()[1].ParameterType, Source.PropertyType)))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.SETTER_MEMBER_DOES_NOT_MATCH, Name, Source.PropertyType.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.SETTER_MEMBER_DOES_NOT_MATCH, Name, Source.PropertyType.FullName));
         }
 
         if (Source.SetMethod == null)
@@ -319,7 +319,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// of the type itself.
     /// </summary>
     /// <param name="body">The member whose body the getter is given.</param>
-    /// <exception cref="ArgumentException">Thrown when the member takes more than the index, or when what it hands back is not the type of the property.</exception>
+    /// <exception cref="WeavingException">Thrown when the member takes more than the index, or when what it hands back is not the type of the property.</exception>
     public void SetGetter(MethodInfo body) => SetGetter(body, null);
 
     /// <summary>
@@ -332,7 +332,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     {
         // Indexer has more than one parameter or the parameter type does not match the property type.
         if (body.GetParameters().Length > 1 || !TypeName.HasSameName(body.ReturnType, Source.PropertyType))
-            throw new ArgumentException(string.Format(ErrorMessages.GETTER_MEMBER_DOES_NOT_MATCH, Name, Source.PropertyType.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.GETTER_MEMBER_DOES_NOT_MATCH, Name, Source.PropertyType.FullName));
 
         if (Source.GetMethod == null)
         {
@@ -357,10 +357,10 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// Refuse an accessor which holds no body, because none can be described for it.
     /// </summary>
     /// <param name="accessor">The accessor which a body is described for.</param>
-    /// <exception cref="ArgumentException">Thrown when the accessor is abstract.</exception>
+    /// <exception cref="WeavingException">Thrown when the accessor is abstract.</exception>
     private static void VerifyHoldsBody(MethodDefinition accessor)
     {
-        if (accessor.IsAbstract) throw new ArgumentException(string.Format(ErrorMessages.ABSTRACT_ACCESSOR_HOLDS_NO_BODY, accessor.Name));
+        if (accessor.IsAbstract) throw new WeavingException(string.Format(ErrorMessages.ABSTRACT_ACCESSOR_HOLDS_NO_BODY, accessor.Name));
     }
 
     /// <inheritdoc/>

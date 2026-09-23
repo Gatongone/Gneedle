@@ -217,17 +217,17 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         {
             ".ctor" => // Instance constructor cannot be static, abstract or virtual, and can only be public, private or protected.
                 methodFlags.HasFlag(MethodFlags.Static)
-                    ? throw new ArgumentException(string.Format(ErrorMessages.INSTANCE_CONSTRUCTOR_IS_STATIC, methodName))
+                    ? throw new WeavingException(string.Format(ErrorMessages.INSTANCE_CONSTRUCTOR_IS_STATIC, methodName))
                     : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
-                        ? throw new ArgumentException(string.Format(ErrorMessages.INSTANCE_CONSTRUCTOR_IS_ABSTRACT_OR_VIRTUAL, methodName))
+                        ? throw new WeavingException(string.Format(ErrorMessages.INSTANCE_CONSTRUCTOR_IS_ABSTRACT_OR_VIRTUAL, methodName))
                         : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
             ".cctor" => // Static constructor must be static, and can only be private, and cannot be abstract or virtual.
                 methodFlags.HasFlag(MethodFlags.Protected) || methodFlags.HasFlag(MethodFlags.Internal)
-                    ? throw new ArgumentException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_NOT_PRIVATE, methodName))
+                    ? throw new WeavingException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_NOT_PRIVATE, methodName))
                     : !methodFlags.HasFlag(MethodFlags.Static)
-                        ? throw new ArgumentException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_NOT_STATIC, methodName))
+                        ? throw new WeavingException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_NOT_STATIC, methodName))
                         : methodFlags.HasFlag(MethodFlags.Abstract) || methodFlags.HasFlag(MethodFlags.Virtual)
-                            ? throw new ArgumentException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_ABSTRACT_OR_VIRTUAL, methodName))
+                            ? throw new WeavingException(string.Format(ErrorMessages.STATIC_CONSTRUCTOR_IS_ABSTRACT_OR_VIRTUAL, methodName))
                             : methodFlags.ToMethodAttributes() | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
             _ => methodFlags.ToMethodAttributes()
         };

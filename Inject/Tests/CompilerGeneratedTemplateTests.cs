@@ -648,7 +648,7 @@ public class CompilerGeneratedTemplateTests
             .SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Twice)));
 
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
-        var refusal = Assert.Throws<ArgumentException>(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.ReachesAnInstanceMemberFromALambda))));
+        var refusal = Assert.Throws<WeavingException>(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.ReachesAnInstanceMemberFromALambda))));
 
         Assert.That(refusal!.Message, Does.Contain("can reach no instance of the member being woven"),
             $"the refusal does not say that the body reaches no instance: {refusal.Message}");
@@ -767,7 +767,7 @@ public class CompilerGeneratedTemplateTests
         var (_, host, _) = NewHost($"CompilerGeneratedRefusedAfterTheCarrying{Guid.NewGuid():N}");
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.HoldsALambdaAndNamesASecondParameter))));
+        var thrown = Assert.Throws<WeavingException>(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.HoldsALambdaAndNamesASecondParameter))));
 
         Assert.Multiple(() =>
         {
@@ -821,7 +821,7 @@ public class CompilerGeneratedTemplateTests
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
         var refused = Assert.Catch(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), templateName)));
-        Assert.That(refused, Is.TypeOf<ArgumentException>(),
+        Assert.That(refused, Is.TypeOf<WeavingException>(),
             $"'{templateName}' was refused by {refused?.GetType().Name ?? "nothing"}: {refused?.Message ?? "it was woven"}");
 
         return refused!.Message;

@@ -32,7 +32,7 @@ public interface IMethodHandler : IAttributeContainer
     /// token to the type of the member.
     /// </summary>
     /// <param name="method">The method which holds the body.</param>
-    /// <exception cref="ArgumentException">Thrown when the template cannot be read, in which case the method is left as it was.</exception>
+    /// <exception cref="WeavingException">Thrown when the template cannot be read, in which case the method is left as it was.</exception>
     void SetBody(MethodInfo method);
 
     /// <summary>
@@ -50,7 +50,7 @@ public interface IMethodHandler : IAttributeContainer
     /// <see cref="This.Method{TMethod}(string)"/>.
     /// </summary>
     /// <param name="method">The template which holds the body to weave around.</param>
-    /// <exception cref="ArgumentException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
+    /// <exception cref="WeavingException">Thrown when the method cannot be woven around, or when the template does not match it.</exception>
     void AroundBody(MethodInfo method);
 }
 
@@ -69,7 +69,7 @@ public static class MethodExtensions
         /// into the member being woven.
         /// </summary>
         /// <param name="delegation">The delegate which holds the body.</param>
-        /// <exception cref="ArgumentException">Thrown when the delegate captured a value and the handler is not one
+        /// <exception cref="WeavingException">Thrown when the delegate captured a value and the handler is not one
         /// which this library builds, which holds nothing to write the value into.</exception>
         public void SetBody(Delegate delegation) => MethodHandler.SetBody(methodHandler, delegation);
 
@@ -77,7 +77,7 @@ public static class MethodExtensions
         /// Set the body of the method to run around the body which it holds, from the delegate which holds the template.
         /// </summary>
         /// <param name="delegation">The delegate which holds the body to weave around.</param>
-        /// <exception cref="ArgumentException">Thrown when the delegate captured a value and the handler is not one
+        /// <exception cref="WeavingException">Thrown when the delegate captured a value and the handler is not one
         /// which this library builds, which holds nothing to write the value into.</exception>
         public void AroundBody(Delegate delegation) => MethodHandler.AroundBody(methodHandler, delegation);
 

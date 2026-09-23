@@ -565,7 +565,7 @@ namespace Gneedle.Inject.Test
 
         [Test]
         public void ResolveTypeFromAssembly_With_An_Unknown_Assembly_Throws()
-            => Assert.Throws<ArgumentException>(() => FromAssembly.ResolveTypeFromAssembly(NewTarget().Source.MainModule, "No.Such.Assembly", $"{NS}.{nameof(Stub)}"));
+            => Assert.Throws<WeavingException>(() => FromAssembly.ResolveTypeFromAssembly(NewTarget().Source.MainModule, "No.Such.Assembly", $"{NS}.{nameof(Stub)}"));
 
         #endregion
 
@@ -574,7 +574,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_With_A_Stub_Which_The_Target_Does_Not_Declare_Throws()
         {
-            var exception = Assert.Throws<ArgumentException>(() => Weave(nameof(Templates.ReadAbsentStubField)));
+            var exception = Assert.Throws<WeavingException>(() => Weave(nameof(Templates.ReadAbsentStubField)));
 
             Assert.That(exception!.Message, Does.Contain($"{NS}.{nameof(AbsentStub)}"));
         }
@@ -582,7 +582,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_With_A_Stub_Of_An_Unknown_Assembly_Throws()
         {
-            var exception = Assert.Throws<ArgumentException>(() => Weave(nameof(Templates.ReadUnresolvableStubField)));
+            var exception = Assert.Throws<WeavingException>(() => Weave(nameof(Templates.ReadUnresolvableStubField)));
 
             Assert.That(exception!.Message, Does.Contain("No.Such.Assembly"));
         }

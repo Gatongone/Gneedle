@@ -140,7 +140,7 @@ public class MethodTests
     public void AddMethod_InstanceCtor_Static_Throws()
     {
         var host = NewClass();
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<WeavingException>(() =>
             host.AddMethod(".ctor", MethodFlags.Public | MethodFlags.Static).WithReturnType(typeof(void)).GetHandler());
     }
 
@@ -148,7 +148,7 @@ public class MethodTests
     public void AddMethod_InstanceCtor_Virtual_Throws()
     {
         var host = NewClass();
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<WeavingException>(() =>
             host.AddMethod(".ctor", MethodFlags.Public | MethodFlags.Virtual).WithReturnType(typeof(void)).GetHandler());
     }
 
@@ -156,7 +156,7 @@ public class MethodTests
     public void AddMethod_StaticCtor_WithoutStatic_Throws()
     {
         var host = NewClass();
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<WeavingException>(() =>
             host.AddMethod(".cctor", MethodFlags.Private).WithReturnType(typeof(void)).GetHandler());
     }
 
@@ -164,7 +164,7 @@ public class MethodTests
     public void AddMethod_StaticCtor_NonPrivate_Throws()
     {
         var host = NewClass();
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<WeavingException>(() =>
             host.AddMethod(".cctor", MethodFlags.Static | MethodFlags.Internal).WithReturnType(typeof(void)).GetHandler());
     }
 

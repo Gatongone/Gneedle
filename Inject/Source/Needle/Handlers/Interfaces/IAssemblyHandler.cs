@@ -9,7 +9,7 @@ public interface IAssemblyHandler
     /// Append a reference to <paramref name="targetAssembly"/> to the assembly which is handled.
     /// </summary>
     /// <param name="targetAssembly">The assembly which need to be referenced.</param>
-    /// <exception cref="ArgumentException">Thrown when the target assembly references the handled one, which cannot be represented in metadata.</exception>
+    /// <exception cref="WeavingException">Thrown when the target assembly references the handled one, which cannot be represented in metadata.</exception>
     void AddReference(Assembly targetAssembly);
 
     /// <summary>

@@ -39,12 +39,12 @@ internal class EnumHandler(AssemblyHandler assemblyHandler, TypeDefinition sourc
     /// Verify that the provided value is of a valid underlying type for an enum.
     /// </summary>
     /// <param name="value">The value to verify.</param>
-    /// <exception cref="ArgumentException">Thrown when the value is not of a valid underlying type.</exception>
+    /// <exception cref="WeavingException">Thrown when the value is not of a valid underlying type.</exception>
     private static void VerifyUnderlyingType(object value)
     {
         if (value is not (sbyte or byte or short or ushort or int or uint or long or ulong))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_ENUM_UNDERLYING_TYPE, value.GetType().Name));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_ENUM_UNDERLYING_TYPE, value.GetType().Name));
         }
     }
 }

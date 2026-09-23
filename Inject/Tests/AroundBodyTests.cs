@@ -434,7 +434,7 @@ public class AroundBodyTests
         // the runtime to refuse the type which was written.
         var (_, host, _) = NewHost(true);
 
-        var thrown = Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add")
+        var thrown = Assert.Throws<WeavingException>(() => HandlerOf(host, "Add")
             .AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedWithAnotherHandedBackType))));
 
         Assert.That(thrown!.Message, Does.Contain("is not the type which the member being woven hands back"));
@@ -447,7 +447,7 @@ public class AroundBodyTests
         // none for it to stand for.
         var (_, host, _) = NewHost(true);
 
-        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add")
+        Assert.Throws<WeavingException>(() => HandlerOf(host, "Add")
             .SetBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedWithItsOwnArgumentsThenAddOne))));
     }
 
@@ -678,7 +678,7 @@ public class AroundBodyTests
         var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
         var captured = new object();
 
-        var thrown = Assert.Throws<ArgumentException>(() => run.AroundBody(() =>
+        var thrown = Assert.Throws<WeavingException>(() => run.AroundBody(() =>
         {
             Proceed.Method<Action>()();
             Console.WriteLine(captured);
@@ -699,7 +699,7 @@ public class AroundBodyTests
         var one = host.AddMethod("One", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
         one.SetBody(DefaultMethodBody.WithDefaultReturn);
 
-        var thrown = Assert.Throws<ArgumentException>(() => one.AroundBody(typeof(InstanceFieldTemplates).GetMethod(nameof(InstanceFieldTemplates.ReadsItsOwnField))!));
+        var thrown = Assert.Throws<WeavingException>(() => one.AroundBody(typeof(InstanceFieldTemplates).GetMethod(nameof(InstanceFieldTemplates.ReadsItsOwnField))!));
 
         Assert.That(thrown!.Message, Does.Contain("instance which it belongs to"));
     }
@@ -717,7 +717,7 @@ public class AroundBodyTests
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
 
         var hostType = host.Source;
-        var thrown = Assert.Throws<ArgumentException>(
+        var thrown = Assert.Throws<WeavingException>(
             () => run.AroundBody(typeof(ProceedInALambdaTemplates).GetMethod(nameof(ProceedInALambdaTemplates.ProceedsFromInsideALambda))!));
 
         Assert.Multiple(() =>
@@ -748,7 +748,7 @@ public class AroundBodyTests
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
 
-        var thrown = Assert.Throws<ArgumentException>(
+        var thrown = Assert.Throws<WeavingException>(
             () => run.AroundBody(typeof(ProceedInALambdaTemplates).GetMethod(nameof(ProceedInALambdaTemplates.ReachesTheProceedFromInsideALambda))!));
 
         Assert.That(thrown!.Message, Does.Contain("A body which the compiler wrote for a body of the template's own"),
@@ -761,12 +761,12 @@ public class AroundBodyTests
         var (_, host, add) =  NewHost(true);
         add.Attributes     |= MethodAttributes.Abstract;
 
-        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
+        Assert.Throws<WeavingException>(() => HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
     }
 
     [Test]
     public void AroundBody_Of_A_Constructor_Throws()
-        => Assert.Throws<ArgumentException>(() =>
+        => Assert.Throws<WeavingException>(() =>
         {
             var (_, host, _) = NewHost(false);
             HandlerOf(host, ".ctor").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
@@ -778,12 +778,12 @@ public class AroundBodyTests
         // A template of plain types cannot match a method whose parameters are generic, which is what the token is for.
         var (_, host, _) = NewGenericHost("AroundBodyGenericRefusalAssembly");
 
-        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Identity").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
+        Assert.Throws<WeavingException>(() => HandlerOf(host, "Identity").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
     }
 
     [Test]
     public void AroundBody_With_A_Template_Of_Another_Signature_Throws()
-        => Assert.Throws<ArgumentException>(() =>
+        => Assert.Throws<WeavingException>(() =>
         {
             var (_, host, _) = NewHost(true);
             HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedWithAnotherSignature)));
@@ -791,7 +791,7 @@ public class AroundBodyTests
 
     [Test]
     public void AroundBody_With_A_Template_Of_Another_Return_Type_Throws()
-        => Assert.Throws<ArgumentException>(() =>
+        => Assert.Throws<WeavingException>(() =>
         {
             var (_, host, _) = NewHost(true);
             HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedWithAnotherReturnType)));
@@ -804,7 +804,7 @@ public class AroundBodyTests
         var method = HandlerOf(host, "Add");
         method.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly)));
 
-        Assert.Throws<ArgumentException>(() => method.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
+        Assert.Throws<WeavingException>(() => method.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
     }
 
     [Test]
@@ -813,7 +813,7 @@ public class AroundBodyTests
         var (_, host, add) = NewHost(true);
         host.Source.Fields.Add(new FieldDefinition(PROCEED_METHOD_NAME, FieldAttributes.Private, add.ReturnType));
 
-        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
+        Assert.Throws<WeavingException>(() => HandlerOf(host, "Add").AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
     }
 
     [Test]
@@ -827,7 +827,7 @@ public class AroundBodyTests
         var body = add.Body;
         var instructions = body.Instructions.ToArray();
 
-        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add")
+        Assert.Throws<WeavingException>(() => HandlerOf(host, "Add")
             .AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ReadAMissingField))));
 
         // The member holds the very body object it held, with the very instructions in it, and neither a variable nor
@@ -843,7 +843,7 @@ public class AroundBodyTests
 
         // A second attempt which fails leaves as little behind as the first one did: nothing of the member is carried
         // from one attempt into the next, and nothing of the template either.
-        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add")
+        Assert.Throws<WeavingException>(() => HandlerOf(host, "Add")
             .AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ReadAMissingField))));
 
         Assert.That(add.Body, Is.SameAs(body));
@@ -879,7 +879,7 @@ public class AroundBodyTests
         // Proceed without a body being woven around is a mistake of its own, and it has a message of its own.
         var (_, host, _) = NewHost(true);
 
-        Assert.Throws<ArgumentException>(() => HandlerOf(host, "Add").SetBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
+        Assert.Throws<WeavingException>(() => HandlerOf(host, "Add").SetBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedOnly))));
     }
 
     #endregion

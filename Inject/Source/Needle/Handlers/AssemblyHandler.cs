@@ -80,7 +80,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// Append assembly reference to current assembly.
     /// </summary>
     /// <param name="targetAssembly">The target assembly need to be appended.</param>
-    /// <exception cref="ArgumentException">Thrown when there is assembly cycle referenced (target assembly referenced current assembly).</exception>
+    /// <exception cref="WeavingException">Thrown when there is assembly cycle referenced (target assembly referenced current assembly).</exception>
     internal void AddReference(AssemblyDefinition targetAssembly)
     {
         // Check repeat.
@@ -105,12 +105,12 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// which cannot be represented in metadata.
     /// </summary>
     /// <param name="targetAssembly">The assembly need to be referenced.</param>
-    /// <exception cref="ArgumentException">Thrown when the target assembly references current assembly.</exception>
+    /// <exception cref="WeavingException">Thrown when the target assembly references current assembly.</exception>
     private void VerifyReferenceCycle(AssemblyDefinition targetAssembly)
     {
         if (targetAssembly.MainModule.AssemblyReferences.Any(nameRef => nameRef.FullName.Equals(Assembly.Source.FullName)))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, targetAssembly.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, targetAssembly.FullName));
         }
     }
 
@@ -206,7 +206,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
     /// </param>
     /// <param name="throwWhenNotFound">Whether to throw an exception when the method is not found. Default is true.</param>
     /// <returns>The method from target type or its base type. Returns null if there is no matching method in the target type and its base types, which only happens when <paramref name="throwWhenNotFound"/> is false.</returns>
-    /// <exception cref="ArgumentException">Thrown when there is no matching method and <paramref name="throwWhenNotFound"/> is true.</exception>
+    /// <exception cref="WeavingException">Thrown when there is no matching method and <paramref name="throwWhenNotFound"/> is true.</exception>
     internal MethodDefinition? GetMethodFromType(TypeDefinition? target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType = null, bool throwWhenNotFound = true, TypeReference? instance = null)
     {
         var curType = target;
@@ -254,7 +254,7 @@ internal sealed partial class AssemblyHandler : IAssemblyHandler
             curType     = GetDefinition(curType.BaseType);
         }
 
-        if (methodDef == null && throwWhenNotFound) throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+        if (methodDef == null && throwWhenNotFound) throw new WeavingException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
         return methodDef;
     }
 

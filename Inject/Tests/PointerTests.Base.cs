@@ -116,13 +116,13 @@ public partial class PointerTests
 
         Assert.Multiple(() =>
         {
-            var memberThrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod))));
+            var memberThrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod))));
             Assert.That(memberThrown!.Message, Does.Contain("Calc"), "the message does not name the member which the template asked for.");
 
-            var fieldThrown = Assert.Throws<ArgumentException>(() => field.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseFieldGet))));
+            var fieldThrown = Assert.Throws<WeavingException>(() => field.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseFieldGet))));
             Assert.That(fieldThrown!.Message, Does.Contain("Value"), "the message does not name the field which the template asked for.");
 
-            var propertyThrown = Assert.Throws<ArgumentException>(() => property.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BasePropertyGet))));
+            var propertyThrown = Assert.Throws<WeavingException>(() => property.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BasePropertyGet))));
             Assert.That(propertyThrown!.Message, Does.Contain("Prop"), "the message does not name the property which the template asked for.");
         });
     }

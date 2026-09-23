@@ -136,7 +136,7 @@ public partial class PointerTests
             [],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeByNameWhichIsComputed))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeByNameWhichIsComputed))));
 
         Assert.That(thrown!.Message, Does.Contain("is not written where the call is"));
     }
@@ -326,7 +326,7 @@ public partial class PointerTests
             [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument))));
 
         Assert.That(thrown!.Message, Does.Contain("is static and belongs to none"));
     }
@@ -470,7 +470,7 @@ public partial class PointerTests
             [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn))));
 
         Assert.That(thrown!.Message, Does.Contain("declares a generic parameter of its own which no parameter of the member being woven stands for"));
     }
@@ -1256,7 +1256,7 @@ public partial class PointerTests
         var host = NewHostWithIdentity("MethodInjectionIdentityMismatchAssembly");
         var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
+        var thrown = Assert.Throws<WeavingException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was not refused as one which no candidate of that name describes: {thrown.Message}");
@@ -1279,7 +1279,7 @@ public partial class PointerTests
             [new Parameter(new GenericParameterType("T"))],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.IdentityOfTheTokenWithAValueOfAnotherType))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.IdentityOfTheTokenWithAValueOfAnotherType))));
 
         Assert.That(thrown!.Message, Does.Contain("names no member"),
             "the delegate was refused as one which names no member rather than by the rule of the call.");
@@ -1296,7 +1296,7 @@ public partial class PointerTests
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityAssembly");
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnIntWhichTheConstraintRefuses))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnIntWhichTheConstraintRefuses))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             "the member was called with a type which the constraint of its own parameter refuses.");
@@ -1331,7 +1331,7 @@ public partial class PointerTests
         asInt.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
         var asString = host.AddMethod("RunString", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString))));
+        var thrown = Assert.Throws<WeavingException>(() => asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             "the member was called with a type of a reference where its parameter accepts the types of values.");
@@ -1356,7 +1356,7 @@ public partial class PointerTests
             GenericParameterAttributes.NotNullableValueTypeConstraint);
         var method = host.AddMethod("Run", typeof(int?).ToGneedleType(), [], [new Parameter(typeof(int?).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with a value which may be absent where its own parameter accepts the types of values: {thrown.Message}");
@@ -1371,7 +1371,7 @@ public partial class PointerTests
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAReferenceFromANullableAssembly");
         var method = host.AddMethod("Run", typeof(int?).ToGneedleType(), [], [new Parameter(typeof(int?).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with a value which may be absent where its own parameter accepts the types of references: {thrown.Message}");
@@ -1387,7 +1387,7 @@ public partial class PointerTests
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToATypeAssembly", typeof(IComparable));
         var method = host.AddMethod("Run", typeof(object).ToGneedleType(), [], [new Parameter(typeof(object).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnObject))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnObject))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with a type which is made of nothing the constraint names: {thrown.Message}");
@@ -1445,7 +1445,7 @@ public partial class PointerTests
             [new Parameter(typeof(CountedOfAnInstantiation).ToGneedleType())],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfACounted))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfACounted))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with a type which is made of another instantiation of the constraint: {thrown.Message}");
@@ -1461,7 +1461,7 @@ public partial class PointerTests
             typeof(IComparable));
         var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with an array which the constraint of the parameter refuses: {thrown.Message}");
@@ -1486,7 +1486,7 @@ public partial class PointerTests
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAVectorOfAnArrayAssembly", typeof(IList<int>));
         var method = host.AddMethod("Run", typeof(int[,]).ToGneedleType(), [], [new Parameter(typeof(int[,]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTwoDimensions))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTwoDimensions))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with an array of two dimensions where the constraint names a collection of one: {thrown.Message}");
@@ -1533,7 +1533,7 @@ public partial class PointerTests
             typeof(IEnumerable<object>));
         var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with an array whose element is another value than the one the constraint names: {thrown.Message}");
@@ -1547,7 +1547,7 @@ public partial class PointerTests
             typeof(IEnumerable<object>));
         var method = host.AddMethod("Run", typeof(List<int>).ToGneedleType(), [], [new Parameter(typeof(List<int>).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfAnInt))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfAnInt))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with an instance whose element is another value than the one the constraint names: {thrown.Message}");
@@ -1568,7 +1568,7 @@ public partial class PointerTests
             [new Parameter(typeof(Comparer<object>).ToGneedleType())],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with a comparer of a value which the constraint does not name: {thrown.Message}");
@@ -1688,7 +1688,7 @@ public partial class PointerTests
             typeof(IList<IntPtr>));
         var method = host.AddMethod("Run", typeof(long[]).ToGneedleType(), [], [new Parameter(typeof(long[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestSignedValues))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestSignedValues))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with an array of the width which the native values are held at: {thrown.Message}");
@@ -1704,7 +1704,7 @@ public partial class PointerTests
             typeof(IList<DayOfWeek[]>));
         var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with an array of values where the constraint names an array of arrays of an enumeration: {thrown.Message}");
@@ -1724,7 +1724,7 @@ public partial class PointerTests
             [new Parameter(typeof(DayOfWeek[]).ToGneedleType())],
             MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration))));
 
         Assert.That(thrown!.Message, Does.Contain("cannot be resolved").And.Contains("Identity"),
             $"the member was called with an array whose element is of another width than the one the constraint names: {thrown.Message}");
@@ -1743,7 +1743,7 @@ public partial class PointerTests
         var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [new GenericParameterType("T")],
             [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
+        var thrown = Assert.Throws<WeavingException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
         Assert.That(thrown!.Message, Does.Contain("Identity"));
     }
@@ -1773,7 +1773,7 @@ public partial class PointerTests
         var host = NewHostWithAMake("MethodInjectionMakeOfNoValueAssembly");
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeOfNoValue))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeOfNoValue))));
 
         Assert.That(thrown!.Message, Does.Contain("Make"));
     }
@@ -1788,7 +1788,7 @@ public partial class PointerTests
         var host = NewHostWithAnEchoAndASilence("MethodInjectionVoidDelegateAssembly");
         var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAVoidDelegate))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAVoidDelegate))));
 
         Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
             $"the member which hands a value back was called through a delegate which hands nothing back: {thrown.Message}");
@@ -1802,7 +1802,7 @@ public partial class PointerTests
         var host = NewHostWithAnEchoAndASilence("MethodInjectionValueDelegateAssembly");
         var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAValueDelegate))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAValueDelegate))));
 
         Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
             $"the member which hands nothing back was called through a delegate which hands a value back: {thrown.Message}");
@@ -1817,7 +1817,7 @@ public partial class PointerTests
         var host = NewHostWithAnEchoAndASilence("MethodInjectionAnotherValueAssembly");
         var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAStringDelegate))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAStringDelegate))));
 
         Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
             $"the member was called through a delegate which hands back a value of another type: {thrown.Message}");
@@ -1831,7 +1831,7 @@ public partial class PointerTests
         // the type of the argument of the call, and the delegate hands back a value of another type than that one.
         var (_, _, method) = NewInstanceHost("InstanceMethodAnotherValueAssembly", [typeof(GenericHelper<int>), typeof(int)]);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethodOfAGenericTypeWhichHandsBackAnotherType))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(InstanceStaticTemplates), nameof(InstanceStaticTemplates.InstanceMethodOfAGenericTypeWhichHandsBackAnotherType))));
 
         Assert.That(thrown!.Message, Does.Contain("The value which the delegate of the template hands back is not the one which the member hands back"),
             $"the member of the generic type was called through a delegate which hands back a value of another type: {thrown.Message}");
@@ -1916,7 +1916,7 @@ public partial class PointerTests
         var host = NewHostWithAnArrayEcho("MethodInjectionArrayRankAssembly");
         var method = host.AddMethod("Run", typeof(int[,]).ToGneedleType(), [], [new Parameter(typeof(int[,]).ToGneedleType())], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnotherRank))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnotherRank))));
 
         Assert.That(thrown!.Message, Does.Contain("Echo"));
     }
