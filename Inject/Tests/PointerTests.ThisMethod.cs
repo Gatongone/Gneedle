@@ -519,6 +519,30 @@ public partial class PointerTests
         return host;
     }
 
+    /// <summary>
+    /// Create a host which declares a real static method <c>int Size(object)</c>, which reads the value back out of
+    /// what it was handed, so that a template which reaches a member with a value it computed and boxed has one.
+    /// </summary>
+    private static TypeHandler NewHostWithSize(string assemblyName = "MethodInjectionBoxedArgumentAssembly")
+    {
+        var handler = (AssemblyHandler) Assembly.Create(assemblyName).Handler;
+        var host = AddAHost(handler);
+        var module = host.Source.Module;
+        var size = new MethodDefinition("Size", MethodAttributes.Public | MethodAttributes.Static | MethodAttributes.HideBySig, module.TypeSystem.Int32)
+        {
+            DeclaringType = host.Source,
+        };
+        size.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, module.TypeSystem.Object));
+        var il = size.Body.GetILProcessor();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, module.TypeSystem.Int32);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ret);
+        host.Source.Methods.Add(size);
+        return host;
+    }
+
     [Test]
     public void InvokeWithAConvertedArgument_Rewrites_To_Direct_Call()
     {
@@ -544,6 +568,67 @@ public partial class PointerTests
         });
         var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
         Assert.That(type.GetMethod("Run")!.Invoke(null, [3]), Is.EqualTo(7L));
+    }
+
+    [Test]
+    public void BothArgumentsComputed_Rewrite_To_A_Direct_Call()
+    {
+        // Both arguments are computed rather than loaded, and the region between the symbol and the invocation holds two
+        // values more than the scan which balances the body says it does, because that scan does not count what an
+        // arithmetic instruction takes off. What tells the invocation is read from the top of the stack downwards, so
+        // the two counts disagree below the arguments rather than about them, and the delegate is folded all the same:
+        // this reads that they do, so that a change which moved the disagreement up into the arguments is reported here
+        // rather than by a member which reaches the placeholder when the woven body runs.
+        //
+        // The host is given a name of its own because this test runs the assembly it built, and two assemblies of one
+        // name cannot be loaded into one run.
+        var host = NewHostWithAdd(isVirtual: false, "MethodInjectionBothArgumentsAssembly");
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithBothArgumentsComputed)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+                "the delegate was not rewritten to a direct call to Add.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        });
+
+        AddAnInstanceConstructor(host);
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(Activator.CreateInstance(type), [2, 3]), Is.EqualTo(11));
+    }
+
+    [Test]
+    public void AComputedArgumentWhichIsBoxed_Rewrites_To_A_Direct_Call()
+    {
+        // The value which the conversion boxed stands in the place of the one it took, and the instruction which pushed
+        // it is the boxing: the argument is read as one the parameter of the delegate can be handed only where the value
+        // stands there, which is what the scan which balances the body answers. It is the same disagreement as above,
+        // read at the one place which asks which instruction pushed a value rather than what its type is.
+        var host = NewHostWithSize();
+        var method = host.AddMethod(
+            "Run",
+            typeof(int).ToGneedleType(),
+            [],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public | MethodFlags.Static);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithABoxedComputedArgument)));
+        var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Size"), Is.True,
+                "the delegate was not rewritten to a direct call to Size.");
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Ldftn), Is.False);
+            Assert.That(ins.Any(i => i.OpCode == OpCodes.Newobj), Is.False);
+        });
+        var type = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!;
+        Assert.That(type.GetMethod("Run")!.Invoke(null, [2, 3]), Is.EqualTo(6));
     }
 
     [Test]

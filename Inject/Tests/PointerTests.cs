@@ -484,6 +484,15 @@ public partial class PointerTests
 
         public static long InvokeWithAConvertedArgument(int a) => This.Method<LongOp>("Widen")(a + a);
 
+        // Both arguments are computed rather than loaded, so the region between the symbol and the invocation holds two
+        // values more than a walk which counts every instruction it reads says it does.
+        public static int InvokeWithBothArgumentsComputed(int a, int b) => This.Method<IntBinaryOp>("Add")(a + b, a * b);
+
+        // The argument is computed and then boxed, and the parameter of the delegate is written for the value which was
+        // boxed: what the conversion leaves stands in the place of the value it took, and the instruction which pushed
+        // it is the boxing rather than the arithmetic which computed it.
+        public static int InvokeWithABoxedComputedArgument(int a, int b) => This.Method<Func<object, int>>("Size")(a + b);
+
         // char literal 'A' compiles to `ldc.i4.s 65` — same IL as int 65.
         public static char InvokeCharLiteral() => This.Method<CharOp>("Echo")('A');
 
