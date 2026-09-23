@@ -173,7 +173,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
 
         var propertyType = m_TypeHandler.AssemblyHandler.ResolveParameterType(m_TypeHandler.Source, m_PropertyType);
         var propertyDef = new PropertyDefinition(m_PropertyName, PropertyAttributes.None, propertyType);
-        m_TypeHandler.Source.Properties.Add(propertyDef);
+        ModuleLock.DeclareMember(m_TypeHandler.Source.Module, m_TypeHandler.Source, propertyDef);
 
         // The flags are handed to the handler, which creates each accessor with them, rather than written over the
         // accessors afterwards: the body of an accessor which reads or writes a field is emitted for the shape the

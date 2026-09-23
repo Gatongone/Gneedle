@@ -315,7 +315,7 @@ partial class MethodHandler
         // member, which was checked above, so parsing it as SetBody does would only write an equal type again.
         // What was carried is dropped here, which is where nothing else can refuse it.
         m_Carried = null;
-        Source.DeclaringType.Methods.Add(generated);
+        ModuleLock.DeclareMember(Source.Module, Source.DeclaringType, generated);
         MoveBodyTo(generated, Source);
         Source.Body = woven;
     }

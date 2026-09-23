@@ -127,7 +127,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             }
 
             Source.GetMethod = methodDef;
-            DeclaringTypeHandler.Source.Methods.Add(methodDef);
+            ModuleLock.DeclareMember(Source.Module, DeclaringTypeHandler.Source, methodDef);
         }
 
         m_Getter = new MethodHandler(Source.GetMethod, DeclaringTypeHandler);
@@ -158,7 +158,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         if (field == null)
         {
             field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private | (isStatic ? FieldAttributes.Static : 0), Source.PropertyType);
-            DeclaringTypeHandler.Source.Fields.Add((FieldDefinition) field);
+            ModuleLock.DeclareMember(Source.Module, DeclaringTypeHandler.Source, (FieldDefinition) field);
         }
 
         var declaringType = DeclaringTypeHandler.Source;
@@ -203,7 +203,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             methodDef.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, Source.PropertyType));
 
             Source.SetMethod = methodDef;
-            DeclaringTypeHandler.Source.Methods.Add(methodDef);
+            ModuleLock.DeclareMember(Source.Module, DeclaringTypeHandler.Source, methodDef);
         }
 
         m_Setter = new MethodHandler(Source.SetMethod, DeclaringTypeHandler);
@@ -234,7 +234,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
         if (field == null)
         {
             field = new FieldDefinition($"<{Name}>k__BackingField", FieldAttributes.Private | (isStatic ? FieldAttributes.Static : 0), Source.PropertyType);
-            DeclaringTypeHandler.Source.Fields.Add((FieldDefinition) field);
+            ModuleLock.DeclareMember(Source.Module, DeclaringTypeHandler.Source, (FieldDefinition) field);
         }
 
         var declaringType = DeclaringTypeHandler.Source;
@@ -303,7 +303,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
 
             methodDef.Parameters.Add(new ParameterDefinition("value", ParameterAttributes.None, Source.PropertyType));
             Source.SetMethod = methodDef;
-            DeclaringTypeHandler.Source.Methods.Add(methodDef);
+            ModuleLock.DeclareMember(Source.Module, DeclaringTypeHandler.Source, methodDef);
         }
 
         m_Setter = new MethodHandler(Source.SetMethod, DeclaringTypeHandler);
@@ -345,7 +345,7 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
             }
 
             Source.GetMethod = methodDef;
-            DeclaringTypeHandler.Source.Methods.Add(methodDef);
+            ModuleLock.DeclareMember(Source.Module, DeclaringTypeHandler.Source, methodDef);
         }
 
         m_Getter = new MethodHandler(Source.GetMethod, DeclaringTypeHandler);

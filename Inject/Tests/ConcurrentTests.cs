@@ -59,6 +59,24 @@ public class ConcurrentTests
         });
     }
 
+    [Test]
+    public void The_Members_Which_Several_Threads_Add_To_One_Type_Are_All_Added()
+    {
+        // The members a type declares are not among the two tables ModuleLock holds - the references of the module and
+        // the types it declares - because a member is named within the type which declares it rather than by the module,
+        // so a decorator adds one to a type without the lock, as the weaving always has. Whether that is enough is what
+        // this reads: a collection of Cecil is not one which two threads may write at the same time, and a member which
+        // one of them adds is one the other may write over.
+        const string assemblyName = "ConcurrentMembers";
+        var (_, host, _) = TestFixtures.NewHost(assemblyName);
+
+        const int added = COUNT * 8;
+        Parallel.For(0, added, index => host.AddMethod("Member" + index, typeof(int).ToGneedleType(), [], [], MethodFlags.Public));
+
+        Assert.That(host.Source.Methods.Count(method => method.Name.StartsWith("Member", StringComparison.Ordinal)),
+            Is.EqualTo(added), "a member which a thread added is one the type does not declare.");
+    }
+
     private static byte[] Weave(byte[] image)
     {
         var (_, woven) = Injections.Apply(AssemblyLoader.LoadFromBytes(image), image);

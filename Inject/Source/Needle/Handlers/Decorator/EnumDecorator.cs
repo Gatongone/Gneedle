@@ -90,7 +90,7 @@ public class EnumDecorator : EnumDecorator.IEnumTypeDecorator
 
         // Add the special value__ instance field of the underlying type.
         var valueField = new FieldDefinition("value__", FieldAttributes.Public | FieldAttributes.SpecialName | FieldAttributes.RTSpecialName, m_UnderlyingType);
-        m_TypeDefinition.Fields.Add(valueField);
+        ModuleLock.DeclareMember(m_TypeDefinition.Module, m_TypeDefinition, valueField);
 
         // Add the [Flags] attribute if requested.
         if (m_WithFlagsAttribute)

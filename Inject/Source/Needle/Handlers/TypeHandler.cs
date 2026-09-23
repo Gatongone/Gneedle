@@ -263,7 +263,7 @@ internal class TypeHandler : ITypeHandler, IInterfaceContainer, IFieldContainer,
         // Set method return type.
         method.ReturnType = AssemblyHandler.ResolveParameterType(Source, returnType, method.GenericParameters);
 
-        Source.Methods.Add(method);
+        ModuleLock.DeclareMember(Source.Module, Source, method);
         var methodHandler = new MethodHandler(method, this);
 
         // A method which is not abstract has to carry a body, otherwise the produced assembly holds a method without an
