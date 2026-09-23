@@ -255,7 +255,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         foreach (var copy in m_MemberCopies)
         {
-            into.Methods.Add(copy);
+            ModuleLock.DeclareMember(into.Module, into, copy);
         }
     }
 
@@ -387,7 +387,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
         if (m_Methods.ContainsKey(key)) return;
 
         var copy = DeclareMethod(method, m_Types[from.FullName]);
-        copy.DeclaringType.Methods.Add(copy);
+        ModuleLock.DeclareMember(copy.Module, copy.DeclaringType, copy);
         m_Methods[key] = (method, copy);
         AddBody(copy);
 
@@ -433,7 +433,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         foreach (var field in from.Fields)
         {
-            copy.Fields.Add(new FieldDefinition(field.Name, field.Attributes, TypeOf(field.FieldType)));
+            ModuleLock.DeclareMember(copy.Module, copy, new FieldDefinition(field.Name, field.Attributes, TypeOf(field.FieldType)));
         }
 
         // The methods of the type are not declared here: which of them are copied is what the walk of what the type

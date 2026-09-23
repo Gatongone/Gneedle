@@ -25,7 +25,7 @@ internal class EnumHandler(AssemblyHandler assemblyHandler, TypeDefinition sourc
             Constant = value
         };
         VerifyUnderlyingType(value);
-        Source.Fields.Add(field);
+        ModuleLock.DeclareMember(Source.Module, Source, field);
     }
 
     /// <inheritdoc/>

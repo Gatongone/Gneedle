@@ -16,9 +16,13 @@ namespace Gneedle.Inject;
 /// rather than at each of the places which import, and the writes which are not an import - the reference of the
 /// standard which the importer of Cecil appends from inside an import, the references which an assembly is appended and
 /// dropped by, and the types which a weave declares and takes away - take the same lock where they stand.<para/>
-/// The members which a type declares are not among those two tables, and the weaving adds one to a type of the module
-/// without this lock, as it always has: what is held here is what tells one type from another, and a member is named
-/// within the type which declares it rather than by the module.
+/// The members which a type declares are not among those two tables, because a member is named within the type which
+/// declares it rather than by the module: what is held there is what tells one type from another, and a lookup of a
+/// member walks that type alone. The <em>write</em> of one is held here all the same, and what it is held for is not
+/// what a name is told by but what the framework allows: the members of a type are collections of Cecil like the tables
+/// above, and two threads which append to one of them at the same time write over the entry of the other - the append
+/// throws from inside the collection, which is what a type whose members four threads were adding to at once was
+/// answered with before this held it.
 /// </summary>
 /// <remarks>
 /// The lock is of one module rather than of the whole library, so that the weavings of two assemblies, which are two
@@ -117,6 +121,51 @@ internal static class ModuleLock
     internal static void DeclareNested(ModuleDefinition module, TypeDefinition declaring, TypeDefinition type)
     {
         lock (Of(module)) declaring.NestedTypes.Add(type);
+    }
+
+    /// <summary>
+    /// Append a member which a type declares to that type, under the lock of the module which declares it.<para/>
+    /// A type which no module holds is one which the chain which describes it has not appended yet, and it is built
+    /// beside the module rather than in it: nothing but the thread which holds it can reach it, so there is nothing for
+    /// the lock to hold and the member is appended as it stands. The module is named by the caller rather than read off
+    /// the type because the type of such a chain is exactly the one which has none to read.
+    /// </summary>
+    /// <param name="module">The module which declares the type, or null while it declares none.</param>
+    /// <param name="type">The type which the member is appended to.</param>
+    /// <param name="method">The method which is appended.</param>
+    internal static void DeclareMember(ModuleDefinition? module, TypeDefinition type, MethodDefinition method)
+    {
+        if (module is null)
+        {
+            type.Methods.Add(method);
+            return;
+        }
+
+        lock (Of(module)) type.Methods.Add(method);
+    }
+
+    /// <inheritdoc cref="DeclareMember(ModuleDefinition, TypeDefinition, MethodDefinition)"/>
+    internal static void DeclareMember(ModuleDefinition? module, TypeDefinition type, FieldDefinition field)
+    {
+        if (module is null)
+        {
+            type.Fields.Add(field);
+            return;
+        }
+
+        lock (Of(module)) type.Fields.Add(field);
+    }
+
+    /// <inheritdoc cref="DeclareMember(ModuleDefinition, TypeDefinition, MethodDefinition)"/>
+    internal static void DeclareMember(ModuleDefinition? module, TypeDefinition type, PropertyDefinition property)
+    {
+        if (module is null)
+        {
+            type.Properties.Add(property);
+            return;
+        }
+
+        lock (Of(module)) type.Properties.Add(property);
     }
 
     /// <summary>

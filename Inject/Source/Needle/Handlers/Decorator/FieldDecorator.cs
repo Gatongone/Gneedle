@@ -72,7 +72,7 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
         var fieldType = m_TypeHandler.AssemblyHandler.ResolveParameterType(m_TypeHandler.Source, m_FieldType);
         var attrs = m_FieldFlags.ToFieldAttributes();
         var fieldDef = new FieldDefinition(m_FieldName, attrs, fieldType);
-        m_TypeHandler.Source.Fields.Add(fieldDef);
+        ModuleLock.DeclareMember(m_TypeHandler.Source.Module, m_TypeHandler.Source, fieldDef);
 
         m_Handler = new FieldHandler(fieldDef, m_TypeHandler);
         return m_Handler;
