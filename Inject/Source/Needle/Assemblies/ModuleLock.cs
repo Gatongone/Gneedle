@@ -169,6 +169,39 @@ internal static class ModuleLock
     }
 
     /// <summary>
+    /// Take a member which a type declares back off it, under the lock of the module which declares it, which is the
+    /// write which undoes <see cref="DeclareMember(ModuleDefinition, TypeDefinition, MethodDefinition)"/>.<para/>
+    /// A member which was appended under the lock is one which is taken away under it as well, and for the reason it
+    /// was appended under it: what is held is the write of a collection of the module, and a removal is one of those
+    /// as much as an append. A lock which held one and not the other would be one which held nothing.
+    /// </summary>
+    /// <param name="module">The module which declares the type, or null where none declares it.</param>
+    /// <param name="type">The type which the member is taken off.</param>
+    /// <param name="method">The method which is taken away.</param>
+    internal static void UndeclareMember(ModuleDefinition? module, TypeDefinition type, MethodDefinition method)
+    {
+        if (module is null)
+        {
+            type.Methods.Remove(method);
+            return;
+        }
+
+        lock (Of(module)) type.Methods.Remove(method);
+    }
+
+    /// <inheritdoc cref="UndeclareMember(ModuleDefinition, TypeDefinition, MethodDefinition)"/>
+    internal static void UndeclareMember(ModuleDefinition? module, TypeDefinition type, InterfaceImplementation implementation)
+    {
+        if (module is null)
+        {
+            type.Interfaces.Remove(implementation);
+            return;
+        }
+
+        lock (Of(module)) type.Interfaces.Remove(implementation);
+    }
+
+    /// <summary>
     /// Take a type which the module declares back off the type which declares it, under the lock of that module,
     /// which is the write which undoes <see cref="DeclareNested"/>.
     /// </summary>
