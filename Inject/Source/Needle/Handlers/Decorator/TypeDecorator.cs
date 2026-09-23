@@ -76,7 +76,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
 
         switch (type)
         {
-            case null:                              throw new NullReferenceException(nameof(type));
+            case null:                              throw new WeavingException(string.Format(ErrorMessages.TYPE_IS_NULL, nameof(type)));
             case {IsValueType              : true}: throw new WeavingException(ErrorMessages.TYPE_IS_VALUE_TYPE);
             case {IsSealed                 : true}: throw new WeavingException(ErrorMessages.TYPE_IS_SEALED);
             case {IsInterface              : true}: throw new WeavingException(ErrorMessages.TYPE_IS_INTERFACE);
@@ -116,7 +116,7 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
 
         switch (type)
         {
-            case null:                               throw new NullReferenceException(nameof(type));
+            case null:                               throw new WeavingException(string.Format(ErrorMessages.TYPE_IS_NULL, nameof(type)));
             case {IsInterface              : false}: throw new WeavingException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
             case {ContainsGenericParameters: true}:  throw new WeavingException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
         }
@@ -315,7 +315,7 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
 
         switch (type)
         {
-            case null:                               throw new NullReferenceException(nameof(type));
+            case null:                               throw new WeavingException(string.Format(ErrorMessages.TYPE_IS_NULL, nameof(type)));
             case {IsInterface              : false}: throw new WeavingException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
             case {ContainsGenericParameters: true}:  throw new WeavingException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
         }

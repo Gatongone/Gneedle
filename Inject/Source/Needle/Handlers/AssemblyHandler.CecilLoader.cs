@@ -15,6 +15,9 @@ partial class AssemblyHandler
     {
         switch (parameterType)
         {
+            // A null names no type, and it is read before the kinds are, because the reading of a kind which is none of
+            // them names the type of the value it was given: a null has no type for that to name.
+            case null: throw new WeavingException(string.Format(ErrorMessages.TYPE_IS_NULL, nameof(parameterType)));
             case NongenericType nongenericType:
                 // A token stands for a generic parameter of the target type or of the method, so it is parsed before
                 // GetCecilType. GetCecilType would append a Gneedle.Inject assembly reference to the target module,
@@ -42,7 +45,10 @@ partial class AssemblyHandler
                 // Create generic instance.
                 var module = Assembly.Source.MainModule;
                 return ModuleLock.Import(module, parameterTypeDef.Definition).MakeGenericInstanceType(arguments);
-            default: throw new ArgumentOutOfRangeException(nameof(parameterType));
+            // The three kinds of a type are the ones this library builds and the only ones anything here reads, and the
+            // interface is one a caller can implement: a kind which is none of them is refused by name rather than
+            // reported as the fault of the framework, which is what an argument out of range is read as.
+            default: throw new WeavingException(string.Format(ErrorMessages.TYPE_IS_OF_A_KIND_WHICH_IS_NOT_ONE, parameterType.GetType().FullName));
         }
     }
 
