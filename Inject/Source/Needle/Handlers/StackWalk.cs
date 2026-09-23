@@ -32,8 +32,10 @@ internal static class StackWalk
     /// The accessor of another placeholder may stand between the two, and it is the one which its own value is the
     /// receiver of: the values which the instructions between push and take off the stack are counted, and the accessor
     /// which is looked for is the one which is reached with exactly as many values above the placeholder's own as it
-    /// takes arguments. An instruction whose count the walk cannot tell ends it, and what the first accessor of the body
-    /// is stands for the one which was looked for.
+    /// takes arguments. An instruction whose count the walk cannot tell ends the weaving by name rather than with the
+    /// accessor of another value, and a value which was taken off the stack by an instruction which is not an accessor
+    /// is a handle the template holds in a local: what the first accessor of the body is stands for the one which was
+    /// looked for then, because what the reads of that local stand for is what the caller reads.
     /// </summary>
     /// <param name="bodyInstructions">The instruction collection to search.</param>
     /// <param name="startIndex">The index of the instruction which follows the call which pushed the value.</param>
@@ -89,7 +91,8 @@ internal static class StackWalk
     /// of: the values which the instructions between push and take off the stack are counted, and the accessor which is
     /// looked for is the one which is reached with exactly as many values above the value which is looked for as it
     /// takes arguments. An instruction whose count the walk cannot tell, or one which takes the value itself off the
-    /// stack, ends it and nothing is answered.
+    /// stack, ends it and nothing is answered by it: the two are told apart by the caller, which reads the reads of the
+    /// local a value which was taken off the stack is held in.
     /// </summary>
     /// <param name="bodyInstructions">The instruction collection to search.</param>
     /// <param name="startIndex">The index of the instruction which follows the one which pushed the value.</param>
@@ -635,7 +638,9 @@ internal static class StackWalk
     /// <param name="ins">The instruction which is read.</param>
     /// <param name="targetDef">The template which the instruction belongs to.</param>
     /// <param name="type">The type of the value which the instruction leaves, or null when it leaves none.</param>
-    /// <returns>Whether the instruction leaves a value on the stack, <see cref="Void"/> being none.</returns>
+    /// <returns>Whether the instruction leaves a value on the stack, <see cref="Void"/> being none. The answer and the
+    /// type are one: a true one is a type which is there, so a caller reads the type rather than checking the answer it
+    /// has already been given.</returns>
     internal static bool TryGetStackType(ParseContext context, Instruction ins, MethodDefinition targetDef, out TypeReference? type)
     {
         var module = context.Module;
