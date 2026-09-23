@@ -135,6 +135,28 @@ public partial class PointerTests
     }
 
     [Test]
+    public void A_Member_Which_A_Template_Invokes_In_A_Handler_Which_Names_Its_Exception_Is_Called_There()
+    {
+        // The value which the first instruction of the handler stores is the exception which the runtime hands over
+        // rather than one which an instruction of the body pushed, so the walk of the arguments reaches that store with
+        // nothing on the stack which it holds: what it takes off there has to answer for the store the way a value the
+        // body pushed does, and the store is not what the walk reads the invocation by.
+        var host = NewRunnableGenericHost("GenericMemberInTheNamedHandlerAssembly");
+        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
+            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            MethodFlags.Public);
+        method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInTheHandlerWhichNamesItsException)));
+
+        var body = ((MethodHandler) method).Source.Body;
+        Assert.Multiple(() =>
+        {
+            Assert.That(body.Instructions.Any(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "Add"), Is.True,
+                "the member is not called where the delegate was invoked.");
+            Assert.That(body.ExceptionHandlers, Is.Not.Empty, "the region which the template protects was not carried.");
+        });
+    }
+
+    [Test]
     public void A_Member_Which_A_Template_Invokes_In_The_Handler_Of_A_Region_Is_Called_There()
     {
         // The symbol stands in the handler rather than in the region, so the beginning of the handler is a place the
