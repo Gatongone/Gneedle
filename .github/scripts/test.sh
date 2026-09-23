@@ -11,6 +11,13 @@
 # passed after it are a run which failed.
 set -euo pipefail
 
+# Every framework which every project of the tree names, which the runs below do not build: a test project is built for
+# the frameworks it names, and a project which it refers to is built for the one of those which the reference takes, so
+# netstandard2.1 - the framework a Unity project reaches both packages through - is built by none of them. What the
+# comment in the test project of the weaver says is that a build of it which does not compile is a build which fails,
+# and until this line stood here there was no build of it at all.
+dotnet build Gneedle.sln -c Release
+
 # The tests of the weaver, built and run for every framework the project names, which is net5.0 and net472.
 dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -c Release
 

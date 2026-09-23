@@ -3,6 +3,6 @@
     "version": "11.0.100-rc.1.26425.128",
     "rollForward": "latestMajor",
     "allowPrerelease": true,
-    "errorMessage": "This tree is written for the language of C# 14 and is built with the .NET 11 SDK. Install it, or a later one, and build again."
+    "errorMessage": "This tree is written for the language of C# 15 and is built with the .NET 11 SDK. Install it, or a later one, and build again."
   }
 }
