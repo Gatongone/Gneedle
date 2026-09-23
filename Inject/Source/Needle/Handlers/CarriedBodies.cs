@@ -243,8 +243,8 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
     /// <summary>
     /// Append the copies to the type which is woven: the nested ones under the lock of the module, which is the write
-    /// which makes them types of the module, and the members among the members of that type, which are appended without
-    /// it as every other member the weaving adds is.
+    /// which makes them types of the module, and the members among the members of that type, under the same lock,
+    /// which is the one every other member the weaving adds is appended under.
     /// </summary>
     internal void Attach()
     {
@@ -272,7 +272,7 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         foreach (var copy in m_MemberCopies)
         {
-            into.Methods.Remove(copy);
+            ModuleLock.UndeclareMember(into.Module, into, copy);
         }
     }
 

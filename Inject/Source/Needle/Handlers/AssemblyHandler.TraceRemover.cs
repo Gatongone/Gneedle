@@ -187,7 +187,10 @@ partial class AssemblyHandler
     {
         for (var index = type.Interfaces.Count - 1; index >= 0; index--)
         {
-            if (Array.IndexOf(InjectorInterfaces.AllNames, type.Interfaces[index].InterfaceType.FullName) >= 0) type.Interfaces.RemoveAt(index);
+            if (Array.IndexOf(InjectorInterfaces.AllNames, type.Interfaces[index].InterfaceType.FullName) >= 0)
+            {
+                ModuleLock.UndeclareMember(type.Module, type, type.Interfaces[index]);
+            }
         }
 
         for (var index = type.Methods.Count - 1; index >= 0; index--)
@@ -196,7 +199,7 @@ partial class AssemblyHandler
             if (method.Name != INJECT_METHOD || method.Parameters.Count != 2) continue;
             if (NamesTheMethod(module, method)) continue;
 
-            type.Methods.RemoveAt(index);
+            ModuleLock.UndeclareMember(type.Module, type, method);
         }
     }
 
