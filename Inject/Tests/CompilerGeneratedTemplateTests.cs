@@ -163,6 +163,18 @@ public static class CompilerGeneratedTemplates
     }
 
     /// <summary>
+    /// A template which holds a local function whose own parameter is constrained to itself, so that the body of the
+    /// member the compiler wrote names a type of that parameter rather than a type of an assembly: the constraint is
+    /// the parameter applied to itself, which no module outside the one it was written in holds a type for.
+    /// </summary>
+    public static int ConstrainsItsParameterToItself(int value)
+    {
+        return Larger(value, value + 1);
+
+        static T Larger<T>(T left, T right) where T : IComparable<T> => left.CompareTo(right) > 0 ? left : right;
+    }
+
+    /// <summary>
     /// A template which holds an anonymous object, whose type the compiler writes at the top level of the assembly
     /// rather than beside the template, so that the carrying does not read it and the weaving refuses it.
     /// </summary>
@@ -636,8 +648,7 @@ public class CompilerGeneratedTemplateTests
             .SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Twice)));
 
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
-        var refusal = Assert.Throws<ArgumentException>(
-            () => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.ReachesAnInstanceMemberFromALambda))));
+        var refusal = Assert.Throws<ArgumentException>(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.ReachesAnInstanceMemberFromALambda))));
 
         Assert.That(refusal!.Message, Does.Contain("can reach no instance of the member being woven"),
             $"the refusal does not say that the body reaches no instance: {refusal.Message}");
@@ -756,8 +767,7 @@ public class CompilerGeneratedTemplateTests
         var (_, host, _) = NewHost($"CompilerGeneratedRefusedAfterTheCarrying{Guid.NewGuid():N}");
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(
-            () => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.HoldsALambdaAndNamesASecondParameter))));
+        var thrown = Assert.Throws<ArgumentException>(() => run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.HoldsALambdaAndNamesASecondParameter))));
 
         Assert.Multiple(() =>
         {
@@ -782,6 +792,18 @@ public class CompilerGeneratedTemplateTests
         // instantiation the template names rather than the open member. What it computes tells a call which reached
         // the instantiation from one which reached the open member, which is a body the runtime refuses to run.
         Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericLocalFunction)),
+                typeof(int).ToGneedleType(), OneValue, 41),
+            Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
+    }
+
+    [Test]
+    public void A_Template_Whose_Local_Function_Constrains_Its_Parameter_To_Itself_Is_Woven_And_Run()
+    {
+        // The constraint of the parameter is the parameter itself, which is what makes the body of the copy name a type
+        // no module outside the one it was written in holds: the copy declares the parameter, and every reference to it
+        // in the body of the copy names the copy of it. A member whose signature names a type of a parameter of its own
+        // is one which the carrying has to write rather than import as it stands.
+        Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.ConstrainsItsParameterToItself)),
                 typeof(int).ToGneedleType(), OneValue, 41),
             Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
@@ -831,7 +853,7 @@ public class CompilerGeneratedTemplateTests
     private static string[] Strays(AssemblyDefinition read, string type)
         => read.MainModule.GetType(type)!.NestedTypes
                .SelectMany(copy => copy.Fields.Select(field => field.FieldType)
-                                      .Concat(copy.Methods.SelectMany(method => method.Body.Variables.Select(variable => variable.VariableType))))
+                                       .Concat(copy.Methods.SelectMany(method => method.Body.Variables.Select(variable => variable.VariableType))))
                .Select(reference => reference.Resolve())
                .Where(declared => declared?.DeclaringType?.FullName == TEMPLATES_TYPE)
                .Select(declared => declared!.FullName)
@@ -1024,7 +1046,7 @@ public class CompilerGeneratedTemplateTests
         // template at the copies would leave it naming a private type of another one, which the runtime refuses to run,
         // and a second weave of the same template would read what the first one wrote.
         Assert.That(AssemblyLoader.LoadFromBytes(result).GetType(TEMPLATES_TYPE)!
-                        .GetMethod(nameof(CompilerGeneratedTemplates.RunsACapturingLambda))!.Invoke(null, [41]),
+                                  .GetMethod(nameof(CompilerGeneratedTemplates.RunsACapturingLambda))!.Invoke(null, [41]),
             Is.EqualTo(42), "the body of the template was written to, so what it names is a type it cannot reach.");
     }
 
