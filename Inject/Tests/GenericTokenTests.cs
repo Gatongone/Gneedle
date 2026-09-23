@@ -191,7 +191,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_10));
 
-        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
     }
 
     [Test]
@@ -212,7 +212,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_1));
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        var thrown = Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
         Assert.That(thrown.Message, Does.Contain("T_1"), "the message does not name the token which was read.");
         Assert.That(thrown.Message, Does.Contain(host.Source.FullName), "the message does not name the type which holds the parameters the token was counted on.");
     }
@@ -225,7 +225,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_20));
 
-        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
     }
 
     #endregion
@@ -260,7 +260,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_0));
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        var thrown = Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
         Assert.That(thrown.Message, Does.Contain("M_0"), "the message does not name the token which was read.");
         Assert.That(thrown.Message, Does.Contain(method.Source.FullName), "the message does not name the member which holds the parameters the token was counted on.");
     }
@@ -285,7 +285,7 @@ public class GenericTokenTests
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_10));
 
-        Assert.Throws<ArgumentException>(() => method.ParseReturnType(token));
+        Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
     }
 
     #endregion
@@ -312,7 +312,7 @@ public class GenericTokenTests
         var host = NewHost();
         var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
 
-        Assert.Throws<ArgumentException>(() => method.SetBody(Template(nameof(Templates.ReturnSecondTypeGeneric))));
+        Assert.Throws<WeavingException>(() => method.SetBody(Template(nameof(Templates.ReturnSecondTypeGeneric))));
     }
 
     #endregion
@@ -639,7 +639,7 @@ public class GenericTokenTests
         var host = NewConstrainedHost();
         var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiverUnwrapped))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiverUnwrapped))));
 
         Assert.That(thrown!.Message, Does.Contain("Name"));
     }
@@ -694,7 +694,7 @@ public class GenericTokenTests
     {
         var host = NewHost("T0");
 
-        Assert.Throws<ArgumentException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
+        Assert.Throws<WeavingException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
             MethodFlags.Public));
     }
 

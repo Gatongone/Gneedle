@@ -69,7 +69,7 @@ internal static class TokenParsing
     /// <param name="methodParameters">Generic parameters of the method.</param>
     /// <param name="parameter">The generic parameter which the token stands for.</param>
     /// <returns>Whether the <paramref name="type"/> is a token which could be resolved.</returns>
-    /// <exception cref="ArgumentException">Thrown when the token names a generic parameter at a position which neither the type being woven nor the method declares.</exception>
+    /// <exception cref="WeavingException">Thrown when the token names a generic parameter at a position which neither the type being woven nor the method declares.</exception>
     internal static bool TryResolveGenericParameter(Type type, IMemberDefinition? typeProvider, IEnumerable<GenericParameter>? methodParameters,
                                                     out GenericParameter? parameter)
     {
@@ -83,7 +83,7 @@ internal static class TokenParsing
             if (parameters == null) return false;
             if (index > parameters.Length - 1)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", type.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", type.FullName));
             }
 
             parameter = parameters[index];
@@ -100,7 +100,7 @@ internal static class TokenParsing
         if (typeDef == null) return false;
         if (index > typeDef.GenericParameters.Count - 1)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
         }
 
         parameter = typeDef.GenericParameters[index];
@@ -116,7 +116,7 @@ internal static class TokenParsing
         /// <param name="provider">GenericParameters provider.</param>
         /// <param name="parameter">The generic parameter from type or method definition.</param>
         /// <returns>Whether the <c>typeReference</c> could passer as GenericParameter.</returns>
-        /// <exception cref="ArgumentException">Thrown when the <c>typeReference</c> names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
+        /// <exception cref="WeavingException">Thrown when the <c>typeReference</c> names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal bool TryGetParsedGenericParameter(IMemberDefinition provider, out GenericParameter? parameter)
             =>
                 typeReference.TryGetParsedGenericParameter(provider, out parameter, out _, out _);
@@ -129,7 +129,7 @@ internal static class TokenParsing
         /// <param name="index">The generic parameter index.</param>
         /// <param name="isFromMethod">Is the generic type from the method or from the method's declaring type.</param>
         /// <returns>Whether the <c>typeReference</c> could passer as GenericParameter.</returns>
-        /// <exception cref="ArgumentException">Thrown when the <c>typeReference</c> names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
+        /// <exception cref="WeavingException">Thrown when the <c>typeReference</c> names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal bool TryGetParsedGenericParameter(IMemberDefinition provider, out GenericParameter? parameter, out int index, out bool isFromMethod)
         {
             parameter = null;
@@ -149,7 +149,7 @@ internal static class TokenParsing
                 var typeParameters = typeDef.GenericParameters;
                 if (index > typeParameters.Count - 1)
                 {
-                    throw new ArgumentException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
+                    throw new WeavingException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'T_{index}'", typeDef.FullName));
                 }
 
                 parameter = typeParameters[index];
@@ -161,7 +161,7 @@ internal static class TokenParsing
             var methodParameters = methodDef.GenericParameters;
             if (index > methodParameters.Count - 1)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", methodDef.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.GENERIC_PARAMETER_OUT_OF_RANGE, $"'M_{index}'", methodDef.FullName));
             }
 
             parameter = methodParameters[index];
@@ -178,7 +178,7 @@ internal static class TokenParsing
         /// <returns>
         /// The type reference without any token. It is the generic parameter of the <c>provider</c> itself when the type reference is a token.
         /// </returns>
-        /// <exception cref="ArgumentException">Thrown when a token of the type names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
+        /// <exception cref="WeavingException">Thrown when a token of the type names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal TypeReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
         {
             // A type specification wraps another type, and the FullName of a wrapper which holds no affix
@@ -290,7 +290,7 @@ internal static class TokenParsing
         /// <param name="provider">GenericParameters provider.</param>
         /// <param name="module">The module which the method reference belongs to.</param>
         /// <returns>The <c>methodReference</c> with all its tokens parsed.</returns>
-        /// <exception cref="ArgumentException">Thrown when a token of the reference names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
+        /// <exception cref="WeavingException">Thrown when a token of the reference names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal MethodReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
         {
             // The declaring type of an instantiation of a method belongs to the method which it instantiates rather than
@@ -333,7 +333,7 @@ internal static class TokenParsing
         /// <param name="provider">GenericParameters provider.</param>
         /// <param name="module">The module which the field reference belongs to.</param>
         /// <returns>The <c>fieldReference</c> with all its tokens parsed.</returns>
-        /// <exception cref="ArgumentException">Thrown when a token of the reference names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
+        /// <exception cref="WeavingException">Thrown when a token of the reference names a generic parameter at a position which the <c>provider</c> does not declare.</exception>
         internal FieldReference ParseGenericTokens(IMemberDefinition provider, ModuleDefinition module)
         {
             fieldReference.DeclaringType = fieldReference.DeclaringType.ParseGenericTokens(provider, module);

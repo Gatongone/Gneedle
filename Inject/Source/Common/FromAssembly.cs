@@ -31,14 +31,14 @@ internal static class FromAssembly
     /// <param name="assemblyName">Name of the assembly which declares the type.</param>
     /// <param name="typeFullName">Full name of the type, which names a nested type as <c>Namespace.Outer/Namespace.Inner</c>.</param>
     /// <returns>The definition of the type.</returns>
-    /// <exception cref="ArgumentException">Thrown when the assembly or the type can't be resolved.</exception>
+    /// <exception cref="WeavingException">Thrown when the assembly or the type can't be resolved.</exception>
     internal static TypeDefinition ResolveTypeFromAssembly(ModuleDefinition module, string assemblyName, string typeFullName)
     {
         // The target assembly does not reference itself, so it is looked up in the module itself.
         if (IsSameAssembly(module.Assembly.Name, assemblyName))
         {
             return FindType(module, typeFullName)
-                ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FROM_ASSEMBLY_TYPE, typeFullName, assemblyName));
+                ?? throw new WeavingException(string.Format(ErrorMessages.INVALID_FROM_ASSEMBLY_TYPE, typeFullName, assemblyName));
         }
 
         // The target may not reference the assembly yet, so a reference is made up when none matches and the resolver is
@@ -50,21 +50,21 @@ internal static class FromAssembly
         try
         {
             assembly = module.AssemblyResolver?.Resolve(reference)
-                ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FROM_ASSEMBLY_ASSEMBLY, assemblyName));
+                ?? throw new WeavingException(string.Format(ErrorMessages.INVALID_FROM_ASSEMBLY_ASSEMBLY, assemblyName));
         }
         catch (AssemblyResolutionException)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_FROM_ASSEMBLY_ASSEMBLY, assemblyName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_FROM_ASSEMBLY_ASSEMBLY, assemblyName));
         }
 
         // A cycle reference cannot be represented in metadata, which is rejected as well when a reference is appended.
         if (assembly.MainModule.AssemblyReferences.Any(name => name.FullName.Equals(module.Assembly.FullName)))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, module.Assembly.FullName, assembly.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, module.Assembly.FullName, assembly.FullName));
         }
 
         return FindType(assembly.MainModule, typeFullName)
-            ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FROM_ASSEMBLY_TYPE, typeFullName, assemblyName));
+            ?? throw new WeavingException(string.Format(ErrorMessages.INVALID_FROM_ASSEMBLY_TYPE, typeFullName, assemblyName));
     }
 
     /// <summary>
@@ -108,7 +108,7 @@ internal static class FromAssembly
         /// <param name="module">The module which the real type is looked up in.</param>
         /// <param name="definition">The definition of the real type.</param>
         /// <returns>Whether the reference stands for a type of another assembly.</returns>
-        /// <exception cref="ArgumentException">Thrown when the assembly or the type which the attribute names can't be resolved.</exception>
+        /// <exception cref="WeavingException">Thrown when the assembly or the type which the attribute names can't be resolved.</exception>
         internal bool TryGetFromAssemblyDefinition(ModuleDefinition module, out TypeDefinition? definition)
         {
             definition = null;
@@ -143,7 +143,7 @@ internal static class FromAssembly
         /// </summary>
         /// <param name="module">The module which the real type is looked up in.</param>
         /// <returns>The definition which the reference points to.</returns>
-        /// <exception cref="ArgumentException">Thrown when the assembly or the type which the attribute names can't be resolved.</exception>
+        /// <exception cref="WeavingException">Thrown when the assembly or the type which the attribute names can't be resolved.</exception>
         internal TypeDefinition ResolveDefinition(ModuleDefinition module)
             => typeReference.TryGetFromAssemblyDefinition(module, out var definition) ? definition! : typeReference.Resolve();
     }

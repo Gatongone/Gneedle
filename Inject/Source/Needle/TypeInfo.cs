@@ -58,11 +58,11 @@ public sealed class NongenericType : IType
     /// Create a non-generic type from system type.
     /// </summary>
     /// <param name="type">System type with non generic.</param>
-    /// <exception cref="ArgumentException">Thrown when the <c>type</c> is type.</exception>
+    /// <exception cref="WeavingException">Thrown when the <c>type</c> is type.</exception>
     public NongenericType(Type type)
     {
         if (type.IsGenericType)
-            throw new ArgumentException(string.Format(ErrorMessages.IS_NOT_NON_GENERIC_PARAMETER_TYPE, type.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.IS_NOT_NON_GENERIC_PARAMETER_TYPE, type.FullName));
         Type = type;
     }
 
@@ -114,7 +114,7 @@ public sealed class GenericType : IType
     /// without a list of arguments rather than with an empty one.
     /// </remarks>
     /// <param name="type">Generic type definition, or a generic type which holds the arguments of it.</param>
-    /// <exception cref="ArgumentException">Thrown when the <c>type</c> is not generic type.</exception>
+    /// <exception cref="WeavingException">Thrown when the <c>type</c> is not generic type.</exception>
     public GenericType(Type type) : this(type, [.. type.GetGenericArguments().Select(argument => argument.ToGneedleType())]) { }
 
     /// <summary>
@@ -155,10 +155,10 @@ public sealed class GenericType : IType
     /// </summary>
     /// <param name="type">Generic type definition.</param>
     /// <param name="genericArguments">Generic arguments.</param>
-    /// <exception cref="ArgumentException">Thrown when the <c>type</c> is not generic type.</exception>
+    /// <exception cref="WeavingException">Thrown when the <c>type</c> is not generic type.</exception>
     public GenericType(Type type, params IType[] genericArguments)
     {
-        if (!type.IsGenericType) throw new ArgumentException(string.Format(ErrorMessages.IS_NOT_PARAMETERIZED_GENERIC_TYPE, type.FullName));
+        if (!type.IsGenericType) throw new WeavingException(string.Format(ErrorMessages.IS_NOT_PARAMETERIZED_GENERIC_TYPE, type.FullName));
         Type             = type.GetGenericTypeDefinition();
         GenericArguments = genericArguments;
     }
@@ -244,9 +244,9 @@ public static class TypeInfoExtensions
     /// <param name="type">Raw type.</param>
     /// <param name="genericParameters">Generic parameter names.</param>
     /// <returns>Generic type definition.</returns>
-    /// <exception cref="ArgumentException">Thrown when type is not generic.</exception>
+    /// <exception cref="WeavingException">Thrown when type is not generic.</exception>
     public static GenericType WithGenericParameter(this Type type, params string[] genericParameters) => !type.IsGenericType
-        ? throw new ArgumentException(ErrorMessages.TYPE_IS_NOT_GENERIC)
+        ? throw new WeavingException(ErrorMessages.TYPE_IS_NOT_GENERIC)
         : new GenericType(type, genericParameters);
 
     /// <summary>
@@ -261,9 +261,9 @@ public static class TypeInfoExtensions
     /// <param name="type">Raw type.</param>
     /// <param name="genericArguments">Generic argument types.</param>
     /// <returns>Generic type definition.</returns>
-    /// <exception cref="ArgumentException">Thrown when type is not generic.</exception>
+    /// <exception cref="WeavingException">Thrown when type is not generic.</exception>
     public static GenericType WithGenericParameter(this Type type, params Type[] genericArguments) => !type.IsGenericType
-        ? throw new ArgumentException(ErrorMessages.TYPE_IS_NOT_GENERIC)
+        ? throw new WeavingException(ErrorMessages.TYPE_IS_NOT_GENERIC)
         : new GenericType(type, genericArguments);
 
     /// <summary>

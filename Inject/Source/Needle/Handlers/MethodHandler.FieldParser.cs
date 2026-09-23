@@ -38,7 +38,7 @@ partial class MethodHandler
     /// <param name="filter">The final instruction's container.</param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
     /// <exception cref="InvalidILException">Thrown when the instructions around the name of the member are not the call which it stands for.</exception>
-    /// <exception cref="ArgumentException">Thrown when the field is invalid.</exception>
+    /// <exception cref="WeavingException">Thrown when the field is invalid.</exception>
     private void ParseField(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         // Can't convert 'callvirt' to `Ldstr {field_name}`, because it doesn't even exist.
@@ -95,11 +95,11 @@ partial class MethodHandler
                 // sequence which leads to the name of it is what names that type: a sequence which the weaving does not
                 // recognize names none, so the name is refused rather than looked up on the member being woven, which
                 // holds a field of that name by coincidence at most.
-                ? DeclaringTypeHandler.AssemblyHandler.GetFieldFromType(declaringTypeFromPattern ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName)), memberName)
+                ? DeclaringTypeHandler.AssemblyHandler.GetFieldFromType(declaringTypeFromPattern ?? throw new WeavingException(string.Format(ErrorMessages.INVALID_FIELD, memberName)), memberName)
                 : DeclaringTypeHandler.GetFieldInThisOrABaseType(memberName);
         if (field == null)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_FIELD, memberName));
         }
 
         // The field is reached through the type which the sequence named, which is the member being woven for the
@@ -111,7 +111,7 @@ partial class MethodHandler
         var heldAccessors = held is { } handle ? StackWalk.AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
         if (held != null && heldAccessors == null)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
         }
 
         var declaringType = declaringTypeFromPattern ?? DeclaringTypeHandler.Source;
@@ -136,7 +136,7 @@ partial class MethodHandler
         // of the local could be written as it.
         if (heldAccessors != null && instanceIsComputed && !isStatic)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
         }
 
         // The array which carried the value of the instance is dropped, because what the field is reached through is the

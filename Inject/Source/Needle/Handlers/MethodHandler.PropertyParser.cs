@@ -38,7 +38,7 @@ partial class MethodHandler
     /// <param name="filter">The final instruction's container.</param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
     /// <exception cref="InvalidILException">Thrown when the instructions around the name of the member are not the call which it stands for.</exception>
-    /// <exception cref="ArgumentException">Thrown when the property is invalid.</exception>
+    /// <exception cref="WeavingException">Thrown when the property is invalid.</exception>
     private void ParseProperty(string memberName, MemberSymbols memberSymbol, int currentIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         if (!StackWalk.TryGetNextGetOrSet(filter.Target, currentIndex + 2, out var isGet, out var callvirtIndex))
@@ -93,11 +93,11 @@ partial class MethodHandler
         var propertyDef = memberSymbol.HasFlag(MemberSymbols.Base)
             ? DeclaringTypeHandler.GetPropertyInBase(memberName)
             : memberSymbol.HasFlag(MemberSymbols.Instance) || memberSymbol.HasFlag(MemberSymbols.Static)
-                ? DeclaringTypeHandler.AssemblyHandler.GetPropertyFromType(declaringTypeFromPattern ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName)), memberName)
+                ? DeclaringTypeHandler.AssemblyHandler.GetPropertyFromType(declaringTypeFromPattern ?? throw new WeavingException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName)), memberName)
                 : DeclaringTypeHandler.GetPropertyInThisOrABaseType(memberName);
         if (propertyDef == null)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_PROPERTY, memberName));
         }
 
         // The accessor which is called is the one which tells whether a receiver is written, because it is the one which
@@ -115,7 +115,7 @@ partial class MethodHandler
         var heldAccessors = held is { } handle ? StackWalk.AccessorsOfAHeldHandle(filter.Target, handle.Local) : null;
         if (held != null && heldAccessors == null)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
         }
 
         // A read of the local stands where it stands and is written as the receiver of the accessor, which is the load of
@@ -123,7 +123,7 @@ partial class MethodHandler
         // read of the local could be written as it.
         if (heldAccessors != null && instanceIsComputed && takesAReceiver)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_HELD_HANDLE, memberName));
         }
 
         // The array which carried the value of the instance is dropped, because what the property is reached through is
@@ -212,7 +212,7 @@ partial class MethodHandler
         // Process property value getting.
         if (isGet)
         {
-            if (propertyDef.GetMethod == null) throw new ArgumentException(string.Format(ErrorMessages.NON_GET_METHOD, propertyDef.Name));
+            if (propertyDef.GetMethod == null) throw new WeavingException(string.Format(ErrorMessages.NON_GET_METHOD, propertyDef.Name));
 
             // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Get(object) -> call instance class {property_type} {declaring_type}::get_{property_name}()
             var getMethod = GetMethodReference(propertyDef.GetMethod, namedInstance);
@@ -221,7 +221,7 @@ partial class MethodHandler
         // Process property value setting.
         else
         {
-            if (propertyDef.SetMethod == null) throw new ArgumentException(string.Format(ErrorMessages.NON_SET_METHOD, propertyDef.Name));
+            if (propertyDef.SetMethod == null) throw new WeavingException(string.Format(ErrorMessages.NON_SET_METHOD, propertyDef.Name));
 
             // callvirt instance void [Gneedle.Inject]Gneedle.Inject.ValuableMember::Set(object) -> call instance class void {declaring_type}::set_{property_name}({property_type})
             var setMethod = GetMethodReference(propertyDef.SetMethod, namedInstance);
@@ -235,9 +235,9 @@ partial class MethodHandler
     /// <param name="propertyDef">The property which is read or written.</param>
     /// <param name="isGet">Whether the value member reads the property rather than writing it.</param>
     /// <returns>The accessor of the property.</returns>
-    /// <exception cref="ArgumentException">Thrown when the property holds no accessor of that kind.</exception>
+    /// <exception cref="WeavingException">Thrown when the property holds no accessor of that kind.</exception>
     private static MethodDefinition AccessorOf(PropertyDefinition propertyDef, bool isGet)
         => isGet
-            ? propertyDef.GetMethod ?? throw new ArgumentException(string.Format(ErrorMessages.NON_GET_METHOD, propertyDef.Name))
-            : propertyDef.SetMethod ?? throw new ArgumentException(string.Format(ErrorMessages.NON_SET_METHOD, propertyDef.Name));
+            ? propertyDef.GetMethod ?? throw new WeavingException(string.Format(ErrorMessages.NON_GET_METHOD, propertyDef.Name))
+            : propertyDef.SetMethod ?? throw new WeavingException(string.Format(ErrorMessages.NON_SET_METHOD, propertyDef.Name));
 }

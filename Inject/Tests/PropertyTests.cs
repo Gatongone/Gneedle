@@ -389,7 +389,7 @@ public class PropertyTests
         // its body would be described, rather than left holding one or reaching Cecil without a body at all.
         var (_, host) = NewHost("PropertyAbstractAssembly");
 
-        var thrown = Assert.Throws<ArgumentException>(() => host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Abstract)
+        var thrown = Assert.Throws<WeavingException>(() => host.AddProperty("Value", PropertyFlags.Public | PropertyFlags.Abstract)
                                                                 .WithType(typeof(int))
                                                                 .WithGetter(DefaultPropertyBody.WithFieldOperation)
                                                                 .GetHandler());

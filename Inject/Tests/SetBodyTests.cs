@@ -374,7 +374,7 @@ public class SetBodyTests
         var method = host.AddMethod("TypeOf", typeof(Type).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
         var captured = typeof(This);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(() => captured));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(() => captured));
 
         Assert.That(thrown!.Message, Does.Contain(captured.FullName!), "the report does not name the type which was captured.");
     }
@@ -438,7 +438,7 @@ public class SetBodyTests
         var method = host.AddMethod("Echo", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
             MethodFlags.Public | MethodFlags.Static);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Sum))!));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Sum))!));
 
         Assert.That(thrown!.Message, Does.Contain("position"));
     }
@@ -744,7 +744,7 @@ public class SetBodyTests
         var body = source.Body;
         var instructions = body.Instructions.ToArray();
 
-        Assert.Throws<ArgumentException>(
+        Assert.Throws<WeavingException>(
             () => method.SetBody(typeof(ConstructTemplates).GetMethod(nameof(ConstructTemplates.HoldsALambdaAndNamesNoMember))!));
 
         // The body is the one the member held rather than a new one which the template wrote what it could into, and
@@ -896,7 +896,7 @@ public class SetBodyTests
         var method = host.AddMethod("Method", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
         // No base type with Method -> should throw
-        Assert.Throws<ArgumentException>(() => method.SetBody(DefaultMethodBody.CallFromBase));
+        Assert.Throws<WeavingException>(() => method.SetBody(DefaultMethodBody.CallFromBase));
     }
 
     #endregion
@@ -952,8 +952,8 @@ public class SetBodyTests
         var handler = new ForeignMethodHandler();
         var captured = 41;
 
-        var body = Assert.Throws<ArgumentException>(() => handler.SetBody(() => captured));
-        var around = Assert.Throws<ArgumentException>(() => handler.AroundBody(() => captured));
+        var body = Assert.Throws<WeavingException>(() => handler.SetBody(() => captured));
+        var around = Assert.Throws<WeavingException>(() => handler.AroundBody(() => captured));
 
         Assert.Multiple(() =>
         {

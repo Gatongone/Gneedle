@@ -154,7 +154,12 @@ public static class Injections
                     // frame of it tells a reader nothing which that message does not. Every other exception is a shape
                     // which the weaver did not expect, which is the fault a reader has the least to find it by: the kind
                     // of the exception and the frame it stands at are written with it.
-                    Report($"Type '{type.FullName}' could not be woven. {(exception is ArgumentException ? exception.Message : exception.ToString())}");
+                    //
+                    // What a refusal is read as is the kind the weaver raises rather than the one of the framework which
+                    // it derives from: an `ArgumentException` is raised by the framework as well - a member which a call
+                    // does not describe, an assembly which a resolver cannot read - and one of those read as a refusal
+                    // would be reported by its message alone, which is the fault the reader has the least to find it by.
+                    Report($"Type '{type.FullName}' could not be woven. {(exception is WeavingException ? exception.Message : exception.ToString())}");
                 }
             }
 

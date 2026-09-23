@@ -11,7 +11,7 @@ partial class MethodHandler
     /// <param name="call">The reference of that call, which names the type the body hands back where it hands one back.</param>
     /// <param name="filter">The final instruction's container.</param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
-    /// <exception cref="ArgumentException">Thrown when the template proceeds without a body being woven around, or when the type which the call hands back is not the one which the member hands back.</exception>
+    /// <exception cref="WeavingException">Thrown when the template proceeds without a body being woven around, or when the type which the call hands back is not the one which the member hands back.</exception>
     private void ParseProceedInvoke(int callIndex, MethodReference call, InstructionFilter filter, MethodDefinition targetDef)
     {
         // The body which was taken over is what the call stands for, and a template which proceeds without one being
@@ -20,7 +20,7 @@ partial class MethodHandler
         // arguments which a body of the compiler's own cannot hand it.
         if (m_ProceedMethod is not { } proceed)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.PROCEED_WITHOUT_AROUND_BODY, nameof(Proceed) + "." + nameof(Proceed.Invoke)));
+            throw new WeavingException(string.Format(ErrorMessages.PROCEED_WITHOUT_AROUND_BODY, nameof(Proceed) + "." + nameof(Proceed.Invoke)));
         }
 
         // The arguments which this call hands over are the arguments of the template, which the member being woven was
@@ -28,7 +28,7 @@ partial class MethodHandler
         // own rather than with them: the call is refused rather than written against values which are not there.
         if (m_CarriedBody is not null)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.PROCEED_IN_A_BODY_OF_ITS_OWN, call.FullName, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.PROCEED_IN_A_BODY_OF_ITS_OWN, call.FullName, Source.FullName));
         }
 
         // The type of the value which the call hands back is written at the call and the type which the member hands
@@ -36,7 +36,7 @@ partial class MethodHandler
         var handedBack = call is GenericInstanceMethod genericCall ? genericCall.GenericArguments[0] : Source.Module.TypeSystem.Void;
         if (!TypeName.HasSameName(handedBack.ParseGenericTokens(Source, Source.Module), Source.ReturnType))
         {
-            throw new ArgumentException(string.Format(ErrorMessages.PROCEED_INVOKE_RETURN_TYPE_MISMATCH, handedBack.FullName, Source.FullName));
+            throw new WeavingException(string.Format(ErrorMessages.PROCEED_INVOKE_RETURN_TYPE_MISMATCH, handedBack.FullName, Source.FullName));
         }
 
         // The receiver of the member comes first where the generated method belongs to an instance, and it is the
@@ -88,7 +88,7 @@ partial class MethodHandler
     /// <param name="filter">The final instruction's container.</param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
     /// <exception cref="InvalidILException">Thrown when the instructions around the name of the member are not the call which it stands for.</exception>
-    /// <exception cref="ArgumentException">Thrown when the method is invalid.</exception>
+    /// <exception cref="WeavingException">Thrown when the method is invalid.</exception>
     private void ParseMethod(string memberName, MemberSymbols memberSymbol, int callIndex, int? nameIndex, InstructionFilter filter, MethodDefinition targetDef)
     {
         if ((filter.Target[callIndex].Operand as GenericInstanceMethod)?.GenericArguments.FirstOrDefault() is not { } delegateRef)
@@ -149,7 +149,7 @@ partial class MethodHandler
         var methodDef = GetMethod(memberSymbol, memberName, nameIndex ?? callIndex, filter, parameters, returnType, targetDef, out var namedInstance);
         if (methodDef == null)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
+            throw new WeavingException(string.Format(ErrorMessages.INVALID_METHOD, memberName));
         }
 
         // What the delegate says the member is instantiated with is read out of the signature which it describes it
@@ -183,7 +183,7 @@ partial class MethodHandler
             // left to a rule which would write a call of another member than the one the delegate described.
             if (arguments == null && methodDef.GenericParameters.Count > 0 && methodDef.SameWith(parameters, null, out _))
             {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_SIGNATURE, methodDef.FullName, Source.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_SIGNATURE, methodDef.FullName, Source.FullName));
             }
 
             // The value which the member hands back is the one which the call of it leaves where the symbol stood, so the
@@ -200,7 +200,7 @@ partial class MethodHandler
                 || (memberHandsBack && methodDef.GenericParameters.Count == 0
                     && !StackWalk.TheSameValueIsHandedBack(Source.Module, methodDef.ReturnType.WithTheArgumentsOf(methodDef.DeclaringType, declaringInstance), returnType)))
             {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_MEMBER_RETURN_TYPE, methodDef.FullName, Source.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.INVALID_MEMBER_RETURN_TYPE, methodDef.FullName, Source.FullName));
             }
         }
 
@@ -387,7 +387,7 @@ partial class MethodHandler
     /// </param>
     /// <param name="namedInstance">The type of the instance which the template reached the member through, or null where the template reached none.</param>
     /// <returns>The reference which the call instruction holds.</returns>
-    /// <exception cref="ArgumentException">Thrown when a parameter of the member stands for no parameter which the body being woven names, because the call of it cannot name the argument for that parameter.</exception>
+    /// <exception cref="WeavingException">Thrown when a parameter of the member stands for no parameter which the body being woven names, because the call of it cannot name the argument for that parameter.</exception>
     private MethodReference GetCallableReference(MethodDefinition methodDef, IReadOnlyList<TypeReference>? arguments = null, TypeReference? namedInstance = null)
     {
         var importedMethod = GetMethodReference(methodDef, namedInstance);
@@ -430,7 +430,7 @@ partial class MethodHandler
             // would leave it open, which the runtime refuses to run rather than being a call of the member.
             if (named == null && position >= Source.GenericParameters.Count)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_CALL, methodDef.FullName, Source.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.INVALID_GENERIC_MEMBER_CALL, methodDef.FullName, Source.FullName));
             }
 
             genericInstance.GenericArguments.Add(named ?? Source.GenericParameters[position]);
@@ -626,7 +626,7 @@ partial class MethodHandler
     /// which stand for a member of the body's own instance, or null where the template named none.
     /// </param>
     /// <returns>The method which the symbol stands for, or null when the symbol is not one which names a method.</returns>
-    /// <exception cref="ArgumentException">Thrown when the member cannot be resolved, or when the template proceeds without a body being woven around.</exception>
+    /// <exception cref="WeavingException">Thrown when the member cannot be resolved, or when the template proceeds without a body being woven around.</exception>
     private MethodDefinition? GetMethod(MemberSymbols memberSymbol, string methodName, int currentIndex, InstructionFilter filter, IReadOnlyList<TypeReference> parameters, TypeReference? returnType, MethodDefinition targetDef, out TypeReference? namedInstance)
     {
         namedInstance = InstanceNamedBy(memberSymbol);
@@ -647,7 +647,7 @@ partial class MethodHandler
             // method which could not be found.
             if (m_ProceedMethod is not { } proceed)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.PROCEED_WITHOUT_AROUND_BODY, methodName));
+                throw new WeavingException(string.Format(ErrorMessages.PROCEED_WITHOUT_AROUND_BODY, methodName));
             }
 
             // The method which was generated by the weave is the one which is named, rather than a method of the
@@ -673,7 +673,7 @@ partial class MethodHandler
 
             if (argType == null)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+                throw new WeavingException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
             }
 
             // A token as the instance type is just another spelling of the generic parameter of the injected method or of
@@ -701,7 +701,7 @@ partial class MethodHandler
             // The type which the member is reached on is the one the arrangement ahead of the name stands for, which is
             // the same arrangement the parse read the name of the member through.
             var staticType = TypeNamedByAStaticFrom(filter, currentIndex)
-                ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+                ?? throw new WeavingException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
 
             return DeclaringTypeHandler.AssemblyHandler.GetMethodFromType(staticType, (string) filter.Target[currentIndex].Operand, parameters, returnType);
         }
@@ -724,7 +724,7 @@ partial class MethodHandler
     /// <param name="returnType">Type of the value which the member hands back, or null when the caller holds none.</param>
     /// <param name="namedInstance">The type of the instance which the member was found on, which is what the call names.</param>
     /// <returns>The method which the constraints of the parameter describe.</returns>
-    /// <exception cref="ArgumentException">Thrown when no constraint holds a method of that name and signature.</exception>
+    /// <exception cref="WeavingException">Thrown when no constraint holds a method of that name and signature.</exception>
     private MethodDefinition GetMethodFromConstraint(GenericParameter target, string methodName, IReadOnlyList<TypeReference> parameters, TypeReference? returnType, out TypeReference? namedInstance)
     {
         foreach (var constraint in target.Constraints)
@@ -738,7 +738,7 @@ partial class MethodHandler
             }
         }
 
-        throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
+        throw new WeavingException(string.Format(ErrorMessages.INVALID_METHOD, methodName));
     }
 
     /// <summary>
@@ -950,7 +950,7 @@ partial class MethodHandler
     /// <param name="paramStack">Parameter stack of current method body scanning.</param>
     /// <param name="localStack"></param>
     /// <param name="targetDef">The template method which the instructions are copied from.</param>
-    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="WeavingException"></exception>
     private void BalanceStack(Instruction ins, StackWalk.ParameterStack paramStack, TypeReference[] localStack, MethodDefinition targetDef)
     {
         // When any method call, the parameters stack should reduce by the same amount as the method parameters count.
@@ -962,7 +962,7 @@ partial class MethodHandler
             // runtime refuses to run, so the weave is refused by name rather than left to that count.
             if (callMethod.ResolveOrNull() is not { } called)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_CALLED_MEMBER, callMethod.FullName, Source.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.INVALID_CALLED_MEMBER, callMethod.FullName, Source.FullName));
             }
 
             // Pop elements with method parameter count.
@@ -985,7 +985,7 @@ partial class MethodHandler
             // Sanity check.
             if (type == null)
             {
-                throw new ArgumentException(string.Format(ErrorMessages.INVALID_INSTRUCTION_METHOD, ins, new TypeName(Source.DeclaringType), Source.Name));
+                throw new WeavingException(string.Format(ErrorMessages.INVALID_INSTRUCTION_METHOD, ins, new TypeName(Source.DeclaringType), Source.Name));
             }
 
             paramStack.Push(ins, type);

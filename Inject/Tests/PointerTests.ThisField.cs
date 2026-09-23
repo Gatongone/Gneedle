@@ -261,7 +261,7 @@ public partial class PointerTests
         var host = NewHostWithField("Value", isStatic: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadAHeldHandleAsAValue))));
+        var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadAHeldHandleAsAValue))));
         Assert.Multiple(() =>
         {
             Assert.That(thrown!.Message, Does.Contain("Value"));
@@ -300,7 +300,7 @@ public partial class PointerTests
         var host = NewHostWithField("Value", isStatic: false);
         var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
 
-        Assert.Throws<ArgumentException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadMissingField))));
+        Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadMissingField))));
     }
 
     [Test]

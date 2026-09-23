@@ -65,10 +65,10 @@ public class AssemblyHandlerTests
         handler.AddClass("Host", NS, ClassFlags.Public);
         handler.AddEnum("Kind", NS, EnumFlags.Public);
 
-        var thrown = Assert.Throws<ArgumentException>(() => handler.AddClass("Host", NS, ClassFlags.Public));
+        var thrown = Assert.Throws<WeavingException>(() => handler.AddClass("Host", NS, ClassFlags.Public));
 
         Assert.That(thrown!.Message, Does.Contain("Host"), "the refusal does not name the type which was asked for twice.");
-        Assert.Throws<ArgumentException>(() => handler.AddStruct("Kind", NS, StructFlags.Public),
+        Assert.Throws<WeavingException>(() => handler.AddStruct("Kind", NS, StructFlags.Public),
             "a type of a name which another kind of type took was not refused.");
     }
 
@@ -158,7 +158,7 @@ public class AssemblyHandlerTests
         var enumType = new TypeDefinition(NS, "Broken", TypeAttributes.Public, module.ImportReference(typeof(Enum)));
         module.Types.Add(enumType);
 
-        var thrown = Assert.Throws<ArgumentException>(() => handler.GetType(enumType));
+        var thrown = Assert.Throws<WeavingException>(() => handler.GetType(enumType));
 
         Assert.That(thrown!.Message, Does.Contain($"{NS}.Broken"), "the refusal does not name the enum which is not one.");
     }
@@ -228,7 +228,7 @@ public class AssemblyHandlerTests
         var target = Assembly.Create(cecilName.Name!, cecilName.Version!, null, cecilName.GetPublicKeyToken());
         var handler = (AssemblyHandler)target.Handler;
 
-        Assert.Throws<ArgumentException>(() => handler.GetCecilType(typeof(TestBaseClass)));
+        Assert.Throws<WeavingException>(() => handler.GetCecilType(typeof(TestBaseClass)));
     }
 
     [Test]
@@ -242,7 +242,7 @@ public class AssemblyHandlerTests
         var module = asm.Source.MainModule;
         var missing = new TypeReference("Nope", "Missing", module.TypeSystem.Object.Module, module.TypeSystem.CoreLibrary);
 
-        var thrown = Assert.Throws<ArgumentException>(() => handler.GetCecilType(missing));
+        var thrown = Assert.Throws<WeavingException>(() => handler.GetCecilType(missing));
 
         Assert.That(thrown!.Message, Does.Contain("Nope.Missing"));
     }
@@ -266,7 +266,7 @@ public class AssemblyHandlerTests
         var handler = (AssemblyHandler)asm.Handler;
         var type = asm.Source.MainModule.Types[0];
 
-        Assert.Throws<ArgumentException>(() => handler.GetMethodFromType(type, "Missing", []));
+        Assert.Throws<WeavingException>(() => handler.GetMethodFromType(type, "Missing", []));
     }
 
     [Test]
@@ -313,7 +313,7 @@ public class AssemblyHandlerTests
 
         var handler = (AssemblyHandler)target.Handler;
 
-        Assert.Throws<ArgumentException>(() => handler.AddReference(other));
+        Assert.Throws<WeavingException>(() => handler.AddReference(other));
     }
 
     [Test]
@@ -378,7 +378,7 @@ public class AssemblyHandlerTests
         var handler = (AssemblyHandler)asm.Handler;
         var host = AddAHost(handler);
 
-        Assert.Throws<ArgumentException>(() => host.AddInterface(typeof(TestBaseClass)));
+        Assert.Throws<WeavingException>(() => host.AddInterface(typeof(TestBaseClass)));
     }
 
     [Test]

@@ -52,14 +52,14 @@ public interface IPropertyHandler : IAttributeContainer
     /// Set the body of the getter of the property from the method which holds the IL to copy.
     /// </summary>
     /// <param name="body">The method which holds the body of the getter.</param>
-    /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the property, which an indexer is read with.</exception>
+    /// <exception cref="WeavingException">Thrown when the parameters of the method do not match the property, which an indexer is read with.</exception>
     void SetGetter(MethodInfo body);
 
     /// <summary>
     /// Set the body of the setter of the property from the method which holds the IL to copy.
     /// </summary>
     /// <param name="body">The method which holds the body of the setter.</param>
-    /// <exception cref="ArgumentException">Thrown when the parameters of the method do not match the property, which an indexer is read with.</exception>
+    /// <exception cref="WeavingException">Thrown when the parameters of the method do not match the property, which an indexer is read with.</exception>
     void SetSetter(MethodInfo body);
 
     /// <summary>
@@ -72,7 +72,7 @@ public interface IPropertyHandler : IAttributeContainer
     /// Set the body of the setter of the property to the default body behavior.
     /// </summary>
     /// <param name="body">The default body of the setter.</param>
-    /// <exception cref="ArgumentException">Thrown when the default body is the one with a field operation, which an indexer cannot be written with.</exception>
+    /// <exception cref="WeavingException">Thrown when the default body is the one with a field operation, which an indexer cannot be written with.</exception>
     void SetSetter(DefaultPropertyBody body);
 }
 
@@ -90,7 +90,7 @@ public static class PropertyExtensions
     /// <param name="decorator">The decorator which describes the property.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
-    /// <exception cref="ArgumentException">Thrown when the decorator is not the one which this library builds, which
+    /// <exception cref="WeavingException">Thrown when the decorator is not the one which this library builds, which
     /// holds nothing to write what the template captured into.</exception>
     public static PropertyDecorator.IAccessorDecorator WithGetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
     {
@@ -99,7 +99,7 @@ public static class PropertyExtensions
         // for the method alone, which would weave a body without the value which the template read.
         if (decorator is not PropertyDecorator propertyDecorator)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
+            throw new WeavingException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
         }
 
         return propertyDecorator.WithGetter(delegation);
@@ -114,7 +114,7 @@ public static class PropertyExtensions
     /// <param name="decorator">The decorator which describes the property.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
-    /// <exception cref="ArgumentException">Thrown when the decorator is not the one which this library builds, which
+    /// <exception cref="WeavingException">Thrown when the decorator is not the one which this library builds, which
     /// holds nothing to write what the template captured into.</exception>
     public static PropertyDecorator.IAccessorDecorator WithSetter(this PropertyDecorator.IAccessorDecorator decorator, Delegate delegation)
     {
@@ -123,7 +123,7 @@ public static class PropertyExtensions
         // for the method alone, which would weave a body without the value which the template read.
         if (decorator is not PropertyDecorator propertyDecorator)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
+            throw new WeavingException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
         }
 
         return propertyDecorator.WithSetter(delegation);

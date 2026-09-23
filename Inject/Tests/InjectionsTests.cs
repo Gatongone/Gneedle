@@ -78,6 +78,39 @@ public sealed class ThrowTypeAttribute : Attribute, ITypeInjector
 public class ThrowingFixture;
 
 /// <summary>
+/// An attribute which throws an <see cref="ArgumentException"/> while the injector of the type it is put on runs, which
+/// is the kind the framework raises as much as the weaver does.<para/>
+/// What it stands for is a fault of the framework which the weaving happens to meet - a member which a call does not
+/// describe, an assembly which a resolver cannot read - and it is told from a refusal of the weaver by what the
+/// exception is rather than by the kind it derives from: the two are one kind, and a report which read both as refusals
+/// would name the message of a fault of the framework and say nothing of what raised it.
+/// </summary>
+[AttributeUsage(AttributeTargets.All)]
+public sealed class ThrowArgumentTypeAttribute : Attribute, ITypeInjector
+{
+    /// <inheritdoc/>
+    public int Priority => 0;
+
+    /// <summary>
+    /// The environment variable which names the type the injector throws for.
+    /// </summary>
+    public const string TYPE_VARIABLE = "GneedleThrowArgumentType";
+
+    /// <inheritdoc/>
+    public void Inject(Type type, ITypeHandler handler)
+    {
+        if (Environment.GetEnvironmentVariable(TYPE_VARIABLE) != type.FullName) return;
+        throw new ArgumentException($"The framework could not read '{type.FullName}'.");
+    }
+}
+
+/// <summary>
+/// The type which carries the throwing injector of the framework above.
+/// </summary>
+[ThrowArgumentType]
+public class ThrowingArgumentFixture;
+
+/// <summary>
 /// The three attributes below mark the type they are put on as obsolete, each of them naming the kind of type it
 /// applies to, so that the kind of the handler which an injector of a type is asked of is read out of what the injector
 /// wrote rather than out of the handler itself.
@@ -379,6 +412,12 @@ public class InjectionsTests
     private const string THROWING_TYPE = "Gneedle.Inject.Test.ThrowingFixture";
 
     /// <summary>
+    /// The name of the type whose injector throws what the framework throws, which is written out for the same reason
+    /// as the names above.
+    /// </summary>
+    private const string THROWING_ARGUMENT_TYPE = "Gneedle.Inject.Test.ThrowingArgumentFixture";
+
+    /// <summary>
     /// The name of the type which declares the two members of one name, which is written out for the same reason as the
     /// names above.
     /// </summary>
@@ -622,6 +661,36 @@ public class InjectionsTests
         var report = reported.Single(message => message.Contains(THROWING_TYPE));
         Assert.That(report, Does.Contain(nameof(InvalidOperationException)), $"the report does not name the kind of the fault: {report}");
         Assert.That(report, Does.Contain($"{nameof(ThrowTypeAttribute)}.{nameof(ThrowTypeAttribute.Inject)}"),
+            $"the report does not name the frame which the fault stands at: {report}");
+    }
+
+    // The variable of the process is read by the injector of every type which is woven while it is set, so this test
+    // runs on its own rather than beside the others, which would be woven by the injector of this test.
+    [Test]
+    [NonParallelizable]
+    public void Apply_Reports_An_ArgumentException_Of_The_Framework_Whole()
+    {
+        // A weave is refused by the weaver raising an `ArgumentException` of its own, which is reported by its message
+        // alone. The framework raises the same kind, and one of those read as a refusal is reported by a message which
+        // says what the framework could not do and names nothing of what was being woven: the kind and the frame are
+        // read from what the exception is, so that a fault the weaver made no decision about is given whole.
+        var image = TestAssemblyImage();
+        var assembly = AssemblyLoader.LoadFromBytes(image);
+        var reported = new List<string>();
+        Environment.SetEnvironmentVariable(ThrowArgumentTypeAttribute.TYPE_VARIABLE, THROWING_ARGUMENT_TYPE);
+
+        try
+        {
+            Injections.Apply(assembly, image, reportError: reported.Add);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ThrowArgumentTypeAttribute.TYPE_VARIABLE, null);
+        }
+
+        var report = reported.Single(message => message.Contains(THROWING_ARGUMENT_TYPE));
+        Assert.That(report, Does.Contain(nameof(ArgumentException)), $"the report does not name the kind of the fault: {report}");
+        Assert.That(report, Does.Contain($"{nameof(ThrowArgumentTypeAttribute)}.{nameof(ThrowArgumentTypeAttribute.Inject)}"),
             $"the report does not name the frame which the fault stands at: {report}");
     }
 

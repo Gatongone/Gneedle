@@ -316,7 +316,7 @@ public static class MethodDecoratorExtensions
     /// <param name="decorator">The decorator which describes the method.</param>
     /// <param name="delegation">The delegate which holds the body.</param>
     /// <returns>Result for chains calling.</returns>
-    /// <exception cref="ArgumentException">Thrown when the decorator is not the one which this library builds, which
+    /// <exception cref="WeavingException">Thrown when the decorator is not the one which this library builds, which
     /// holds nothing to write what the template captured into.</exception>
     public static MethodDecorator.ITypeDecorator WithBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
     {
@@ -325,7 +325,7 @@ public static class MethodDecoratorExtensions
         // for the method alone, which would weave a body without the value which the template read.
         if (decorator is not MethodDecorator methodDecorator)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
+            throw new WeavingException(string.Format(ErrorMessages.DECORATOR_HOLDS_NO_CAPTURE, decorator.GetType().FullName));
         }
 
         return methodDecorator.WithBody(delegation);

@@ -82,7 +82,7 @@ public readonly struct TypeName : IEquatable<TypeName>
     /// <summary>
     /// Create type name from <see cref="IType"/>.
     /// </summary>
-    /// <exception cref="ArgumentException">The parameter type is not following type:
+    /// <exception cref="WeavingException">The parameter type is not following type:
     /// <list>
     /// <item><see cref="GenericParameterType"/></item>
     /// <item><see cref="NongenericType"/></item>
@@ -128,7 +128,7 @@ public readonly struct TypeName : IEquatable<TypeName>
                 stringBuilder.Append(']');
                 Name = stringBuilder.ToString();
                 break;
-            default: throw new ArgumentException(string.Format(ErrorMessages.INVALID_TYPE_NAME));
+            default: throw new WeavingException(string.Format(ErrorMessages.INVALID_TYPE_NAME));
         }
     }
 

@@ -39,7 +39,7 @@ public class TypeTests
     [Test]
     public void CreateGenericType_With_NonGenericType()
     {
-        Assert.Throws<ArgumentException>(() => _ = new GenericType(typeof(NonGenericTestClass), new GenericParameterType("Test")));
+        Assert.Throws<WeavingException>(() => _ = new GenericType(typeof(NonGenericTestClass), new GenericParameterType("Test")));
     }
 
     [Test]
@@ -96,8 +96,8 @@ public class TypeTests
     [Test]
     public void CreateNonGenericType_With_GenericType()
     {
-        Assert.Throws<ArgumentException>(() => { new NongenericType(typeof(GenericTestClass<>)); });
-        Assert.Throws<ArgumentException>(() => { new NongenericType(typeof(GenericTestClass<string>)); });
+        Assert.Throws<WeavingException>(() => { new NongenericType(typeof(GenericTestClass<>)); });
+        Assert.Throws<WeavingException>(() => { new NongenericType(typeof(GenericTestClass<string>)); });
     }
 
     [Test]

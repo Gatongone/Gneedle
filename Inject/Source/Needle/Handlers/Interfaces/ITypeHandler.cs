@@ -305,10 +305,10 @@ public static class TypeHandlerExtensions
         /// Append an interface to the type which is handled.
         /// </summary>
         /// <param name="interfaceType">The interface which is added, which has to be an interface.</param>
-        /// <exception cref="ArgumentException">Thrown when the type which is given is not an interface.</exception>
+        /// <exception cref="WeavingException">Thrown when the type which is given is not an interface.</exception>
         public void AddInterface(Type interfaceType)
         {
-            if (!interfaceType.IsInterface) throw new ArgumentException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
+            if (!interfaceType.IsInterface) throw new WeavingException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
             container.AddInterface(interfaceType.ToGneedleType());
         }
 

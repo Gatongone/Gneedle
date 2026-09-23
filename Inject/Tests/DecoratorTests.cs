@@ -590,7 +590,7 @@ public class DecoratorTests
         var decorator = new ForeignBodyDecorator();
         var delegation = () => 41;
 
-        var thrown = Assert.Throws<ArgumentException>(() => decorator.WithBody(delegation));
+        var thrown = Assert.Throws<WeavingException>(() => decorator.WithBody(delegation));
 
         Assert.Multiple(() =>
         {
@@ -607,8 +607,8 @@ public class DecoratorTests
         var decorator = new ForeignAccessorDecorator();
         var captured = 41;
 
-        var getter = Assert.Throws<ArgumentException>(() => decorator.WithGetter(() => captured));
-        var setter = Assert.Throws<ArgumentException>(() => decorator.WithSetter((int value) => Console.WriteLine(value + captured)));
+        var getter = Assert.Throws<WeavingException>(() => decorator.WithGetter(() => captured));
+        var setter = Assert.Throws<WeavingException>(() => decorator.WithSetter((int value) => Console.WriteLine(value + captured)));
 
         Assert.Multiple(() =>
         {

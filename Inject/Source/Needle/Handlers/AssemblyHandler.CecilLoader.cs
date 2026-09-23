@@ -31,7 +31,7 @@ partial class AssemblyHandler
                 // Get generic parameter from method or target type.
                 return methodGenericParameters?.FirstOrDefault(param => genericParameterType.TypeName.Equals(param.FullName))
                     ?? target.GenericParameters.FirstOrDefault(param => genericParameterType.TypeName.Equals(param.FullName))
-                    ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_GENERIC_PARAMETER, genericParameterType.TypeName));
+                    ?? throw new WeavingException(string.Format(ErrorMessages.INVALID_GENERIC_PARAMETER, genericParameterType.TypeName));
             case GenericType genericType:
                 // Generic type should be recursively resolve its arguments.
                 var parameterTypeDef = GetCecilType(genericType.Type);
@@ -66,7 +66,7 @@ partial class AssemblyHandler
     /// If the type's assembly was never been referenced, then it would be appended.
     /// </summary>
     /// <param name="typeName">Name of the type which need to be converted.</param>
-    /// <exception cref="ArgumentException">Thrown when can't get from runtime type with the type name.</exception>
+    /// <exception cref="WeavingException">Thrown when can't get from runtime type with the type name.</exception>
     /// <returns>The cecil type from current definition.</returns>
     internal CecilType GetCecilType(string typeName)
     {
@@ -91,7 +91,7 @@ partial class AssemblyHandler
             if (typeDefinition != null) return GetCecilType(typeDefinition);
         }
 
-        throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);
+        throw new WeavingException(ErrorMessages.INVALID_TYPE_NAME);
     }
 
     /// <summary>
@@ -146,7 +146,7 @@ partial class AssemblyHandler
             // carried about as a type of nothing, whose every query would throw from somewhere the caller cannot see the
             // reason of.
             var definition = typeRef.Resolve()
-                ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, typeRef.FullName));
+                ?? throw new WeavingException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, typeRef.FullName));
             cecilType         = new CecilType(definition, ModuleLock.Import(module, typeRef));
             m_TypeCache[name] = cecilType;
             return cecilType;
@@ -179,7 +179,7 @@ partial class AssemblyHandler
             // assembly which the weaving produced would be discarded, declared to be referring to itself.
             if (type.Assembly.GetName().Name == Assembly.Source.Name.Name)
             {
-                var declaredType = FindDeclaredType(type) ?? throw new ArgumentException(ErrorMessages.INVALID_TYPE_NAME);
+                var declaredType = FindDeclaredType(type) ?? throw new WeavingException(ErrorMessages.INVALID_TYPE_NAME);
                 cecilType = new CecilType(declaredType, declaredType);
                 m_TypeCache[name] = cecilType;
                 return cecilType;
@@ -189,7 +189,7 @@ partial class AssemblyHandler
             // assembly of the type does not have to be read for it, because the reflection type knows its references.
             if (type.Assembly.GetReferencedAssemblies().Any(reference => reference.FullName.Equals(Assembly.Source.FullName)))
             {
-                throw new ArgumentException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, type.Assembly.FullName));
+                throw new WeavingException(string.Format(ErrorMessages.ASSEMBLY_CYCLE_REFERENCE, Assembly.Source.FullName, type.Assembly.FullName));
             }
 
             // A type which FromAssemblyAttribute marks stands for the real type of the same name which another assembly
@@ -211,7 +211,7 @@ partial class AssemblyHandler
 
             // The definition is the one for looking the members up, and a type which the assembly it was asked of does
             // not hold has none: the type is refused here rather than being carried about as a type of nothing.
-            var definition = targetTypeRef.Resolve() ?? throw new ArgumentException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, type.FullName));
+            var definition = targetTypeRef.Resolve() ?? throw new WeavingException(string.Format(ErrorMessages.TYPE_CANNOT_BE_READ, type.FullName));
             cecilType = new CecilType(definition, targetTypeRef);
             m_TypeCache[name] = cecilType;
             return cecilType;
@@ -231,7 +231,7 @@ partial class AssemblyHandler
     /// </remarks>
     /// <param name="template">The method which holds the body to weave.</param>
     /// <returns>The definition of the template.</returns>
-    /// <exception cref="ArgumentException">Thrown when the assembly being woven declares the template and its module does not hold it.</exception>
+    /// <exception cref="WeavingException">Thrown when the assembly being woven declares the template and its module does not hold it.</exception>
     internal MethodDefinition ResolveTemplate(MethodInfo template)
     {
         if (template.DeclaringType == null || template.DeclaringType.Assembly.GetName().Name != Assembly.Source.Name.Name)
@@ -246,7 +246,7 @@ partial class AssemblyHandler
         var parameterTypes = template.GetParameters().Select(parameter => parameter.ParameterType).ToArray();
         var declaredMethod = FindDeclaredType(template.DeclaringType)?.Methods
                                                                      .FirstOrDefault(method => method.Name == template.Name && method.Parameters.SameWith(parameterTypes));
-        return declaredMethod ?? throw new ArgumentException(string.Format(ErrorMessages.INVALID_METHOD, $"{template.DeclaringType.FullName}.{template.Name}"));
+        return declaredMethod ?? throw new WeavingException(string.Format(ErrorMessages.INVALID_METHOD, $"{template.DeclaringType.FullName}.{template.Name}"));
     }
 
     /// <summary>

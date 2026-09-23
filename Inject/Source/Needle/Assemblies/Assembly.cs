@@ -212,7 +212,7 @@ public abstract class Assembly : IDisposable
         SaveTo(assemblyStream);
         if (assemblyBytes.Length < assemblyStream.Length)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_ASSEMBLY, assemblyStream.Length), nameof(assemblyBytes));
+            throw new WeavingException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_ASSEMBLY, assemblyStream.Length), nameof(assemblyBytes));
         }
 
         var length = assemblyStream.Length;
@@ -227,7 +227,7 @@ public abstract class Assembly : IDisposable
     /// <param name="assemblyBytes">Byte array to hold the assembly data.</param>
     /// <param name="symbolBytes">Byte array to hold the symbol data.</param>
     /// <returns>A tuple containing the number of bytes written to the assembly and symbol byte arrays, respectively.</returns>
-    /// <exception cref="ArgumentException">Thrown when the provided byte arrays are too small to hold the assembly or symbol data.</exception>
+    /// <exception cref="WeavingException">Thrown when the provided byte arrays are too small to hold the assembly or symbol data.</exception>
     public (long assemblyWrote, long symbolWrote) SaveTo(byte[] assemblyBytes, byte[] symbolBytes)
     {
         using var assemblyStream = new MemoryStream();
@@ -235,12 +235,12 @@ public abstract class Assembly : IDisposable
         SaveTo(assemblyStream, symbolStream);
         if (assemblyBytes.Length < assemblyStream.Length)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_ASSEMBLY, assemblyStream.Length), nameof(assemblyBytes));
+            throw new WeavingException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_ASSEMBLY, assemblyStream.Length), nameof(assemblyBytes));
         }
 
         if (symbolBytes.Length < symbolStream.Length)
         {
-            throw new ArgumentException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_SYMBOLS, symbolStream.Length), nameof(symbolBytes));
+            throw new WeavingException(string.Format(ErrorMessages.ARRAY_TOO_SMALL_FOR_SYMBOLS, symbolStream.Length), nameof(symbolBytes));
         }
 
         var (assemblyWrote, symbolWrote) = (assemblyStream.Length, symbolStream.Length);

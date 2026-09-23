@@ -77,10 +77,10 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         switch (type)
         {
             case null:                              throw new NullReferenceException(nameof(type));
-            case {IsValueType              : true}: throw new ArgumentException(ErrorMessages.TYPE_IS_VALUE_TYPE);
-            case {IsSealed                 : true}: throw new ArgumentException(ErrorMessages.TYPE_IS_SEALED);
-            case {IsInterface              : true}: throw new ArgumentException(ErrorMessages.TYPE_IS_INTERFACE);
-            case {ContainsGenericParameters: true}: throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithBaseType(IType) instead.");
+            case {IsValueType              : true}: throw new WeavingException(ErrorMessages.TYPE_IS_VALUE_TYPE);
+            case {IsSealed                 : true}: throw new WeavingException(ErrorMessages.TYPE_IS_SEALED);
+            case {IsInterface              : true}: throw new WeavingException(ErrorMessages.TYPE_IS_INTERFACE);
+            case {ContainsGenericParameters: true}: throw new WeavingException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithBaseType(IType) instead.");
         }
 
         // CecilType.Reference is owned by the target module already, so it can be appended as it is.
@@ -117,8 +117,8 @@ public class ClassDecorator : ClassDecorator.IGenericParametersDecorator
         switch (type)
         {
             case null:                               throw new NullReferenceException(nameof(type));
-            case {IsInterface              : false}: throw new ArgumentException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
-            case {ContainsGenericParameters: true}:  throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
+            case {IsInterface              : false}: throw new WeavingException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
+            case {ContainsGenericParameters: true}:  throw new WeavingException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
         }
 
         // CecilType.Reference is owned by the target module already, so it can be appended as it is.
@@ -316,8 +316,8 @@ public class StructDecorator : StructDecorator.IGenericParametersDecorator
         switch (type)
         {
             case null:                               throw new NullReferenceException(nameof(type));
-            case {IsInterface              : false}: throw new ArgumentException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
-            case {ContainsGenericParameters: true}:  throw new ArgumentException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
+            case {IsInterface              : false}: throw new WeavingException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
+            case {ContainsGenericParameters: true}:  throw new WeavingException($"{ErrorMessages.TYPE_IS_GENERIC} Please use WithInterface(IType) instead.");
         }
 
         // CecilType.Reference is owned by the target module already, so it can be appended as it is.
