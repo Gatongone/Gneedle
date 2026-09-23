@@ -500,17 +500,66 @@ public class DecoratorTests
 
         Assert.Multiple(() =>
         {
-            Assert.Throws<InvalidOperationException>(() => classChain.WithInterface(typeof(ITestInterface)), "the chain of the class described it after it was built.");
-            Assert.Throws<InvalidOperationException>(() => structChain.WithInterface(typeof(ITestInterface)), "the chain of the struct described it after it was built.");
-            Assert.Throws<InvalidOperationException>(() => enumChain.WithFlagsAttribute(), "the chain of the enum described it after it was built.");
-            Assert.Throws<InvalidOperationException>(() => methodChain.WithReturnType(typeof(int)), "the chain of the method described it after it was built.");
-            Assert.Throws<InvalidOperationException>(() => fieldChain.WithType(typeof(int)), "the chain of the field described it after it was built.");
-            Assert.Throws<InvalidOperationException>(() => propertyChain.WithType(typeof(int)), "the chain of the property described it after it was built.");
+            Assert.Throws<WeavingException>(() => classChain.WithInterface(typeof(ITestInterface)), "the chain of the class described it after it was built.");
+            Assert.Throws<WeavingException>(() => structChain.WithInterface(typeof(ITestInterface)), "the chain of the struct described it after it was built.");
+            Assert.Throws<WeavingException>(() => enumChain.WithFlagsAttribute(), "the chain of the enum described it after it was built.");
+            Assert.Throws<WeavingException>(() => methodChain.WithReturnType(typeof(int)), "the chain of the method described it after it was built.");
+            Assert.Throws<WeavingException>(() => fieldChain.WithType(typeof(int)), "the chain of the field described it after it was built.");
+            Assert.Throws<WeavingException>(() => propertyChain.WithType(typeof(int)), "the chain of the property described it after it was built.");
         });
 
-        var thrown = Assert.Throws<InvalidOperationException>(() => methodChain.WithReturnType(typeof(int)));
+        var thrown = Assert.Throws<WeavingException>(() => methodChain.WithReturnType(typeof(int)));
         Assert.That(thrown!.Message, Does.Contain("Method"), "the message does not name the member which was built.");
     }
+
+    [Test]
+    public void A_Null_Type_Is_Refused_As_A_Refusal()
+    {
+        // A null names no type, so a chain which is described by one is refused where it stands: the refusal is read by
+        // its message alone, which is what tells it from a fault of the framework, and the message of a fault names
+        // nothing of what was being woven.
+        var assembly = Assembly.Create("DecoratorNullTypeAssembly");
+        var handler = (AssemblyHandler) assembly.Handler;
+        var classChain = handler.AddClass("Class", NS, ClassFlags.Public);
+        var structChain = handler.AddStruct("Struct", NS, StructFlags.Public);
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<WeavingException>(() => classChain.WithBaseType((Type) null!), "the base type of the class was not refused.");
+            Assert.Throws<WeavingException>(() => classChain.WithInterface((Type) null!), "the interface of the class was not refused.");
+            Assert.Throws<WeavingException>(() => structChain.WithInterface((Type) null!), "the interface of the struct was not refused.");
+        });
+    }
+
+    [Test]
+    public void A_Type_Of_A_Kind_Which_This_Library_Does_Not_Build_Is_Refused_As_A_Refusal()
+    {
+        // The three kinds of a type are the ones this library builds, and one of another kind is one which nothing here
+        // reads: it is refused where it stands, by the same reading of what a refusal is as the null above.
+        var assembly = Assembly.Create("DecoratorUnknownTypeAssembly");
+        var handler = (AssemblyHandler) assembly.Handler;
+        var classChain = handler.AddClass("Class", NS, ClassFlags.Public);
+
+        Assert.Throws<WeavingException>(() => classChain.WithBaseType(new ATypeOfAKindWhichIsNotOne()), "the type was not refused.");
+    }
+
+    [Test]
+    public void A_Null_Of_The_Interface_Kind_Of_A_Type_Is_Refused_As_A_Refusal()
+    {
+        // A null is a kind which is none of the three as well, and it is the one a caller reaches without meaning to:
+        // the reading of the kind names what was given, which is what a null has not.
+        var assembly = Assembly.Create("DecoratorNullInterfaceTypeAssembly");
+        var handler = (AssemblyHandler) assembly.Handler;
+        var classChain = handler.AddClass("Class", NS, ClassFlags.Public);
+
+        Assert.Throws<WeavingException>(() => classChain.WithBaseType((IType) null!), "the type was not refused.");
+    }
+
+    /// <summary>
+    /// A type of a kind which this library does not build, which is what a caller of it can write where a type is asked
+    /// for and nothing of this library reads.
+    /// </summary>
+    private sealed class ATypeOfAKindWhichIsNotOne : IType;
 
     #endregion
 
