@@ -34,6 +34,12 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v5
+        with:
+          # Every commit of the history, because the suite reads the commit which the plugin was built at out of the
+          # plugin and asks the history about it: a clone of one commit holds the commit which stands at the tip of it
+          # and none of the ones behind, so a record which names any other commit is a name which no such clone holds,
+          # and the gate refuses a record it cannot read the way it refuses one which is out of date.
+          fetch-depth: 0
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -51,7 +57,7 @@ jobs:
       - name: Set up the SDK which the tree is built with
         uses: actions/setup-dotnet@v5
         with:
-          # The newest SDK, which is what the whole tree is built with: it is written for the language of C# 14, and
+          # The newest SDK, which is what the whole tree is built with: it is written for the language of C# 15, and
           # the SDK of a runner is older than that for as long as the release of this one is newer than the image.
           #
           # A preview is what this asks for because the channel is one: 11.0 is a release candidate which is supported
