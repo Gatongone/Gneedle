@@ -131,7 +131,15 @@ namespace Gneedle.Aspect
             private readonly ConcurrentDictionary<string, string> m_Unresolved = new(StringComparer.OrdinalIgnoreCase);
 
             /// <summary>
-            /// What is reported of the assembly which is woven.
+            /// What is reported of the assembly which is woven.<para/>
+            /// The two collections above are written by the resolution, which the runtime reaches on threads of its own
+            /// while a weaving runs, and that is what makes them concurrent. This one is not: what is reported of a
+            /// weaving is reported by the weaving, and the reads which the runtime makes beside it say nothing of what
+            /// could not be woven - they answer with an assembly or with nothing, and the assembly they cannot answer
+            /// for is written where they stand rather than here. So the only thread which writes this is the one which
+            /// weaves the assembly, and then the same one where the weaving reports what the resolution could not
+            /// answer. The threads of a compilation are the threads of its assemblies, one assembly to each, and no two
+            /// of them stand at the diagnostics of one.
             /// </summary>
             private readonly List<DiagnosticMessage> m_Diagnostics;
 

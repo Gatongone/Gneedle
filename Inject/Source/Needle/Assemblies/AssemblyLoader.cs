@@ -58,6 +58,11 @@ public static class AssemblyLoader
     private static int s_WeaverAssembliesRegistered;
 
     /// <summary>
+    /// The guard which the mark above is set under, so that the subscription it stands for is made once.
+    /// </summary>
+    private static readonly object s_Registration = new();
+
+    /// <summary>
     /// Load the assembly of <paramref name="rawBytes"/> and remember those bytes.
     /// </summary>
     /// <remarks>
@@ -134,8 +139,22 @@ public static class AssemblyLoader
     /// </remarks>
     private static void RegisterWeaverAssemblies()
     {
-        if (Interlocked.Exchange(ref s_WeaverAssembliesRegistered, 1) != 0) return;
-        AppDomain.CurrentDomain.AssemblyResolve += (_, args) => FindWeaverAssembly(args);
+        // The subscription is made before the mark which says it was, rather than the mark before the subscription: a
+        // second thread reads the mark to learn that there is nothing for it to do, and one which read it while the
+        // subscription was still to come would carry on without one - and the request it makes of an assembly of the
+        // weaver, which it makes while it weaves, would be answered by the resolution of the process rather than here.
+        //
+        // The mark is held under the guard so that the subscription is made once, and it is written after it so that a
+        // thread which reads the mark without the guard is a thread the subscription is already there for.
+        if (Volatile.Read(ref s_WeaverAssembliesRegistered) != 0) return;
+
+        lock (s_Registration)
+        {
+            if (s_WeaverAssembliesRegistered != 0) return;
+
+            AppDomain.CurrentDomain.AssemblyResolve += (_, args) => FindWeaverAssembly(args);
+            Volatile.Write(ref s_WeaverAssembliesRegistered, 1);
+        }
     }
 
     /// <summary>
