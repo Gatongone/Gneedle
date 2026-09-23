@@ -1,8 +1,3 @@
-using System.Globalization;
-using System.Reflection;
-using MethodAttributes = Mono.Cecil.MethodAttributes;
-using MethodBody = Mono.Cecil.Cil.MethodBody;
-
 namespace Gneedle.Inject;
 
 /// <summary>
