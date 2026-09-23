@@ -30,6 +30,14 @@ if [ -z "$built" ]; then
 fi
 
 if ! git merge-base --is-ancestor "$built" HEAD; then
+  # A clone of one commit holds the commit it stands at and none of the ones behind it, so the record of a plugin which
+  # is not out of date is a name which such a clone has no answer for: the two read alike from here, and they are told
+  # apart by the clone, because what the reader has to do about them is not one thing.
+  if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+    echo "the plugin of Unity was built at $built, which this clone does not hold: the clone is shallow, and the record is read against the history. Fetch the history rather than build anything."
+    exit 1
+  fi
+
   echo "the plugin of Unity was built at $built, which is not a commit of this history: build the copy and commit it."
   exit 1
 fi

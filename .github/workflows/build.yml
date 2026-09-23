@@ -34,6 +34,12 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v5
+        with:
+          # Every commit of the history, because the suite reads the commit which the plugin was built at out of the
+          # plugin and asks the history about it: a clone of one commit holds the commit which stands at the tip of it
+          # and none of the ones behind, so a record which names any other commit is a name which no such clone holds,
+          # and the gate refuses a record it cannot read the way it refuses one which is out of date.
+          fetch-depth: 0
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
