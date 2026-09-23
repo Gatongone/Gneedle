@@ -189,6 +189,13 @@ internal static class TokenParsing
                 // The token stands for the generic parameter of the provider itself. It is not a type of any module, so it doesn't need to be imported.
                 if (typeReference.TryGetParsedGenericParameter(provider, out var parameter)) return parameter!;
 
+                // A parameter which no token names is not a type of any module either: what it names is the position it
+                // holds in the signature it stands in, which is read of the member that signature belongs to rather than
+                // of a module, so an import has nothing to carry and the importer of Cecil has no context to read the
+                // position against. A reference written against a member which declares a parameter of its own - the
+                // copy of a body the compiler wrote - is where one of those stands.
+                if (typeReference is GenericParameter genericParameter) return genericParameter;
+
                 return typeReference.TryGetFromAssemblyDefinition(module, out var fromAssemblyType)
                     // A type which FromAssemblyAttribute marks stands for the real type of the same name which another
                     // assembly declares, so the real type replaces it. The reference ownership is not a criterion here: the

@@ -27,6 +27,14 @@ namespace Gneedle.Inject;
 internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into)
 {
     /// <summary>
+    /// The copy whose body is being written, or null where none is.<para/>
+    /// A parameter of a method is named within the body of that method and of no other, so the body which is being
+    /// written is what the position of such a parameter is read against: what it declares in that position is the copy
+    /// of the parameter, and there is nothing else the position could name.
+    /// </summary>
+    private MethodDefinition? m_Writing;
+
+    /// <summary>
     /// The copies of the types the compiler wrote, by the full name of the type each was written from.
     /// </summary>
     private readonly Dictionary<string, TypeDefinition> m_Types = new(StringComparer.Ordinal);
@@ -641,6 +649,26 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     {
         if (!from.HasBody) return;
 
+        m_Writing = copy;
+        try
+        {
+            WriteTheBody(from, copy);
+        }
+        finally
+        {
+            // The copy is dropped whether the body was written or the writing of it was refused, so that a body which is
+            // written next reads the copy of itself rather than the one this held.
+            m_Writing = null;
+        }
+    }
+
+    /// <summary>
+    /// The same, which the body above holds the copy of for as long as it runs: a parameter of a method is read against
+    /// the copy of that method while the body of the copy is written and nowhere else.
+    /// </summary>
+    /// <inheritdoc cref="CarryTheBody(MethodDefinition, MethodDefinition)"/>
+    private void WriteTheBody(MethodDefinition from, MethodDefinition copy)
+    {
         var placed = new Dictionary<Instruction, Instruction>();
 
         foreach (var variable in from.Body.Variables)
@@ -844,11 +872,69 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
     {
         RefuseATypeWrittenAtTheTopLevel(called.DeclaringType);
 
-        if (called is not GenericInstanceMethod specification) return ModuleLock.Import(module, called);
+        if (called is not GenericInstanceMethod specification)
+        {
+            // A signature which names a parameter of the method whose body it stands in is one the importer of Cecil
+            // reads against the declaring type rather than against that method, so the parameter is one it has nothing
+            // standing for: `where T : IComparable<T>` is a constraint of a parameter of the method applied to itself,
+            // and the argument of the declaring type of the call of it is such a parameter, which the import answers
+            // with nothing for rather than refusing by a name. What such a member names is written rather than imported,
+            // which reads every type of the signature for the copy of it.
+            return NamesAParameterOfTheMethod(called) ? Written(called) : ModuleLock.Import(module, called);
+        }
 
         var instantiated = new GenericInstanceMethod(ModuleLock.Import(module, specification.ElementMethod));
         foreach (var argument in specification.GenericArguments) instantiated.GenericArguments.Add(TypeOf(argument));
         return instantiated;
+    }
+
+    /// <summary>
+    /// Whether a reference names a parameter which the method whose body it stands in declares.<para/>
+    /// A body names a parameter of a method within that body and of no other, so a parameter of a method which a
+    /// reference standing in one names is a parameter of that method, and the copy of the body is what declares it. A
+    /// parameter of a type is not one of those: it is named by the signature it stands in, and the declaring type of
+    /// the reference is what supplies the type the position of it stands for.
+    /// </summary>
+    /// <param name="called">The member which is asked about.</param>
+    /// <returns>Whether the signature of the reference names such a parameter.</returns>
+    private static bool NamesAParameterOfTheMethod(MethodReference called)
+        => NamesAParameterOfTheMethod(called.DeclaringType)
+           || NamesAParameterOfTheMethod(called.ReturnType)
+           || called.Parameters.Any(parameter => NamesAParameterOfTheMethod(parameter.ParameterType));
+
+    /// <inheritdoc cref="NamesAParameterOfTheMethod(MethodReference)"/>
+    private static bool NamesAParameterOfTheMethod(TypeReference? type)
+        => type switch
+        {
+            GenericParameter parameter => parameter.Type == Mono.Cecil.GenericParameterType.Method,
+            GenericInstanceType instantiation => NamesAParameterOfTheMethod(instantiation.ElementType)
+                                                 || instantiation.GenericArguments.Any(NamesAParameterOfTheMethod),
+            TypeSpecification specification => NamesAParameterOfTheMethod(specification.ElementType),
+            _ => false
+        };
+
+    /// <summary>
+    /// The reference to a member which the carry did not write, written rather than imported.<para/>
+    /// What the copy of the body declares in the place of every parameter of its own is what the body names, so nothing
+    /// of the signature is left for the importer of Cecil to read.
+    /// </summary>
+    /// <param name="called">The member which is written.</param>
+    /// <returns>The reference which the body names.</returns>
+    private MethodReference Written(MethodReference called)
+    {
+        var reference = new MethodReference(called.Name, TypeOf(called.ReturnType), TypeOf(called.DeclaringType))
+        {
+            HasThis           = called.HasThis,
+            ExplicitThis      = called.ExplicitThis,
+            CallingConvention = called.CallingConvention
+        };
+
+        foreach (var parameter in called.Parameters)
+        {
+            reference.Parameters.Add(new ParameterDefinition(parameter.Name, parameter.Attributes, TypeOf(parameter.ParameterType)));
+        }
+
+        return reference;
     }
 
     /// <summary>
@@ -863,14 +949,25 @@ internal sealed class CarriedBodies(ModuleDefinition module, TypeDefinition into
 
         if (reference is GenericParameter parameter && OwnerOf(parameter) is { } owner)
         {
-            // A parameter which no copy of what declared it stands for is imported, which answers with the parameter
-            // itself where the module which declares it is the one being written: a parameter of the template's own
-            // method is one of those, and what the member being woven declares in its place is not held here. A
-            // parameter of another module is one which the import has no context to resolve against, and it throws
-            // rather than refusing by a name.
-            return m_Parameters.TryGetValue($"{owner}/{parameter.Position}", out var declared)
-                ? declared
-                : ModuleLock.Import(module, reference);
+            // A parameter which a copy of what declared it stands for names that copy.
+            if (m_Parameters.TryGetValue($"{owner}/{parameter.Position}", out var declared)) return declared;
+
+            // A parameter of a type is named by the signature it stands in rather than by what Cecil records as its
+            // owner, which is the reference it was read out of: the position it holds is what it means, and the body
+            // which is written declares the parameter of the copy in that position. What the reference names is
+            // therefore left as it was written, and it is the declaring type of the reference - which is written as the
+            // instantiation the call makes of it - which supplies the type the position stands for.
+            if (parameter.Type == Mono.Cecil.GenericParameterType.Type) return parameter;
+
+            // A parameter of a method is one which the copy of that method declares in the same position: a body names
+            // a parameter within that body and of no other, so a parameter of a method which a reference standing in one
+            // names is a parameter of the method whose body it stands in.
+            if (m_Writing is { } writing && parameter.Position < writing.GenericParameters.Count)
+            {
+                return writing.GenericParameters[parameter.Position];
+            }
+
+            return ModuleLock.Import(module, reference);
         }
 
         if (reference is GenericInstanceType instantiation)
