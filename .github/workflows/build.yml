@@ -1,0 +1,58 @@
+# What the workflow of a release runs before it publishes is run here on every push to the branch the releases are cut
+# from and on every pull request: a suite which is first run when a version is being published is a suite which reports
+# a fault of a commit made weeks ago, at the one moment where stopping is most expensive and where nobody is looking for
+# it.
+#
+# The runner is the one the workflow of a release runs on, and for the same reason: the tests of the aspect weaver are
+# built for net472 and are run by that framework itself, which the runners of Linux do not carry. The commands below are
+# the ones that workflow holds, word for word, so that a run of this one and a run of that one answer the same way; the
+# reason each of them is there is written out where that workflow has it.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # A branch which is not a pull request yet, and a run which is asked for again after something beside the tree changed.
+  workflow_dispatch:
+
+# A run of a branch which was pushed to again is answered by the one which is on its way and says nothing a reader
+# needs, so it is dropped rather than queued behind it. The group is the branch rather than the commit, because what
+# makes the earlier run unnecessary is the later commit of the same branch and not a commit of another one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Nothing is written: what this reads is the tree and the packages it is built from, and what it answers with is a run.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          # 5.0 runs the tests which are built for net5.0. Every other framework is built and run by the SDK of the
+          # runner, which is the newest one it carries.
+          dotnet-version: 5.0.x
+
+      - name: Test the script which writes the version into the files
+        # The version is written into every file which names one, and the readmes are read by whoever is deciding what
+        # to install, so a readme which was left at the version of the release before this one is a reader who is sent
+        # to a package of that version. What keeps the two together is the script beside it, which is tested here as
+        # well as before a release runs it: a placeholder which stopped matching the readme it was written for is a
+        # commit which breaks the next release rather than the one it is in.
+        shell: bash
+        run: python .github/scripts/set-version-tests.py
+
+      - name: Test
+        # The suite is the one a release runs, taken from the script which that workflow runs as well rather than named
+        # here a second time: what each run is for is written out where the commands are.
+        shell: bash
+        run: bash .github/scripts/test.sh
