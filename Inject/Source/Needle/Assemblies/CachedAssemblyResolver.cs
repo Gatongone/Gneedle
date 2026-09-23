@@ -252,13 +252,13 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
             // in - a section table of an image which is not one - is refused rather than read, because a read which
             // stands past the memory which is mapped faults the process in a way which cannot be caught.
             var mapped = MappedSizeOf(basePtr);
-            var headerLength = (int) Math.Min(mapped, HeaderWindow);
+            var headerLength = (int) Math.Min(mapped, HEADER_WINDOW);
 
             // A window too short to hold a header is not read at all, which is what keeps the read of this memory to a
             // mapping which could be an image: the measuring below refuses such a window as well, so a mapping this
             // narrow is refused twice rather than once, and the copy which the refusal of it saves is one whose source
             // is too short to be the header of anything.
-            if (headerLength < MinimumHeader)
+            if (headerLength < MINIMUM_HEADER)
             {
                 return false;
             }
@@ -290,13 +290,13 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     /// The most bytes of the beginning of an image which are read into this memory to be measured, which holds the
     /// headers of every image and the section table of every one a compiler writes.
     /// </summary>
-    private const int HeaderWindow = 0x4000;
+    private const int HEADER_WINDOW = 0x4000;
 
     /// <summary>
     /// The fewest bytes of an image which can be measured: its DOS header, the signature of its PE header, its file
     /// header, and the smallest optional header which a portable image declares.
     /// </summary>
-    private const int MinimumHeader = 0x40 + SignatureSize + FileHeaderSize + OptionalHeader32;
+    private const int MINIMUM_HEADER = 0x40 + SIGNATURE_SIZE + FILE_HEADER_SIZE + OPTIONAL_HEADER32;
 
     /// <summary>
     /// The sizes of the parts of the header of an image which name where its sections are: the signature which tells a
@@ -304,17 +304,17 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     /// sections and the size of the optional header, the optional header of a 32-bit image and of a 64-bit one - which
     /// are the two sizes a portable image declares - and one entry of the section table.
     /// </summary>
-    private const int SignatureSize = 4;
+    private const int SIGNATURE_SIZE = 4;
 
-    private const int FileHeaderSize    = 20;
-    private const int OptionalHeader32  = 224;
-    private const int OptionalHeader64  = 240;
-    private const int SectionHeaderSize = 40;
+    private const int FILE_HEADER_SIZE    = 20;
+    private const int OPTIONAL_HEADER32  = 224;
+    private const int OPTIONAL_HEADER64  = 240;
+    private const int SECTION_HEADER_SIZE = 40;
 
     /// <summary>
     /// The most sections an image can declare, which is the number the loader of Windows accepts.
     /// </summary>
-    private const int MaxSections = 96;
+    private const int MAX_SECTIONS = 96;
 
     /// <summary>
     /// How many bytes of the memory at <paramref name="basePtr"/> are mapped from it onwards, or zero when it cannot be
@@ -360,40 +360,40 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
     internal static bool TryMeasureImage(byte[] header, long mapped, out int fileSize)
     {
         fileSize = 0;
-        if (header.Length < MinimumHeader)
+        if (header.Length < MINIMUM_HEADER)
         {
             return false;
         }
 
         // The offset of the PE header, which is the field the DOS header of every image ends with.
         var eLfanew = BitConverter.ToInt32(header, 0x3C);
-        if (!Fits(eLfanew, SignatureSize, header.Length) || BitConverter.ToInt32(header, eLfanew) != 0x00004550) // "PE\0\0"
+        if (!Fits(eLfanew, SIGNATURE_SIZE, header.Length) || BitConverter.ToInt32(header, eLfanew) != 0x00004550) // "PE\0\0"
         {
             return false;
         }
 
-        var fileHeader = eLfanew + SignatureSize;
-        if (!Fits(fileHeader, FileHeaderSize, header.Length))
+        var fileHeader = eLfanew + SIGNATURE_SIZE;
+        if (!Fits(fileHeader, FILE_HEADER_SIZE, header.Length))
         {
             return false;
         }
 
         int numberOfSections = BitConverter.ToUInt16(header, fileHeader + 2);
         int sizeOfOptionalHeader = BitConverter.ToUInt16(header, fileHeader + 16);
-        if (numberOfSections == 0 || numberOfSections > MaxSections)
+        if (numberOfSections == 0 || numberOfSections > MAX_SECTIONS)
         {
             return false;
         }
 
         // The optional header stands between the file header and the section table, so a size of it which no portable
         // image declares is one which names a section table which is not where the table of this image is.
-        if (sizeOfOptionalHeader != OptionalHeader32 && sizeOfOptionalHeader != OptionalHeader64)
+        if (sizeOfOptionalHeader != OPTIONAL_HEADER32 && sizeOfOptionalHeader != OPTIONAL_HEADER64)
         {
             return false;
         }
 
-        var sectionTable = fileHeader + FileHeaderSize + sizeOfOptionalHeader;
-        if (!Fits(sectionTable, (long) numberOfSections * SectionHeaderSize, header.Length))
+        var sectionTable = fileHeader + FILE_HEADER_SIZE + sizeOfOptionalHeader;
+        if (!Fits(sectionTable, (long) numberOfSections * SECTION_HEADER_SIZE, header.Length))
         {
             return false;
         }
@@ -404,7 +404,7 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
         var measured = 0L;
         for (var index = 0; index < numberOfSections; index++)
         {
-            var section = sectionTable + index * SectionHeaderSize;
+            var section = sectionTable + index * SECTION_HEADER_SIZE;
             var sizeOfRawData = BitConverter.ToInt32(header, section + 16);
             var pointerToRawData = BitConverter.ToInt32(header, section + 20);
             if (sizeOfRawData < 0 || pointerToRawData < 0)
@@ -421,7 +421,7 @@ internal sealed class CachedAssemblyResolver(IAssemblyResolver fallback, string?
             measured = Math.Max(measured, end);
         }
 
-        if (measured <= 0 || measured > int.MaxValue)
+        if (measured is <= 0 or > int.MaxValue)
         {
             return false;
         }
