@@ -761,8 +761,13 @@ partial class MethodHandler
 
         // This stack is used to ensure that the method parameters are of the same type as the method signature before they're all pushed to the stack.
         var paramStack = new StackWalk.ParameterStack();
-        // This stack is used to cache the types of 'stloc' operand during scanning the method body.
-        var localStack = new TypeReference[bodyInstructions.Length];
+        // This stack is used to cache the types of 'stloc' operand during scanning the method body. What is held is one
+        // entry per slot of the body rather than one per instruction of it, because what indexes it is the slot which a
+        // store names rather than the instruction which names it, and the two are counted apart: a local which nothing
+        // reads is one the compiler keeps a slot for while it holds the symbols of the body, so the stores of a body
+        // name slots which stand past the number of its instructions, and the count of its slots is the one which those
+        // slot numbers stand within.
+        var localStack = new TypeReference[targetDef.Body.Variables.Count];
 
         // TODO: Maybe we could cache all scanning results that wouldn't simulate parameter balance every time.
         // Scanning method body.
@@ -991,7 +996,10 @@ partial class MethodHandler
         // We got stloc operand from previous instructions, and we push ldloc operand with same index to the parameters stack.
         else if (ins.TryGetStlocIndex(out var stIndex))
         {
-            localStack[stIndex] = paramStack.Pop().Type;
+            // The value which the first instruction of a handler stores is the exception which the runtime handed over
+            // rather than one an instruction of the body pushed, which the stack holds none of: the slot is left without
+            // a type, which is how a local whose type the walk cannot tell is read where it is loaded again.
+            if (paramStack.TryPop(out _, out var stored)) localStack[stIndex] = stored!;
         }
         else if (ins.TryGetLdlocIndex(out var ldIndex))
         {

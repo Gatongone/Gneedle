@@ -265,6 +265,20 @@ public partial class PointerTests
         // Immediately invokes the returned delegate -> branch that rewrites to a direct call.
         public static int InvokeInstanceMethod(int a, int b) => This.Method<IntBinaryOp>("Add")(a, b);
 
+        // A template whose locals are slotted past the number of instructions which its body holds. A local which is
+        // declared and never read is one the compiler keeps a slot for while it holds the symbols of the body, and the
+        // locals which are read afterwards are numbered above it: what a store names is a slot of the body, and a body
+        // whose slots are not as many as its instructions has slots which no count of instructions stands within. It is
+        // the shape a build without the optimizer writes, which is the one a Unity project builds its assemblies in.
+        public static int InvokeInstanceMethodWithLocalsSlottedPastTheBody(int a, int b)
+        {
+#pragma warning disable CS0168
+            int l0, l1, l2, l3, l4, l5, l6, l7, l8, l9, l10, l11, l12, l13, l14, l15, l16, l17, l18, l19;
+#pragma warning restore CS0168
+            var sum = a + b;
+            return This.Method<IntBinaryOp>("Add")(sum, sum);
+        }
+
         // The same local is handed to the call twice, which is what a local is for: `ldloc` reads the value of the
         // local rather than taking it away, so the second read is of the type which the first one read.
         public static int InvokeWithALocalReadTwice(int a, int b)
@@ -323,6 +337,25 @@ public partial class PointerTests
             {
                 return This.Method<IntBinaryOp>("Add")(a, b);
             }
+        }
+
+        // The handler of the region a template protects names the exception which was caught, so the value which its
+        // first instruction stores is one the runtime hands over: it was pushed by no instruction of the body, and a
+        // walk which holds the values an instruction pushed reads the store as one of a value the body never pushed.
+        public static int InvokeAMemberInTheHandlerWhichNamesItsException(int a, int b)
+        {
+            try
+            {
+#pragma warning disable CS0219
+                var ignored = a;
+#pragma warning restore CS0219
+            }
+            catch (Exception exception)
+            {
+                return This.Method<IntBinaryOp>("Add")(a, b) + exception.Source!.Length;
+            }
+
+            return b;
         }
 
         // The delegate is held in a local and invoked by it rather than where the symbol stands, which is what a
