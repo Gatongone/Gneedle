@@ -1,6 +1,32 @@
 namespace Gneedle.Inject;
 
 /// <summary>
+/// Represents a container which a type may be declared in: a class and a struct are the two which C# lets one stand in,
+/// and an enum is not one, because an enum holds nothing but its values.<para/>
+/// The visibility of a nested type is written in the nested form of it, which is none of the two forms a type declared
+/// at the top of a module is written with. What is taken here is the same <see cref="ClassFlags"/> which
+/// <see cref="IAssemblyHandler.AddClass"/> takes, written as that form, so that what <see cref="IClassHandler.Flags"/>
+/// reads back of it is what it was declared with.
+/// </summary>
+public interface INestedTypeContainer
+{
+    /// <summary>
+    /// Declare a class which is nested in this type, and hand back the decorator which describes it.
+    /// </summary>
+    /// <param name="typeName">Name of the class.</param>
+    /// <param name="flags">Flags of the class.</param>
+    /// <returns>Decorator for describing the class.</returns>
+    /// <exception cref="WeavingException">Thrown when the type has been defined.</exception>
+    ClassDecorator AddNestedClass(string typeName, ClassFlags flags = ClassFlags.Public);
+
+    /// <inheritdoc cref="AddNestedClass(string, ClassFlags)"/>
+    StructDecorator AddNestedStruct(string typeName, StructFlags flags = StructFlags.Public);
+
+    /// <inheritdoc cref="AddNestedClass(string, ClassFlags)"/>
+    EnumDecorator AddNestedEnum(string typeName, EnumFlags flags = EnumFlags.Public);
+}
+
+/// <summary>
 /// Represents a container that holds a base type for a class or struct.
 /// </summary>
 public interface IBaseTypeContainer
@@ -227,7 +253,7 @@ public interface IPropertyContainer : IPropertyQuery
 /// <summary>
 /// Represents a handler for a class type, providing access to its base type, interfaces, fields, methods, and properties.
 /// </summary>
-public interface IClassHandler : ITypeHandler, IBaseTypeContainer, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer
+public interface IClassHandler : ITypeHandler, INestedTypeContainer, IBaseTypeContainer, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer
 {
     /// <summary>
     /// Flags of the class, which are the visibility and the modifiers which the definition declares. A class which was
@@ -239,7 +265,7 @@ public interface IClassHandler : ITypeHandler, IBaseTypeContainer, IInterfaceCon
 /// <summary>
 /// Represents a handler for a struct type, providing access to its interfaces, fields, methods, and properties.
 /// </summary>
-public interface IStructHandler : ITypeHandler, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer
+public interface IStructHandler : ITypeHandler, INestedTypeContainer, IInterfaceContainer, IFieldContainer, IMethodContainer, IPropertyContainer
 {
     /// <summary>
     /// Flags of the struct, which are the visibility which the definition declares and the two kinds which it is marked

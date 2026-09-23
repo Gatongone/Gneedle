@@ -190,4 +190,100 @@ partial class AssemblyHandler
 
         return new EnumDecorator(this, typeDef, underlyingType);
     }
+
+    /// <summary>
+    /// Declare a class which is nested in the type which is given, and hand back the decorator which describes it.<para/>
+    /// The visibility of a nested class is written in the nested form of it, which is none of the two forms a class
+    /// declared at the top of a module is written with, so what is given here is the same
+    /// <see cref="ClassFlags"/> which <see cref="IAssemblyHandler.AddClass"/> takes and it is written as the nested
+    /// form of it. What is declared is a type of the module like any other, so the name of it is taken the same way.
+    /// </summary>
+    /// <param name="declaring">The type which the class is declared in.</param>
+    /// <param name="typeName">Name of the class.</param>
+    /// <param name="classFlags">Flags of the class.</param>
+    /// <returns>Decorator for describing the class.</returns>
+    /// <exception cref="WeavingException">Thrown when the type has been defined.</exception>
+    internal ClassDecorator AddNestedClass(TypeDefinition declaring, string typeName, ClassFlags classFlags)
+    {
+        var typeDef = new TypeDefinition("", typeName, classFlags.ToNestedTypeAttributes())
+        {
+            DeclaringType = declaring,
+        };
+
+        Reserve(typeDef, $"{new TypeName(declaring)}.{typeName}");
+
+        // The base type is described through the decorator before the class is appended, as it is above.
+        return new ClassDecorator(this, typeDef, null, AddClassCallback);
+
+        IClassHandler AddClassCallback(TypeDefinition type, TypeReference? baseType)
+        {
+            type.BaseType = baseType;
+            ModuleLock.DeclareNested(Assembly.Source.MainModule, declaring, type);
+
+            return new ClassHandler(this, type);
+        }
+    }
+
+    /// <summary>
+    /// Declare a struct which is nested in the type which is given, and hand back the decorator which describes it.
+    /// </summary>
+    /// <param name="declaring">The type which the struct is declared in.</param>
+    /// <param name="typeName">Name of the struct.</param>
+    /// <param name="structFlags">Flags of the struct.</param>
+    /// <returns>Decorator for describing the struct.</returns>
+    /// <exception cref="WeavingException">Thrown when the type has been defined.</exception>
+    internal StructDecorator AddNestedStruct(TypeDefinition declaring, string typeName, StructFlags structFlags)
+    {
+        var typeDef = new TypeDefinition("", typeName, structFlags.ToNestedTypeAttributes())
+        {
+            DeclaringType = declaring,
+        };
+
+        Reserve(typeDef, $"{new TypeName(declaring)}.{typeName}");
+
+        // What the two kinds of struct are marked by is a custom attribute rather than a flag, so it is the same
+        // whether the struct is nested or not: what is nested is the visibility alone.
+        if (structFlags.HasFlag(StructFlags.Ref))
+        {
+            var module = Assembly.Source.MainModule;
+            typeDef.CustomAttributes.Add(GetCecilType(typeof(IsByRefLikeAttribute)).Definition.CreateCustomAttribute(module));
+            typeDef.CustomAttributes.Add(GetCecilType(typeof(ObsoleteAttribute)).Definition.CreateCustomAttribute(module,
+                "This type is a ref struct and cannot be used as a field.", true));
+        }
+
+        if (structFlags.HasFlag(StructFlags.ReadOnly))
+        {
+            typeDef.CustomAttributes.Add(GetCecilType(typeof(IsReadOnlyAttribute)).Definition.CreateCustomAttribute(Assembly.Source.MainModule));
+        }
+
+        return new StructDecorator(this, typeDef, null, AddStructCallback);
+
+        IStructHandler AddStructCallback(TypeDefinition type, TypeReference? baseType)
+        {
+            type.BaseType = baseType;
+            ModuleLock.DeclareNested(Assembly.Source.MainModule, declaring, type);
+
+            return new StructHandler(this, type);
+        }
+    }
+
+    /// <summary>
+    /// Declare an enum which is nested in the type which is given, and hand back the decorator which describes it.
+    /// </summary>
+    /// <param name="declaring">The type which the enum is declared in.</param>
+    /// <param name="typeName">Name of the enum.</param>
+    /// <param name="enumFlags">Flags of the enum.</param>
+    /// <returns>Decorator for describing the enum.</returns>
+    /// <exception cref="WeavingException">Thrown when the type has been defined.</exception>
+    internal EnumDecorator AddNestedEnum(TypeDefinition declaring, string typeName, EnumFlags enumFlags)
+    {
+        var typeDef = new TypeDefinition("", typeName, enumFlags.ToNestedTypeAttributes())
+        {
+            DeclaringType = declaring,
+        };
+
+        Reserve(typeDef, $"{new TypeName(declaring)}.{typeName}");
+
+        return new EnumDecorator(this, typeDef, Assembly.Source.MainModule.TypeSystem.Int32);
+    }
 }
