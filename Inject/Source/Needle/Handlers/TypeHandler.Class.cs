@@ -8,6 +8,18 @@ namespace Gneedle.Inject;
 internal class ClassHandler(AssemblyHandler assemblyHandler, TypeDefinition source) : TypeHandler(assemblyHandler, source), IClassHandler
 {
     /// <inheritdoc/>
+    public ClassDecorator AddNestedClass(string typeName, ClassFlags flags = ClassFlags.Public)
+        => AssemblyHandler.AddNestedClass(Source, typeName, flags);
+
+    /// <inheritdoc/>
+    public StructDecorator AddNestedStruct(string typeName, StructFlags flags = StructFlags.Public)
+        => AssemblyHandler.AddNestedStruct(Source, typeName, flags);
+
+    /// <inheritdoc/>
+    public EnumDecorator AddNestedEnum(string typeName, EnumFlags flags = EnumFlags.Public)
+        => AssemblyHandler.AddNestedEnum(Source, typeName, flags);
+
+    /// <inheritdoc/>
     public ClassFlags Flags => Source.ToClassFlags();
 
     /// <inheritdoc/>
