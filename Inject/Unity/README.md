@@ -3,8 +3,10 @@
 The weaver of [Gneedle](https://github.com/Gatongone/Gneedle). It rewrites the IL of an assembly through
 [Mono.Cecil](https://github.com/jbevain/cecil), and weaves a body into it from a template, which is an ordinary C#
 method: the template reaches the members of the type it is woven into through the placeholders `This`, `Base`,
-`Instance`, `Static` and `Proceed`, and names a generic parameter of that type through the tokens `T_0`–`T_20` and
-`M_0`–`M_20`. Around advice keeps the body which a method already held and lets the template proceed into it, either
+`Instance` and `Static`, reads the instance which the member being woven belongs to through `This.Reference`, and lets
+the template proceed into the body which the member held through `Proceed`. It names a generic parameter of that type
+through the tokens `T_0`–`T_20` and `M_0`–`M_20`, and the type itself through `T_Self` — which is also how a template
+names a member of that type reached through another instance of it, `other.Field<int>("name")`. Around advice keeps the body which a method already held and lets the template proceed into it, either
 with a signature which the template names through `Proceed.Method<TMethod>()` or with the arguments which the template
 itself was given, through `Proceed.Invoke<TResult>()`. A template may also be a lambda which captures what it is written among, and what it captured is written
 into the assembly which is woven as the value itself, which

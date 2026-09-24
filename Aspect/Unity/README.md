@@ -4,7 +4,9 @@ The aspect weaver of [Gneedle](https://github.com/Gatongone/Gneedle). An injecto
 the interfaces of `Gneedle.Inject` and says what to do with the member it is put on, and this package applies the
 injectors which an assembly declares to that assembly as it is compiled. The template which an injector applies is
 usually a lambda which captures what the attribute was given, and what it captured is written into the assembly which is
-woven as the value itself.
+woven as the value itself. A lambda stands where a `Delegate` is asked for from C# 10 — which is the version of the
+language a lambda has a type of its own in — so an injector of a project whose compiler is older, which is what the
+compiler of Unity is, hands over the delegate the lambda would have been: `handler.AroundBody((Action)(() => …))`.
 
 This package is that weaver as a package of Unity, where it is an IL post processor rather than the build task which
 the package of NuGet carries: the compilation pipeline runs it on an assembly which it has just compiled, and writes the
