@@ -17,6 +17,24 @@ internal static class GenericTokens
 }
 
 /// <summary>
+/// The type which is being woven, which the template of a member of it names wherever a type is named.<para/>
+/// What it stands for is the type which declares the member being woven, as an instantiation of itself where that type
+/// declares generic parameters: what a member of an instantiation reaches is an instantiation, so a list of the type
+/// being woven is a list of the type with the arguments it was declared with rather than of the definition which stands
+/// open.<para/>
+/// It is a token of the shape of the ones below and not one of them, and it is not read as one: the ones below name the
+/// parameter at the index they carry, and this one names no parameter at all. It is one of them in what it derives from,
+/// which is <see cref="Instance"/>: what a template holds of one of these is an instance it may reach a member through,
+/// and the type which is being woven is reached the same way. A reference to it is read as the type
+/// being woven wherever a type is named, <c>new T_Self()</c> and <c>is T_Self</c> among them, which the compiler writes as a
+/// reference to this class as it writes any other.<para/>
+/// What is not read as that type is a <em>default</em> of it: <c>default(T_Self)</c> is written as the null which the
+/// default of a class is, so a member woven into a type which is not a class is left with a null where the default of
+/// that type belongs.
+/// </summary>
+public sealed class T_Self : Instance;
+
+/// <summary>
 /// The generic parameter type of the type that the index of 0.
 /// </summary>
 public sealed class T_0 : Instance;

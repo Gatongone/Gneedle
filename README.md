@@ -85,18 +85,30 @@ A default body is asked for the same way, when no template is needed: `WithBody(
 
 ### Placeholders
 
-| Placeholder                                              | Names                                                                                     |
-|----------------------------------------------------------|-------------------------------------------------------------------------------------------|
-| `This.Field<T>("name")`, `This.Property<T>("name")`      | a field or a property of the type being woven, read and written through `Get` and `Set`   |
-| `This.Method<TDelegate>("name")`                         | a method of the type being woven, called through the delegate that gives its signature    |
-| `Base.Field`, `Base.Property`, `Base.Method`             | the same, on the type that the target derives from                                        |
-| `new Instance(instance).Field`, `.Property`, `.Method`   | the same, on an instance the template pushed                                              |
-| `Static.From("Full.Type.Name").Method`                   | the same, on a type named by a string                                                     |
-| `T_0`–`T_20`, `M_0`–`M_20`                               | the first to the twenty-first generic parameter of the declaring type, or of the method   |
-| `ValuableMember<T>`                                      | the value of a field or a property of a value type, which `ValuableMember` would box      |
-| `Proceed.Method<T>()`, `Proceed.Invoke<TResult>()`       | the body which the member already held, proceeded into                                    |
+| Placeholder                                                  | Names                                                                                         |
+|--------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| `This.Field<T>("name")`, `This.Property<T>("name")`          | a field or a property of the type being woven, read and written through `Get` and `Set`       |
+| `This.Method<TDelegate>("name")`                             | a method of the type being woven, called through the delegate that gives its signature        |
+| `Base.Field`, `Base.Property`, `Base.Method`                 | the same, on the type that the target derives from                                            |
+| `new Instance(instance).Field`, `.Property`, `.Method`       | the same, on an instance the template pushed                                                  |
+| `Static.From("Full.Type.Name").Method`                       | the same, on a type named by a string                                                         |
+| `T_0`–`T_20`, `M_0`–`M_20`                                   | the first to the twenty-first generic parameter of the declaring type, or of the method       |
+| `T_Self`                                                     | the type being woven, which a template of it names wherever a type is named                   |
+| `ValuableMember<T>`                                          | the value of a field or a property of a value type, which `ValuableMember` would box          |
+| `Proceed.Method<T>()`, `Proceed.Invoke<TResult>()`           | the body which the member already held, proceeded into                                        |
+| `This.Reference`                                             | the instance which the member being woven belongs to, as a value of `T_Self`                  |
 
 Each placeholder is named after what it reaches, and none of them is named after a type of the framework: a placeholder called `Object` would be read wherever a template writes `Object` with the usings of this library in scope, so a field, a parameter or a return type which names the type of the framework would name the placeholder instead. The keyword `object` is not affected, and neither is a template which writes `System.Object` in full.
+
+`T_Self` is the type being woven, which a template names wherever a type is named — `List<T_Self>`, `T_Self[]`, `typeof(T_Self)`, and `This.Field<T_Self>("name")` for a member whose type is the type itself. Where the type being woven declares generic parameters, `T_Self` is an instantiation of that type rather than the definition which stands open. `new T_Self()` and `is T_Self` are written by the compiler as a reference to the token and are read as the type being woven like any other. A **default** of it is not: `default(T_Self)` is written as the null which the default of a class is, so a member woven into a type which is not a class stands a null where the default of that type belongs. The tokens of a generic parameter do not carry that limit — the default of one is written as the default of a parameter rather than as a null — so the limit belongs to the token of a type.
+
+`This.Reference` is the instance which the member being woven belongs to, which the other placeholders only reach the members of. It is how a template compares that instance with something:
+
+```csharp
+public static bool IsTheSame() => This.Field<T_Self>("s_Instance").Get() == This.Reference;
+```
+
+A member which is static belongs to no instance, and a template of one which reads `This.Reference` is refused by name.
 
 The name that a placeholder is given is read out of the template itself, and the instruction which the call follows is what holds it: a name is therefore one which the compiler writes there — a literal, a `nameof`, or a constant of the template — rather than one which the template computes while it runs.
 

@@ -73,6 +73,32 @@ partial class MethodHandler
                 namedInstance            = instanceType;
             }
         }
+        // The instance is one which the template holds rather than one which it built: what the receiver of the
+        // placeholder is stands ahead of the name, and the type of that value is the type which the field is looked up
+        // on. A value of a token is one of those - the instance which the member being woven belongs to, or another
+        // instance of the type being woven - and what names the type of it is the reading below, which parses the
+        // tokens of it the way every other type of a body is parsed.
+        else if (memberSymbol.HasFlag(MemberSymbols.Instance) && currentIndex > 0)
+        {
+            // What the value is is read off the instruction which the template holds rather than off what was written
+            // for it: a load which was written for the member being woven names the slot of that member, and the type
+            // of it is the type of the parameter which the template holds at the slot it names.
+            // The receiver is read off the instruction which the template holds rather than off what was written for
+            // it: a load which was written for the member being woven names the slot of that member, and the type of it
+            // is the type of the parameter which the template holds at the slot it names. The instance which the member
+            // being woven belongs to is the one value which is of neither: what the template holds there is the
+            // placeholder of it, and the type of that value is the type which the member is declared by.
+            var receiver = filter.Target[currentIndex - 1];
+            var instanceType = receiver is { OpCode.Code: Code.Call, Operand: MethodReference { DeclaringType: var placeholder } } && placeholder.FullName == This.TYPE_NAME
+                ? Source.DeclaringType
+                : StackWalk.GetArgType(Context, receiver, targetDef) ?? GetValueType(filter, currentIndex - 1, targetDef);
+            if (instanceType != null)
+            {
+                receiverIns              = receiver;
+                declaringTypeFromPattern = instanceType.ResolveDefinition(Source.Module);
+                namedInstance            = instanceType;
+            }
+        }
         else if (memberSymbol.HasFlag(MemberSymbols.Static) && TypeNamedByAStaticFrom(filter, currentIndex) is { } staticType)
         {
             skipStaticFromCount      = 2;

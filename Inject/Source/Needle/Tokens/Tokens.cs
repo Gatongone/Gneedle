@@ -142,6 +142,14 @@ public static class This
     /// <returns>The symbol of the method.</returns>
     /// <exception cref="InjectionNotEffectiveException">Thrown when the operand didn't be parsed.</exception>
     public static TMethod Method<TMethod>(string name) where TMethod : Delegate => throw new InjectionNotEffectiveException();
+
+    /// <summary>
+    /// The instance which the member being woven belongs to, which a template reaches the members of.<para/>
+    /// What it is for is the instance itself rather than a member of it: a template which compares the instance with
+    /// something, or hands it to a call of its own, reads it here. A member which is static belongs to no instance, and
+    /// a template of one which reads this is refused by name.
+    /// </summary>
+    public static T_Self Reference => throw new InjectionNotEffectiveException();
 }
 
 /// <summary>
