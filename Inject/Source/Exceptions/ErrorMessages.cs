@@ -212,6 +212,18 @@ internal static class ErrorMessages
     internal const string TYPE_IS_NOT_INTERFACE = "A type which is not an interface was given as an interface.";
 
     /// <summary>
+    /// A null was given where a type was asked for, which names no type. The placeholder is the name of the argument
+    /// which was given it.
+    /// </summary>
+    internal const string TYPE_IS_NULL = "A null was given where a type is asked for, which names no type. Argument: {0}.";
+
+    /// <summary>
+    /// A type of a kind which this library does not build was given where a type to weave with is asked for, so nothing
+    /// of it can be read. The placeholder is the name of the kind which was given.
+    /// </summary>
+    internal const string TYPE_IS_OF_A_KIND_WHICH_IS_NOT_ONE = "A type of a kind which this library does not build was given where a type is asked for, so nothing of it can be read. Kind: {0}.";
+
+    /// <summary>
     /// A type which cannot be assigned to the type which was asked for was given. The placeholder is the name of the
     /// type which the given one has to be assignable to.
     /// </summary>
