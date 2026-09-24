@@ -6,6 +6,15 @@ namespace Gneedle.Inject.Test;
 using static TestFixtures;
 
 /// <summary>
+/// The type which a parameter of a generic type of these tests is constrained to, whose member a token reaches.
+/// </summary>
+public class AConstrainedBase
+{
+    /// <summary>The member which a token of the parameter reaches.</summary>
+    public int Number;
+}
+
+/// <summary>
 /// Tests for the token which stands for the type being woven, and for the placeholder which stands for the instance the
 /// member being woven belongs to.<para/>
 /// Both name what a template cannot otherwise name: the type it is woven into is not one it was compiled against, and
@@ -51,6 +60,10 @@ public class SelfTokenTests
         /// <summary>The same, of the instance which the member being woven belongs to, which is what the placeholder
         /// of the instance stands for.</summary>
         public static int ReadThroughOwnInstance() => This.Reference.Field<int>("Next").Get()!.GetHashCode();
+
+        /// <summary>The same, of a token of a generic parameter: a value of one is a value of the constraint which the
+        /// parameter holds, and what its members are is read there.</summary>
+        public static int ReadThroughAParameter(T_0 other) => other.Field<int>("Number").Get()!.GetHashCode();
 
         /// <summary>The same, of a property rather than a field.</summary>
         public static int ReadAPropertyThroughAnother(T_Self other) => other.Property<int>("Next").Get()!.GetHashCode();
@@ -258,6 +271,28 @@ public class SelfTokenTests
         Assert.That(method.Source.Body.Instructions.Any(instruction => instruction.OpCode is { } opcode && (opcode == OpCodes.Call || opcode == OpCodes.Callvirt)
             && instruction.Operand is MethodReference reference && reference.Name == "get_Next"), Is.True,
             "the woven body does not call the accessor of the property of the type being woven.");
+    }
+
+    [Test]
+    public void T_0_Stands_For_An_Instance_Which_A_Member_Is_Reached_Through()
+    {
+        // A value of a parameter of a type is a value of the constraint that parameter holds, and no member is declared
+        // by the parameter itself: what the token stands for is read as the constraint, which is what the weaving takes
+        // the definition of a value of a parameter to be.
+        var assembly = Assembly.Create("SelfTokenParameterAssembly");
+        var handler = (AssemblyHandler) assembly.Handler;
+        var host = (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public)
+                                       .WithGenericParameter("T", new Constraint(typeof(AConstrainedBase).ToGneedleType()))
+                                       .GetHandler();
+
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        method.Source.Parameters.Add(new ParameterDefinition("other", ParameterAttributes.None, host.Source.GenericParameters[0]));
+        method.SetBody(typeof(Templates).GetMethod(nameof(Templates.ReadThroughAParameter))!);
+
+        var read = method.Source.Body.Instructions.FirstOrDefault(instruction => instruction.OpCode == OpCodes.Ldfld);
+        Assert.That(read, Is.Not.Null, "the woven body reads no field.");
+        Assert.That(((FieldReference) read!.Operand).DeclaringType.FullName, Is.EqualTo(typeof(AConstrainedBase).FullName),
+            "the field which is read is not one of the constraint of the parameter.");
     }
 
     [Test]

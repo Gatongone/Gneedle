@@ -139,12 +139,32 @@ internal static class FromAssembly
 
         /// <summary>
         /// Get the definition which the reference points to, which is the one of the real type when the reference
-        /// stands for a type of another assembly.
+        /// stands for a type of another assembly.<para/>
+        /// Where the reference is a parameter of a type, what is answered with is the definition of the constraint which
+        /// that parameter holds: a value of a parameter is a value of the type which the parameter is constrained to,
+        /// and no member is declared by the parameter itself. What a member of such a value is looked up on is therefore
+        /// the constraint, which is what tells a template which reaches a member through a token of a parameter.
         /// </summary>
         /// <param name="module">The module which the real type is looked up in.</param>
         /// <returns>The definition which the reference points to.</returns>
         /// <exception cref="WeavingException">Thrown when the assembly or the type which the attribute names can't be resolved.</exception>
         internal TypeDefinition ResolveDefinition(ModuleDefinition module)
-            => typeReference.TryGetFromAssemblyDefinition(module, out var definition) ? definition! : typeReference.Resolve();
+        {
+            var type = typeReference is GenericParameter parameter ? TheConstraintOf(parameter) : typeReference;
+            return type.TryGetFromAssemblyDefinition(module, out var definition) ? definition! : type.Resolve();
+        }
+
+        /// <summary>
+        /// The type which a value of a parameter of a type is a value of, which is the first of the constraints the
+        /// parameter holds.<para/>
+        /// The first of them is the one which a value of the parameter is read through: the language writes the class
+        /// which a parameter is of ahead of the interfaces of it, and a parameter which holds interfaces alone is one
+        /// whose members are the ones of those interfaces - which is what a template of it may reach without a cast, and
+        /// so what a member which it names is looked for among.
+        /// </summary>
+        /// <param name="parameter">The parameter whose constraint is read.</param>
+        /// <returns>The reference of the constraint, or of the type which everything is, where the parameter holds none.</returns>
+        private static TypeReference TheConstraintOf(GenericParameter parameter)
+            => parameter.Constraints.FirstOrDefault()?.ConstraintType ?? parameter.Module.TypeSystem.Object;
     }
 }
