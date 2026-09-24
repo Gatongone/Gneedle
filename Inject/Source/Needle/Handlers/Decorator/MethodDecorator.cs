@@ -318,6 +318,11 @@ public static class MethodDecoratorExtensions
     /// <returns>Result for chains calling.</returns>
     /// <exception cref="WeavingException">Thrown when the decorator is not the one which this library builds, which
     /// holds nothing to write what the template captured into.</exception>
+    /// <remarks>
+    /// A lambda written where a <see cref="Delegate"/> is asked for stands there from C# 10: a caller compiled by an
+    /// earlier one hands over the delegate the lambda would have been, as
+    /// <see cref="MethodExtensions"/> describes.
+    /// </remarks>
     public static MethodDecorator.ITypeDecorator WithBody(this MethodDecorator.IBodyDecorator decorator, Delegate delegation)
     {
         // The value of a capture is read out of the delegate where the body is woven, which only the decorator this

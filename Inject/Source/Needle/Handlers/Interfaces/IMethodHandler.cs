@@ -71,6 +71,13 @@ public static class MethodExtensions
         /// <param name="delegation">The delegate which holds the body.</param>
         /// <exception cref="WeavingException">Thrown when the delegate captured a value and the handler is not one
         /// which this library builds, which holds nothing to write the value into.</exception>
+        /// <remarks>
+        /// A lambda written where a <see cref="Delegate"/> is asked for stands there from C# 10, which is the version of
+        /// the language a lambda has a type of its own in: a caller compiled by an earlier one - which is what the
+        /// compiler of a Unity project is - hands over the delegate the lambda would have been instead, which is
+        /// <see cref="Action"/> where the template takes nothing and hands nothing back, and the <c>Func</c> which
+        /// describes it otherwise.
+        /// </remarks>
         public void SetBody(Delegate delegation) => MethodHandler.SetBody(methodHandler, delegation);
 
         /// <summary>
@@ -79,6 +86,13 @@ public static class MethodExtensions
         /// <param name="delegation">The delegate which holds the body to weave around.</param>
         /// <exception cref="WeavingException">Thrown when the delegate captured a value and the handler is not one
         /// which this library builds, which holds nothing to write the value into.</exception>
+        /// <remarks>
+        /// A lambda written where a <see cref="Delegate"/> is asked for stands there from C# 10, which is the version of
+        /// the language a lambda has a type of its own in: a caller compiled by an earlier one - which is what the
+        /// compiler of a Unity project is - hands over the delegate the lambda would have been instead, which is
+        /// <see cref="Action"/> where the template takes nothing and hands nothing back, and the <c>Func</c> which
+        /// describes it otherwise.
+        /// </remarks>
         public void AroundBody(Delegate delegation) => MethodHandler.AroundBody(methodHandler, delegation);
 
         /// <summary>
