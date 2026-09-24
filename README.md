@@ -322,8 +322,8 @@ dotnet add package Gneedle.Inject
 Or in the project file, where both lines name the version:
 
 ```xml
-<PackageReference Include="Gneedle.Aspect" Version="0.0.3"/>
-<PackageReference Include="Gneedle.Inject" Version="0.0.3"/>
+<PackageReference Include="Gneedle.Aspect" Version="0.0.4"/>
+<PackageReference Include="Gneedle.Inject" Version="0.0.4"/>
 ```
 
 ### Unity
@@ -335,8 +335,8 @@ The same two are packages of Unity as well, under the names `com.gatongone.gneed
 ```json
 {
   "dependencies": {
-    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.3",
-    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.3"
+    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.4",
+    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.4"
   }
 }
 ```
@@ -355,8 +355,8 @@ Both lines are written even where only one of the two is used, and it is the asp
     }
   ],
   "dependencies": {
-    "com.gatongone.gneedle.inject": "0.0.3",
-    "com.gatongone.gneedle.aspect": "0.0.3"
+    "com.gatongone.gneedle.inject": "0.0.4",
+    "com.gatongone.gneedle.aspect": "0.0.4"
   }
 }
 ```

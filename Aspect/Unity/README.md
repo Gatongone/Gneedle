@@ -31,8 +31,8 @@ well, because a version of it is what this package asks for:
   ],
   "dependencies":
   {
-    "com.gatongone.gneedle.inject": "0.0.3",
-    "com.gatongone.gneedle.aspect": "0.0.3"
+    "com.gatongone.gneedle.inject": "0.0.4",
+    "com.gatongone.gneedle.aspect": "0.0.4"
   }
 }
 ```
@@ -45,8 +45,8 @@ version of it, and that version is read out of a registry rather than along the 
 {
   "dependencies":
   {
-    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.3",
-    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.3"
+    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.4",
+    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.4"
   }
 }
 ```
