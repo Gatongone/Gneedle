@@ -70,17 +70,24 @@ namespace Gneedle.Aspect
                 var image = assembly.InMemoryAssembly.PeData;
                 weaving.LoadWhatTheWeavingReads(image);
 
+                // The symbols are read with the image and woven with it, because the two are one pair: the places which
+                // a database records are places of the image it names, and the weaving writes an image of its own, so
+                // the symbols of the image which was read describe an image which is not the one answered with below.
                 var loaded = AssemblyLoader.LoadFromBytes(image);
-                var (changed, result) = Injections.Apply(loaded, image, removesTheWeaver: true, reportError: weaving.Report);
+                var (changed, result, symbols) = Injections.Apply(loaded, image, assembly.InMemoryAssembly.PdbData,
+                                                                  removesTheWeaver: true, reportError: weaving.Report);
 
                 // What could not be read is reported with what was tried for it, because a member which names an
                 // assembly the weaving cannot read is failed by the runtime rather than by the weaving, which says
                 // which assembly it was and nothing more.
                 weaving.ReportUnresolved();
 
-                // The symbols are handed back with the image, so that what was woven is still read where it was written.
+                // The symbols which were woven with the image are handed back with it, so that what was woven is still
+                // read where it was written: the two describe one image, and the symbols of another one are a pair which
+                // a reader of the two refuses. An assembly which was compiled without symbols is handed back without
+                // them, which is what the weaving answers with where it was given none.
                 return changed
-                    ? new ILPostProcessResult(new InMemoryAssembly(result, assembly.InMemoryAssembly.PdbData), diagnostics)
+                    ? new ILPostProcessResult(new InMemoryAssembly(result, symbols!), diagnostics)
                     : new ILPostProcessResult(assembly.InMemoryAssembly, diagnostics);
             }
             catch (Exception exception)

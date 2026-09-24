@@ -21,6 +21,9 @@ namespace Gneedle.Unity.Test
     public sealed class MarkTypeAttribute : Attribute, ITypeInjector
     {
         /// <inheritdoc/>
+        public int Priority => 0;
+        
+        /// <inheritdoc/>
         public void Inject(Type type, ITypeHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "marked");
     }
 
@@ -28,9 +31,7 @@ namespace Gneedle.Unity.Test
     /// The type which carries the marker above, whose injection is read back out of the image which was woven.
     /// </summary>
     [MarkType]
-    public class MarkedFixture
-    {
-    }
+    public class MarkedFixture { }
 
     /// <summary>
     /// Tests for <see cref="Gneedle.Aspect.GneedleILPostProcessor"/>, the step of a compilation which applies the
@@ -54,10 +55,14 @@ namespace Gneedle.Unity.Test
         private const string MarkedType = "Gneedle.Unity.Test.MarkedFixture";
 
         /// <summary>
-        /// The symbols which every assembly of the tests is compiled with, which are the bytes which tell that the symbols
-        /// of the assembly which was woven were handed back with its image.
+        /// The symbols which the assembly of these tests was compiled with, which are the program database beside it,
+        /// and which are handed over with it as the symbols of its compilation.<para/>
+        /// Whether the symbols of an image which was woven are handed back with it is a question which only an image
+        /// which a weaving changes answers, and this one is not: the editor wove the assembly of these tests before they
+        /// ran, and a weaving of it writes the image which it was given. The test which reads a woven pair builds its
+        /// own image and hands it over with symbols of its own.
         /// </summary>
-        private static readonly byte[] Symbols = {1, 2, 3, 4};
+        private static readonly byte[] Symbols = File.ReadAllBytes(Path.ChangeExtension(System.Reflection.Assembly.GetExecutingAssembly().Location, ".pdb"));
 
         /// <summary>
         /// The processor which is asked of the assemblies of the tests, which the compilation asks for one of per assembly.
@@ -168,15 +173,21 @@ namespace Gneedle.Unity.Test
             // weaving is therefore the weaving of the assembly rather than one which it wrote itself, and the symbols
             // which are handed back with it belong to the image which was answered with either way.
             var image = File.ReadAllBytes(System.Reflection.Assembly.GetExecutingAssembly().Location);
-            var assembly = new StubCompiledAssembly("Unity.Gneedle.CodeGen.Tests", image);
+            var assembly = new StubCompiledAssembly("Unity.Gneedle.CodeGen.Tests", image, symbols: Symbols);
 
             var result = Processor().Process(assembly);
 
             Assert.That(Messages(result), Is.Empty, string.Join(Environment.NewLine, Messages(result)));
-            Assert.That(result.InMemoryAssembly.PdbData, Is.SameAs(assembly.InMemoryAssembly.PdbData),
-                        "the symbols of the assembly were not handed back with the image which was woven.");
 
-            using (var read = AssemblyDefinition.ReadAssembly(new MemoryStream(result.InMemoryAssembly.PeData)))
+            // The image and the symbols are read together, because the pair is what the compilation reads back: what
+            // tells a database from one which describes another image is the image it names, and a reader handed the
+            // two is refused rather than left to read places of an image which is not the one it was given.
+            using var stream = new MemoryStream(result.InMemoryAssembly.PeData);
+            using (var read = AssemblyDefinition.ReadAssembly(stream, new ReaderParameters
+            {
+                ReadSymbols          = true,
+                SymbolReaderProvider = new SymbolsInBytes(result.InMemoryAssembly.PdbData)
+            }))
             {
                 var marked = read.MainModule.GetType(MarkedType);
                 Assert.That(marked.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == typeof(ObsoleteAttribute).FullName), Is.True,
@@ -184,6 +195,39 @@ namespace Gneedle.Unity.Test
                 Assert.That(marked.CustomAttributes.Any(attribute => attribute.AttributeType.FullName == typeof(MarkTypeAttribute).FullName), Is.False,
                             "the attribute which the injector was read from was left on the type.");
             }
+        }
+
+        [Test]
+        public void Process_Answers_With_The_Symbols_Of_The_Image_Which_It_Wove()
+        {
+            // What a compilation hands a post processor is one image and the symbols which describe it, and what is
+            // handed back is one image and the symbols which describe that one: the two are a pair, and what tells a
+            // database from one which describes another image is the image it names.<para/>
+            // The image here is one the test builds and one which a weaving writes, because the assembly of these tests
+            // is the one which the editor wove before they ran: a weaving of that assembly answers with the image which
+            // it was given, and the pair which is handed back is the pair which was handed in, which tells nothing of
+            // either. What a weaving of this one writes is a pair of its own, and the two are read back together.
+            var (image, symbols) = ImageAndSymbolsOf("WovenAssembly", module => NewType(module, "Host").CustomAttributes.Add(new CustomAttribute(AnInjectorOf(module))));
+            var assembly = new StubCompiledAssembly("WovenAssembly", image, symbols: symbols);
+
+            var result = Processor().Process(assembly);
+
+            Assert.That(Messages(result), Is.Empty, string.Join(Environment.NewLine, Messages(result)));
+            Assert.That(result.InMemoryAssembly.PeData, Is.Not.SameAs(image),
+                        "the assembly was not woven, so what was handed back is what was handed in.");
+            Assert.That(result.InMemoryAssembly.PdbData, Is.Not.SameAs(symbols),
+                        "the symbols of the image which was read were handed back with the image which was woven.");
+
+            // The pair which is handed back is read together: a database of another image is refused by the reader
+            // rather than left to describe places of an image which is not the one it was handed.
+            using var stream = new MemoryStream(result.InMemoryAssembly.PeData);
+            using var read = AssemblyDefinition.ReadAssembly(stream, new ReaderParameters
+            {
+                ReadSymbols          = true,
+                SymbolReaderProvider = new SymbolsInBytes(result.InMemoryAssembly.PdbData)
+            });
+
+            Assert.That(read.MainModule.HasSymbols, Is.True, "the image which was woven was read without the symbols which were handed back with it.");
         }
 
         [Test]
@@ -287,7 +331,96 @@ namespace Gneedle.Unity.Test
                 var host = NewType(module, "Host");
                 method.DeclaringType = host;
                 host.Methods.Add(method);
+
+                // The member carries an injector, which is what makes the weaving read it: a type which carries none is
+                // one which nothing is applied to, and no member of it is read, so the assembly which the signature of
+                // this one names would never be asked for and nothing would be reported of it.<para/>
+                // The injector is declared by the image rather than by the assembly of these tests, which is the shape
+                // the tests above read an injector by as well: the assembly of the tests is woven by the editor which
+                // runs them, so what the weaving reads of a type of it is not what it reads of one which was compiled
+                // and left alone.
+                var injector = NewType(module, "Injector", TypeAttributes.Public | TypeAttributes.Class, module.ImportReference(typeof(Attribute)));
+                injector.Interfaces.Add(new InterfaceImplementation(module.ImportReference(typeof(IMethodInjector))));
+
+                var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void)
+                {
+                    DeclaringType = injector
+                };
+                constructor.Body.GetILProcessor().Emit(OpCodes.Ret);
+                injector.Methods.Add(constructor);
+
+                method.CustomAttributes.Add(new CustomAttribute(constructor));
             });
+
+        /// <summary>
+        /// The image of an assembly and the symbols which describe it, written together as a compilation writes them.
+        /// </summary>
+        /// <param name="assemblyName">The name of the assembly.</param>
+        /// <param name="build">What the module of the image holds.</param>
+        /// <returns>The bytes of the image and the bytes of the symbols.</returns>
+        private static (byte[] Image, byte[] Symbols) ImageAndSymbolsOf(string assemblyName, Action<ModuleDefinition> build)
+        {
+            var name = new AssemblyNameDefinition(assemblyName, new Version(1, 0));
+            var assembly = AssemblyDefinition.CreateAssembly(name, assemblyName, ModuleKind.Dll);
+            build(assembly.MainModule);
+
+            using var image = new MemoryStream();
+            using var symbols = new MemoryStream();
+            assembly.Write(image, new WriterParameters
+            {
+                WriteSymbols         = true,
+                SymbolWriterProvider = new PortablePdbWriterProvider(),
+                SymbolStream         = symbols
+            });
+
+            return (image.ToArray(), symbols.ToArray());
+        }
+
+        /// <summary>
+        /// The constructor of a type which the image declares and which is an injector, which is what an attribute of
+        /// the image is made of.<para/>
+        /// The injector is declared by the image rather than by the assembly of these tests, because that assembly is
+        /// woven by the editor which runs them: what a weaving reads of a type of it is not what it reads of one which
+        /// was compiled and left alone. What it injects is nothing, which is enough for a weaving to be one which wrote
+        /// an image, because an injector which ran is one which the image it stands on was changed by.
+        /// </summary>
+        /// <param name="module">The module which the injector is declared by.</param>
+        /// <returns>The constructor of the injector, which the attribute names.</returns>
+        private static MethodDefinition AnInjectorOf(ModuleDefinition module)
+        {
+            var injector = NewType(module, "Injector", TypeAttributes.Public | TypeAttributes.Class, module.ImportReference(typeof(Attribute)));
+            injector.Interfaces.Add(new InterfaceImplementation(module.ImportReference(typeof(ITypeInjector))));
+
+            var constructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void)
+            {
+                DeclaringType = injector
+            };
+            constructor.Body.GetILProcessor().Emit(OpCodes.Ret);
+            injector.Methods.Add(constructor);
+
+            // The order which the injector asks to be applied in, which the interface of every injector declares.
+            var priority = new MethodDefinition("get_Priority", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.SpecialName, module.TypeSystem.Int32)
+            {
+                DeclaringType = injector
+            };
+            priority.Body.GetILProcessor().Emit(OpCodes.Ldc_I4_0);
+            priority.Body.GetILProcessor().Emit(OpCodes.Ret);
+            injector.Methods.Add(priority);
+
+            // The members of the interface are declared by the type rather than handed bodies by the interface itself,
+            // which no framework the weaver is built for allows: what the weaving calls is the member, and a type which
+            // does not hold one is one which the runtime refuses to load.
+            var inject = new MethodDefinition("Inject", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual | MethodAttributes.Final, module.TypeSystem.Void)
+            {
+                DeclaringType = injector
+            };
+            inject.Parameters.Add(new ParameterDefinition("type", ParameterAttributes.None, module.ImportReference(typeof(Type))));
+            inject.Parameters.Add(new ParameterDefinition("handler", ParameterAttributes.None, module.ImportReference(typeof(ITypeHandler))));
+            inject.Body.GetILProcessor().Emit(OpCodes.Ret);
+            injector.Methods.Add(inject);
+
+            return constructor;
+        }
 
         /// <summary>
         /// Add a class to a module.
@@ -307,6 +440,31 @@ namespace Gneedle.Unity.Test
         }
 
         /// <summary>
+        /// The symbols which are read out of the memory they were handed over in, which is the shape of what a post
+        /// processor answers with: an image and its database are read together, and neither of the two is a file which
+        /// a reader could find beside the image it was given the name of.
+        /// </summary>
+        private sealed class SymbolsInBytes : ISymbolReaderProvider
+        {
+            /// <summary>
+            /// The bytes of the symbols, which are what the readers below read out of.
+            /// </summary>
+            private readonly byte[] m_Symbols;
+
+            /// <summary>
+            /// Hold the symbols of one image.
+            /// </summary>
+            /// <param name="symbols">The bytes of the symbols.</param>
+            public SymbolsInBytes(byte[] symbols) => m_Symbols = symbols;
+
+            /// <inheritdoc/>
+            public ISymbolReader GetSymbolReader(ModuleDefinition module, string fileName) => GetSymbolReader(module, new MemoryStream(m_Symbols));
+
+            /// <inheritdoc/>
+            public ISymbolReader GetSymbolReader(ModuleDefinition module, Stream stream) => new PortablePdbReaderProvider().GetSymbolReader(module, stream);
+        }
+
+        /// <summary>
         /// One assembly of a compilation, as the post processor of the tests is handed one.<para/>
         /// The paths which the compilation named are the ones of the assembly which was joined to it, which is what tells
         /// that the resolution of the assemblies of one weaving is held by that weaving alone.
@@ -319,10 +477,12 @@ namespace Gneedle.Unity.Test
             /// <param name="name">The name of the assembly.</param>
             /// <param name="image">The bytes of the image which the assembly was compiled to.</param>
             /// <param name="references">The paths which the assembly refers to.</param>
-            public StubCompiledAssembly(string name, byte[] image, string[] references = null)
+            /// <param name="symbols">The symbols which the image was compiled with, or null for the image which a test
+            /// built itself, which was compiled with none.</param>
+            public StubCompiledAssembly(string name, byte[] image, string[] references = null, byte[] symbols = null)
             {
                 Name             = name;
-                InMemoryAssembly = new InMemoryAssembly(image, Symbols);
+                InMemoryAssembly = new InMemoryAssembly(image, symbols);
                 References       = references ?? Array.Empty<string>();
             }
 

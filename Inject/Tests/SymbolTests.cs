@@ -1,4 +1,5 @@
 using Mono.Cecil;
+using Mono.Cecil.Cil;
 
 namespace Gneedle.Inject.Test;
 
@@ -42,5 +43,29 @@ public class SymbolTests
         // read held the places of its instructions, and the writer writes the ones the module holds.
         var described = read.MainModule.Types.SelectMany(type => type.Methods).Count(method => method.DebugInformation.HasSequencePoints);
         Assert.That(described, Is.GreaterThan(0), "no method of the image which was woven is described by the symbols which were written beside it.");
+    }
+
+    [Test]
+    public void An_Image_Which_Was_Woven_Is_Not_Described_By_The_Symbols_Of_The_Image_It_Was_Woven_From()
+    {
+        // What is read here is the answer of the overload which is asked for the image alone, which is a pair no caller
+        // can wear: what tells a database from a database which describes one image is the image it names, and a weaving
+        // writes an image of its own, so a caller which hands the image it read the symbols of along with the image
+        // which was woven hands over two things which do not describe one image, and a reader of the two says so rather
+        // than reading places which are not there. It is the shape which the post processor of Unity was written in
+        // rather than a fault of the weaver, which is why the test which answers for it lives beside that processor.
+        var location = typeof(SymbolTests).Assembly.Location;
+        var image = File.ReadAllBytes(location);
+        var symbols = File.ReadAllBytes(Path.ChangeExtension(location, ".pdb"));
+
+        var (changed, woven) = Injections.Apply(AssemblyLoader.LoadFromBytes(image), image);
+        Assert.That(changed, Is.True, "the assembly of these tests was woven by none of its injectors.");
+
+        using var stream = new MemoryStream(woven);
+        Assert.Throws<SymbolsNotMatchingException>(() => AssemblyDefinition.ReadAssembly(stream, new ReaderParameters
+        {
+            ReadSymbols          = true,
+            SymbolReaderProvider = new PdbInBytes(symbols)
+        }), "the symbols of the image which was read describe the image which was written.");
     }
 }
