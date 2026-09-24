@@ -179,6 +179,10 @@ An injector is an attribute that implements one of the interfaces of `Gneedle.In
    + **IStructInjector**: for a struct.
    + **IEnumInjector**: for an enum.
 
+An injector which stands on a member is read on the members which **override** it as well, and one which stands on a type on the types which **derive** from it. What decides it is the `AttributeUsage` of the type of the attribute, which is the reading the runtime makes of one: `Inherited = false` is read where it stands alone, and an attribute whose type declares no usage at all inherits, which is the default of the framework. What an override which carries an injector of its own is given is the one of the member it overrides first and its own after, so the more specific advice is the one which stands outermost.
+
+Three things are not on that chain. A member which is inherited and not overridden is declared by the base and woven there, so a type which inherits one is woven by nothing of its own; an implementation of an interface member is not an override of it, so an injector of the interface member is read where it stands alone; and a member which hides the one above it with `new` declares a member of its own rather than overriding that one.
+
 An injector is an attribute, so it is read out of the assembly at build time and does nothing at run time. The weaver is not a dependency of what you ship, and the attributes are taken back out once the injectors have been applied:
 
 ```csharp
