@@ -56,8 +56,7 @@ jobs:
       - name: Set up the SDK which the tree is built with
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 11.0.x
-          dotnet-quality: preview
+          dotnet-version: 10.0.x
 
       - name: Set up Node
         uses: actions/setup-node@v5
