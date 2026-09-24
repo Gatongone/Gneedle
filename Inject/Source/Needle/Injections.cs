@@ -344,19 +344,7 @@ public static class Injections
             var holds = false;
             foreach (var attribute in attributes)
             {
-                TypeDefinition? attributeType;
-                try
-                {
-                    attributeType = attribute.AttributeType.Resolve();
-                }
-                catch (AssemblyResolutionException)
-                {
-                    // The attribute names a type of an assembly which the weaving cannot read, which is answered as an
-                    // attribute which is not an injector rather than as a failure of the member which carries it.
-                    continue;
-                }
-
-                if (attributeType == null || !InjectorInterfaces.IsAnInjector(attributeType, injectorInterfaces)) continue;
+                if (!IsAnInjector(attribute, injectorInterfaces)) continue;
 
                 // The name is the one which the metadata holds rather than the one which the runtime reads, because the
                 // metadata is what the trace is taken out by: a nested type is named with a '+' by the one and with a
@@ -369,17 +357,162 @@ public static class Injections
         }
 
         /// <summary>
+        /// Whether one of the attributes is an injector of one of the kinds which are named, which is read of the
+        /// metadata alone and writes nothing of it down.
+        /// </summary>
+        /// <param name="attribute">The attribute which is read.</param>
+        /// <param name="injectorInterfaces">The interfaces which an injector of the kinds which are wanted implements.</param>
+        /// <returns>Whether the attribute is one of them.</returns>
+        private static bool IsAnInjector(CustomAttribute attribute, string[] injectorInterfaces)
+        {
+            TypeDefinition? attributeType;
+            try
+            {
+                attributeType = attribute.AttributeType.Resolve();
+            }
+            catch (AssemblyResolutionException)
+            {
+                // The attribute names a type of an assembly which the weaving cannot read, which is answered as an
+                // attribute which is not an injector rather than as a failure of the member which carries it.
+                return false;
+            }
+
+            return attributeType != null && InjectorInterfaces.IsAnInjector(attributeType, injectorInterfaces);
+        }
+
+        /// <summary>
+        /// Whether an injector of one of the kinds which are named stands on the attributes, which is the same reading
+        /// without the names being written down.
+        /// </summary>
+        /// <param name="attributes">The attributes which are read.</param>
+        /// <param name="injectorInterfaces">The interfaces which an injector of the kinds which are wanted implements.</param>
+        /// <returns>Whether one of them is an injector.</returns>
+        private static bool HoldsAnyInjector(IEnumerable<CustomAttribute> attributes, string[] injectorInterfaces)
+            => attributes.Any(attribute => IsAnInjector(attribute, injectorInterfaces));
+
+        /// <summary>
         /// Whether any injector stands on the type or on a member of it, which is read from the metadata of the image
         /// rather than from the types of the runtime: materializing every type of an assembly is the cost of a weaving
-        /// beside the weaving of it, and a type which no injector stands on is one which nothing is applied to.
+        /// beside the weaving of it, and a type which no injector stands on is one which nothing is applied to.<para/>
+        /// An injector of a type or of a member is read on the types which derive from it and on the members which
+        /// override it as well, wherever the type of the attribute declares that it inherits, so the base types of the
+        /// type and the members which its own members override are read here beside it. What is read of them is read by
+        /// the name of the member rather than by its signature, because what this guards is whether the type is looked
+        /// at at all: the reading which decides whether an injector is applied to a member is the one the runtime makes
+        /// of that member, and a member which this names and which overrides nothing is one that reading passes over.
         /// </summary>
         /// <param name="type">The definition of the type which is read.</param>
         /// <returns>Whether the type declares an injector anywhere.</returns>
         private bool HoldsAnInjector(TypeDefinition type)
             => HoldsInjector(type.CustomAttributes, InjectorInterfaces.TypeInjectorNames)
-                || type.Methods.Any(method => HoldsInjector(method.CustomAttributes, InjectorInterfaces.MethodInjectorNames))
+                || BaseTypesOf(type).Any(baseType => HoldsAnyInjector(baseType.CustomAttributes, InjectorInterfaces.TypeInjectorNames))
+                || type.Methods.Any(HoldsAnInjector)
                 || type.Fields.Any(field => HoldsInjector(field.CustomAttributes, InjectorInterfaces.FieldInjectorNames))
-                || type.Properties.Any(property => HoldsInjector(property.CustomAttributes, InjectorInterfaces.PropertyInjectorNames));
+                || type.Properties.Any(HoldsAnInjector);
+
+        /// <summary>
+        /// Whether an injector of a method stands on the method or on one which it overrides.
+        /// </summary>
+        /// <param name="method">The definition of the method which is read.</param>
+        /// <returns>Whether the method carries an injector anywhere.</returns>
+        private bool HoldsAnInjector(MethodDefinition method)
+            => HoldsInjector(method.CustomAttributes, InjectorInterfaces.MethodInjectorNames)
+                || OverriddenBy(method).Any(overridden => HoldsAnyInjector(overridden.CustomAttributes, InjectorInterfaces.MethodInjectorNames));
+
+        /// <summary>
+        /// The same, of a property, whose injectors are read where it stands and where the property it overrides stands.
+        /// </summary>
+        /// <param name="property">The definition of the property which is read.</param>
+        /// <returns>Whether the property carries an injector anywhere.</returns>
+        private bool HoldsAnInjector(PropertyDefinition property)
+            => HoldsInjector(property.CustomAttributes, InjectorInterfaces.PropertyInjectorNames)
+                || OverriddenBy(property).Any(overridden => HoldsAnyInjector(overridden.CustomAttributes, InjectorInterfaces.PropertyInjectorNames));
+
+        /// <summary>
+        /// The base types of a type, the nearest first, or none where it derives from none.
+        /// </summary>
+        /// <remarks>
+        /// A base type which cannot be read ends the walk rather than failing it, because what the walk is for is a
+        /// reason to look at the type rather than the reading of it: a type which derives from one the weaving cannot
+        /// read is still woven for what it carries itself, and what is lost is that an injector of the base is not
+        /// looked for, which is the same answer the reading of the member would give.
+        /// </remarks>
+        /// <param name="type">The type whose base types are walked.</param>
+        /// <returns>The definitions of the base types which could be read.</returns>
+        private static IEnumerable<TypeDefinition> BaseTypesOf(TypeDefinition type)
+        {
+            for (var baseType = BaseOf(type); baseType != null; baseType = BaseOf(baseType)) yield return baseType;
+        }
+
+        /// <summary>
+        /// The members which a member overrides, the nearest first, or none where it overrides none.
+        /// </summary>
+        /// <remarks>
+        /// A member overrides a member of a base type where the two have one name and one count of parameters and the
+        /// one above is virtual. What is not asked of the one above is whether it takes a slot of its own, because it
+        /// is the declaration which takes the slot which carries the attribute: a member which overrides it is the one
+        /// which does not take one, and a walk which wanted the one above to be an override as well would reach
+        /// nothing. A member which hides the one above it is not kept out here either: the walk names it, and the
+        /// reading of the runtime is what passes over it, because a hidden member is not a member whose attributes are
+        /// read on the member which hides it. The count of the parameters rather than their types is what the walk is
+        /// held to, for the reason it is held to the name: what it answers is whether the member is read at all.
+        /// </remarks>
+        /// <param name="method">The member which is read.</param>
+        /// <returns>The definitions of the members which it overrides.</returns>
+        private static IEnumerable<MethodDefinition> OverriddenBy(MethodDefinition method)
+        {
+            for (var baseType = BaseOf(method.DeclaringType); baseType != null; baseType = BaseOf(baseType))
+            {
+                if (baseType.Methods.FirstOrDefault(above => Overrides(above, method)) is not { } overridden) continue;
+
+                yield return overridden;
+                method = overridden;
+            }
+        }
+
+        /// <inheritdoc cref="OverriddenBy(MethodDefinition)"/>
+        /// <param name="property">The property which is read.</param>
+        /// <returns>The definitions of the properties which it overrides.</returns>
+        private static IEnumerable<PropertyDefinition> OverriddenBy(PropertyDefinition property)
+        {
+            for (var baseType = BaseOf(property.DeclaringType); baseType != null; baseType = BaseOf(baseType))
+            {
+                if (baseType.Properties.FirstOrDefault(above => above.Name == property.Name) is not { } overridden) continue;
+
+                yield return overridden;
+                property = overridden;
+            }
+        }
+
+        /// <summary>
+        /// Whether a member of a base type is the member which the one below it overrides.
+        /// </summary>
+        /// <param name="above">The member of the base type.</param>
+        /// <param name="member">The member which is read.</param>
+        /// <returns>Whether the one above is the one which the one below overrides.</returns>
+        private static bool Overrides(MethodDefinition above, MethodDefinition member)
+            => above.Name == member.Name
+                && above.Parameters.Count == member.Parameters.Count
+                && above.IsVirtual;
+
+        /// <summary>
+        /// The base type of a type, or null where it derives from none or from one which cannot be read.
+        /// </summary>
+        /// <param name="type">The type whose base type is read.</param>
+        /// <returns>The definition of the base type, or null.</returns>
+        private static TypeDefinition? BaseOf(TypeDefinition type)
+        {
+            if (type.BaseType is null) return null;
+
+            try
+            {
+                return type.BaseType.Resolve();
+            }
+            catch (AssemblyResolutionException)
+            {
+                return null;
+            }
+        }
 
         /// <summary>
         /// Apply the injectors of one type of the assembly.
@@ -459,7 +592,22 @@ public static class Injections
         /// <param name="isAnInjector">Whether an attribute is one of the kind which is asked for.</param>
         /// <returns>The injectors which it carries, in the order in which they are applied.</returns>
         private static Attribute[] TheInjectorsWhich(System.Reflection.ICustomAttributeProvider provider, Func<Attribute, bool> isAnInjector)
-            => InTheOrderTheyAreApplied(provider.GetCustomAttributes(inherit: false).OfType<Attribute>().Where(isAnInjector));
+            => InTheOrderTheyAreApplied(TheAttributesOf(provider).OfType<Attribute>().Where(isAnInjector));
+
+        /// <summary>
+        /// The attributes of an assembly or of a member of one, which are the ones it carries itself and the ones which
+        /// it is read as carrying.<para/>
+        /// An attribute of a member is read on the members which override it, and one of a type on the types which
+        /// derive from it, wherever the type of the attribute declares that it inherits — which is what the reading
+        /// below is asked for, and what it answers by on its own: the walk of the chain and the honouring of
+        /// `AttributeUsage` are the runtime's, and an attribute whose type declares no usage at all is one which
+        /// inherits, which is the default they are read by. An attribute of a field is read on the field alone, which
+        /// is a reading the runtime makes the same way.
+        /// </summary>
+        /// <param name="provider">The assembly or member whose attributes are read.</param>
+        /// <returns>The attributes which it carries, nearest first.</returns>
+        private static object[] TheAttributesOf(System.Reflection.ICustomAttributeProvider provider)
+            => provider.GetCustomAttributes(inherit: true);
 
         /// <summary>
         /// The injectors which an assembly or a member carries, in the order in which they are applied: by the priority
@@ -489,7 +637,9 @@ public static class Injections
         /// <returns>Whether an injector was applied.</returns>
         private bool ProcessTypeInjector(AssemblyHandler assemblyHandler, Type type)
         {
-            if (!HoldsInjector(assemblyHandler.GetCecilType(type).Definition.CustomAttributes, InjectorInterfaces.TypeInjectorNames)) return false;
+            var definition = assemblyHandler.GetCecilType(type).Definition;
+            if (!HoldsInjector(definition.CustomAttributes, InjectorInterfaces.TypeInjectorNames)
+                && !BaseTypesOf(definition).Any(baseType => HoldsAnyInjector(baseType.CustomAttributes, InjectorInterfaces.TypeInjectorNames))) return false;
 
             var dirty = false;
             var typeAttributes = TheInjectorsWhich(type, static attribute => InjectorInterfaces.TypeInjectors.Any(injector => injector.IsInstanceOfType(attribute)));
@@ -568,7 +718,7 @@ public static class Injections
             // its reflection being read. A member which the assembly does not hold is left to the reflection, so that
             // the injector which was put on it is reported as naming a member which is not there rather than passed
             // over in silence.
-            if (methodHandler is MethodHandler {Source: { } methodDefinition} && !HoldsInjector(methodDefinition.CustomAttributes, InjectorInterfaces.MethodInjectorNames)) return false;
+            if (methodHandler is MethodHandler {Source: { } methodDefinition} && !HoldsAnInjector(methodDefinition)) return false;
 
             if (TheInjectorsWhich(methodInfo, static attribute => attribute is IMethodInjector)
                 .Cast<IMethodInjector>()
@@ -636,7 +786,7 @@ public static class Injections
         private bool ProcessPropertyInjector(IPropertyContainer typeHandler, Type runtimeType, PropertyInfo propertyInfo)
         {
             var propertyHandler = typeHandler.GetProperty(propertyInfo.Name);
-            if (propertyHandler is PropertyHandler {Source: { } propertyDefinition} && !HoldsInjector(propertyDefinition.CustomAttributes, InjectorInterfaces.PropertyInjectorNames)) return false;
+            if (propertyHandler is PropertyHandler {Source: { } propertyDefinition} && !HoldsAnInjector(propertyDefinition)) return false;
 
             if (TheInjectorsWhich(propertyInfo, static attribute => attribute is IPropertyInjector)
                 .Cast<IPropertyInjector>()
