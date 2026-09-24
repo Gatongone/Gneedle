@@ -148,6 +148,17 @@ host.GetMethod("Write", typeof(void).ToGneedleType())!
     });
 ```
 
+A lambda stands where a `Delegate` is asked for, and which lambdas may do that is settled by the version of the language which compiles the caller: a lambda has a type of its own from C# 10, and one written against an earlier version — which is what the compiler of a Unity project is — has none, so it cannot be handed over as a `Delegate` at all. What such a caller writes is the delegate the lambda would have been, which is `Action` where the template takes nothing and hands nothing back, and the `Func` which describes it otherwise:
+
+```csharp
+host.GetMethod("Write", typeof(void).ToGneedleType())!
+    .AroundBody((Action)(() =>
+    {
+        Proceed.Invoke();
+        Console.WriteLine(message);
+    }));
+```
+
 The delegate is what the weaving is given, so what the lambda captured is read out of it while the weaving runs, and the member that is woven carries `"Hello World"` as a string of its own rather than reaching for the instance the lambda was made from. What may be captured is settled by what the woven body can hold: a type, a string, an integer or a floating point number of any width, a character, a boolean, an enumeration, and a null of a reference type are written, and a capture of any other type is refused by name rather than woven into a member that would fail when it ran.
 
 ### Referring to a type you cannot reference
@@ -211,6 +222,8 @@ public sealed class LogMessageAttribute(string message) : Attribute, IMethodInje
     });
 }
 ```
+
+A project whose language is older than C# 10 writes the delegate the lambda would have been rather than the lambda itself, which is what the note under [Around advice](#around-advice) describes.
 
 ### What is left in the assembly
 
