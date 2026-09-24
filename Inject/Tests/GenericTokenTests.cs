@@ -437,7 +437,7 @@ public class GenericTokenTests
                                  .GetHandler();
         AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalOfGenericInstance));
 
-        // The runtime loader can't load this net5.0-targeted image here, but Cecil
+        // The runtime loader can't load this net6.0-targeted image here, but Cecil
         // re-reading the emitted bytes proves the produced image is well-formed.
         using var stream = new MemoryStream();
         assembly.SaveTo(stream);

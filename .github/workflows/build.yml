@@ -44,15 +44,15 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          # The runtime which the tests built for net5.0 are run by, which no runner carries any more. The SDK which
+          # The runtime which the tests built for net6.0 are run by. The SDK which
           # builds them is the one below, and the two are separate programs of one installation: what this asks for is
           # the shared framework, and what a project is built with is the newest SDK the installation holds, since
           # nothing here pins one.
           #
           # It is not raised with the SDK below, because a shared framework of a version is what a test built for that
-          # version is run by: a leg of net5.0 run on a framework of another version is not the leg which a consumer of
+          # version is run by: a leg of net6.0 run on a framework of another version is not the leg which a consumer of
           # the package runs, and the suites of this tree read what the framework writes as much as what it runs.
-          dotnet-version: 5.0.x
+          dotnet-version: 6.0.x
 
       - name: Set up the SDK which the tree is built with
         uses: actions/setup-dotnet@v5
@@ -62,7 +62,7 @@ jobs:
           # band rather than to whichever SDK a machine happens to have newest.
           #
           # The runtime above is a step of its own rather than a second version of this one, because the two are
-          # separate programs: what a project is built with is the SDK, and what a test which was built for net5.0 is
+          # separate programs: what a project is built with is the SDK, and what a test which was built for net6.0 is
           # run by is the shared framework of that version.
           dotnet-version: 10.0.x
 

@@ -6,8 +6,8 @@
 
     <PropertyGroup>
         <RootNamespace>Gneedle.Inject</RootNamespace>
-        <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
-        <!-- Ignore .net5.0 EOL -->
+        <TargetFrameworks>net6.0;netstandard2.1;net472</TargetFrameworks>
+        <!-- Ignore .net6.0 EOL -->
         <CheckEolTargetFramework>false</CheckEolTargetFramework>
 
         <!-- A package is made by `dotnet pack`, which builds the frameworks which it packs. The property which makes a

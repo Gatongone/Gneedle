@@ -48,10 +48,10 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          # The runtime which the tests built for net5.0 are run by, which no runner carries any more. The two steps of
+          # The runtime which the tests built for net6.0 are run by. The two steps of
           # this are the ones the workflow which holds every pull request and every push to the branch the releases are
           # cut from asks for, and for the reason written out there.
-          dotnet-version: 5.0.x
+          dotnet-version: 6.0.x
 
       - name: Set up the SDK which the tree is built with
         uses: actions/setup-dotnet@v5

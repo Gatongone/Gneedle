@@ -10,8 +10,8 @@
              run which holds it fails whole - the two which pass are answered, and the command still reports failure.
              The library is built for netstandard2.1 whether or not this is, which is what a Unity project reaches the
              weaver through, and a build of it which does not compile is a build which fails. -->
-        <TargetFrameworks>net5.0;net472</TargetFrameworks>
-        <!-- Ignore .net5.0 EOL -->
+        <TargetFrameworks>net6.0;net472</TargetFrameworks>
+        <!-- Ignore .net6.0 EOL -->
         <CheckEolTargetFramework>false</CheckEolTargetFramework>
 
         <OutputType>Library</OutputType>

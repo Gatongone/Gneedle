@@ -14,7 +14,7 @@
 
         <RootNamespace>Gneedle.Aspect.Test</RootNamespace>
 
-        <!-- Ignore .net5.0 EOL -->
+        <!-- Ignore .net6.0 EOL -->
         <CheckEolTargetFramework>false</CheckEolTargetFramework>
 
         <!-- The scan of the solution adds the injection target to every project which references this one, and this

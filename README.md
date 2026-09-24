@@ -298,7 +298,7 @@ A delegate which names a member that it does not describe — one which hands ba
 
 ## Requirement
 
-* **The project** that is woven references the weaver, which targets `net5.0`, `netstandard2.1` and `net472`.
+* **The project** that is woven references the weaver, which targets `net6.0`, `netstandard2.1` and `net472`.
 * **The build task**, which is what `Gneedle.Aspect` is, runs on MSBuild 17.6 or later, which is what the .NET SDK, Visual Studio 2022 and Rider provide. A full framework MSBuild loads the `net472` build of the task and a `dotnet build` loads the `netstandard2.1` one; the package picks between them by itself. A project that drives the weaver from its own code is not bound by this, since it runs what it writes.
 * **Unity** 2021.3 or later, for the two packages that are installed through the Package Manager. The weaver is a plugin of the project there, so it is compiled for `netstandard2.1`, and Mono.Cecil is brought in by the package that names it as a dependency rather than installed by hand.
 * **Nothing** of the weaver is needed by the assembly once it has been woven, so the weaver does not become a dependency of what you ship.
@@ -373,11 +373,11 @@ openupm add com.gatongone.gneedle.aspect
 The tests of the weaver and of the build task are run with `dotnet test`, from the root of the repository, and each project is built for every framework it names:
 
 ```
-dotnet test Inject/Tests/Gneedle.Inject.Test.csproj    # the weaver, built for net5.0 and net472
+dotnet test Inject/Tests/Gneedle.Inject.Test.csproj    # the weaver, built for net6.0 and net472
 dotnet test Aspect/Tests/Gneedle.Aspect.Test.csproj    # the build task, built for net472
 ```
 
-The tests of the weaver are run on `net5.0` by the runtime they were built for. A machine that carries a newer one rather than the 5.0 runtime starts its host only when it is told to move forward to the runtime it holds:
+The tests of the weaver are run on `net6.0` by the runtime they were built for. A machine that carries a newer one rather than the 6.0 runtime starts its host only when it is told to move forward to the runtime it holds:
 
 ```
 DOTNET_ROLL_FORWARD=LatestMajor dotnet test Inject/Tests/Gneedle.Inject.Test.csproj

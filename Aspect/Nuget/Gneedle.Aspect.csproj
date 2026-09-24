@@ -6,7 +6,7 @@
 
     <PropertyGroup>
         <RootNamespace>Gneedle.Aspect</RootNamespace>
-        <TargetFrameworks>net5.0;netstandard2.1;net472</TargetFrameworks>
+        <TargetFrameworks>net6.0;netstandard2.1;net472</TargetFrameworks>
 
         <!-- A package is made by `dotnet pack`, which builds the frameworks which it packs. The property which makes a
              build pack as well is not set, because it works the other way round: a `dotnet pack` of a project which
@@ -28,7 +28,7 @@
          the reason each of them is raised with.
 
          NU1701: the packages this project is built on carry no assembly for the frameworks it is built for -
-         Microsoft.Build and Microsoft.IO.Redist hold a net472 build and a net7.0 build alone - so a project of net5.0
+         Microsoft.Build and Microsoft.IO.Redist hold a net472 build and a net7.0 build alone - so a project of net6.0
          or of netstandard2.1 resolves them through the net472 one. That is what the task wants: what runs them is the
          build which loads the task, and the reference below excludes their runtime, so nothing of theirs is carried
          beside the task.

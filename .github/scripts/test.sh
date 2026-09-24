@@ -55,7 +55,7 @@ fi
 # and until this line stood here there was no build of it at all.
 dotnet build Gneedle.sln -c Release
 
-# The tests of the weaver, built and run for every framework the project names, which is net5.0 and net472.
+# The tests of the weaver, built and run for every framework the project names, which is net6.0 and net472.
 dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -c Release
 
 # The same suite against the shapes which the optimizer writes, which are the ones a release build of a consumer holds.
