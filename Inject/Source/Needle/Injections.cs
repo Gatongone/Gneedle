@@ -497,10 +497,6 @@ public static class Injections
             foreach (var typeAttribute in typeAttributes)
             {
                 var typeHandler = assemblyHandler.GetType(type);
-                if (typeHandler == null!)
-                {
-                    continue;
-                }
 
                 if (typeAttribute is ITypeInjector typeInjector)
                 {
