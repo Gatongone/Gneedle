@@ -1,6 +1,6 @@
 <Project>
     <PropertyGroup>
-        <LangVersion>15</LangVersion>
+        <LangVersion>14</LangVersion>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
