@@ -404,29 +404,44 @@ public static class Injections
         /// <param name="type">The definition of the type which is read.</param>
         /// <returns>Whether the type declares an injector anywhere.</returns>
         private bool HoldsAnInjector(TypeDefinition type)
-            => HoldsInjector(type.CustomAttributes, InjectorInterfaces.TypeInjectorNames)
-                || BaseTypesOf(type).Any(baseType => HoldsAnyInjector(baseType.CustomAttributes, InjectorInterfaces.TypeInjectorNames))
-                || type.Methods.Any(HoldsAnInjector)
+        {
+            // The chain of the base types is one thing for the type, so it is read once here and handed to every member
+            // of it: a chain read for each member is a chain resolved once per member, and the reading of a type which
+            // carries no injector at all - which is nearly every type of an assembly - is the one which walks the whole
+            // of it. What the resolution costs is therefore paid once for the type rather than once for each of its
+            // members, which is the difference between a weaving of an assembly and a weaving of it per member.
+            var baseTypes = BaseTypesOf(type).ToArray();
+            return HoldsInjector(type.CustomAttributes, InjectorInterfaces.TypeInjectorNames)
+                || baseTypes.Any(baseType => HoldsAnyInjector(baseType.CustomAttributes, InjectorInterfaces.TypeInjectorNames))
+                || type.Methods.Any(method => HoldsAnInjector(method, baseTypes))
                 || type.Fields.Any(field => HoldsInjector(field.CustomAttributes, InjectorInterfaces.FieldInjectorNames))
-                || type.Properties.Any(HoldsAnInjector);
+                || type.Properties.Any(property => HoldsAnInjector(property, baseTypes));
+        }
 
         /// <summary>
-        /// Whether an injector of a method stands on the method or on one which it overrides.
+        /// Whether an injector of a method stands on the method or on a member of a base type which overrides it.
         /// </summary>
         /// <param name="method">The definition of the method which is read.</param>
+        /// <param name="baseTypes">The base types of the type which declares the method, the nearest first, or null for
+        /// the walk which reads them here: a caller which reads the members of one type reads them for all of them, and
+        /// hands the chain which it read to each.</param>
         /// <returns>Whether the method carries an injector anywhere.</returns>
-        private bool HoldsAnInjector(MethodDefinition method)
+        private bool HoldsAnInjector(MethodDefinition method, IReadOnlyList<TypeDefinition>? baseTypes = null)
             => HoldsInjector(method.CustomAttributes, InjectorInterfaces.MethodInjectorNames)
-                || OverriddenBy(method).Any(overridden => HoldsAnyInjector(overridden.CustomAttributes, InjectorInterfaces.MethodInjectorNames));
+                || (baseTypes ?? BaseTypesOf(method.DeclaringType!).ToArray()).Any(baseType =>
+                       baseType.Methods.Any(above => Overrides(above, method) && HoldsAnyInjector(above.CustomAttributes, InjectorInterfaces.MethodInjectorNames)));
 
         /// <summary>
         /// The same, of a property, whose injectors are read where it stands and where the property it overrides stands.
         /// </summary>
         /// <param name="property">The definition of the property which is read.</param>
+        /// <param name="baseTypes">The base types of the type which declares the property, the nearest first, or null for
+        /// the walk which reads them here.</param>
         /// <returns>Whether the property carries an injector anywhere.</returns>
-        private bool HoldsAnInjector(PropertyDefinition property)
+        private bool HoldsAnInjector(PropertyDefinition property, IReadOnlyList<TypeDefinition>? baseTypes = null)
             => HoldsInjector(property.CustomAttributes, InjectorInterfaces.PropertyInjectorNames)
-                || OverriddenBy(property).Any(overridden => HoldsAnyInjector(overridden.CustomAttributes, InjectorInterfaces.PropertyInjectorNames));
+                || (baseTypes ?? BaseTypesOf(property.DeclaringType!).ToArray()).Any(baseType =>
+                       baseType.Properties.Any(above => above.Name == property.Name && HoldsAnyInjector(above.CustomAttributes, InjectorInterfaces.PropertyInjectorNames)));
 
         /// <summary>
         /// The base types of a type, the nearest first, or none where it derives from none.
@@ -442,46 +457,6 @@ public static class Injections
         private static IEnumerable<TypeDefinition> BaseTypesOf(TypeDefinition type)
         {
             for (var baseType = BaseOf(type); baseType != null; baseType = BaseOf(baseType)) yield return baseType;
-        }
-
-        /// <summary>
-        /// The members which a member overrides, the nearest first, or none where it overrides none.
-        /// </summary>
-        /// <remarks>
-        /// A member overrides a member of a base type where the two have one name and one count of parameters and the
-        /// one above is virtual. What is not asked of the one above is whether it takes a slot of its own, because it
-        /// is the declaration which takes the slot which carries the attribute: a member which overrides it is the one
-        /// which does not take one, and a walk which wanted the one above to be an override as well would reach
-        /// nothing. A member which hides the one above it is not kept out here either: the walk names it, and the
-        /// reading of the runtime is what passes over it, because a hidden member is not a member whose attributes are
-        /// read on the member which hides it. The count of the parameters rather than their types is what the walk is
-        /// held to, for the reason it is held to the name: what it answers is whether the member is read at all.
-        /// </remarks>
-        /// <param name="method">The member which is read.</param>
-        /// <returns>The definitions of the members which it overrides.</returns>
-        private static IEnumerable<MethodDefinition> OverriddenBy(MethodDefinition method)
-        {
-            for (var baseType = BaseOf(method.DeclaringType); baseType != null; baseType = BaseOf(baseType))
-            {
-                if (baseType.Methods.FirstOrDefault(above => Overrides(above, method)) is not { } overridden) continue;
-
-                yield return overridden;
-                method = overridden;
-            }
-        }
-
-        /// <inheritdoc cref="OverriddenBy(MethodDefinition)"/>
-        /// <param name="property">The property which is read.</param>
-        /// <returns>The definitions of the properties which it overrides.</returns>
-        private static IEnumerable<PropertyDefinition> OverriddenBy(PropertyDefinition property)
-        {
-            for (var baseType = BaseOf(property.DeclaringType); baseType != null; baseType = BaseOf(baseType))
-            {
-                if (baseType.Properties.FirstOrDefault(above => above.Name == property.Name) is not { } overridden) continue;
-
-                yield return overridden;
-                property = overridden;
-            }
         }
 
         /// <summary>
