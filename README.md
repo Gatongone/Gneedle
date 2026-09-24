@@ -180,6 +180,18 @@ public class Stub
 }
 ```
 
+A stub which is not written under that name names the real type itself, which is what the stubs of an assembly are written with where they are to stand in one namespace of their own:
+
+```csharp
+[FromAssembly("MyAssembly", "My.Namespace.Host")]
+public class HostStub
+{
+    public int Value;
+}
+```
+
+What is named there is the type, and the number of generic parameters the stub declares is added to it: a stub which declares one stands for `Host<T>`, since a type which declares any is named by that number wherever it is named. A type which is nested and whose declaring type declares parameters of its own is not named this way.
+
 ## Aspect
 
 The aspect weaver drives the library from the build that produces the assembly. It is added to a project as a package and needs no entry point of its own: it reads the injectors from the attributes that the assembly declares, applies them to it as it is built, and takes itself back out of the assembly once they have been applied.
