@@ -724,7 +724,10 @@ public class GenericTokenTests
 
     /// <summary>
     /// The numbers of the tokens which the library declares of one kind, read off the classes of it which are named
-    /// <c>Gneedle.Inject.{token}_</c> and the number of them.
+    /// <c>Gneedle.Inject.{token}_</c> followed by the number of the parameter which the token stands for.<para/>
+    /// A type of the library is named after that prefix without numbering a parameter as well, which is what the token
+    /// of the type being woven is: it is a token of the shape of the others and stands for no parameter of a signature
+    /// at all, so the two are told apart by what stands after the prefix.
     /// </summary>
     /// <param name="token">The letter which tells the token of the type from the token of the method.</param>
     /// <returns>The numbers of the tokens, in the order of the numbers which they hold.</returns>
@@ -738,7 +741,9 @@ public class GenericTokenTests
                           .Select(type => type.FullName)
                           .OfType<string>()
                           .Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
-                          .Select(name => int.Parse(name.Substring(prefix.Length)))
+                          .Select(name => name.Substring(prefix.Length))
+                          .Where(number => number.Length > 0 && number.All(char.IsDigit))
+                          .Select(int.Parse)
                           .OrderBy(index => index)
         ];
     }

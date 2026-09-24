@@ -107,6 +107,34 @@ internal static class TokenParsing
         return true;
     }
 
+    /// <summary>
+    /// The full name of the token which stands for the type being woven.
+    /// </summary>
+    private static readonly string WovenTypeToken = $"{nameof(Gneedle)}.{nameof(Inject)}.{nameof(T_Self)}";
+
+    /// <summary>
+    /// The type which the token of the type being woven stands for, which is the type which declares the member being
+    /// woven, as an instantiation of itself where that type declares generic parameters.<para/>
+    /// What a member of an instantiation reaches is an instantiation: a list of the type being woven is a list of that
+    /// type with the arguments it was declared with, rather than of the definition which stands open.
+    /// </summary>
+    /// <param name="provider">The member which is being woven, whose declaring type is the type being woven.</param>
+    /// <param name="module">The module the reference is written into.</param>
+    /// <returns>The reference of the type being woven, which belongs to that module.</returns>
+    internal static TypeReference TheWovenType(IMemberDefinition provider, ModuleDefinition module)
+    {
+        // What is woven is a member, and the type it is woven into is the one which declares it: that type is of the
+        // module which the reference is written into as well, because the image being woven is the image that type is
+        // of, so the parameters of it are already the ones which the reference is written with.
+        var definition = provider.DeclaringType!;
+        var reference = ModuleLock.Import(module, definition);
+        if (definition.GenericParameters.Count == 0) return reference;
+
+        var instance = new GenericInstanceType(reference);
+        foreach (var parameter in definition.GenericParameters) instance.GenericArguments.Add(parameter);
+        return instance;
+    }
+
     /// <param name="typeReference">The type reference which could be Gneedle.Inject.T_[0-20] or Gneedle.Inject.M_[0-20].</param>
     extension(TypeReference typeReference)
     {
@@ -186,6 +214,11 @@ internal static class TokenParsing
             // So the wrapped type is parsed below, otherwise the token of it would be taken as the token of the whole type.
             if (typeReference is not TypeSpecification)
             {
+                // The token of the type being woven stands for the type itself rather than for a parameter of it, and it
+                // is read before the tokens of a parameter are: it is a type of this library in the same way they are,
+                // and the two are told apart by the name alone.
+                if (typeReference.FullName == WovenTypeToken) return TheWovenType(provider, module);
+
                 // The token stands for the generic parameter of the provider itself. It is not a type of any module, so it doesn't need to be imported.
                 if (typeReference.TryGetParsedGenericParameter(provider, out var parameter)) return parameter!;
 

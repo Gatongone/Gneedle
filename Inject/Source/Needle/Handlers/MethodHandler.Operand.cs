@@ -86,6 +86,22 @@ partial class MethodHandler
                 throw new WeavingException(string.Format(ErrorMessages.PROCEED_IN_A_BODY_OF_ITS_OWN, proceedCall.FullName, Source.FullName));
             }
         }
+        // The instance which the member being woven belongs to, which a template reads as a value rather than as the
+        // receiver of a member which it reaches: what stands in the body is the receiver of that member, and which
+        // instructions that is - or that there is none, for a member which is static, or for a body of the compiler's
+        // own which reaches no instance - is what the receiver of a member which a placeholder reaches is read by.
+        else if (currentIns.Operand is MethodReference { Name: nameof(This.Reference) or "get_" + nameof(This.Reference), DeclaringType: var woven } && woven.FullName == This.TYPE_NAME)
+        {
+            // A member which is static belongs to no instance, and what the template asked for is the instance rather
+            // than a member of one: the reading is refused by the name of what was read, where the receiver of a member
+            // which a placeholder reaches is refused by the name of the member which was reached.
+            if (Source.IsStatic)
+            {
+                throw new WeavingException(string.Format(ErrorMessages.REFERENCE_OF_A_MEMBER_WHICH_IS_STATIC, Source.FullName));
+            }
+
+            filter.Replace(currentIndex, CreateReceiver(null, targetDef, currentIndex, filter));
+        }
         else
         {
             FilterOperand(currentIns, currentIndex, filter, targetDef);
