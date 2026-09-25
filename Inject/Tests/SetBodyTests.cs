@@ -311,9 +311,9 @@ public class SetBodyTests
         var (_, host) = NewCalc();
         var method = host.AddMethod(
             "Add",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
 
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Add))!);
@@ -334,7 +334,7 @@ public class SetBodyTests
         // the reference: reading the tokens of the reference wrote the declaring type of it, which the setter of a
         // specification refuses, so a call of one was refused before the tokens of its arguments were read.
         var (handler, host) = NewCalc();
-        var method = host.AddMethod("First", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())],
+        var method = host.AddMethod("First", typeof(int).ToIType(), [], [new Parameter(typeof(int[]).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.First))!);
 
@@ -354,7 +354,7 @@ public class SetBodyTests
         // that two assemblies of one name are not asked of one run.
         var handler = (AssemblyHandler) Assembly.Create("CapturedTypeAssembly").Handler;
         var host = AddAHost(handler);
-        var method = host.AddMethod("TypeOf", typeof(Type).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var method = host.AddMethod("TypeOf", typeof(Type).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         var captured = typeof(BodyTemplates);
 
         method.SetBody(() => captured);
@@ -371,7 +371,7 @@ public class SetBodyTests
         // reference to the weaver which they name, are taken out of it once they have been applied, and the token of a
         // type of the weaver would name it again.
         var (_, host) = NewCalc();
-        var method = host.AddMethod("TypeOf", typeof(Type).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var method = host.AddMethod("TypeOf", typeof(Type).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         var captured = typeof(This);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(() => captured));
@@ -388,9 +388,9 @@ public class SetBodyTests
 
         var method = host.AddMethod(
             "Add",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Add))!);
 
@@ -417,7 +417,7 @@ public class SetBodyTests
         // the operand null where the names differ, which Cecil rejects while the instruction is built.
         var assembly = Assembly.Create("SetBodyParameterOperandAssembly");
         var host = AddAHost(assembly, "Calc");
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var method = host.AddMethod("Sum", intType, [], [
                 new Parameter(intType), new Parameter(intType), new Parameter(intType),
                 new Parameter(intType), new Parameter(intType)
@@ -435,7 +435,7 @@ public class SetBodyTests
     public void SetBody_With_More_Parameters_Than_The_Method_Holds_Throws()
     {
         var (_, host) = NewCalc();
-        var method = host.AddMethod("Echo", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+        var method = host.AddMethod("Echo", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Sum))!));
@@ -451,9 +451,9 @@ public class SetBodyTests
         // parameter) must be remapped to ldarg.1 because arg0 of the instance method is `this`.
         var method = host.AddMethod(
             "Echo",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(typeof(BodyTemplates).GetMethod(nameof(BodyTemplates.Echo))!);
 
@@ -475,8 +475,8 @@ public class SetBodyTests
         // names, whichever form of the opcode carries the slot.
         var assembly = Assembly.Create("SetBodyShiftedArgumentsAssembly");
         var host = AddAHost(assembly, "Calc");
-        var intType = typeof(int).ToGneedleType();
-        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+        var intType = typeof(int).ToIType();
+        host.AddMethod(".ctor", typeof(void).ToIType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
 
         var method = host.AddMethod("Number", intType, [],
             [
@@ -506,8 +506,8 @@ public class SetBodyTests
         // two: none of them moves where both belong to an instance.
         var assembly = Assembly.Create("SetBodyInstanceTemplateAssembly");
         var host = AddAHost(assembly, "Calc");
-        var intType = typeof(int).ToGneedleType();
-        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+        var intType = typeof(int).ToIType();
+        host.AddMethod(".ctor", typeof(void).ToIType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
 
         var method = host.AddMethod("Number", intType, [],
             [
@@ -578,7 +578,7 @@ public class SetBodyTests
         // assembly the template was compiled into. The type is carried onto the type being woven, which is what reaches
         // the private members of that type, and the member is run rather than read: what the carrying got wrong is
         // answered by the runtime rather than by the shape of the body.
-        var woven = NewProbeOf("SetBodyLambdaAssembly", nameof(ConstructTemplates.Lambda), typeof(int).ToGneedleType());
+        var woven = NewProbeOf("SetBodyLambdaAssembly", nameof(ConstructTemplates.Lambda), typeof(int).ToIType());
 
         Assert.That(woven.Invoke(null, [41]), Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
@@ -588,7 +588,7 @@ public class SetBodyTests
     {
         // What the lambda captured is held by the type the compiler wrote for it, and that field is carried with the
         // type: the copy of it holds the value the template wrote there.
-        var woven = NewProbeOf("SetBodyCapturingLambdaAssembly", nameof(ConstructTemplates.LambdaWhichCaptured), typeof(int).ToGneedleType());
+        var woven = NewProbeOf("SetBodyCapturingLambdaAssembly", nameof(ConstructTemplates.LambdaWhichCaptured), typeof(int).ToIType());
 
         Assert.That(woven.Invoke(null, [41]), Is.EqualTo(42), "the value which the template captured was not carried with the type.");
     }
@@ -598,7 +598,7 @@ public class SetBodyTests
     {
         // A local function which captures nothing is written as a method of the type which holds the template, so there
         // is no type to move for it and the member is moved on its own. It is the cheaper of the two moves.
-        var woven = NewProbeOf("SetBodyLocalFunctionAssembly", nameof(ConstructTemplates.LocalFunction), typeof(int).ToGneedleType());
+        var woven = NewProbeOf("SetBodyLocalFunctionAssembly", nameof(ConstructTemplates.LocalFunction), typeof(int).ToIType());
 
         Assert.That(woven.Invoke(null, [21]), Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
@@ -609,7 +609,7 @@ public class SetBodyTests
         // A local function which captured is written as a method of a type which the compiler writes beside the
         // template rather than as a method of the type which declares it, so the type is carried and the member of it
         // with it.
-        var woven = NewProbeOf("SetBodyCapturingLocalFunctionAssembly", nameof(ConstructTemplates.LocalFunctionWhichCaptured), typeof(int).ToGneedleType());
+        var woven = NewProbeOf("SetBodyCapturingLocalFunctionAssembly", nameof(ConstructTemplates.LocalFunctionWhichCaptured), typeof(int).ToIType());
 
         Assert.That(woven.Invoke(null, [41]), Is.EqualTo(42), "the value which the template captured was not carried with the type.");
     }
@@ -653,7 +653,7 @@ public class SetBodyTests
         // The body of an async method is the stub which starts a state machine, whose MoveNext holds what was written:
         // the machine is carried onto the type being woven and its MoveNext is woven there, so what the member is run
         // through is the state machine the copy holds rather than the one which was left behind.
-        var woven = NewProbeOf("SetBodyAsyncAssembly", nameof(ConstructTemplates.Async), typeof(Task<int>).ToGneedleType());
+        var woven = NewProbeOf("SetBodyAsyncAssembly", nameof(ConstructTemplates.Async), typeof(Task<int>).ToIType());
         var awaited = (Task<int>) woven.Invoke(null, [41])!;
 
         Assert.That(awaited.GetAwaiter().GetResult(), Is.EqualTo(42), "the member which was woven did not hand back what the template hands back.");
@@ -664,7 +664,7 @@ public class SetBodyTests
     {
         // An iterator is the other body which the compiler writes as a state machine of its own: the copies of what the
         // machine holds are what the woven member runs, and what it yields is what the template yields.
-        var woven = NewProbeOf("SetBodyIteratorAssembly", nameof(ConstructTemplates.Iterator), typeof(IEnumerable<int>).ToGneedleType());
+        var woven = NewProbeOf("SetBodyIteratorAssembly", nameof(ConstructTemplates.Iterator), typeof(IEnumerable<int>).ToIType());
 
         Assert.That(((IEnumerable<int>) woven.Invoke(null, [41])!).ToArray(), Is.EqualTo(new[] {41}),
             "the member which was woven did not produce what the template produces.");
@@ -677,7 +677,7 @@ public class SetBodyTests
     /// <param name="templateName">Name of the template of <see cref="ConstructTemplates"/> which is woven.</param>
     /// <returns>The method which was woven.</returns>
     private static MethodInfo NewProbe(string templateName)
-        => NewProbeOf($"SetBody{templateName}Assembly", templateName, typeof(int).ToGneedleType());
+        => NewProbeOf($"SetBody{templateName}Assembly", templateName, typeof(int).ToIType());
 
     /// <summary>
     /// Weave a template of <see cref="ConstructTemplates"/> into <c>public static {returnType} Probe(int value)</c> of an
@@ -691,7 +691,7 @@ public class SetBodyTests
     {
         var assembly = Assembly.Create(assemblyName);
         var host = AddAHost(assembly, "Calc");
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var method = host.AddMethod("Probe", returnType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
         method.SetBody(typeof(ConstructTemplates).GetMethod(templateName)!);
@@ -712,7 +712,7 @@ public class SetBodyTests
     {
         var assembly = Assembly.Create(assemblyName);
         var host = AddAHost(assembly, "Calc");
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var method = host.AddMethod("Probe", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
         method.SetBody(holder.GetMethod(templateName)!);
@@ -738,7 +738,7 @@ public class SetBodyTests
         // whose carrying succeeds and whose parse is refused, which is what tells the carrying to take back what it
         // wrote as well.
         var (_, host) = NewCalc();
-        var method = host.AddMethod("Probe", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())],
+        var method = host.AddMethod("Probe", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
         var source = SourceOf(method);
         var body = source.Body;
@@ -771,7 +771,7 @@ public class SetBodyTests
     public void ThrowException_Emits_Newobj_And_Throw()
     {
         var host = NewHost();
-        var method = host.AddMethod("Do", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Do", typeof(void).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(DefaultMethodBody.ThrowException);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
@@ -790,7 +790,7 @@ public class SetBodyTests
     public void WithDefaultReturn_ReferenceType_Emits_Ldnull()
     {
         var host = NewHost();
-        var method = host.AddMethod("Get", typeof(string).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Get", typeof(string).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(DefaultMethodBody.WithDefaultReturn);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
@@ -805,7 +805,7 @@ public class SetBodyTests
     public void WithDefaultReturn_ValueType_Emits_Initobj()
     {
         var host = NewHost();
-        var method = host.AddMethod("Get", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Get", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(DefaultMethodBody.WithDefaultReturn);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
@@ -820,7 +820,7 @@ public class SetBodyTests
     public void WithDefaultReturn_Void_Emits_Just_Ret()
     {
         var host = NewHost();
-        var method = host.AddMethod("Do", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Do", typeof(void).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(DefaultMethodBody.WithDefaultReturn);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
@@ -850,7 +850,7 @@ public class SetBodyTests
         var host = AddAHost(handler, "Derived");
         host.Source.BaseType = baseDef;
 
-        var method = host.AddMethod("Method", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Method", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(DefaultMethodBody.CallFromBase);
 
         var ins = SourceOf(method).Body.Instructions.ToArray();
@@ -872,8 +872,8 @@ public class SetBodyTests
         var host = AddAHost(assembly, "Calc");
 
         // The constructor is a call from base of its own, which is the first thing which an instance of the type runs.
-        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
-        host.AddMethod("Equals", typeof(bool).ToGneedleType(), [], [new Parameter(typeof(object).ToGneedleType())], MethodFlags.Public)
+        host.AddMethod(".ctor", typeof(void).ToIType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+        host.AddMethod("Equals", typeof(bool).ToIType(), [], [new Parameter(typeof(object).ToIType())], MethodFlags.Public)
             .SetBody(DefaultMethodBody.CallFromBase);
 
         var type = assembly.Load().GetType($"{NS}.Calc")!;
@@ -893,7 +893,7 @@ public class SetBodyTests
     public void CallFromBase_Without_Base_Method_Throws()
     {
         var host = NewHost();
-        var method = host.AddMethod("Method", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Method", typeof(int).ToIType(), [], [], MethodFlags.Public);
 
         // No base type with Method -> should throw
         Assert.Throws<WeavingException>(() => method.SetBody(DefaultMethodBody.CallFromBase));

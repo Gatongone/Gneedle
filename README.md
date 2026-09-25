@@ -31,7 +31,7 @@ public static int Double(int value) => This.Field<int>("m_Value").Get() + value;
 using var assembly = Assembly.Read("path/to/AnAssembly.dll");
 var host = (IClassHandler) assembly.Handler.GetType("My.Namespace.Host")!;
 
-host.GetMethod("Compute", typeof(int).ToGneedleType())!.SetBody(typeof(Templates).GetMethod(nameof(Double))!);
+host.GetMethod("Compute", typeof(int).ToIType())!.SetBody(typeof(Templates).GetMethod(nameof(Double))!);
 
 assembly.SaveTo("path/to/AnAssembly.dll");
 ```
@@ -128,7 +128,7 @@ public static T_0 Echo(T_0 value) => value;
 ```csharp
 public static int AddOne(int value) => Proceed.Method<Func<int, int>>()(value) + 1;
 
-host.GetMethod("Double", typeof(int).ToGneedleType())!
+host.GetMethod("Double", typeof(int).ToIType())!
     .AroundBody(typeof(Templates).GetMethod(nameof(Templates.AddOne))!);
 ```
 
@@ -147,7 +147,7 @@ A template may be a lambda rather than a method, and then it may capture the var
 
 ```csharp
 var message = "Hello World";
-host.GetMethod("Write", typeof(void).ToGneedleType())!
+host.GetMethod("Write", typeof(void).ToIType())!
     .AroundBody(() =>
     {
         Proceed.Invoke();
@@ -158,7 +158,7 @@ host.GetMethod("Write", typeof(void).ToGneedleType())!
 A lambda stands where a `Delegate` is asked for, and which lambdas may do that is settled by the version of the language which compiles the caller: a lambda has a type of its own from C# 10, and one written against an earlier version — which is what the compiler of a Unity project is — has none, so it cannot be handed over as a `Delegate` at all. What such a caller writes is the delegate the lambda would have been, which is `Action` where the template takes nothing and hands nothing back, and the `Func` which describes it otherwise:
 
 ```csharp
-host.GetMethod("Write", typeof(void).ToGneedleType())!
+host.GetMethod("Write", typeof(void).ToIType())!
     .AroundBody((Action)(() =>
     {
         Proceed.Invoke();

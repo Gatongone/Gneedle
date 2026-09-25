@@ -90,7 +90,7 @@ public class SelfTokenTests
         host.Source.Fields.Add(new FieldDefinition("s_Instance", FieldAttributes.Public | FieldAttributes.Static, host.Source));
         host.Source.Fields.Add(new FieldDefinition("Next", FieldAttributes.Public, host.Source));
 
-        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [],
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], [],
             MethodFlags.Public | (isStatic ? MethodFlags.Static : 0));
         method.SetBody(typeof(Templates).GetMethod(templateName)!);
         return (host, method);
@@ -220,7 +220,7 @@ public class SelfTokenTests
         var host = (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public).GetHandler();
         host.Source.Fields.Add(new FieldDefinition("Next", FieldAttributes.Public, host.Source));
 
-        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.Source.Parameters.Add(new ParameterDefinition("other", ParameterAttributes.None, host.Source));
         method.SetBody(typeof(Templates).GetMethod(nameof(Templates.ReadThroughAnother))!);
 
@@ -264,7 +264,7 @@ public class SelfTokenTests
         host.Source.Methods.Add(getter);
         property.GetMethod = getter;
 
-        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.Source.Parameters.Add(new ParameterDefinition("other", ParameterAttributes.None, host.Source));
         method.SetBody(typeof(Templates).GetMethod(nameof(Templates.ReadAPropertyThroughAnother))!);
 
@@ -282,10 +282,10 @@ public class SelfTokenTests
         var assembly = Assembly.Create("SelfTokenParameterAssembly");
         var handler = (AssemblyHandler) assembly.Handler;
         var host = (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public)
-                                       .WithGenericParameter("T", new Constraint(typeof(AConstrainedBase).ToGneedleType()))
+                                       .WithGenericParameter("T", new Constraint(typeof(AConstrainedBase).ToIType()))
                                        .GetHandler();
 
-        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.Source.Parameters.Add(new ParameterDefinition("other", ParameterAttributes.None, host.Source.GenericParameters[0]));
         method.SetBody(typeof(Templates).GetMethod(nameof(Templates.ReadThroughAParameter))!);
 

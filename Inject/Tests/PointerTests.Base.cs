@@ -57,7 +57,7 @@ public partial class PointerTests
             baseDef.Methods.Add(calc);
         });
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -71,7 +71,7 @@ public partial class PointerTests
         var host = NewDerivedHost((baseDef, mod) =>
             baseDef.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, mod.TypeSystem.Int32)));
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseFieldGet)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -91,7 +91,7 @@ public partial class PointerTests
             baseDef.Properties.Add(prop);
         });
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BasePropertyGet)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -110,9 +110,9 @@ public partial class PointerTests
         // A class which is added derives from the object of the target framework unless the decorator is given another
         // base type, so the one which derives from nothing is the root of a hierarchy which is written out here.
         host.Source.BaseType = null;
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
-        var field = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
-        var property = host.AddMethod("ReadProp", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
+        var field = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public);
+        var property = host.AddMethod("ReadProp", typeof(int).ToIType(), [], [], MethodFlags.Public);
 
         Assert.Multiple(() =>
         {

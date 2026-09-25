@@ -112,7 +112,7 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false);
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
             [],
             MethodFlags.Public);
@@ -131,7 +131,7 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false);
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
             [],
             MethodFlags.Public);
@@ -147,9 +147,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false);
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeInstanceMethod)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -174,9 +174,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false);
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeInstanceMethodWithLocalsSlottedPastTheBody)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -246,9 +246,9 @@ public partial class PointerTests
         var host = AddAHost(handler);
         host.AddMethod(
             "Touch",
-            typeof(M_0).ToGneedleType(),
+            typeof(M_0).ToIType(),
             [new GenericParameterType("U")],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
 
         return host;
@@ -267,9 +267,9 @@ public partial class PointerTests
         var host = AddAHost(handler);
         host.AddMethod(
             "Touch",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [new GenericParameterType("U")],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
 
         return host;
@@ -285,9 +285,9 @@ public partial class PointerTests
         var host = NewHostWithAnArgumentTakenByAddress();
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAnOutArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -315,9 +315,9 @@ public partial class PointerTests
         var host = NewHostWithAnArgumentTakenByAddress("MethodInjectionByRefArgumentAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -345,9 +345,9 @@ public partial class PointerTests
         var host = NewHostWithAnArgumentTakenByAddress("MethodInjectionStaticThisAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithARefArgument))));
@@ -394,9 +394,9 @@ public partial class PointerTests
         var host = NewHostWithAMemberNamedByTheLaterParameter();
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(M_1).ToGneedleType(),
+            typeof(M_1).ToIType(),
             [new GenericParameterType("TKey"), new GenericParameterType("TRes")],
-            [new Parameter(typeof(M_0).ToGneedleType()), new Parameter(typeof(M_1).ToGneedleType())],
+            [new Parameter(typeof(M_0).ToIType()), new Parameter(typeof(M_1).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichTheNameOfAParameterNames)));
 
@@ -455,9 +455,9 @@ public partial class PointerTests
         var host = NewHostWithAMemberWhoseParameterTheTypeNames("ShadowedParameterAssembly");
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(T_0).ToGneedleType(),
+            typeof(T_0).ToIType(),
             [],
-            [new Parameter(typeof(T_0).ToGneedleType())],
+            [new Parameter(typeof(T_0).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhoseParameterTheTypeNames)));
 
@@ -489,9 +489,9 @@ public partial class PointerTests
         var host = NewHostWithAMemberWhoseParameterStandsNowhere("MethodInjectionUnnamedParameterAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn))));
@@ -508,9 +508,9 @@ public partial class PointerTests
         var host = NewHostWithAMemberWhichDeclaresAParameterOfItsOwn("MethodInjectionParameterNamedByTheValueAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichDeclaresAParameterOfItsOwn)));
 
@@ -577,9 +577,9 @@ public partial class PointerTests
         var host = NewHostWithWiden();
         var method = host.AddMethod(
             "Run",
-            typeof(long).ToGneedleType(),
+            typeof(long).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAConvertedArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -609,9 +609,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false, "MethodInjectionBothArgumentsAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithBothArgumentsComputed)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -638,9 +638,9 @@ public partial class PointerTests
         var host = NewHostWithSize();
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithABoxedComputedArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -664,7 +664,7 @@ public partial class PointerTests
         var host = NewHostWithWiden("MethodInjectionStaticDelegateAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(ThisMethodTemplates.LongOp).ToGneedleType(),
+            typeof(ThisMethodTemplates.LongOp).ToIType(),
             [],
             [],
             MethodFlags.Public | MethodFlags.Static);
@@ -691,7 +691,7 @@ public partial class PointerTests
         var host = NewHostWithWiden("MethodInjectionGenericDelegateAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(Func<long, long>).ToGneedleType(),
+            typeof(Func<long, long>).ToIType(),
             [],
             [],
             MethodFlags.Public | MethodFlags.Static);
@@ -721,9 +721,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false);
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegate)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -751,9 +751,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false, "MethodInjectionNestedHeldDelegateAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWithTheValueOfItsOwnInvocation)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -782,9 +782,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false, "MethodInjectionNestedSymbolAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeASymbolWithTheValueOfAnother)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -813,9 +813,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false, "MethodInjectionHandedOnDelegateAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         Assert.DoesNotThrow(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichWasHandedOn))),
             "the template which hands the delegate it holds on was refused rather than woven.");
@@ -846,9 +846,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false, "MethodInjectionStoredOnItsWayDelegateAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichIsStoredThroughAValueItWasHandedTo)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -881,9 +881,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false, "MethodInjectionCountedDelegateAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateWhichWasCountedFirst)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -910,9 +910,9 @@ public partial class PointerTests
         var host = NewHostWithWiden("MethodInjectionHeldDelegateAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(long).ToGneedleType(),
+            typeof(long).ToIType(),
             [],
-            [new Parameter(typeof(long).ToGneedleType())],
+            [new Parameter(typeof(long).ToIType())],
             MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAHeldDelegateOfAStaticMember)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -937,9 +937,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false);
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithALocalReadTwice)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -960,9 +960,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false);
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
 
         Assert.DoesNotThrow(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeViaGenericDelegate))));
@@ -974,9 +974,9 @@ public partial class PointerTests
         var host = NewHostWithAdd(isVirtual: false);
         var method = host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeViaGenericDelegate)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -998,15 +998,15 @@ public partial class PointerTests
         var host = AddAHost(handler);
         host.AddMethod(
             "Filter",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [new GenericParameterType("T")],
             [new Parameter(new GenericParameterType("T"))],
             MethodFlags.Public);
         host.AddMethod(
             "Filter",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
 
         return host;
@@ -1150,7 +1150,7 @@ public partial class PointerTests
         object argument, string message)
     {
         var host = NewHostWhoseIdentityIsConstrainedTo(assemblyName, constraint);
-        var method = host.AddMethod("Run", value.ToGneedleType(), [], [new Parameter(value.ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", value.ToIType(), [], [new Parameter(value.ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), template));
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
@@ -1205,7 +1205,7 @@ public partial class PointerTests
         // what those names leave open rather than what they say. So a type which declares both is called through the one
         // the names name, whether or not the other is declared first.
         var host = NewHostWithTwoMembersOfOneName("MethodInjectionTwoMembersAssembly");
-        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Filter_OfAnInt)));
 
         var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
@@ -1223,9 +1223,9 @@ public partial class PointerTests
         // the template wrote is what says which instantiation of it is reached: two woven members which name the same
         // member are calls of two instantiations of it.
         var host = NewHostWithIdentity();
-        var asInt = host.AddMethod("RunInt", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var asInt = host.AddMethod("RunInt", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         asInt.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
-        var asString = host.AddMethod("RunString", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
+        var asString = host.AddMethod("RunString", typeof(string).ToIType(), [], [new Parameter(typeof(string).ToIType())], MethodFlags.Public);
         asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString)));
         Assert.Multiple(() =>
         {
@@ -1253,9 +1253,9 @@ public partial class PointerTests
         var host = NewHostWithIdentity("MethodInjectionIdentityByTokenAssembly");
         var call = host.AddMethod(
             "Call",
-            typeof(M_0).ToGneedleType(),
+            typeof(M_0).ToIType(),
             [new GenericParameterType("U")],
-            [new Parameter(typeof(M_0).ToGneedleType())],
+            [new Parameter(typeof(M_0).ToIType())],
             MethodFlags.Public);
         call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfTheMethod)));
 
@@ -1278,7 +1278,7 @@ public partial class PointerTests
         // found and refused by the rule of the call. The refusal names the member which was looked for either way, so
         // both are read.
         var host = NewHostWithIdentity("MethodInjectionIdentityMismatchAssembly");
-        var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var call = host.AddMethod("Run", typeof(string).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
@@ -1298,7 +1298,7 @@ public partial class PointerTests
         var host = NewHostWithIdentity("MethodInjectionIdentityOfTheTokenAssembly");
         var method = (MethodHandler) host.AddMethod(
             "Run",
-            typeof(int).ToGneedleType(),
+            typeof(int).ToIType(),
             [new GenericParameterType("T")],
             [new Parameter(new GenericParameterType("T"))],
             MethodFlags.Public);
@@ -1318,7 +1318,7 @@ public partial class PointerTests
         // holds a call the verifier rejects rather than failing the weave, so the mismatch of the constraint is what
         // the weave reads as well, just as the mismatch of the value which the member hands back already is.
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnIntWhichTheConstraintRefuses))));
 
@@ -1332,7 +1332,7 @@ public partial class PointerTests
         // The same host, woven with a delegate which names a type of the kind which the parameter accepts: the kind is
         // what the constraint is read against, so the member is found and the woven assembly runs.
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAStringAssembly");
-        var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(string).ToIType(), [], [new Parameter(typeof(string).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString)));
 
         Assert.That(InstantiationOfTheCall(method, "Identity"), Is.EqualTo(typeof(string).FullName),
@@ -1351,9 +1351,9 @@ public partial class PointerTests
         // values is one which the type of a string does not fit and one which the type of an int does.
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAValueAssembly",
             GenericParameterAttributes.NotNullableValueTypeConstraint);
-        var asInt = host.AddMethod("RunInt", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var asInt = host.AddMethod("RunInt", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         asInt.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
-        var asString = host.AddMethod("RunString", typeof(string).ToGneedleType(), [], [new Parameter(typeof(string).ToGneedleType())], MethodFlags.Public);
+        var asString = host.AddMethod("RunString", typeof(string).ToIType(), [], [new Parameter(typeof(string).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => asString.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAString))));
 
@@ -1378,7 +1378,7 @@ public partial class PointerTests
         // parameter with it, so a delegate which names it describes no member rather than one which cannot be called.
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfANullableAssembly",
             GenericParameterAttributes.NotNullableValueTypeConstraint);
-        var method = host.AddMethod("Run", typeof(int?).ToGneedleType(), [], [new Parameter(typeof(int?).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int?).ToIType(), [], [new Parameter(typeof(int?).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
 
@@ -1393,7 +1393,7 @@ public partial class PointerTests
         // whatever the constraint of the parameter says, so the read of the type which pairs a value with the absence
         // of it may not turn that kind into the kind which the references are.
         var host = NewHostWithAConstrainedIdentity("MethodInjectionConstrainedIdentityOfAReferenceFromANullableAssembly");
-        var method = host.AddMethod("Run", typeof(int?).ToGneedleType(), [], [new Parameter(typeof(int?).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int?).ToIType(), [], [new Parameter(typeof(int?).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfANullable))));
 
@@ -1409,7 +1409,7 @@ public partial class PointerTests
         // anything which implements one, so the instantiation the delegate names is one the runtime refuses and the
         // delegate describes no member rather than one which cannot be called.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToATypeAssembly", typeof(IComparable));
-        var method = host.AddMethod("Run", typeof(object).ToGneedleType(), [], [new Parameter(typeof(object).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(object).ToIType(), [], [new Parameter(typeof(object).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnObject))));
 
@@ -1423,7 +1423,7 @@ public partial class PointerTests
         // The same host, woven with a delegate which names a type which is made of the interface the constraint names:
         // the member is found, called on the instantiation, and the woven assembly runs.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToASatisfiedTypeAssembly", typeof(IComparable));
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnInt)));
 
         Assert.That(InstantiationOfTheCall(method, "Identity"), Is.EqualTo(typeof(int).FullName),
@@ -1464,9 +1464,9 @@ public partial class PointerTests
             typeof(ICountedOfAnInstantiation<string>));
         var method = host.AddMethod(
             "Run",
-            typeof(CountedOfAnInstantiation).ToGneedleType(),
+            typeof(CountedOfAnInstantiation).ToIType(),
             [],
-            [new Parameter(typeof(CountedOfAnInstantiation).ToGneedleType())],
+            [new Parameter(typeof(CountedOfAnInstantiation).ToIType())],
             MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfACounted))));
@@ -1483,7 +1483,7 @@ public partial class PointerTests
         // and the delegate describes no member rather than one which cannot be called.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAnUnnamedTypeOfAnArrayAssembly",
             typeof(IComparable));
-        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int[]).ToIType(), [], [new Parameter(typeof(int[]).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
@@ -1508,7 +1508,7 @@ public partial class PointerTests
         // runtime calls a vector: the element which the constraint names stands in a type which the array of two
         // dimensions is not given, so the shape of the array is what the walk reads rather than the element alone.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToAVectorOfAnArrayAssembly", typeof(IList<int>));
-        var method = host.AddMethod("Run", typeof(int[,]).ToGneedleType(), [], [new Parameter(typeof(int[,]).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int[,]).ToIType(), [], [new Parameter(typeof(int[,]).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTwoDimensions))));
 
@@ -1555,7 +1555,7 @@ public partial class PointerTests
         // of the values of the framework, which the runtime refuses the instantiation for.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABoxedElementOfAnArrayAssembly",
             typeof(IEnumerable<object>));
-        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int[]).ToIType(), [], [new Parameter(typeof(int[]).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
@@ -1569,7 +1569,7 @@ public partial class PointerTests
         // The same read of an instance of a generic type, whose argument is a value which is boxed as well.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToABoxedElementOfAnInstanceAssembly",
             typeof(IEnumerable<object>));
-        var method = host.AddMethod("Run", typeof(List<int>).ToGneedleType(), [], [new Parameter(typeof(List<int>).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(List<int>).ToIType(), [], [new Parameter(typeof(List<int>).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAListOfAnInt))));
 
@@ -1587,9 +1587,9 @@ public partial class PointerTests
             typeof(IComparer<int>));
         var method = host.AddMethod(
             "Run",
-            typeof(Comparer<object>).ToGneedleType(),
+            typeof(Comparer<object>).ToIType(),
             [],
-            [new Parameter(typeof(Comparer<object>).ToGneedleType())],
+            [new Parameter(typeof(Comparer<object>).ToIType())],
             MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAComparerOfTheValuesOfTheFramework))));
@@ -1710,7 +1710,7 @@ public partial class PointerTests
         // holds them at: the runtime refuses the instantiation as well.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfTheNativeValuesOfOneWidthAssembly",
             typeof(IList<IntPtr>));
-        var method = host.AddMethod("Run", typeof(long[]).ToGneedleType(), [], [new Parameter(typeof(long[]).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(long[]).ToIType(), [], [new Parameter(typeof(long[]).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfTheWidestSignedValues))));
 
@@ -1726,7 +1726,7 @@ public partial class PointerTests
         // the array as the type it is.
         var host = NewHostWhoseIdentityIsConstrainedTo("MethodInjectionConstrainedToACollectionOfArraysOfAnEnumerationAssembly",
             typeof(IList<DayOfWeek[]>));
-        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int[]).ToIType(), [], [new Parameter(typeof(int[]).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfInt))));
 
@@ -1743,9 +1743,9 @@ public partial class PointerTests
             typeof(IList<float>));
         var method = host.AddMethod(
             "Run",
-            typeof(DayOfWeek[]).ToGneedleType(),
+            typeof(DayOfWeek[]).ToIType(),
             [],
-            [new Parameter(typeof(DayOfWeek[]).ToGneedleType())],
+            [new Parameter(typeof(DayOfWeek[]).ToIType())],
             MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnEnumeration))));
@@ -1764,8 +1764,8 @@ public partial class PointerTests
         // a call which hands the member a value of a type which its parameter does not stand for, which is a body the
         // runtime refuses to run rather than one which calls the member.
         var host = NewHostWithIdentity("MethodInjectionIdentityMismatchNamedAssembly");
-        var call = host.AddMethod("Run", typeof(string).ToGneedleType(), [new GenericParameterType("T")],
-            [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var call = host.AddMethod("Run", typeof(string).ToIType(), [new GenericParameterType("T")],
+            [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => call.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Mismatched_Identity))));
 
@@ -1779,7 +1779,7 @@ public partial class PointerTests
         // hands back is what names it: the delegate hands that value back, so the member is instantiated with the type
         // of its argument and the type of the value at once, in the order its parameters are declared in.
         var host = NewHostWithAMake("MethodInjectionMakeAssembly");
-        var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(string).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeAString)));
 
         Assert.That(InstantiationsOfTheCall(method, "Make"), Is.EqualTo(new[] {typeof(int).FullName, typeof(string).FullName}),
@@ -1795,7 +1795,7 @@ public partial class PointerTests
         // nothing as the argument of the member is what naming it there would come to, and an assembly which names it is
         // one the runtime refuses to load, so the weave is refused instead.
         var host = NewHostWithAMake("MethodInjectionMakeOfNoValueAssembly");
-        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeOfNoValue))));
 
@@ -1810,7 +1810,7 @@ public partial class PointerTests
         // calls the member: the delegate describes no member here, just as it describes none where it names a type
         // which no instantiation of the member stands for.
         var host = NewHostWithAnEchoAndASilence("MethodInjectionVoidDelegateAssembly");
-        var method = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAVoidDelegate))));
 
@@ -1824,7 +1824,7 @@ public partial class PointerTests
         // The other direction of the same mismatch: a delegate which hands a value back reads one which no call of the
         // member leaves, and the woven body is one the runtime refuses to run for it as well.
         var host = NewHostWithAnEchoAndASilence("MethodInjectionValueDelegateAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAValueDelegate))));
 
@@ -1839,7 +1839,7 @@ public partial class PointerTests
         // say nothing of the value it hands back: a delegate which hands back a value of another name describes no
         // member of the type either, and the value which the call of it leaves is read as one of another type.
         var host = NewHostWithAnEchoAndASilence("MethodInjectionAnotherValueAssembly");
-        var method = host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(string).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAStringDelegate))));
 
@@ -1868,7 +1868,7 @@ public partial class PointerTests
         // which names them, so a member which hands back an int is one which a delegate which hands back a char
         // describes: the tolerance is the one which the arguments of a call are read with as well.
         var host = NewHostWithAnEchoAndASilence("MethodInjectionIntegerFamilyAssembly");
-        var method = host.AddMethod("Run", typeof(char).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(char).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallACharDelegate)));
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
@@ -1884,7 +1884,7 @@ public partial class PointerTests
         // leaves and the value which the delegate hands back: there is no instruction which names the enumeration, so
         // a member which hands back one is described by a delegate which hands back the value under it.
         var host = NewHostWithAValueOfAnEnumeration("MethodInjectionEnumerationValueAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.CallAnIntDelegateForAnEnumeration)));
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host);
@@ -1900,7 +1900,7 @@ public partial class PointerTests
         // List<string> is what List<TOut> is described by, so TOut is named by the argument of that value rather than by
         // the value itself, and the instantiation names that argument.
         var host = NewHostWithAListReturn("MethodInjectionListReturnAssembly");
-        var method = host.AddMethod("Run", typeof(List<string>).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(List<string>).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.MakeAList)));
 
         Assert.That(InstantiationsOfTheCall(method, "Make"),
@@ -1915,7 +1915,7 @@ public partial class PointerTests
         // alone: Array<int> is what Array<T> is described by, so the parameter is bound to the element of the arguments
         // and the call is one of the instantiation which the delegate named.
         var host = NewHostWithAnArrayEcho("MethodInjectionArrayIdentityAssembly");
-        var method = host.AddMethod("Run", typeof(int[]).ToGneedleType(), [], [new Parameter(typeof(int[]).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int[]).ToIType(), [], [new Parameter(typeof(int[]).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArray)));
 
         Assert.That(InstantiationOfTheCall(method, "Echo"), Is.EqualTo(typeof(int).FullName),
@@ -1938,7 +1938,7 @@ public partial class PointerTests
         // value which stands on the stack is a value of another rank, which is a body the runtime refuses to run. The
         // rank is read before the elements are, and the weave is refused.
         var host = NewHostWithAnArrayEcho("MethodInjectionArrayRankAssembly");
-        var method = host.AddMethod("Run", typeof(int[,]).ToGneedleType(), [], [new Parameter(typeof(int[,]).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int[,]).ToIType(), [], [new Parameter(typeof(int[,]).ToIType())], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.Identity_OfAnArrayOfAnotherRank))));
 
@@ -1949,7 +1949,7 @@ public partial class PointerTests
     public void InvokeCharLiteral_Rewrites_To_Direct_Call()
     {
         var host = NewHostWithEcho(typeof(char));
-        var method = host.AddMethod("Run", typeof(char).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(char).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeCharLiteral)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
         Assert.Multiple(() =>
@@ -1964,7 +1964,7 @@ public partial class PointerTests
     public void InvokeBoolLiteral_Rewrites_To_Direct_Call()
     {
         var host = NewHostWithEcho(typeof(bool));
-        var method = host.AddMethod("Run", typeof(bool).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(bool).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeBoolLiteral)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
         Assert.Multiple(() =>

@@ -26,7 +26,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     /// <summary>
     /// Type of the value which the method hands back, which is <see cref="void"/> until another is asked for.
     /// </summary>
-    private IType m_ReturnType = typeof(void).ToGneedleType();
+    private IType m_ReturnType = typeof(void).ToIType();
 
     /// <summary>
     /// The generic parameters of the method, in the order they were asked for, which is the order their tokens are
@@ -107,7 +107,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     public IParameterDecorator WithParameter(string name, Type parameterType)
     {
         DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
-        m_Parameters.Add(new Parameter(name, parameterType.ToGneedleType()));
+        m_Parameters.Add(new Parameter(name, parameterType.ToIType()));
         return this;
     }
 
@@ -123,7 +123,7 @@ public class MethodDecorator : MethodDecorator.IGenericParameterDecorator
     public IBodyDecorator WithReturnType(Type returnType)
     {
         DecoratorChain.RefuseDescription(m_Handler, m_MethodName);
-        m_ReturnType = returnType.ToGneedleType();
+        m_ReturnType = returnType.ToIType();
         return this;
     }
 

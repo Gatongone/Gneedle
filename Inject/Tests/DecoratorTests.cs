@@ -167,7 +167,7 @@ public class DecoratorTests
     {
         var host = NewClass();
         var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
-                         .WithParameter(new Parameter("left", typeof(int).ToGneedleType()))
+                         .WithParameter(new Parameter("left", typeof(int).ToIType()))
                          .WithParameter("right", typeof(int))
                          .WithReturnType(typeof(int))
                          .GetHandler();
@@ -186,7 +186,7 @@ public class DecoratorTests
     {
         var host = NewClass();
         var method = host.AddMethod("Compute", MethodFlags.Public | MethodFlags.Static)
-                         .WithParameter(new Parameter(typeof(int).ToGneedleType()))
+                         .WithParameter(new Parameter(typeof(int).ToIType()))
                          .GetHandler();
 
         Assert.That(((MethodHandler) method).Source.Parameters[0].Name, Is.Empty);

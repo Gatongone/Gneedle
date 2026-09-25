@@ -63,7 +63,7 @@ public partial class PointerTests
     public void ReadInstanceProperty_Rewrites_To_Call_Getter()
     {
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: true, isVirtual: false);
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -74,7 +74,7 @@ public partial class PointerTests
     public void WriteInstanceProperty_Rewrites_To_Call_Setter()
     {
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: true, isVirtual: false);
-        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Write", typeof(void).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -88,7 +88,7 @@ public partial class PointerTests
         // holds names the property rather than one of them: each accessor which a read of the local calls is written as
         // the accessor which the value member of that read stands for.
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: true, isVirtual: false);
-        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleOfAProperty), MethodFlags.Public);
+        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToIType())], nameof(ThisMemberTemplates.BumpAHeldHandleOfAProperty), MethodFlags.Public);
         Assert.Multiple(() =>
         {
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Call && ((MethodReference) i.Operand).Name == "get_Prop"), Is.EqualTo(2), "the getter was not called exactly twice.");
@@ -103,7 +103,7 @@ public partial class PointerTests
     public void ReadVirtualProperty_Rewrites_To_Callvirt_Getter()
     {
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: true, isVirtual: true);
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -114,7 +114,7 @@ public partial class PointerTests
     public void ReadProperty_Without_Getter_Throws()
     {
         var host = NewHostWithProperty("Prop", withGetter: false, withSetter: true, isVirtual: false);
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public);
 
         Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty))));
     }
@@ -123,7 +123,7 @@ public partial class PointerTests
     public void WriteProperty_Without_Setter_Throws()
     {
         var host = NewHostWithProperty("Prop", withGetter: true, withSetter: false, isVirtual: false);
-        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Write", typeof(void).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
 
         Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty))));
     }
@@ -186,7 +186,7 @@ public partial class PointerTests
     public void WriteGenericProp_Rewrites_To_Call_Setter_With_Correct_Signature()
     {
         var host = NewGenericHostWithProperty("Prop", withGetter: true, withSetter: true);
-        var method = host.AddMethod("Set", typeof(void).ToGneedleType(), [], [new Parameter(new GenericParameterType("T"))], MethodFlags.Public);
+        var method = host.AddMethod("Set", typeof(void).ToIType(), [], [new Parameter(new GenericParameterType("T"))], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteGenericProp)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 

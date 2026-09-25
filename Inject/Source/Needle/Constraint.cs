@@ -97,12 +97,12 @@ public struct Constraint
     /// <summary>
     /// Create a constraint type from type.
     /// </summary>
-    public static Constraint FromType(Type type) => new(type.ToGneedleType());
+    public static Constraint FromType(Type type) => new(type.ToIType());
 
     /// <summary>
     /// Create a constraint type from type.
     /// </summary>
-    public static Constraint FromType<T>() => new(typeof(T).ToGneedleType());
+    public static Constraint FromType<T>() => new(typeof(T).ToIType());
 
     /// <summary>
     /// Create a constraint type from type.

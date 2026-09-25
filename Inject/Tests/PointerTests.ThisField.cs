@@ -37,9 +37,9 @@ public partial class PointerTests
         var host = NewHostWithTwoFields("TheFieldWrittenFromAConditionAssembly");
         var method = host.AddMethod(
             "Run",
-            typeof(void).ToGneedleType(),
+            typeof(void).ToIType(),
             [],
-            [new Parameter(typeof(int).ToGneedleType())],
+            [new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteTheLeftFieldFromACondition)));
 
@@ -103,7 +103,7 @@ public partial class PointerTests
     /// </summary>
     private static Instruction[] Rewrite(TypeHandler host, string methodName, Type returnType, Parameter[] parameters, string template, MethodFlags flags)
     {
-        var method = host.AddMethod(methodName, returnType.ToGneedleType(), [], parameters, flags);
+        var method = host.AddMethod(methodName, returnType.ToIType(), [], parameters, flags);
         method.SetBody(Template(typeof(ThisMemberTemplates), template));
         return [.. ((MethodHandler) method).Source.Body.Instructions];
     }
@@ -112,7 +112,7 @@ public partial class PointerTests
     public void ReadInstanceField_Rewrites_To_Ldfld()
     {
         var host = NewHostWithField("Value", isStatic: false);
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceField)));
 
         var body = ((MethodHandler) method).Source.Body;
@@ -127,7 +127,7 @@ public partial class PointerTests
     public void WriteInstanceField_Rewrites_To_Stfld()
     {
         var host = NewHostWithField("Value", isStatic: false);
-        var ins = Rewrite(host, "Write", typeof(void), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.WriteInstanceField), MethodFlags.Public);
+        var ins = Rewrite(host, "Write", typeof(void), [new Parameter(typeof(int).ToIType())], nameof(ThisMemberTemplates.WriteInstanceField), MethodFlags.Public);
         Assert.Multiple(() =>
         {
             Assert.That(ins.Any(i => i.OpCode == OpCodes.Stfld), Is.True);
@@ -168,7 +168,7 @@ public partial class PointerTests
         // the accessor of the write was taken for one which stands above the value, and the read of the same field was
         // answered for the write as well, which wrote one instruction twice.
         var host = NewHostWithField("Value", isStatic: false, "FieldArrayValueAssembly");
-        var method = host.AddMethod("Bump", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Bump", typeof(void).ToIType(), [], [], MethodFlags.Public);
         Assert.DoesNotThrow(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.AddTheFirstElementOfAnArrayToTheField))),
             "the write of a value which holds an array was refused rather than woven.");
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -191,7 +191,7 @@ public partial class PointerTests
         // The name stands where the handle is built rather than where the member is read or written, so the accessors
         // which the template wrote belong to the local: the local has to be read as the member which the name found.
         var host = NewHostWithField("Value", isStatic: false, "FieldHeldHandleAssembly");
-        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandle), MethodFlags.Public);
+        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToIType())], nameof(ThisMemberTemplates.BumpAHeldHandle), MethodFlags.Public);
         Assert.Multiple(() =>
         {
             // The two reads are the one which the write is given and the one which the member hands back.
@@ -220,7 +220,7 @@ public partial class PointerTests
     {
         // What the template holds and what it names stand in one body, and each of them is woven where it stands.
         var host = NewHostWithField("Value", isStatic: false, "FieldHeldHandleAndNameAssembly");
-        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleAndTheFieldItself), MethodFlags.Public);
+        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToIType())], nameof(ThisMemberTemplates.BumpAHeldHandleAndTheFieldItself), MethodFlags.Public);
         Assert.Multiple(() =>
         {
             // The three reads are the ones of the write, of the member which is handed back and of the name which is read.
@@ -242,7 +242,7 @@ public partial class PointerTests
     {
         // A field which belongs to no instance takes no receiver, so the read of the local is written as nothing.
         var host = NewHostWithField("Value", isStatic: true, "StaticFieldHeldHandleAssembly");
-        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToGneedleType())], nameof(ThisMemberTemplates.BumpAHeldHandleOfAStaticField), MethodFlags.Public | MethodFlags.Static);
+        var ins = Rewrite(host, "Bump", typeof(int), [new Parameter(typeof(int).ToIType())], nameof(ThisMemberTemplates.BumpAHeldHandleOfAStaticField), MethodFlags.Public | MethodFlags.Static);
         Assert.Multiple(() =>
         {
             Assert.That(ins.Count(i => i.OpCode == OpCodes.Ldsfld), Is.EqualTo(2), "the field was not read exactly twice.");
@@ -259,7 +259,7 @@ public partial class PointerTests
         // The handle of a value member is a value which only the weaving writes, so a local which holds one has no
         // value where it is read for anything but the member.
         var host = NewHostWithField("Value", isStatic: false);
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadAHeldHandleAsAValue))));
         Assert.Multiple(() =>
@@ -273,7 +273,7 @@ public partial class PointerTests
     public void ReadStaticField_Rewrites_To_Ldsfld_Without_Ldarg0()
     {
         var host = NewHostWithField("Value", isStatic: true);
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var method = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadStaticField)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
         Assert.Multiple(() =>
@@ -287,7 +287,7 @@ public partial class PointerTests
     public void WriteStaticField_Rewrites_To_Stsfld()
     {
         var host = NewHostWithField("Value", isStatic: true);
-        var method = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static);
+        var method = host.AddMethod("Write", typeof(void).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteStaticField)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 
@@ -298,7 +298,7 @@ public partial class PointerTests
     public void ReadMissingField_Throws()
     {
         var host = NewHostWithField("Value", isStatic: false);
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public);
 
         Assert.Throws<WeavingException>(() => method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadMissingField))));
     }
@@ -312,7 +312,7 @@ public partial class PointerTests
         // body it was woven into.
         var host = NewHostWithField("Value", isStatic: false, "FieldSwitchAssembly");
         host.Source.Fields.Add(new FieldDefinition("Other", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
-        var method = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Read", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadAFieldPerCase)));
 
         var body = ((MethodHandler) method).Source.Body;
@@ -371,7 +371,7 @@ public partial class PointerTests
     public void WriteGenericField_Rewrites_To_Stfld_On_GenericInstanceType()
     {
         var host = NewGenericHostWithField("value");
-        var method = host.AddMethod("Set", typeof(void).ToGneedleType(), [], [new Parameter(new GenericParameterType("T"))], MethodFlags.Public);
+        var method = host.AddMethod("Set", typeof(void).ToIType(), [], [new Parameter(new GenericParameterType("T"))], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteGenericField)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
 

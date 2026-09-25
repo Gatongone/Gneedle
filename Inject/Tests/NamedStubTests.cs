@@ -114,7 +114,7 @@ public class NamedStubTests
 
         var handler = (AssemblyHandler) assembly.Handler;
         var host = (TypeHandler) handler.AddClass("Host", NS, ClassFlags.Public).GetHandler();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         method.SetBody(typeof(Templates).GetMethod(templateName)!);
         return method;
     }

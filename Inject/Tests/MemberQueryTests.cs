@@ -250,7 +250,7 @@ public class MemberQueryTests
             Assert.That(classHandler.GetMethod("Run"), Is.Not.Null);
             Assert.That(classHandler.GetProperties().Select(property => property.Name), Is.EqualTo(new[] {"Count"}));
             Assert.That(classHandler.GetProperty("Count"), Is.Not.Null);
-            Assert.That(classHandler.ContainsInterface(typeof(IDisposable).ToGneedleType()), Is.False);
+            Assert.That(classHandler.ContainsInterface(typeof(IDisposable).ToIType()), Is.False);
         });
     }
 }

@@ -362,7 +362,7 @@ public class AssemblyInjectTests
         var assembly = BuiltAssembly("RefusedInjectorAssembly", handler =>
             handler.AddStruct("NotAClass", "Gneedle.Aspect.Test.Built", StructFlags.Public)
                    .GetHandler()
-                   .AddAttribute(typeof(ClassOnlyAttribute).ToGneedleType()));
+                   .AddAttribute(typeof(ClassOnlyAttribute).ToIType()));
         var before = File.ReadAllBytes(assembly);
 
         var (result, engine) = Inject(assembly, Project());
@@ -387,9 +387,9 @@ public class AssemblyInjectTests
             handler.AddClass("Woven", "Gneedle.Aspect.Test.Built", ClassFlags.Public)
                    .GetHandler()
                    .AddField("m_Marked", FieldFlags.Public | FieldFlags.Static)
-                   .WithType(typeof(int).ToGneedleType())
+                   .WithType(typeof(int).ToIType())
                    .GetHandler()
-                   .AddAttribute(typeof(MarkFieldAttribute).ToGneedleType());
+                   .AddAttribute(typeof(MarkFieldAttribute).ToIType());
 
             if (!withTheRefusedType) return;
 
@@ -397,7 +397,7 @@ public class AssemblyInjectTests
             // refused for.
             handler.AddStruct("NotAClass", "Gneedle.Aspect.Test.Built", StructFlags.Public)
                    .GetHandler()
-                   .AddAttribute(typeof(ClassOnlyAttribute).ToGneedleType());
+                   .AddAttribute(typeof(ClassOnlyAttribute).ToIType());
         });
 
     [Test]

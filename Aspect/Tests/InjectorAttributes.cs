@@ -28,7 +28,7 @@ public sealed class MarkFieldAttribute : Attribute, IFieldInjector
     public int Priority => 0;
 
     /// <inheritdoc/>
-    public void Inject(FieldInfo field, IFieldHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "marked");
+    public void Inject(FieldInfo field, IFieldHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToIType(), "marked");
 }
 
 /// <summary>
@@ -80,5 +80,5 @@ public sealed class ClassOnlyAttribute : Attribute, IClassInjector
     public int Priority => 0;
 
     /// <inheritdoc/>
-    public void Inject(Type type, IClassHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "class");
+    public void Inject(Type type, IClassHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToIType(), "class");
 }

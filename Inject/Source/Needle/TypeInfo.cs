@@ -102,7 +102,7 @@ public sealed class GenericType : IType
 
     /// <summary>
     /// Create generic type with the arguments which the type itself carries, which is what
-    /// <see cref="TypeInfoExtensions.ToGneedleType(Type)"/> reads out of the same type.
+    /// <see cref="TypeInfoExtensions.ToIType(Type)"/> reads out of the same type.
     /// <example>
     /// If you ganna make <c>MyClass&lt;T1, T2&gt;</c>, you can use:
     /// <code>new GenericType(typeof(MyClass&lt;,&gt;));</code>
@@ -115,7 +115,7 @@ public sealed class GenericType : IType
     /// </remarks>
     /// <param name="type">Generic type definition, or a generic type which holds the arguments of it.</param>
     /// <exception cref="WeavingException">Thrown when the <c>type</c> is not generic type.</exception>
-    public GenericType(Type type) : this(type, [.. type.GetGenericArguments().Select(argument => argument.ToGneedleType())]) { }
+    public GenericType(Type type) : this(type, [.. type.GetGenericArguments().Select(argument => argument.ToIType())]) { }
 
     /// <summary>
     /// Create generic type with generic parameter type arguments.
@@ -218,11 +218,11 @@ public static class TypeInfoExtensions
     /// Create <see cref="IType"/> from System.Type.
     /// </summary>
     /// <param name="type">The type where create from.</param>
-    public static IType ToGneedleType(this Type type) => type switch
+    public static IType ToIType(this Type type) => type switch
     {
         {IsGenericParameter: true}  => new GenericParameterType(type.Name),
         {IsGenericType     : false} => new NongenericType(type),
-        _                           => new GenericType(type, [.. type.GetGenericArguments().Select(ToGneedleType)])
+        _                           => new GenericType(type, [.. type.GetGenericArguments().Select(ToIType)])
     };
 
     /// <summary>
@@ -230,7 +230,7 @@ public static class TypeInfoExtensions
     /// </summary>
     /// <param name="parameters">The parameter info array.</param>
     /// <returns>An array of <see cref="IType"/> representing the parameter types.</returns>
-    public static IType[] GetITypes(this ParameterInfo[] parameters) => [.. parameters.Select(p => p.ParameterType.ToGneedleType())];
+    public static IType[] GetITypes(this ParameterInfo[] parameters) => [.. parameters.Select(p => p.ParameterType.ToIType())];
 
     /// <summary>
     /// Create Generic type definition from generic parameters.

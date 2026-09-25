@@ -156,7 +156,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_T0_To_First_Type_Generic_Parameter()
     {
         var host = NewHost("T0");
-        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [], nameof(Templates.ReturnFirstTypeGeneric));
+        var method = AddMethod(host, "Get", typeof(void).ToIType(), [], nameof(Templates.ReturnFirstTypeGeneric));
 
         Assert.That(method.Source.ReturnType, Is.SameAs(host.Source.GenericParameters[0]));
     }
@@ -165,7 +165,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_T1_To_Second_Type_Generic_Parameter()
     {
         var host = NewHost("T0", "T1");
-        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [], nameof(Templates.ReturnSecondTypeGeneric));
+        var method = AddMethod(host, "Get", typeof(void).ToIType(), [], nameof(Templates.ReturnSecondTypeGeneric));
 
         Assert.That(method.Source.ReturnType, Is.SameAs(host.Source.GenericParameters[1]));
     }
@@ -176,7 +176,7 @@ public class GenericTokenTests
         // Guards the tens of the token pattern: the alternation has to cover '10', which is the one index of the two
         // tens which does not share its spelling with the single digit tokens.
         var host = NewHost("T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10");
-        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [], nameof(Templates.ReturnTenthTypeGeneric));
+        var method = AddMethod(host, "Get", typeof(void).ToIType(), [], nameof(Templates.ReturnTenthTypeGeneric));
 
         Assert.That(method.Source.ReturnType, Is.SameAs(host.Source.GenericParameters[10]));
         Assert.That(method.Source.ReturnType.Name, Is.EqualTo("T10"));
@@ -188,7 +188,7 @@ public class GenericTokenTests
         // The token has to be parsed rather than taken as a type of its own, which is what throwing proves: an
         // unparsed token would be imported as an ordinary type and set as the return type without any complaint.
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_10));
 
         Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
@@ -199,7 +199,7 @@ public class GenericTokenTests
     {
         // Guards the multi-digit alternation of the token pattern: 'T_11' must not be parsed as 'T_1'.
         var host = NewHost("T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11");
-        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [], nameof(Templates.ReturnEleventhTypeGeneric));
+        var method = AddMethod(host, "Get", typeof(void).ToIType(), [], nameof(Templates.ReturnEleventhTypeGeneric));
 
         Assert.That(method.Source.ReturnType, Is.SameAs(host.Source.GenericParameters[11]));
         Assert.That(method.Source.ReturnType.Name, Is.EqualTo("T11"));
@@ -209,7 +209,7 @@ public class GenericTokenTests
     public void ParseReturnType_With_T1_Token_But_Single_Type_Generic_Parameter_Throws()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_1));
 
         var thrown = Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
@@ -222,7 +222,7 @@ public class GenericTokenTests
     {
         // Guards the upper bound of the token pattern.
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(T_20));
 
         Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
@@ -236,7 +236,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_M_0_To_First_Method_Generic_Parameter()
     {
         var host = NewHost();
-        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], nameof(Templates.ReturnFirstMethodGeneric));
+        var method = AddMethod(host, "Get", typeof(void).ToIType(), [new GenericParameterType("U")], nameof(Templates.ReturnFirstMethodGeneric));
 
         Assert.That(method.Source.ReturnType, Is.SameAs(method.Source.GenericParameters[0]));
         Assert.That(method.Source.ReturnType.Name, Is.EqualTo("U"));
@@ -246,7 +246,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_M_1_To_Second_Method_Generic_Parameter()
     {
         var host = NewHost();
-        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [new GenericParameterType("V"), new GenericParameterType("U")],
+        var method = AddMethod(host, "Get", typeof(void).ToIType(), [new GenericParameterType("V"), new GenericParameterType("U")],
             nameof(Templates.ReturnSecondMethodGeneric));
 
         Assert.That(method.Source.ReturnType, Is.SameAs(method.Source.GenericParameters[1]));
@@ -257,7 +257,7 @@ public class GenericTokenTests
     public void ParseReturnType_With_M_0_Token_But_NonGeneric_Method_Throws()
     {
         var host = NewHost();
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_0));
 
         var thrown = Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
@@ -271,7 +271,7 @@ public class GenericTokenTests
         // The method pattern is an expression of its own rather than the type one, so the tens are guarded here as well.
         var host = NewHost();
         var genericParameters = Enumerable.Range(0, 11).Select(index => new GenericParameterType($"U{index}")).ToArray();
-        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), genericParameters, nameof(Templates.ReturnTenthMethodGeneric));
+        var method = AddMethod(host, "Get", typeof(void).ToIType(), genericParameters, nameof(Templates.ReturnTenthMethodGeneric));
 
         Assert.That(method.Source.ReturnType, Is.SameAs(method.Source.GenericParameters[10]));
         Assert.That(method.Source.ReturnType.Name, Is.EqualTo("U10"));
@@ -282,7 +282,7 @@ public class GenericTokenTests
     {
         // An unparsed token would be imported as an ordinary type and set as the return type without any complaint.
         var host = NewHost();
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [new GenericParameterType("U")], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [new GenericParameterType("U")], [], MethodFlags.Public);
         var token = host.Source.Module.ImportReference(typeof(M_10));
 
         Assert.Throws<WeavingException>(() => method.ParseReturnType(token));
@@ -296,7 +296,7 @@ public class GenericTokenTests
     public void ParseReturnType_With_NonToken_Type_Sets_ReturnType_To_It()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(int).ToIType(), [], [], MethodFlags.Public);
         var target = host.Source.Module.ImportReference(typeof(string));
 
         method.ParseReturnType(target);
@@ -310,7 +310,7 @@ public class GenericTokenTests
     {
         // A host without generic parameters cannot hold a 'T_1' token in its return type.
         var host = NewHost();
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
 
         Assert.Throws<WeavingException>(() => method.SetBody(Template(nameof(Templates.ReturnSecondTypeGeneric))));
     }
@@ -323,7 +323,7 @@ public class GenericTokenTests
     public void CopyVariables_Maps_T0_Local_To_First_Type_Generic_Parameter()
     {
         var host = NewHost("T0");
-        var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalFirstTypeGeneric));
+        var method = AddMethod(host, "Get", typeof(bool).ToIType(), [], nameof(Templates.LocalFirstTypeGeneric));
 
         Assert.That(method.Source.Body.Variables, Is.Not.Empty);
         Assert.That(method.Source.Body.Variables[0].VariableType, Is.SameAs(host.Source.GenericParameters[0]));
@@ -333,7 +333,7 @@ public class GenericTokenTests
     public void CopyVariables_Maps_T1_Local_To_Second_Type_Generic_Parameter()
     {
         var host = NewHost("T0", "T1");
-        var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalSecondTypeGeneric));
+        var method = AddMethod(host, "Get", typeof(bool).ToIType(), [], nameof(Templates.LocalSecondTypeGeneric));
 
         Assert.That(method.Source.Body.Variables, Is.Not.Empty);
         Assert.That(method.Source.Body.Variables[0].VariableType, Is.SameAs(host.Source.GenericParameters[1]));
@@ -343,7 +343,7 @@ public class GenericTokenTests
     public void CopyVariables_Maps_M_0_Local_To_First_Method_Generic_Parameter()
     {
         var host = NewHost();
-        var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [new GenericParameterType("U")], nameof(Templates.LocalFirstMethodGeneric));
+        var method = AddMethod(host, "Get", typeof(bool).ToIType(), [new GenericParameterType("U")], nameof(Templates.LocalFirstMethodGeneric));
 
         Assert.That(method.Source.Body.Variables, Is.Not.Empty);
         Assert.That(method.Source.Body.Variables[0].VariableType, Is.SameAs(method.Source.GenericParameters[0]));
@@ -355,7 +355,7 @@ public class GenericTokenTests
         // ldloc.0/stloc.0 carry no operand, so they address the source variables by index only.
         // CopyVariables must therefore copy the variables without changing their order.
         var host = NewHost("T0");
-        var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalFirstTypeGeneric));
+        var method = AddMethod(host, "Get", typeof(bool).ToIType(), [], nameof(Templates.LocalFirstTypeGeneric));
 
         var codes = method.Source.Body.Instructions.Select(i => i.OpCode.Code).ToArray();
         Assert.That(codes, Does.Contain(Code.Stloc_0));
@@ -366,7 +366,7 @@ public class GenericTokenTests
     public void CopyVariables_Remaps_Local_Instructions_To_Remapped_Variables()
     {
         var host = NewHost("T0");
-        var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalFifthTypeGeneric));
+        var method = AddMethod(host, "Get", typeof(bool).ToIType(), [], nameof(Templates.LocalFifthTypeGeneric));
         Assert.Multiple(() =>
         {
 
@@ -386,7 +386,7 @@ public class GenericTokenTests
     public void SetBody_Remaps_Branch_Targets_To_Source_Instructions()
     {
         var host = NewHost();
-        var method = AddMethod(host, "Check", typeof(bool).ToGneedleType(), [], nameof(Templates.BranchingTemplate));
+        var method = AddMethod(host, "Check", typeof(bool).ToIType(), [], nameof(Templates.BranchingTemplate));
 
         var body = method.Source.Body;
         var branches = body.Instructions.Where(i => i.Operand is Instruction).ToArray();
@@ -403,7 +403,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_Token_Nested_In_Generic_Instance()
     {
         var host = NewHost("T0");
-        var method = AddMethod(host, "Get", typeof(void).ToGneedleType(), [], nameof(Templates.ReturnGenericInstance));
+        var method = AddMethod(host, "Get", typeof(void).ToIType(), [], nameof(Templates.ReturnGenericInstance));
 
         var returnType = method.Source.ReturnType;
         Assert.Multiple(() =>
@@ -417,7 +417,7 @@ public class GenericTokenTests
     public void CopyVariables_Maps_Token_Nested_In_Generic_Instance()
     {
         var host = NewHost("T0");
-        var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalOfGenericInstance));
+        var method = AddMethod(host, "Get", typeof(bool).ToIType(), [], nameof(Templates.LocalOfGenericInstance));
 
         var variableType = method.Source.Body.Variables[0].VariableType;
         Assert.Multiple(() =>
@@ -435,7 +435,7 @@ public class GenericTokenTests
                                  .AddClass("Host", NS, ClassFlags.Public)
                                  .WithGenericParameter("T0")
                                  .GetHandler();
-        AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalOfGenericInstance));
+        AddMethod(host, "Get", typeof(bool).ToIType(), [], nameof(Templates.LocalOfGenericInstance));
 
         // The runtime loader can't load this net6.0-targeted image here, but Cecil
         // re-reading the emitted bytes proves the produced image is well-formed.
@@ -459,7 +459,7 @@ public class GenericTokenTests
     public void SetBody_Does_Not_Leak_Token_Types()
     {
         var host = NewHost("T0");
-        var method = AddMethod(host, "Get", typeof(bool).ToGneedleType(), [], nameof(Templates.LocalOfGenericInstance));
+        var method = AddMethod(host, "Get", typeof(bool).ToIType(), [], nameof(Templates.LocalOfGenericInstance));
 
         foreach (var instruction in method.Source.Body.Instructions) AssertNoTokenType(instruction);
         foreach (var variable in method.Source.Body.Variables) AssertNoTokenType(variable.VariableType);
@@ -476,7 +476,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_Token_In_Function_Pointer()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var module = host.Source.Module;
 
         var pointer = new FunctionPointerType {ReturnType = module.TypeSystem.Void};
@@ -496,7 +496,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_Token_In_Required_Modifier()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var module = host.Source.Module;
 
         // The shape of an `in` parameter: T& modreq(InAttribute).
@@ -524,7 +524,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_Token_In_Optional_Modifier()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var module = host.Source.Module;
 
         var outAttribute = module.ImportReference(typeof(System.Runtime.InteropServices.OutAttribute));
@@ -545,7 +545,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_Token_In_Pinned_Type()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var pinned = new PinnedType(host.Source.Module.ImportReference(typeof(T_0)));
 
         method.ParseReturnType(pinned);
@@ -562,7 +562,7 @@ public class GenericTokenTests
     public void ParseReturnType_Maps_Token_In_Sentinel_Type()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Get", typeof(void).ToIType(), [], [], MethodFlags.Public);
         var sentinel = new SentinelType(host.Source.Module.ImportReference(typeof(T_0)));
 
         method.ParseReturnType(sentinel);
@@ -595,7 +595,7 @@ public class GenericTokenTests
     public void InstanceMethod_With_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_First_Generic_Parameter()
     {
         var host = NewConstrainedHost();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToIType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
 
         method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiver)));
 
@@ -616,7 +616,7 @@ public class GenericTokenTests
     public void InstanceMethod_With_Second_Token_Receiver_Is_Looked_Up_On_The_Constraint_Of_The_Second_Generic_Parameter()
     {
         var host = NewConstrainedHost();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T1"))], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToIType(), [], [new Parameter(new GenericParameterType("T1"))], MethodFlags.Public);
 
         method.SetBody(Template(nameof(Templates.InstanceMethod_SecondTokenReceiver)));
 
@@ -637,7 +637,7 @@ public class GenericTokenTests
         // beside it, and the body which comes of it is one the runtime refuses to run rather than one which calls the
         // member - so the weave is refused, which is what the class of the receiver being unreadable is refused for.
         var host = NewConstrainedHost();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToGneedleType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(string).ToIType(), [], [new Parameter(new GenericParameterType("T0"))], MethodFlags.Public);
 
         var thrown = Assert.Throws<WeavingException>(() => method.SetBody(Template(nameof(Templates.InstanceMethod_TokenReceiverUnwrapped))));
 
@@ -658,7 +658,7 @@ public class GenericTokenTests
     public void AddMethod_Parses_The_Token_Of_The_Parameter_Type()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_0).ToGneedleType())], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(typeof(T_0).ToIType())], MethodFlags.Public);
 
         // The token parameter has to be the generic parameter of the host, just like the one from `new GenericParameterType("T")`.
         Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(host.Source.GenericParameters[0]));
@@ -668,8 +668,8 @@ public class GenericTokenTests
     public void AddMethod_Parses_The_Token_Of_The_Method_Generic_Parameter()
     {
         var host = NewHost();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [new GenericParameterType("U")],
-            [new Parameter(typeof(M_0).ToGneedleType())], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToIType(), [new GenericParameterType("U")],
+            [new Parameter(typeof(M_0).ToIType())], MethodFlags.Public);
 
         Assert.That(method.Source.Parameters[0].ParameterType, Is.SameAs(method.Source.GenericParameters[0]));
     }
@@ -678,7 +678,7 @@ public class GenericTokenTests
     public void AddMethod_Parses_The_Token_Nested_In_The_Parameter_Type()
     {
         var host = NewHost("T0");
-        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(new GenericType(typeof(List<>), typeof(T_0)))],
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(new GenericType(typeof(List<>), typeof(T_0)))],
             MethodFlags.Public);
 
         var parameterType = method.Source.Parameters[0].ParameterType;
@@ -694,7 +694,7 @@ public class GenericTokenTests
     {
         var host = NewHost("T0");
 
-        Assert.Throws<WeavingException>(() => host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_1).ToGneedleType())],
+        Assert.Throws<WeavingException>(() => host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(typeof(T_1).ToIType())],
             MethodFlags.Public));
     }
 
@@ -706,7 +706,7 @@ public class GenericTokenTests
                                  .AddClass("Host", NS, ClassFlags.Public)
                                  .WithGenericParameter("T0")
                                  .GetHandler();
-        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(T_0).ToGneedleType())], MethodFlags.Public);
+        var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(typeof(T_0).ToIType())], MethodFlags.Public);
         Assert.Multiple(() =>
         {
 

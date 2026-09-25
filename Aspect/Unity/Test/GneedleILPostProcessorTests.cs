@@ -24,7 +24,7 @@ namespace Gneedle.Unity.Test
         public int Priority => 0;
         
         /// <inheritdoc/>
-        public void Inject(Type type, ITypeHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "marked");
+        public void Inject(Type type, ITypeHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToIType(), "marked");
     }
 
     /// <summary>

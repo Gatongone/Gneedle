@@ -84,7 +84,7 @@ public class AttributeTests
     {
         var host = NewHost("AttributeITypeAssembly");
 
-        host.AddAttribute(typeof(MarkerAttribute).ToGneedleType(), "hello");
+        host.AddAttribute(typeof(MarkerAttribute).ToIType(), "hello");
 
         var attribute = host.Source.CustomAttributes.Single();
         Assert.That(attribute.AttributeType.FullName, Is.EqualTo(typeof(MarkerAttribute).FullName));
@@ -163,7 +163,7 @@ public class AttributeTests
         host.Source.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, host.Source.Module.TypeSystem.Int32));
         var field = host.GetField("Value")!;
 
-        field.AddAttribute(typeof(MarkerAttribute).ToGneedleType(), "hello");
+        field.AddAttribute(typeof(MarkerAttribute).ToIType(), "hello");
         Assert.Multiple(() =>
         {
             Assert.That(((FieldHandler) field).Source.CustomAttributes.Count, Is.EqualTo(1));
@@ -179,7 +179,7 @@ public class AttributeTests
         var field = host.GetField("Value")!;
 
         Assert.That(field.ContainsAttribute<MarkerAttribute>(), Is.False);
-        field.AddAttribute(typeof(MarkerAttribute).ToGneedleType(), "hello");
+        field.AddAttribute(typeof(MarkerAttribute).ToIType(), "hello");
         Assert.That(field.ContainsAttribute<MarkerAttribute>(), Is.True);
     }
 
@@ -196,7 +196,7 @@ public class AttributeTests
         host.Source.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, host.Source.Module.TypeSystem.Int32));
         var property = host.GetProperty("Prop")!;
 
-        property.AddAttribute(typeof(MarkerAttribute).ToGneedleType(), "hello");
+        property.AddAttribute(typeof(MarkerAttribute).ToIType(), "hello");
         Assert.Multiple(() =>
         {
             Assert.That(((PropertyHandler) property).Source.CustomAttributes.Count, Is.EqualTo(1));
@@ -212,7 +212,7 @@ public class AttributeTests
         var property = host.GetProperty("Prop")!;
 
         Assert.That(property.ContainsAttribute<MarkerAttribute>(), Is.False);
-        property.AddAttribute(typeof(MarkerAttribute).ToGneedleType(), "hello");
+        property.AddAttribute(typeof(MarkerAttribute).ToIType(), "hello");
         Assert.That(property.ContainsAttribute<MarkerAttribute>(), Is.True);
     }
 

@@ -99,7 +99,7 @@ public class TypeInjectorTests
     {
         var handler = CreateHandler();
         var structHandler = handler.AddStruct("MyStruct", NS, StructFlags.Public)
-                                   .WithInterface(typeof(IComparable).ToGneedleType())
+                                   .WithInterface(typeof(IComparable).ToIType())
                                    .GetHandler();
 
         var def = ((StructHandler) structHandler).Source;

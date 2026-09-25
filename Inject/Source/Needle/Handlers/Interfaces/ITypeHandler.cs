@@ -316,7 +316,7 @@ public static class TypeHandlerExtensions
         /// <summary>
         /// Checks if the container contains the specified interface type.
         /// </summary>
-        public bool ContainsInterface(Type interfaceType) => query.ContainsInterface(interfaceType.ToGneedleType());
+        public bool ContainsInterface(Type interfaceType) => query.ContainsInterface(interfaceType.ToIType());
 
         /// <summary>
         /// Checks if the container contains the specified interface type.
@@ -335,7 +335,7 @@ public static class TypeHandlerExtensions
         public void AddInterface(Type interfaceType)
         {
             if (!interfaceType.IsInterface) throw new WeavingException(ErrorMessages.TYPE_IS_NOT_INTERFACE);
-            container.AddInterface(interfaceType.ToGneedleType());
+            container.AddInterface(interfaceType.ToIType());
         }
 
         /// <summary>

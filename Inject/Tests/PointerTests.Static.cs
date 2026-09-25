@@ -49,8 +49,8 @@ public partial class PointerTests
         BuildTheMember(member, asm, handler, name);
 
         var method = member is StaticMember.FieldSet or StaticMember.PropertySet
-            ? host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public | MethodFlags.Static)
-            : host.AddMethod("Run", returns.ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+            ? host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public | MethodFlags.Static)
+            : host.AddMethod("Run", returns.ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         method.SetBody(Template(typeof(InstanceStaticTemplates), template));
 
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();

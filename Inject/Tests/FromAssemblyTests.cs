@@ -199,7 +199,7 @@ namespace Gneedle.Inject.Test
         {
             var assembly = NewTarget();
             var host = AddAHost(assembly);
-            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], parameterTypes ?? [],
+            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], parameterTypes ?? [],
                 MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(templateName)!);
             return method;
@@ -228,7 +228,7 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Method()
         {
-            var method = Weave(nameof(Templates.InstanceMethod_StubReceiver), [new Parameter(typeof(Stub).ToGneedleType())]);
+            var method = Weave(nameof(Templates.InstanceMethod_StubReceiver), [new Parameter(typeof(Stub).ToIType())]);
             var call = method.Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
                              .FirstOrDefault(reference => reference.Name == nameof(Stub.Read));
 
@@ -302,7 +302,7 @@ namespace Gneedle.Inject.Test
             // them apart: importing the template method references the template assembly either way.
             var assembly = NewTarget();
             var host = AddAHost(assembly);
-            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(nameof(Templates.CallStubMethod))!);
 
             using var stream = new MemoryStream();
@@ -320,7 +320,7 @@ namespace Gneedle.Inject.Test
             // a full name. Executing the produced method is the strongest form of that check.
             var assembly = NewTarget();
             var host = AddAHost(assembly);
-            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+            var method = (MethodHandler) host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
             method.SetBody(typeof(Templates).GetMethod(nameof(Templates.CallStubMethod))!);
 
             var loaded = assembly.Load();
@@ -348,12 +348,12 @@ namespace Gneedle.Inject.Test
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Field()
             => TheMemberWhichWasWoven<FieldReference>(nameof(Templates.InstanceField_StubReceiver), nameof(Stub.Field),
-                [new Parameter(typeof(Stub).ToGneedleType())]);
+                [new Parameter(typeof(Stub).ToIType())]);
 
         [Test]
         public void SetBody_Replaces_The_Stub_Receiver_Of_Object_Property()
             => TheMemberWhichWasWoven<MethodReference>(nameof(Templates.InstanceProperty_StubReceiver), "get_Property",
-                [new Parameter(typeof(Stub).ToGneedleType())]);
+                [new Parameter(typeof(Stub).ToIType())]);
 
         #endregion
 
@@ -387,7 +387,7 @@ namespace Gneedle.Inject.Test
         {
             var assembly = NewTarget();
             var host = AddAHost(assembly);
-            var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(typeof(Stub).ToGneedleType())],
+            var method = (MethodHandler) host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(typeof(Stub).ToIType())],
                 MethodFlags.Public | MethodFlags.Static);
 
             var parameter = method.Source.Parameters[0].ParameterType;

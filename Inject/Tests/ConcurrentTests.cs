@@ -71,7 +71,7 @@ public class ConcurrentTests
         var (_, host, _) = TestFixtures.NewHost(assemblyName);
 
         const int added = COUNT * 8;
-        Parallel.For(0, added, index => host.AddMethod("Member" + index, typeof(int).ToGneedleType(), [], [], MethodFlags.Public));
+        Parallel.For(0, added, index => host.AddMethod("Member" + index, typeof(int).ToIType(), [], [], MethodFlags.Public));
 
         Assert.That(host.Source.Methods.Count(method => method.Name.StartsWith("Member", StringComparison.Ordinal)),
             Is.EqualTo(added), "a member which a thread added is one the type does not declare.");

@@ -174,7 +174,7 @@ public class AssemblyHandlerTests
         var asm = Assembly.Create("CecilLoaderAssembly");
         var handler = (AssemblyHandler)asm.Handler;
 
-        var result = handler.GetCecilType(typeof(TestBaseClass).ToGneedleType());
+        var result = handler.GetCecilType(typeof(TestBaseClass).ToIType());
 
         Assert.That(result.Definition.FullName, Is.EqualTo(typeof(TestBaseClass).FullName));
     }
@@ -352,7 +352,7 @@ public class AssemblyHandlerTests
         var handler = (AssemblyHandler)asm.Handler;
         var host = AddAHost(handler);
 
-        host.AddInterface(typeof(ITestInterface).ToGneedleType());
+        host.AddInterface(typeof(ITestInterface).ToIType());
 
         Assert.That(host.ContainsInterface<ITestInterface>(), Is.True);
     }

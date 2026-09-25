@@ -6,10 +6,10 @@ namespace Gneedle.Inject.Test;
 public class TypeTests
 {
     [Test]
-    public void ToGneedleType_With_GenericType()
+    public void ToIType_With_GenericType()
     {
         // Type with generic parameter.
-        var genericType = typeof(GenericTestClass<>).ToGneedleType() as GenericType;
+        var genericType = typeof(GenericTestClass<>).ToIType() as GenericType;
         Assert.That(genericType, Is.Not.Null);
         Assert.That(genericType.Type == typeof(GenericTestClass<>), Is.True);
         var parameter = genericType.GenericArguments[0] as GenericParameterType;
@@ -17,7 +17,7 @@ public class TypeTests
         Assert.That(parameter.TypeName, Is.EqualTo("T"));
 
         // Type with generic argument.
-        var genericType2 = typeof(GenericTestClass<string>).ToGneedleType() as GenericType;
+        var genericType2 = typeof(GenericTestClass<string>).ToIType() as GenericType;
         Assert.That(genericType2, Is.Not.Null);
         Assert.That(genericType2.Type, Is.EqualTo(typeof(GenericTestClass<>)));
         var argument = genericType2.GenericArguments[0] as NongenericType;
@@ -26,10 +26,10 @@ public class TypeTests
     }
 
     [Test]
-    public void ToGneedleType_With_NonGenericType()
+    public void ToIType_With_NonGenericType()
     {
         // Type check.
-        var type = typeof(NonGenericTestClass).ToGneedleType() as NongenericType;
+        var type = typeof(NonGenericTestClass).ToIType() as NongenericType;
         Assert.That(type, Is.Not.Null);
 
         // Field check.
@@ -68,7 +68,7 @@ public class TypeTests
     public void CreateGenericType_With_The_Type_Alone()
     {
         // The call which names no argument is the type with the arguments which the type itself carries, which is what
-        // ToGneedleType builds out of the same type: the two spellings answer with the same argument, so a caller which
+        // ToIType builds out of the same type: the two spellings answer with the same argument, so a caller which
         // holds a type has a way of saying so rather than one which has to be told what the arguments of it are. It is
         // also the call which nothing answered before, because both of the overloads which take a list of arguments can
         // be called with an empty one, and a call which the compiler can read through either of two of them is one which
@@ -89,7 +89,7 @@ public class TypeTests
         {
             Assert.That(closedType.Type, Is.EqualTo(typeof(GenericTestClass<>)));
             Assert.That((closedType.GenericArguments[0] as NongenericType)?.Type, Is.EqualTo(typeof(int)));
-            Assert.That(closedType.GetTypeName(), Is.EqualTo(typeof(GenericTestClass<int>).ToGneedleType().GetTypeName()));
+            Assert.That(closedType.GetTypeName(), Is.EqualTo(typeof(GenericTestClass<int>).ToIType().GetTypeName()));
         });
     }
 
