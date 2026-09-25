@@ -8,7 +8,8 @@ namespace Gneedle.Inject;
 public interface IMethodHandler : IAttributeContainer
 {
     /// <summary>
-    /// Flags of the method, which are the visibility and the modifiers which the definition declares. An abstract method
+    /// Flags of the method, which are the visibility and the modifiers which the definition declares, and the shape of
+    /// belonging which is <see cref="MethodFlags.Static"/> or <see cref="MethodFlags.Instance"/>. An abstract method
     /// is a virtual one as well, and the flags name it by the narrower of the two shapes, which is
     /// <see cref="MethodFlags.Abstract"/>.
     /// </summary>

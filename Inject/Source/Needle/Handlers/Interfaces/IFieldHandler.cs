@@ -6,7 +6,8 @@ namespace Gneedle.Inject;
 public interface IFieldHandler : IAttributeContainer
 {
     /// <summary>
-    /// Flags of the field, which are the visibility and the modifiers which the definition declares.
+    /// Flags of the field, which are the visibility and the modifiers which the definition declares, and the shape of
+    /// belonging which is <see cref="FieldFlags.Static"/> or <see cref="FieldFlags.Instance"/>.
     /// </summary>
     FieldFlags Flags { get; }
 

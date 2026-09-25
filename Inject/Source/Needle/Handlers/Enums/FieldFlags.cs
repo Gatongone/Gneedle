@@ -7,6 +7,15 @@ namespace Gneedle.Inject;
 public enum FieldFlags
 {
     /// <summary>
+    /// The field belongs to an instance of the type rather than to the type itself.<para/>
+    /// Every field belongs to one of the two, which are this flag and <see cref="Static"/>, and the two of them
+    /// together name an instance one: the instance shape is the narrower of the two, so it is the one which a field
+    /// that names both is written as and read back as. A field which names neither is one of an instance as well,
+    /// because the static shape is the one which the metadata writes out.
+    /// </summary>
+    Instance = 1 << 0,
+
+    /// <summary>
     /// The field is visible to the types of every assembly.
     /// </summary>
     Public = 1 << 1,
@@ -63,9 +72,11 @@ internal static class FieldFlagExtensions
                 _                                               => FieldAttributes.Public // Default
             };
 
-            // Process field modifiers.
-            if ((fieldFlags & FieldFlags.Static) != 0) attributes   |= FieldAttributes.Static;
-            if ((fieldFlags & FieldFlags.ReadOnly) != 0) attributes |= FieldAttributes.InitOnly;
+            // Process field modifiers. The instance shape is the narrower of the two shapes of belonging, so a field
+            // which names both of them is written as one of an instance: the static shape is written only where it is
+            // the one of the two which the field names.
+            if ((fieldFlags & FieldFlags.Static) != 0 && (fieldFlags & FieldFlags.Instance) == 0) attributes |= FieldAttributes.Static;
+            if ((fieldFlags & FieldFlags.ReadOnly) != 0) attributes                                    |= FieldAttributes.InitOnly;
 
             return attributes;
         }
@@ -75,7 +86,9 @@ internal static class FieldFlagExtensions
     extension(FieldDefinition fieldDefinition)
     {
         /// <summary>
-        /// Reads the flags of the field which the definition declares, which is the inverse of the conversion above.
+        /// Reads the flags of the field which the definition declares, which is the inverse of the conversion above:
+        /// the two shapes of belonging are read back the same way, which is what makes the instance shape the one of
+        /// the two which a field that names both is answered with.
         /// </summary>
         /// <returns><see cref="FieldFlags"/> corresponding to the definition.</returns>
         internal FieldFlags ToFieldFlags()
@@ -92,7 +105,11 @@ internal static class FieldFlagExtensions
                 _                           => (FieldFlags) 0 // No access modifier flag is set
             };
 
-            if (fieldDefinition.IsStatic) fieldFlags   |= FieldFlags.Static;
+            // Every field belongs to the type or to an instance of it, and the metadata writes the static shape out:
+            // the one which belongs to the type is marked static, and every other one is read as the instance shape.
+            if (fieldDefinition.IsStatic) fieldFlags |= FieldFlags.Static;
+            else fieldFlags                         |= FieldFlags.Instance;
+
             if (fieldDefinition.IsInitOnly) fieldFlags |= FieldFlags.ReadOnly;
 
             return fieldFlags;

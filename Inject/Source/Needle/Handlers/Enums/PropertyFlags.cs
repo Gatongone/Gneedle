@@ -7,6 +7,15 @@ namespace Gneedle.Inject;
 public enum PropertyFlags
 {
     /// <summary>
+    /// The property belongs to an instance of the type rather than to the type itself.<para/>
+    /// Every property belongs to one of the two, which are this flag and <see cref="Static"/>, and the two of them
+    /// together name an instance one: the instance shape is the narrower of the two, so it is the one which a property
+    /// that names both is written as and read back as. A property which names neither is one of an instance as well,
+    /// because the static shape is the one which the metadata writes out.
+    /// </summary>
+    Instance = 1 << 0,
+
+    /// <summary>
     /// The accessors of the property are visible to the types of every assembly.
     /// </summary>
     Public = 1 << 1,
@@ -68,8 +77,10 @@ internal static class PropertyFlagExtensions
                 _                                                     => MethodAttributes.Public // Default
             };
 
-            // Process property modifiers.
-            if ((propertyFlags & PropertyFlags.Static) != 0) attributes   |= MethodAttributes.Static;
+            // Process property modifiers. The instance shape is the narrower of the two shapes of belonging, so a
+            // property which names both of them is written as one of an instance: the static shape is written only
+            // where it is the one of the two which the property names.
+            if ((propertyFlags & PropertyFlags.Static) != 0 && (propertyFlags & PropertyFlags.Instance) == 0) attributes   |= MethodAttributes.Static;
             if ((propertyFlags & PropertyFlags.Virtual) != 0) attributes  |= MethodAttributes.Virtual | MethodAttributes.NewSlot;
             if ((propertyFlags & PropertyFlags.Abstract) != 0) attributes |= MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.NewSlot;
 
@@ -84,7 +95,9 @@ internal static class PropertyFlagExtensions
         /// Reads the flags of the property which the definition declares, which is the inverse of the conversion above:
         /// a property holds no attributes of its own, so the flags of it are the ones of the accessor which it holds,
         /// which is the getter, or the setter when the property holds no getter. A property which holds no accessor at
-        /// all declares no flag, and is answered with none.
+        /// all declares no flag, and is answered with none. The two shapes of belonging are read off that accessor the
+        /// same way, which is what makes the instance shape the one of the two which a property that names both is
+        /// answered with.
         /// </summary>
         /// <returns><see cref="PropertyFlags"/> corresponding to the definition.</returns>
         internal PropertyFlags ToPropertyFlags()
@@ -109,7 +122,11 @@ internal static class PropertyFlagExtensions
             if (accessor.IsAbstract) propertyFlags     |= PropertyFlags.Abstract;
             else if (accessor.IsVirtual) propertyFlags |= PropertyFlags.Virtual;
 
+            // Every property belongs to the type or to an instance of it, and the metadata writes the static shape out
+            // on the accessor: the one which belongs to the type is marked static, and every other one is read as the
+            // instance shape.
             if (accessor.IsStatic) propertyFlags |= PropertyFlags.Static;
+            else propertyFlags                   |= PropertyFlags.Instance;
 
             return propertyFlags;
         }

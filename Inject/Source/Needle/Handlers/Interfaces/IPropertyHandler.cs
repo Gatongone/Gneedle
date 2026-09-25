@@ -8,8 +8,9 @@ namespace Gneedle.Inject;
 public interface IPropertyHandler : IAttributeContainer
 {
     /// <summary>
-    /// Flags of the property, which are the flags of the accessor which it holds: a property holds no attributes of its
-    /// own, so the flags are read off the getter, or off the setter when the property holds no getter.
+    /// Flags of the property, which are the flags of the accessor which it holds, the shape of belonging which is
+    /// <see cref="PropertyFlags.Static"/> or <see cref="PropertyFlags.Instance"/> among them: a property holds no
+    /// attributes of its own, so the flags are read off the getter, or off the setter when the property holds no getter.
     /// </summary>
     PropertyFlags Flags { get; }
 
