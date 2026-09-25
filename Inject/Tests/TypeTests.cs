@@ -43,6 +43,45 @@ public class TypeTests
     }
 
     [Test]
+    public void TryGetSystemType_With_A_Description_Which_Names_A_Type_Of_The_Runtime()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(typeof(int).ToIType().TryGetSystemType(out var nonGenericType), Is.True);
+            Assert.That(nonGenericType, Is.EqualTo(typeof(int)));
+
+            // The description of an instance is the definition of the type and the arguments of it, so the type which is
+            // answered with is the one the definition is made into by those arguments.
+            Assert.That(typeof(List<int>).ToIType().TryGetSystemType(out var genericType), Is.True);
+            Assert.That(genericType, Is.EqualTo(typeof(List<int>)));
+
+            // A description which names a type by its name alone is read the way the runtime reads a name of its own.
+            Assert.That(new ReferencedType(typeof(string).FullName!).TryGetSystemType(out var referencedType), Is.True);
+            Assert.That(referencedType, Is.EqualTo(typeof(string)));
+        });
+    }
+
+    [Test]
+    public void TryGetSystemType_With_A_Description_Which_Names_No_Type_Of_The_Runtime()
+    {
+        // A type which the assembly being woven declares lies in an image which may never have been loaded, a parameter
+        // stands for whatever instantiates it, and the description of an instance which holds such an argument is one
+        // the definition cannot be made into: none of them is a type the runtime can hand over, and each is answered
+        // with nothing rather than with a failure.
+        Assert.Multiple(() =>
+        {
+            Assert.That(typeof(List<>).ToIType().TryGetSystemType(out var openGenericType), Is.False);
+            Assert.That(openGenericType, Is.Null);
+
+            Assert.That(new GenericParameterType("T").TryGetSystemType(out var parameterType), Is.False);
+            Assert.That(parameterType, Is.Null);
+
+            Assert.That(new ReferencedType($"{typeof(TypeTests).Namespace}.ATypeWhichIsDeclaredNowhere").TryGetSystemType(out var unknownType), Is.False);
+            Assert.That(unknownType, Is.Null);
+        });
+    }
+
+    [Test]
     public void CreateGenericType_With_GenericTypeArgument()
     {
         // Type with generic parameter.

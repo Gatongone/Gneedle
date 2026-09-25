@@ -252,6 +252,77 @@ public static class TypeInfoExtensions
     };
 
     /// <summary>
+    /// Read the <see cref="Type"/> which a description names, where the runtime holds one.<para/>
+    /// A description is built from a type as often as it is read out of metadata, and the two are the same type to the
+    /// names of the tree, but only the first of them holds the type itself: the type of the assembly being woven lies in
+    /// an image which may never have been loaded, and a parameter stands for whatever instantiates it, so neither is a
+    /// type the runtime can hand over. What this answers with is the type which the description names where the runtime
+    /// holds one, and nothing where it does not.
+    /// </summary>
+    /// <param name="type">The description which is read.</param>
+    /// <param name="systemType">The type which the description names, or null where the runtime holds none.</param>
+    /// <returns>Whether the runtime holds the type which the description names.</returns>
+    public static bool TryGetSystemType(this IType type, out Type? systemType)
+    {
+        switch (type)
+        {
+            case NongenericType nongenericType:
+                systemType = nongenericType.Type;
+                return true;
+
+            // The description of an instance holds the definition of the type and the arguments of the instance, so the
+            // type the runtime holds is the one which that definition is made into by those arguments: an argument which
+            // is no type of the runtime is one the definition cannot be made into, and one which the constraints of the
+            // definition refuse is one the runtime refuses as well.
+            case GenericType genericType:
+                var arguments = new Type?[genericType.GenericArguments.Length];
+                for (var index = 0; index < arguments.Length; index++)
+                {
+                    if (!genericType.GenericArguments[index].TryGetSystemType(out arguments[index]))
+                    {
+                        systemType = null;
+                        return false;
+                    }
+                }
+
+                try
+                {
+                    systemType = genericType.Type.MakeGenericType(arguments!);
+                    return true;
+                }
+                catch (ArgumentException)
+                {
+                    systemType = null;
+                    return false;
+                }
+
+            // The description names a type which this run reads as metadata alone, so the name is what tells which type
+            // it is, and the runtime answers for that name the way it answers for a name of its own: the names of the
+            // corlib and of the assembly which the reading is made in, and a name which the assembly of the type
+            // qualifies. A name which cannot be read at all is one the runtime holds no type of, which is what is
+            // answered here rather than the failure of the reading: the description itself is readable either way.
+            case ReferencedType referencedType:
+                try
+                {
+                    systemType = Type.GetType(referencedType.TypeName);
+                    return systemType != null;
+                }
+                catch (Exception exception) when (exception is ArgumentException or TypeLoadException or FileLoadException or BadImageFormatException)
+                {
+                    systemType = null;
+                    return false;
+                }
+
+            // A parameter of a method or of a type stands for whatever instantiates it, which is no type of this run
+            // until that instantiation is written, and a kind which this tree does not build holds nothing to read a
+            // type out of at all.
+            default:
+                systemType = null;
+                return false;
+        }
+    }
+
+    /// <summary>
     /// Create <see cref="IType"/> array from <see cref="ParameterInfo"/> array.
     /// </summary>
     /// <param name="parameters">The parameter info array.</param>
