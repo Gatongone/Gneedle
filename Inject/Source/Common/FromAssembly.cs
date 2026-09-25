@@ -12,13 +12,44 @@ internal static class FromAssembly
     /// <param name="definition">The type definition which could carry the attribute.</param>
     /// <returns>The name of the assembly, or null when the definition does not carry the attribute.</returns>
     private static string? GetFromAssemblyName(TypeDefinition definition)
+        => GetFromAssemblyAttribute(definition)?.ConstructorArguments[0].Value as string;
+
+    /// <summary>
+    /// Get the full name of the real type which the attribute of <paramref name="definition"/> names, which is the one
+    /// it carries where it carries it, and the name of the stub itself where it names none: a stub is what it stands
+    /// for by its own name where nothing else says what that is.
+    /// </summary>
+    /// <param name="definition">The type definition which could carry the attribute.</param>
+    /// <returns>The full name of the real type.</returns>
+    private static string GetFromAssemblyTypeName(TypeDefinition definition)
+    {
+        var named = GetFromAssemblyAttribute(definition)?.ConstructorArguments;
+        if (named is not { Count: > 1 } || named[1].Value is not string typeFullName) return definition.FullName;
+
+        // A type which declares generic parameters is named by the number of them wherever it is named, and a stub
+        // declares the ones of the type it stands for: what the name is written without is that number, which is read
+        // off the stub rather than written a second time.
+        if (definition.GenericParameters.Count == 0) return typeFullName;
+
+        var arity = "`" + definition.GenericParameters.Count;
+        var last = typeFullName.LastIndexOf('/') + 1;
+        return typeFullName.Substring(0, last) + typeFullName.Substring(last).Split('`')[0] + arity;
+    }
+
+    /// <summary>
+    /// The attribute of <paramref name="definition"/> which stands for a type of another assembly, or null where it
+    /// carries none.
+    /// </summary>
+    /// <param name="definition">The type definition which could carry the attribute.</param>
+    /// <returns>The attribute, or null.</returns>
+    private static CustomAttribute? GetFromAssemblyAttribute(TypeDefinition definition)
     {
         foreach (var attribute in definition.CustomAttributes)
         {
-            if (attribute.AttributeType.FullName != FromAssemblyAttribute.TYPE_NAME) continue;
-            if (attribute.ConstructorArguments.Count == 0) return null;
-
-            return attribute.ConstructorArguments[0].Value as string;
+            if (attribute.AttributeType.FullName == FromAssemblyAttribute.TYPE_NAME && attribute.ConstructorArguments.Count > 0)
+            {
+                return attribute;
+            }
         }
 
         return null;
@@ -133,7 +164,7 @@ internal static class FromAssembly
             var assemblyName = GetFromAssemblyName(stub);
             if (assemblyName == null) return false;
 
-            definition = ResolveTypeFromAssembly(module, assemblyName, stub.FullName);
+            definition = ResolveTypeFromAssembly(module, assemblyName, GetFromAssemblyTypeName(stub));
             return true;
         }
 
