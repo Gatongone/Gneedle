@@ -157,30 +157,37 @@ public class HandlerFlagsTests
 
     #region Method
 
-    [TestCase(MethodFlags.Public)]
-    [TestCase(MethodFlags.Private)]
-    [TestCase(MethodFlags.Internal)]
-    [TestCase(MethodFlags.Protected)]
-    [TestCase(MethodFlags.Public | MethodFlags.Static)]
-    [TestCase(MethodFlags.Public | MethodFlags.Virtual)]
-    [TestCase(MethodFlags.Public | MethodFlags.Abstract)]
-    public void Method_Flags_Are_Read_Back_Off_The_Definition_Which_They_Were_Written_Into(MethodFlags methodFlags)
+    [TestCase(MethodFlags.Public, MethodFlags.Public | MethodFlags.Instance)]
+    [TestCase(MethodFlags.Private, MethodFlags.Private | MethodFlags.Instance)]
+    [TestCase(MethodFlags.Internal, MethodFlags.Internal | MethodFlags.Instance)]
+    [TestCase(MethodFlags.Protected, MethodFlags.Protected | MethodFlags.Instance)]
+    [TestCase(MethodFlags.Public | MethodFlags.Static, MethodFlags.Public | MethodFlags.Static)]
+    [TestCase(MethodFlags.Public | MethodFlags.Virtual, MethodFlags.Public | MethodFlags.Virtual | MethodFlags.Instance)]
+    [TestCase(MethodFlags.Public | MethodFlags.Abstract, MethodFlags.Public | MethodFlags.Abstract | MethodFlags.Instance)]
+    [TestCase(MethodFlags.Public | MethodFlags.Static | MethodFlags.Instance, MethodFlags.Public | MethodFlags.Instance)]
+    public void Method_Flags_Are_Read_Back_Off_The_Definition_Which_They_Were_Written_Into(MethodFlags methodFlags, MethodFlags readBack)
     {
+        // Every method belongs to the type it is declared by or to an instance of it, and the two shapes of belonging
+        // are read back as the narrower of the two: a set which names the static shape alone is the only one which a
+        // method is read back as static with, and every other one is read back as an instance one, which includes the
+        // set which names both of them.
         var (_, host, _) = NewHost($"FlagsReadBackMethod{(int)methodFlags}Assembly");
 
-        Assert.That(host.AddMethod("Run", methodFlags).GetHandler().Flags, Is.EqualTo(methodFlags));
+        Assert.That(host.AddMethod("Run", methodFlags).GetHandler().Flags, Is.EqualTo(readBack));
     }
 
     [Test]
     public void Method_Flags_Of_A_Definition_Which_Overrides_Are_Those_Of_A_Virtual_Method()
     {
         // An override is a virtual method which takes the slot of another one, which is a difference the flags do not
-        // name: the flags say what a method is, not which of the shapes of it the metadata was written with.
+        // name: the flags say what a method is, not which of the shapes of it the metadata was written with. The shape
+        // of belonging is named by the flags as well, and a definition which is not marked static belongs to an
+        // instance.
         var (_, host, module) = NewHost("FlagsOverrideMethodAssembly");
         var overrideMethod = new MethodDefinition("Run", MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig, module.TypeSystem.Void);
         host.Source.Methods.Add(overrideMethod);
 
-        Assert.That(host.GetMethod("Run")!.Flags, Is.EqualTo(MethodFlags.Public | MethodFlags.Virtual));
+        Assert.That(host.GetMethod("Run")!.Flags, Is.EqualTo(MethodFlags.Public | MethodFlags.Virtual | MethodFlags.Instance));
     }
 
     [Test]
@@ -202,7 +209,7 @@ public class HandlerFlagsTests
             Assert.That(staticConstructor.Name, Is.EqualTo(".cctor"));
             Assert.That(staticConstructor.IsStaticCtor, Is.True);
             Assert.That(staticConstructor.IsInstanceCtor, Is.False);
-            Assert.That(instanceConstructor.Flags, Is.EqualTo(MethodFlags.Public));
+            Assert.That(instanceConstructor.Flags, Is.EqualTo(MethodFlags.Public | MethodFlags.Instance));
             Assert.That(instanceConstructor.Name, Is.EqualTo(".ctor"));
             Assert.That(instanceConstructor.IsInstanceCtor, Is.True);
             Assert.That(instanceConstructor.IsStaticCtor, Is.False);
@@ -224,7 +231,7 @@ public class HandlerFlagsTests
         Assert.Multiple(() =>
         {
             Assert.That(host.GetMethod(".cctor")!.Flags, Is.EqualTo(MethodFlags.Private | MethodFlags.Static));
-            Assert.That(host.GetMethod(".ctor")!.Flags, Is.EqualTo(MethodFlags.Public));
+            Assert.That(host.GetMethod(".ctor")!.Flags, Is.EqualTo(MethodFlags.Public | MethodFlags.Instance));
         });
     }
 
@@ -241,8 +248,10 @@ public class HandlerFlagsTests
 
         Assert.Multiple(() =>
         {
+            // The shape of belonging is named by the flags as well: a field which a definition declares without the
+            // static shape is one of an instance, which is what it is read back as.
             Assert.That(host.GetField("Counter")!.Flags, Is.EqualTo(FieldFlags.Private | FieldFlags.Static | FieldFlags.ReadOnly));
-            Assert.That(host.GetField("Value")!.Flags, Is.EqualTo(FieldFlags.Public));
+            Assert.That(host.GetField("Value")!.Flags, Is.EqualTo(FieldFlags.Public | FieldFlags.Instance));
         });
     }
 
@@ -296,7 +305,7 @@ public class HandlerFlagsTests
 
         var property = NewProperty(host, module, "Value", MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig, withGetter: false);
 
-        Assert.That(property.Flags, Is.EqualTo(PropertyFlags.Public));
+        Assert.That(property.Flags, Is.EqualTo(PropertyFlags.Public | PropertyFlags.Instance));
     }
 
     [Test]
@@ -310,6 +319,59 @@ public class HandlerFlagsTests
                            .GetHandler();
 
         Assert.That(property.Flags, Is.EqualTo(PropertyFlags.Internal | PropertyFlags.Static));
+    }
+
+    #endregion
+
+    #region The shapes of belonging
+
+    [Test]
+    public void The_Flags_Of_A_Member_Which_Names_Both_Shapes_Of_Belonging_Are_Those_Of_An_Instance()
+    {
+        // The instance shape is the narrower of the two shapes of belonging, so a member which names both of them is
+        // written as one of an instance and read back as one of an instance: what the two flags name together is the
+        // shape which a member of an instance has, and the static shape is not written at all.
+        var (_, host, _) = NewHost("FlagsBothShapesOfBelongingAssembly");
+
+        var method = host.AddMethod("Run", MethodFlags.Public | MethodFlags.Static | MethodFlags.Instance)
+                         .GetHandler();
+        var field = host.AddField("Value", FieldFlags.Public | FieldFlags.Static | FieldFlags.Instance)
+                        .WithType(typeof(int))
+                        .GetHandler();
+        var property = host.AddProperty("Count", PropertyFlags.Public | PropertyFlags.Static | PropertyFlags.Instance)
+                           .WithType(typeof(int))
+                           .WithGetter(() => 0)
+                           .GetHandler();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(method.Flags, Is.EqualTo(MethodFlags.Public | MethodFlags.Instance));
+            Assert.That(field.Flags, Is.EqualTo(FieldFlags.Public | FieldFlags.Instance));
+            Assert.That(property.Flags, Is.EqualTo(PropertyFlags.Public | PropertyFlags.Instance));
+        });
+    }
+
+    [Test]
+    public void A_Member_Which_Names_One_Shape_Of_Belonging_Is_Written_With_That_One()
+    {
+        // The shape which is named alone is the one which the member is written with, whichever of the two it is: the
+        // instance shape is the one which a member that names neither is written with, which is what the default of the
+        // metadata holds.
+        var (_, host, _) = NewHost("FlagsOneShapeOfBelongingAssembly");
+
+        var instance = host.AddMethod("Instance", MethodFlags.Public | MethodFlags.Instance)
+                           .GetHandler();
+        var named = host.AddMethod("Named", MethodFlags.Public | MethodFlags.Static)
+                        .GetHandler();
+        var neither = host.AddMethod("Neither", MethodFlags.Public)
+                          .GetHandler();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(((MethodHandler) instance).Source.IsStatic, Is.False);
+            Assert.That(((MethodHandler) named).Source.IsStatic, Is.True);
+            Assert.That(((MethodHandler) neither).Source.IsStatic, Is.False);
+        });
     }
 
     #endregion

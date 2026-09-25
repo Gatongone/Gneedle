@@ -26,6 +26,9 @@ internal class PropertyHandler(PropertyDefinition methodDef, TypeHandler declari
     /// </summary>
     public string FullName => Source.FullName;
 
+    /// <inheritdoc/>
+    public IType PropertyType => Source.PropertyType.ToIType();
+
     /// <summary>
     /// Get the string representation of the property, which is the declaration of it: the body of a property is the body
     /// of the accessors of it, which are the members of the type which it names. The IL of an accessor is what the

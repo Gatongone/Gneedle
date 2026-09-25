@@ -544,18 +544,18 @@ public class CompilerGeneratedTemplateTests
     /// The parameters which every template above is written with: each takes one value and hands one back, whatever it
     /// does with it, and the two which yield and await are woven with the same argument as the rest.
     /// </summary>
-    private static Parameter[] OneValue => [new Parameter(typeof(int).ToGneedleType())];
+    private static Parameter[] OneValue => [new Parameter(typeof(int).ToIType())];
 
     [Test]
     public void A_Template_Which_Holds_A_Lambda_Is_Woven()
         => Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsALambda)),
-                typeof(int).ToGneedleType(), OneValue, 41),
+                typeof(int).ToIType(), OneValue, 41),
             Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
 
     [Test]
     public void A_Template_Which_Holds_A_Capturing_Lambda_Is_Woven()
         => Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsACapturingLambda)),
-                typeof(int).ToGneedleType(), OneValue, 41),
+                typeof(int).ToIType(), OneValue, 41),
             Is.EqualTo(42), "the value which the template captured was not written where the template read it.");
 
     [Test]
@@ -565,7 +565,7 @@ public class CompilerGeneratedTemplateTests
         // method of the type which declares the template, so there is no type to move for it and the member is moved on
         // its own. It is the cheaper of the two moves and the one the other four are not.
         Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.RunsALocalFunction)),
-                typeof(int).ToGneedleType(), OneValue, 41),
+                typeof(int).ToIType(), OneValue, 41),
             Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
@@ -573,7 +573,7 @@ public class CompilerGeneratedTemplateTests
     public void A_Template_Which_Is_An_Iterator_Is_Woven_And_Enumerated()
     {
         var produced = ((IEnumerable<int>) WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Yields)),
-            typeof(IEnumerable<int>).ToGneedleType(), OneValue, 7)!).ToArray();
+            typeof(IEnumerable<int>).ToIType(), OneValue, 7)!).ToArray();
 
         Assert.That(produced, Is.EqualTo(new[] {7, 8}), "the member which was woven did not produce what the template produces.");
     }
@@ -582,7 +582,7 @@ public class CompilerGeneratedTemplateTests
     public void A_Template_Which_Is_An_Async_Body_Is_Woven_And_Awaited()
     {
         var awaited = (Task<int>) WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Awaits)),
-            typeof(Task<int>).ToGneedleType(), OneValue, 5)!;
+            typeof(Task<int>).ToIType(), OneValue, 5)!;
 
         Assert.That(awaited.GetAwaiter().GetResult(), Is.EqualTo(5), "the member which was woven did not hand back what the template hands back.");
     }
@@ -594,7 +594,7 @@ public class CompilerGeneratedTemplateTests
         // The body of the lambda is carried onto the type being woven and is read there, so a placeholder which stands
         // inside it is resolved where it stands: the call it makes names a member of that type, and the member computes
         // what the template computes. Nothing of the placeholder is left in the body which was woven.
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var (_, host, _) = NewHost($"CompilerGeneratedInALambda{Guid.NewGuid():N}");
 
         host.AddMethod("Twice", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static)
@@ -617,13 +617,13 @@ public class CompilerGeneratedTemplateTests
         // The body which is carried here is the MoveNext of the state machine, whose receiver is the machine rather than
         // the member being woven: a placeholder which reaches a member which belongs to no instance needs no receiver,
         // so it is woven where it stands and the machine the copy holds is what runs it.
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var (_, host, _) = NewHost($"CompilerGeneratedInAnAsyncBody{Guid.NewGuid():N}");
 
         host.AddMethod("Twice", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static)
             .SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.Twice)));
 
-        var run = host.AddMethod("Run", typeof(Task<int>).ToGneedleType(), [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
+        var run = host.AddMethod("Run", typeof(Task<int>).ToIType(), [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.AwaitsAStaticMember)));
 
         var woven = host.AssemblyHandler.Assembly.Load().GetType($"{NS}.Host")!.GetMethod("Run")!;
@@ -639,7 +639,7 @@ public class CompilerGeneratedTemplateTests
         // The instance which the member being woven belongs to is not the receiver of the body the compiler wrote for a
         // lambda, and a lambda which captured nothing holds no field to read it out of: the placeholder is refused
         // rather than written against the receiver of that body, which is a value of another type.
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var (_, host, _) = NewHost($"CompilerGeneratedInALambdaForAnInstance{Guid.NewGuid():N}");
 
         // The member the placeholder names belongs to an instance of the type being woven, which is what the body of the
@@ -763,7 +763,7 @@ public class CompilerGeneratedTemplateTests
         // position the member being woven does not declare is refused after the carrying of it succeeded: what the
         // carrying wrote onto the type being woven is taken back off there as well, which is what the type declaring
         // nothing of the compiler's own reads.
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var (_, host, _) = NewHost($"CompilerGeneratedRefusedAfterTheCarrying{Guid.NewGuid():N}");
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
@@ -792,7 +792,7 @@ public class CompilerGeneratedTemplateTests
         // instantiation the template names rather than the open member. What it computes tells a call which reached
         // the instantiation from one which reached the open member, which is a body the runtime refuses to run.
         Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericLocalFunction)),
-                typeof(int).ToGneedleType(), OneValue, 41),
+                typeof(int).ToIType(), OneValue, 41),
             Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
@@ -804,7 +804,7 @@ public class CompilerGeneratedTemplateTests
         // in the body of the copy names the copy of it. A member whose signature names a type of a parameter of its own
         // is one which the carrying has to write rather than import as it stands.
         Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.ConstrainsItsParameterToItself)),
-                typeof(int).ToGneedleType(), OneValue, 41),
+                typeof(int).ToIType(), OneValue, 41),
             Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
@@ -816,7 +816,7 @@ public class CompilerGeneratedTemplateTests
     /// <returns>The report of the refusal.</returns>
     private static string RefusalOf(string templateName)
     {
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var (_, host, _) = NewHost($"CompilerGeneratedRefused{Guid.NewGuid():N}");
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 
@@ -914,7 +914,7 @@ public class CompilerGeneratedTemplateTests
         // is why the template adds one rather than handing its argument back: a member whose call was dropped hands the
         // argument back as well.
         Assert.That(WovenAndRun(Template(typeof(CompilerGeneratedTemplates), nameof(CompilerGeneratedTemplates.CallsAGenericMethod)),
-                typeof(int).ToGneedleType(), OneValue, 41),
+                typeof(int).ToIType(), OneValue, 41),
             Is.EqualTo(42), "the member which was woven did not compute what the template computes.");
     }
 
@@ -1186,7 +1186,7 @@ public class CompilerGeneratedTemplateTests
         // The same, of a body the compiler wrote which the assembly being woven does not declare, which is the case of
         // every weave which is not an assembly weaving itself: the copy names the type as the template named it, and
         // the assembly which is written is given a reference to the one which declares it.
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var (_, host, _) = NewHost($"CompilerGeneratedAcrossAnAssembly{Guid.NewGuid():N}");
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
 

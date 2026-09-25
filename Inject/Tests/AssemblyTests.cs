@@ -38,7 +38,7 @@ public class AssemblyTests
     public void Load_Of_A_Type_With_A_Method_Returns_The_Produced_Assembly()
     {
         var assembly = Assembly.Create("LoadableMethodAssembly");
-        NewHost(assembly).AddMethod("Ping", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        NewHost(assembly).AddMethod("Ping", typeof(void).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
         var loaded = assembly.Load();
 
@@ -50,7 +50,7 @@ public class AssemblyTests
     {
         // Calling the produced method proves that its body is valid IL and not merely metadata which got emitted.
         var assembly = Assembly.Create("ExecutableAssembly");
-        NewHost(assembly).AddMethod("Ping", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        NewHost(assembly).AddMethod("Ping", typeof(void).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
         var ping = assembly.Load().GetType($"{NS}.Host")!.GetMethod("Ping")!;
 
@@ -62,7 +62,7 @@ public class AssemblyTests
     public void Load_Constructs_A_Type_Whose_Constructor_Was_Added_Without_A_Body()
     {
         var assembly = Assembly.Create("ConstructibleAssembly");
-        NewHost(assembly).AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public);
+        NewHost(assembly).AddMethod(".ctor", typeof(void).ToIType(), [], [], MethodFlags.Public);
 
         var type = assembly.Load().GetType($"{NS}.Host")!;
 
@@ -80,7 +80,7 @@ public class AssemblyTests
     private static (MemoryStream image, string name) NewImage(string assemblyName)
     {
         var assembly = Assembly.Create(assemblyName);
-        NewHost(assembly).AddMethod("Ping", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        NewHost(assembly).AddMethod("Ping", typeof(void).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
         var image = new MemoryStream();
         assembly.SaveTo(image);

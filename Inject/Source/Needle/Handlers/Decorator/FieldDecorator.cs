@@ -24,7 +24,7 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
     /// <summary>
     /// Type of the value which the field holds, which is <see cref="object"/> until another is asked for.
     /// </summary>
-    private IType m_FieldType = typeof(object).ToGneedleType();
+    private IType m_FieldType = typeof(object).ToIType();
 
     /// <summary>
     /// The handler of the field which the chain built, or null while the field is still being described: the chain
@@ -58,7 +58,7 @@ public class FieldDecorator : FieldDecorator.IFieldTypeDecorator
     public ITypeDecorator WithType(Type fieldType)
     {
         DecoratorChain.RefuseDescription(m_Handler, m_FieldName);
-        m_FieldType = fieldType.ToGneedleType();
+        m_FieldType = fieldType.ToIType();
         return this;
     }
 

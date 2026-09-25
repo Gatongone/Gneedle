@@ -8,8 +8,9 @@ namespace Gneedle.Inject;
 public interface IPropertyHandler : IAttributeContainer
 {
     /// <summary>
-    /// Flags of the property, which are the flags of the accessor which it holds: a property holds no attributes of its
-    /// own, so the flags are read off the getter, or off the setter when the property holds no getter.
+    /// Flags of the property, which are the flags of the accessor which it holds, the shape of belonging which is
+    /// <see cref="PropertyFlags.Static"/> or <see cref="PropertyFlags.Instance"/> among them: a property holds no
+    /// attributes of its own, so the flags are read off the getter, or off the setter when the property holds no getter.
     /// </summary>
     PropertyFlags Flags { get; }
 
@@ -22,6 +23,16 @@ public interface IPropertyHandler : IAttributeContainer
     /// Full name of the property, which holds the name of the type which declares it.
     /// </summary>
     string FullName { get; }
+
+    /// <summary>
+    /// Type of the value which the property reads and writes, which is described by <see cref="ReferencedType"/> where
+    /// the assembly being woven declares the type, and by <see cref="GenericParameterType"/> where it stands for a
+    /// generic parameter of the type which declares the property.<para/>
+    /// An indexer holds the type of the value which it reads and writes here as well, and the types which it is indexed
+    /// by are the types of the parameters of its accessors rather than of the property, so they are read off the getter
+    /// or the setter through <see cref="GetGetter"/> and <see cref="GetSetter"/>.
+    /// </summary>
+    IType PropertyType { get; }
 
     /// <summary>
     /// Handler of the type which declares the property.

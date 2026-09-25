@@ -27,7 +27,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     /// <summary>
     /// Type of the value which the property holds, which is <see cref="object"/> until another is asked for.
     /// </summary>
-    private IType m_PropertyType = typeof(object).ToGneedleType();
+    private IType m_PropertyType = typeof(object).ToIType();
 
     /// <summary>
     /// The body of the getter of a kind which can be written from the member alone, which the last
@@ -99,7 +99,7 @@ public class PropertyDecorator : PropertyDecorator.IPropertyTypeDecorator
     public IAccessorDecorator WithType(Type propertyType)
     {
         DecoratorChain.RefuseDescription(m_Handler, m_PropertyName);
-        m_PropertyType = propertyType.ToGneedleType();
+        m_PropertyType = propertyType.ToIType();
         return this;
     }
 

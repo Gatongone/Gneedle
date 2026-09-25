@@ -7,6 +7,15 @@ namespace Gneedle.Inject;
 public enum MethodFlags
 {
     /// <summary>
+    /// The method belongs to an instance of the type rather than to the type itself.<para/>
+    /// Every method belongs to one of the two, which are this flag and <see cref="Static"/>, and the two of them
+    /// together name an instance one: the instance shape is the narrower of the two, so it is the one which a method
+    /// that names both is written as and read back as. A method which names neither is one of an instance as well,
+    /// because the static shape is the one which the metadata writes out.
+    /// </summary>
+    Instance = 1 << 0,
+
+    /// <summary>
     /// The method is visible to the types of every assembly.
     /// </summary>
     Public = 1 << 1,
@@ -76,12 +85,16 @@ internal static class MethodFlagExtensions
                 _                                                                                              => 0 // No access modifier flag is set
             };
 
-            // Process method type.
+            // Process method type. The instance shape is the narrower of the two shapes of belonging, so a method which
+            // names both of them is written as one of an instance: the static shape is written only where it is the one
+            // of the two which the method names.
+            var isStatic = methodFlags.HasFlag(MethodFlags.Static) && !methodFlags.HasFlag(MethodFlags.Instance);
+
             methodAttributes |= methodFlags switch
             {
                 _ when methodFlags.HasFlag(MethodFlags.Virtual)  => MethodAttributes.Virtual | MethodAttributes.NewSlot,
                 _ when methodFlags.HasFlag(MethodFlags.Abstract) => MethodAttributes.Abstract | MethodAttributes.Virtual | MethodAttributes.NewSlot,
-                _ when methodFlags.HasFlag(MethodFlags.Static)   => MethodAttributes.Static,
+                _ when isStatic                                  => MethodAttributes.Static,
                 _                                                => 0 // No method type flag is set
             };
 
@@ -95,7 +108,9 @@ internal static class MethodFlagExtensions
         /// <summary>
         /// Reads the flags of the method which the definition declares, which is the inverse of the conversion above:
         /// an abstract method is a virtual one which holds no body, and it is written with the two shapes at once, so it
-        /// is read back as the narrower of them, which is <see cref="MethodFlags.Abstract"/>.
+        /// is read back as the narrower of them, which is <see cref="MethodFlags.Abstract"/>. The two shapes of
+        /// belonging are read back the same way, which is what makes the instance shape the one of the two which a
+        /// method that names both is answered with.
         /// </summary>
         /// <returns><see cref="MethodFlags"/> corresponding to the definition.</returns>
         internal MethodFlags ToMethodFlags()
@@ -118,7 +133,10 @@ internal static class MethodFlagExtensions
             if (methodDefinition.IsAbstract) methodFlags     |= MethodFlags.Abstract;
             else if (methodDefinition.IsVirtual) methodFlags |= MethodFlags.Virtual;
 
+            // Every method belongs to the type or to an instance of it, and the metadata writes the static shape out:
+            // the one which belongs to the type is marked static, and every other one is read as the instance shape.
             if (methodDefinition.IsStatic) methodFlags |= MethodFlags.Static;
+            else methodFlags                           |= MethodFlags.Instance;
 
             return methodFlags;
         }

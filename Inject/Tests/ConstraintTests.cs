@@ -95,7 +95,7 @@ public class ConstraintTests
         var host = NewClass();
         var method = host.AddMethod(
             "Foo",
-            typeof(void).ToGneedleType(),
+            typeof(void).ToIType(),
             [new GenericParameterType("T", Constraint.Class)],
             [],
             MethodFlags.Public);
@@ -109,7 +109,7 @@ public class ConstraintTests
         var host = NewClass();
         var method = host.AddMethod(
             "Foo",
-            typeof(void).ToGneedleType(),
+            typeof(void).ToIType(),
             [new GenericParameterType("T", Constraint.FromSelf())],
             [],
             MethodFlags.Public);
@@ -124,7 +124,7 @@ public class ConstraintTests
         var host = NewClass();
         var method = host.AddMethod(
             "Foo",
-            typeof(void).ToGneedleType(),
+            typeof(void).ToIType(),
             [new GenericParameterType("T", Constraint.FromType<IDisposable>())],
             [],
             MethodFlags.Public);

@@ -90,7 +90,7 @@ public class MethodTests
         // type of another assembly, so both of the shapes which are not importable as-is are covered here.
         var assembly = Assembly.Create("DeclaredTypeAssembly");
         var host = AddAHost(assembly);
-        host.AddMethod("Run", typeof(void).ToGneedleType(), [], [new Parameter(new NongenericType(typeof(MethodTests)))], MethodFlags.Public);
+        host.AddMethod("Run", typeof(void).ToIType(), [], [new Parameter(new NongenericType(typeof(MethodTests)))], MethodFlags.Public);
 
         using var stream = new MemoryStream();
         assembly.SaveTo(stream);

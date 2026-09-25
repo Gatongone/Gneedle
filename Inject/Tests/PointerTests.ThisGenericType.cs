@@ -70,8 +70,8 @@ public partial class PointerTests
     public void A_Call_Of_A_Member_Of_A_Generic_Type_Runs_The_Member()
     {
         var host = NewRunnableGenericHost("GenericMemberCallAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeInstanceMethod)));
 
@@ -88,8 +88,8 @@ public partial class PointerTests
         // are rather than in a row, so the invocation which every path reaches with the two arguments of the delegate is
         // the one which the symbol stands for, and the call of the member is written in its place.
         var host = NewRunnableGenericHost("GenericMemberConditionalArgumentAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType()), new Parameter(typeof(bool).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeWithAConditionalArgument)));
         var ins = ((MethodHandler) method).Source.Body.Instructions.ToArray();
@@ -114,8 +114,8 @@ public partial class PointerTests
         // of the body, and every path which reaches the invocation of the delegate passes through the symbol either
         // way, so the call of the member stands where the delegate was invoked rather than a delegate being built.
         var host = NewRunnableGenericHost("GenericMemberInsideAProtectedRegionAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInsideAProtectedRegion)));
 
@@ -142,8 +142,8 @@ public partial class PointerTests
         // nothing on the stack which it holds: what it takes off there has to answer for the store the way a value the
         // body pushed does, and the store is not what the walk reads the invocation by.
         var host = NewRunnableGenericHost("GenericMemberInTheNamedHandlerAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInTheHandlerWhichNamesItsException)));
 
@@ -163,8 +163,8 @@ public partial class PointerTests
         // runtime hands the control to rather than one which a path of the body reaches: the path which begins there
         // passes through the symbol, so the call of the member stands where the delegate was invoked.
         var host = NewRunnableGenericHost("GenericMemberInTheHandlerAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType())],
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberInTheHandler)));
 
@@ -192,8 +192,8 @@ public partial class PointerTests
         // holds: the invocation is left as the invocation of that delegate, which runs the member of the arm which ran.
         var host = NewRunnableGenericHost("GenericMemberConditionalNameAssembly");
         AddASubtract(host);
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType()), new Parameter(typeof(bool).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichAConditionNames)));
 
@@ -216,8 +216,8 @@ public partial class PointerTests
         // delegates which the two arms build are what it invokes.
         var host = NewRunnableGenericHost("GenericMemberConditionalNameWhereItStandsAssembly");
         AddASubtract(host);
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [],
-            [new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(int).ToGneedleType()), new Parameter(typeof(bool).ToGneedleType())],
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [],
+            [new Parameter(typeof(int).ToIType()), new Parameter(typeof(int).ToIType()), new Parameter(typeof(bool).ToIType())],
             MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.InvokeAMemberWhichAConditionNamesWhereItStands)));
 
@@ -255,7 +255,7 @@ public partial class PointerTests
     public void A_Delegate_Of_A_Member_Of_A_Generic_Type_Runs_The_Member()
     {
         var host = NewRunnableGenericHost("GenericMemberDelegateAssembly");
-        var method = host.AddMethod("Run", typeof(ThisMethodTemplates.IntBinaryOp).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(ThisMethodTemplates.IntBinaryOp).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(ThisMethodTemplates), nameof(ThisMethodTemplates.GetInstanceMethodDelegate)));
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
@@ -268,14 +268,14 @@ public partial class PointerTests
     public void A_Property_Of_A_Generic_Type_Reads_And_Writes_It()
     {
         var host = NewRunnableGenericHost("GenericMemberPropertyAssembly");
-        var read = host.AddMethod("Read", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var read = host.AddMethod("Read", typeof(int).ToIType(), [], [], MethodFlags.Public);
         read.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.ReadInstanceProperty)));
 
         var call = ((MethodHandler) read).Source.Body.Instructions.First(instruction => instruction.Operand is MethodReference {Name: "get_Prop"});
         Assert.That(((MethodReference) call.Operand).DeclaringType, Is.InstanceOf<GenericInstanceType>(),
             "the accessor is called on the definition of the generic type rather than on the instantiation of it.");
 
-        var write = host.AddMethod("Write", typeof(void).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var write = host.AddMethod("Write", typeof(void).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         write.SetBody(Template(typeof(ThisMemberTemplates), nameof(ThisMemberTemplates.WriteInstanceProperty)));
 
         var type = LoadHostOf(host.AssemblyHandler.Assembly, host).MakeGenericType(typeof(int));
@@ -309,7 +309,7 @@ public partial class PointerTests
         baseInstance.GenericArguments.Add(host.Source.GenericParameters[0]);
         host.Source.BaseType = baseInstance;
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod)));
 
         var type = LoadHostOf(asm, host).MakeGenericType(typeof(int));
@@ -392,7 +392,7 @@ public partial class PointerTests
     public void A_Member_Of_A_Generic_Base_Of_A_Generic_Base_Is_Called_On_The_Instantiation_Which_The_Chain_Names()
     {
         var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleMemberAssembly", AddCalcToTheGenericBase);
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod)));
 
         var call = ((MethodHandler) method).Source.Body.Instructions
@@ -414,7 +414,7 @@ public partial class PointerTests
     public void A_Member_Of_A_Generic_Base_Of_A_Generic_Base_Of_An_Open_Type_Is_Called_On_The_Instantiation_Which_Names_The_Parameter()
     {
         var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleOfAnOpenTypeAssembly", AddCalcToTheGenericBase, theHostDeclaresTheParameter: true);
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethod)));
 
         var call = ((MethodHandler) method).Source.Body.Instructions
@@ -441,7 +441,7 @@ public partial class PointerTests
         // instantiation which the chain names, which is what the argument of the instantiation is, so the member which
         // the delegate describes is found rather than refused.
         var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleSignatureAssembly", AddEchoToTheGenericBase);
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.ThisMethodOfABaseWhichNamesTheParameter)));
 
         var call = ((MethodHandler) method).Source.Body.Instructions
@@ -467,7 +467,7 @@ public partial class PointerTests
         // definition of the base, and the walk which reaches it through `Base` is handed the instantiation which the
         // type being woven derives from, so the member is found and called on that instantiation rather than refused.
         var host = NewHostWhichDerivesFromAnInstantiationOfAGenericType("BaseSignatureOfAnInstantiationAssembly");
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseMethodOfABaseWhichNamesTheParameter)));
 
         var call = ((MethodHandler) method).Source.Body.Instructions
@@ -495,7 +495,7 @@ public partial class PointerTests
         // of the base which takes the parameter of it is the one which takes an `int`, so the member is found and the
         // call names that instantiation rather than the definition of the base, which stands open.
         var host = NewHostWhichDerivesFromAnInstantiationOfAGenericType("BaseCallOfAnInstantiationAssembly");
-        var method = host.AddMethod("Echo", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Echo", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(DefaultMethodBody.CallFromBase);
 
         var call = ((MethodHandler) method).Source.Body.Instructions.Select(instruction => instruction.Operand).OfType<MethodReference>()
@@ -518,7 +518,7 @@ public partial class PointerTests
     public void A_Member_Of_A_Generic_Base_Of_A_Generic_Base_Is_Called_On_The_Instantiation_Through_This()
     {
         var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleThisMemberAssembly", AddCalcToTheGenericBase);
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.ThisMethodOfABaseOfABase)));
 
         var call = ((MethodHandler) method).Source.Body.Instructions
@@ -541,7 +541,7 @@ public partial class PointerTests
     {
         var host = NewHostWhichDerivesFromAGenericBaseOfAGenericBase("GenericBaseOfAMiddleFieldAssembly",
             (baseDef, mod) => baseDef.Fields.Add(new FieldDefinition("Value", FieldAttributes.Public, mod.TypeSystem.Int32)));
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BaseFieldGet)));
 
         var read = ((MethodHandler) method).Source.Body.Instructions.First(instruction => instruction.OpCode == OpCodes.Ldfld);
@@ -570,7 +570,7 @@ public partial class PointerTests
             baseDef.Properties.Add(new PropertyDefinition("Prop", PropertyAttributes.None, mod.TypeSystem.Int32) {GetMethod = getter});
         });
 
-        var method = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public);
+        var method = host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public);
         method.SetBody(Template(typeof(BaseTemplates), nameof(BaseTemplates.BasePropertyGet)));
 
         var call = ((MethodHandler) method).Source.Body.Instructions

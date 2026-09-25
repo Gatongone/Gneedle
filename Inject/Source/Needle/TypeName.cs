@@ -87,6 +87,7 @@ public readonly struct TypeName : IEquatable<TypeName>
     /// <item><see cref="GenericParameterType"/></item>
     /// <item><see cref="NongenericType"/></item>
     /// <item><see cref="GenericType"/></item>
+    /// <item><see cref="ReferencedType"/></item>
     /// </list>
     /// </exception>
     /// <param name="type">The name owner.</param>
@@ -106,6 +107,11 @@ public readonly struct TypeName : IEquatable<TypeName>
             case NongenericType nonGenericParameterType:
                 // Non generic type just return the name or full name from the type.
                 Name = nonGenericParameterType.Type.FullName ?? nonGenericParameterType.Type.Name;
+                break;
+            case ReferencedType referencedType:
+                // The type which a reference of the metadata names is described by that very name, which is the one
+                // every other description of the same type is read as well.
+                Name = referencedType.TypeName;
                 break;
             case GenericType parameterizedGenericType:
                 var arguments = parameterizedGenericType.GenericArguments;

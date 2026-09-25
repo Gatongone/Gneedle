@@ -344,8 +344,8 @@ public class AroundBodyTests
         // template is written one slot after the one which the template names, whichever form of the opcode carries it.
         var assembly = Assembly.Create("AroundBodyWideArgumentsAssembly");
         var host = AddAHost(assembly);
-        var intType = typeof(int).ToGneedleType();
-        host.AddMethod(".ctor", typeof(void).ToGneedleType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
+        var intType = typeof(int).ToIType();
+        host.AddMethod(".ctor", typeof(void).ToIType(), [], [], MethodFlags.Public).SetBody(DefaultMethodBody.CallFromBase);
 
         var method = host.AddMethod("Number", intType, [],
             [new Parameter(intType), new Parameter(intType), new Parameter(intType), new Parameter(intType)],
@@ -368,7 +368,7 @@ public class AroundBodyTests
         // region without a handler would hand back by reading nothing off the stack.
         var assembly = Assembly.Create("AroundBodyCatchAssembly");
         var host = AddAHost(assembly);
-        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var run = host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
         run.AroundBody(Template(typeof(AroundTemplates), nameof(AroundTemplates.ProceedInsideACatch)));
 
@@ -458,7 +458,7 @@ public class AroundBodyTests
         // method already held: the throwing body which a method is added with, which the call reaches and runs.
         var assembly = Assembly.Create("AroundBodyOwnArgumentsVoidAssembly");
         var host = AddAHost(assembly);
-        var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var run = host.AddMethod("Run", typeof(void).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
 
         run.AroundBody(() => Proceed.Invoke());
 
@@ -625,7 +625,7 @@ public class AroundBodyTests
         // the member instead: the woven body reaches the same value, and holds no instance which it could not.
         var assembly = Assembly.Create("AroundBodyCapturedValueAssembly");
         var host = AddAHost(assembly);
-        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var run = host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
         var captured = 41;
 
@@ -652,7 +652,7 @@ public class AroundBodyTests
         // member of it, which is read off the instance the delegate holds.
         var assembly = Assembly.Create("AroundBodyInstanceCaptureAssembly");
         var host = AddAHost(assembly);
-        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var run = host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
 
         new InstanceCaptureTemplate(7).Weave(run);
@@ -675,7 +675,7 @@ public class AroundBodyTests
         // type is named rather than woven into a member which the runtime would refuse.
         var assembly = Assembly.Create("AroundBodyUnwritableCaptureAssembly");
         var host = AddAHost(assembly);
-        var run = host.AddMethod("Run", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        var run = host.AddMethod("Run", typeof(void).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         var captured = new object();
 
         var thrown = Assert.Throws<WeavingException>(() => run.AroundBody(() =>
@@ -695,7 +695,7 @@ public class AroundBodyTests
         // belongs to is held by nothing, and there is no value of it to write into the member being woven.
         var assembly = Assembly.Create("AroundBodyInstanceFieldAssembly");
         var host = AddAHost(assembly);
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var one = host.AddMethod("One", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
         one.SetBody(DefaultMethodBody.WithDefaultReturn);
 
@@ -712,7 +712,7 @@ public class AroundBodyTests
         // against values which are not there.
         var assembly = Assembly.Create("AroundBodyProceedInALambdaAssembly");
         var host = AddAHost(assembly);
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
 
@@ -744,7 +744,7 @@ public class AroundBodyTests
     {
         var assembly = Assembly.Create("AroundBodyProceedMethodInALambdaAssembly");
         var host = AddAHost(assembly);
-        var intType = typeof(int).ToGneedleType();
+        var intType = typeof(int).ToIType();
         var run = host.AddMethod("Run", intType, [], [new Parameter(intType)], MethodFlags.Public | MethodFlags.Static);
         run.SetBody(DefaultMethodBody.WithDefaultReturn);
 

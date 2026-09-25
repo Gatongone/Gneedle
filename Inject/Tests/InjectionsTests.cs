@@ -21,7 +21,7 @@ public class MarkTypeAttribute : Attribute, ITypeInjector
     public int Priority => 0;
 
     /// <inheritdoc/>
-    public void Inject(Type type, ITypeHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "marked");
+    public void Inject(Type type, ITypeHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToIType(), "marked");
 }
 
 /// <summary>
@@ -122,7 +122,7 @@ public sealed class MarkClassAttribute : Attribute, IClassInjector
     public int Priority => 0;
 
     /// <inheritdoc/>
-    public void Inject(Type type, IClassHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "class");
+    public void Inject(Type type, IClassHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToIType(), "class");
 }
 
 /// <inheritdoc cref="MarkClassAttribute"/>
@@ -133,7 +133,7 @@ public sealed class MarkStructAttribute : Attribute, IStructInjector
     public int Priority => 0;
 
     /// <inheritdoc/>
-    public void Inject(Type type, IStructHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "struct");
+    public void Inject(Type type, IStructHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToIType(), "struct");
 }
 
 /// <inheritdoc cref="MarkClassAttribute"/>
@@ -144,7 +144,7 @@ public sealed class MarkEnumAttribute : Attribute, IEnumInjector
     public int Priority => 0;
 
     /// <inheritdoc/>
-    public void Inject(Type type, IEnumHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToGneedleType(), "enum");
+    public void Inject(Type type, IEnumHandler handler) => handler.AddAttribute(typeof(ObsoleteAttribute).ToIType(), "enum");
 }
 
 /// <summary>
@@ -547,8 +547,8 @@ public class InjectionsTests
         // keeps it, so the attribute is the trace of a weaving which crossed the boundary of the assemblies.
         var built = Assembly.Create("HostOfAnInjectorOfAnotherAssembly");
         var host = AddAHost(built, "Host");
-        var run = host.AddMethod("Run", typeof(int).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
-        run.AddAttribute(typeof(RunBodyAttribute).ToGneedleType());
+        var run = host.AddMethod("Run", typeof(int).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        run.AddAttribute(typeof(RunBodyAttribute).ToIType());
 
         using var written = new MemoryStream();
         built.SaveTo(written);
@@ -967,11 +967,11 @@ public class InjectionsTests
         var second = SwitchHost(handler, "SwitchHostSecond");
         var template = typeof(PointerTests.ThisMemberTemplates).GetMethod(nameof(PointerTests.ThisMemberTemplates.ReadAFieldPerCase))!;
 
-        var firstMethod = first.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var firstMethod = first.AddMethod("Read", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         firstMethod.SetBody(template);
         var firstBody = ((MethodHandler) firstMethod).Source.Body;
 
-        var secondMethod = second.AddMethod("Read", typeof(int).ToGneedleType(), [], [new Parameter(typeof(int).ToGneedleType())], MethodFlags.Public);
+        var secondMethod = second.AddMethod("Read", typeof(int).ToIType(), [], [new Parameter(typeof(int).ToIType())], MethodFlags.Public);
         Assert.DoesNotThrow(() => secondMethod.SetBody(template),
             "the second weave of a template of the assembly itself was refused rather than carried.");
         var secondBody = ((MethodHandler) secondMethod).Source.Body;
@@ -1097,7 +1097,7 @@ public class InjectionsTests
     {
         var handler = (AssemblyHandler) assembly.Handler;
         var injector = (TypeHandler) handler.AddClass("Injector", NS, ClassFlags.Public)
-                                            .WithInterface(typeof(IMethodInjector).ToGneedleType())
+                                            .WithInterface(typeof(IMethodInjector).ToIType())
                                             .GetHandler();
 
         var module = assembly.Source.MainModule;
@@ -1173,7 +1173,7 @@ public class InjectionsTests
     {
         var assembly = Assembly.Create("UntracedAssembly");
         var host = AddAHost(assembly);
-        host.AddMethod("Ping", typeof(void).ToGneedleType(), [], [], MethodFlags.Public | MethodFlags.Static);
+        host.AddMethod("Ping", typeof(void).ToIType(), [], [], MethodFlags.Public | MethodFlags.Static);
         Assert.Multiple(() =>
         {
             Assert.That(((AssemblyHandler) assembly.Handler).RemoveTheWeaver(), Is.False);

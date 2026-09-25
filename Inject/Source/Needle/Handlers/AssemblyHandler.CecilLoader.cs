@@ -45,7 +45,13 @@ partial class AssemblyHandler
                 // Create generic instance.
                 var module = Assembly.Source.MainModule;
                 return ModuleLock.Import(module, parameterTypeDef.Definition).MakeGenericInstanceType(arguments);
-            // The three kinds of a type are the ones this library builds and the only ones anything here reads, and the
+            case ReferencedType referencedType:
+                // The description holds the name of the type and nothing else, so the type is resolved by that name, as
+                // the name which every other reading of a type of the tree is written with is resolved: a name which
+                // the assembly being woven declares is found in its module, and one of an assembly which lies beside
+                // it is found by the runtime. A name which neither holds is refused where it is read.
+                return GetCecilType(referencedType.TypeName).Reference;
+            // The four kinds of a type are the ones this library builds and the only ones anything here reads, and the
             // interface is one a caller can implement: a kind which is none of them is refused by name rather than
             // reported as the fault of the framework, which is what an argument out of range is read as.
             default: throw new WeavingException(string.Format(ErrorMessages.TYPE_IS_OF_A_KIND_WHICH_IS_NOT_ONE, parameterType.GetType().FullName));

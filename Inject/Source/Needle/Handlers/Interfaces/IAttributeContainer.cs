@@ -33,7 +33,7 @@ public static class AttributeExtensions
     extension(IAttributeContainer container)
     {
         /// <inheritdoc cref="IAttributeContainer.ContainsAttribute(IType)"/>
-        public bool ContainsAttribute(Type attributeType) => container.ContainsAttribute(attributeType.ToGneedleType());
+        public bool ContainsAttribute(Type attributeType) => container.ContainsAttribute(attributeType.ToIType());
 
         /// <summary>
         /// Check whether the container carries an attribute of the given type.
@@ -48,7 +48,7 @@ public static class AttributeExtensions
         {
             if (!typeof(Attribute).IsAssignableFrom(attributeType))
                 throw new WeavingException(string.Format(ErrorMessages.TYPE_CANNOT_ASSIGN_TO_TARGET_TYPE, typeof(Attribute)));
-            container.AddAttribute(attributeType.ToGneedleType(), arguments);
+            container.AddAttribute(attributeType.ToIType(), arguments);
         }
 
         /// <summary>
