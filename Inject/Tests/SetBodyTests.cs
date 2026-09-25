@@ -927,6 +927,17 @@ public class SetBodyTests
         /// <inheritdoc/>
         public ITypeHandler DeclaringTypeHandler => throw new NotSupportedException("A handler of a test declares no type.");
 
+        /// <summary>
+        /// The handler stands for no method of the metadata, so it holds no signature which could be read.
+        /// </summary>
+        public IType[] ArgumentTypes => throw new NotSupportedException("A handler of a test reads no signature.");
+
+        /// <inheritdoc cref="ArgumentTypes"/>
+        public GenericParameterType[] GenericParameters => throw new NotSupportedException("A handler of a test reads no signature.");
+
+        /// <inheritdoc cref="ArgumentTypes"/>
+        public IType ReturnType => throw new NotSupportedException("A handler of a test reads no signature.");
+
         /// <inheritdoc/>
         public void SetBody(MethodInfo method) => Bodies.Add(method);
 

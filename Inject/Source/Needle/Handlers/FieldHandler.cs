@@ -21,6 +21,9 @@ internal class FieldHandler(FieldDefinition fieldDef, TypeHandler declaringTypeH
     /// <inheritdoc/>
     public string Name => Source.Name;
 
+    /// <inheritdoc/>
+    public IType FieldType => Source.FieldType.ToIType();
+
     /// <summary>
     /// Get the string representation of the field, which is the declaration of it.
     /// </summary>

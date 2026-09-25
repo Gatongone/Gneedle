@@ -171,6 +171,32 @@ public sealed class GenericType : IType
 }
 
 /// <summary>
+/// The type which a reference of the metadata names, which is what a member of the assembly being woven is described
+/// by.<para/>
+/// The other descriptions of this tree are built from a <see cref="Type"/>, and an assembly which the weaver reads as
+/// metadata holds none: its image may never have been loaded, so the type of a member of it cannot be asked of the
+/// runtime, and what describes the type instead is the name which the reference of it writes. That name is what the
+/// whole tree compares types by as well, because <see cref="TypeName"/> reads a description of either kind as the name
+/// of it: a name and the description which was built from the type of that name are one type, so a type which was read
+/// out of a member is the one which a caller named with <see cref="TypeInfoExtensions.ToIType(Type)"/>, and the
+/// queries of a handler are asked with the two of them alike.
+/// </summary>
+/// <param name="typeName">The full name of the type, written as the metadata writes it: the types a type is nested in are separated by a plus, and the arguments of an instance stand in the brackets of it.</param>
+public sealed class ReferencedType(string typeName) : IType
+{
+    /// <summary>
+    /// Full name of the type.
+    /// </summary>
+    public readonly string TypeName = typeName;
+
+    /// <summary>
+    /// Get type name.
+    /// </summary>
+    /// <returns>Type name.</returns>
+    public override string ToString() => TypeName;
+}
+
+/// <summary>
 /// Type for predefined type definition.
 /// </summary>
 /// <remarks>
@@ -231,6 +257,56 @@ public static class TypeInfoExtensions
     /// <param name="parameters">The parameter info array.</param>
     /// <returns>An array of <see cref="IType"/> representing the parameter types.</returns>
     public static IType[] GetITypes(this ParameterInfo[] parameters) => [.. parameters.Select(p => p.ParameterType.ToIType())];
+
+    /// <summary>
+    /// Read the type which a reference of the metadata names as a description of this tree, which is the inverse of the
+    /// reading which <c>AssemblyHandler.ResolveParameterType</c> does.<para/>
+    /// The type of a member of the assembly being woven is described by the name of the reference alone, because the
+    /// runtime holds no type of an assembly which lies there as metadata: see <see cref="ReferencedType"/>. A parameter
+    /// of a method or of a type is the one exception, because it stands for the type which instantiates it rather than
+    /// for a type of an assembly, and the name of it is what a caller writes in the place of it as well.
+    /// </summary>
+    /// <param name="typeReference">The reference which is read.</param>
+    /// <returns>The description of the type which the reference names.</returns>
+    internal static IType ToIType(this TypeReference typeReference) => typeReference switch
+    {
+        GenericParameter parameter => parameter.ToGenericParameterType(),
+        _                          => new ReferencedType(new TypeName(typeReference).Name)
+    };
+
+    /// <summary>
+    /// Read the parameter which a definition declares as a description of this tree, which holds the name of the
+    /// parameter and the constraints which it declares.<para/>
+    /// The kinds which a constraint names by an attribute of the parameter rather than by a type are written as the
+    /// shapes of this tree which stand for them, because a caller reads them back the same way: <c>where T : class</c>,
+    /// <c>where T : struct</c>, <c>where T : new()</c>, <c>in T</c> and <c>out T</c>. The value kind is one of them and
+    /// it is written as a constraint on <c>System.ValueType</c> as well, which is the type the shape of it carries, so
+    /// that constraint is left out here: it is written again from the shape, and the two would be two constraints of one
+    /// type.
+    /// </summary>
+    /// <param name="parameter">The parameter of a method or of a type which is read.</param>
+    /// <returns>The description of the parameter.</returns>
+    internal static GenericParameterType ToGenericParameterType(this GenericParameter parameter)
+    {
+        // The value kind is written as a constraint on System.ValueType as well, which the shape of it carries, so that
+        // constraint is left out of the list below where the kind is named: it is written again from the shape.
+        var isValueKind = parameter.HasNotNullableValueTypeConstraint;
+
+        var constraints = new List<Constraint>();
+
+        if (parameter.HasReferenceTypeConstraint) constraints.Add(Constraint.Class);
+        if (parameter.IsCovariant) constraints.Add(Constraint.Out);
+        if (parameter.IsContravariant) constraints.Add(Constraint.In);
+        if (isValueKind) constraints.Add(Constraint.Struct);
+        else if (parameter.HasDefaultConstructorConstraint) constraints.Add(Constraint.New);
+
+        constraints.AddRange(parameter.Constraints
+            .Select(constraint => constraint.ConstraintType)
+            .Where(constraintType => !(isValueKind && constraintType.FullName == typeof(ValueType).FullName))
+            .Select(constraintType => Constraint.FromType(constraintType.ToIType())));
+
+        return new GenericParameterType(parameter.Name, [.. constraints]);
+    }
 
     /// <summary>
     /// Create Generic type definition from generic parameters.

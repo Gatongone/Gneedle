@@ -17,6 +17,15 @@ public interface IFieldHandler : IAttributeContainer
     string Name { get; }
 
     /// <summary>
+    /// Type of the value which the field holds, which is described by <see cref="ReferencedType"/> where the assembly
+    /// being woven declares the type, and by <see cref="GenericParameterType"/> where it stands for a generic parameter
+    /// of the type which declares the field.<para/>
+    /// The type is the one which the definition declares, so it is the description which a decorator describes the
+    /// field with as well, and the two are read as one type by the names of the tree.
+    /// </summary>
+    IType FieldType { get; }
+
+    /// <summary>
     /// Gets the handler of the declaring type.
     /// </summary>
     ITypeHandler DeclaringTypeHandler { get; }

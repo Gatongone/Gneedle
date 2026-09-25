@@ -25,6 +25,16 @@ public interface IPropertyHandler : IAttributeContainer
     string FullName { get; }
 
     /// <summary>
+    /// Type of the value which the property reads and writes, which is described by <see cref="ReferencedType"/> where
+    /// the assembly being woven declares the type, and by <see cref="GenericParameterType"/> where it stands for a
+    /// generic parameter of the type which declares the property.<para/>
+    /// An indexer holds the type of the value which it reads and writes here as well, and the types which it is indexed
+    /// by are the types of the parameters of its accessors rather than of the property, so they are read off the getter
+    /// or the setter through <see cref="GetGetter"/> and <see cref="GetSetter"/>.
+    /// </summary>
+    IType PropertyType { get; }
+
+    /// <summary>
     /// Handler of the type which declares the property.
     /// </summary>
     ITypeHandler DeclaringTypeHandler { get; }

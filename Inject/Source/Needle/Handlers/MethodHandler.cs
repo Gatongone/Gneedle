@@ -63,6 +63,15 @@ internal sealed partial class MethodHandler : IMethodHandler
     ITypeHandler IMethodHandler.DeclaringTypeHandler => DeclaringTypeHandler;
 
     /// <inheritdoc/>
+    public GenericParameterType[] GenericParameters => [.. Source.GenericParameters.Select(parameter => parameter.ToGenericParameterType())];
+
+    /// <inheritdoc/>
+    public IType[] ArgumentTypes => [.. Source.Parameters.Select(parameter => parameter.ParameterType.ToIType())];
+
+    /// <inheritdoc/>
+    public IType ReturnType => Source.ReturnType.ToIType();
+
+    /// <inheritdoc/>
     public bool ContainsAttribute(IType attributeType) => Source.CustomAttributes.Any(attribute => TypeName.HasSameName(attribute.AttributeType, attributeType));
 
     /// <inheritdoc/>

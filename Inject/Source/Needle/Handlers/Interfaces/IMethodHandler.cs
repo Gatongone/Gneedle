@@ -26,6 +26,39 @@ public interface IMethodHandler : IAttributeContainer
     ITypeHandler DeclaringTypeHandler { get; }
 
     /// <summary>
+    /// Parameters which the method declares, in the order in which it declares them, which is none of them for a
+    /// method which declares none.<para/>
+    /// A parameter of a method stands for whatever instantiates the method, so it is described by
+    /// <see cref="GenericParameterType"/>, which holds the name of the parameter and the constraints which it declares:
+    /// the kinds which a constraint names by an attribute of the parameter rather than by a type are described by the
+    /// shapes of this tree which stand for them, which are <see cref="Constraint.Class"/>, <see cref="Constraint.Struct"/>,
+    /// <see cref="Constraint.New"/>, <see cref="Constraint.In"/> and <see cref="Constraint.Out"/>. The types which
+    /// <see cref="ArgumentTypes"/> and <see cref="ReturnType"/> hold name those parameters where one of them stands in
+    /// them, so that the signature of a method which declares parameters of its own is whole.
+    /// </summary>
+    GenericParameterType[] GenericParameters { get; }
+
+    /// <summary>
+    /// Types of the arguments which the method takes, in the order in which it declares them.<para/>
+    /// The types are read off the definition rather than off a runtime type of the method, so a type of the assembly
+    /// being woven is described by the name which the metadata writes for it: see <see cref="ReferencedType"/>. A
+    /// parameter which stands for a generic parameter of the method, or of the type which declares it, is the one the
+    /// name of that parameter describes, which is the shape a caller names it with as well. The types are the ones
+    /// which the definition declares, so they can be handed to <see cref="IMethodQuery.GetMethod(string, IType[])"/>,
+    /// which reads a type of either description by the name of it.
+    /// </summary>
+    IType[] ArgumentTypes { get; }
+
+    /// <summary>
+    /// Type of the value which the method hands back, which is described by <see cref="ReferencedType"/> where the
+    /// assembly being woven declares it, and by <see cref="GenericParameterType"/> where it stands for a generic
+    /// parameter of the method or of its declaring type.<para/>
+    /// A method which hands nothing back is described by the type of nothing, which is the type named
+    /// <c>System.Void</c>.
+    /// </summary>
+    IType ReturnType { get; }
+
+    /// <summary>
     /// Set the body of the method from the method which holds the IL to copy.<para/>
     /// The return type of the template becomes the return type of the method, which is a contract of the call rather
     /// than something which is checked against the method: a template which stands for the return type of the member
