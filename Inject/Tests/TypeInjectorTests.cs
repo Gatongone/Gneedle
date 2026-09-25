@@ -167,7 +167,15 @@ public class TypeInjectorTests
 
         var def = ((EnumHandler) enumHandler).Source;
         var valueField = def.Fields.First(f => f.Name == "value__");
-        Assert.That(valueField.FieldType.FullName, Is.EqualTo(typeof(byte).FullName));
+        Assert.Multiple(() =>
+        {
+            Assert.That(valueField.FieldType.FullName, Is.EqualTo(typeof(byte).FullName));
+
+            // The type which the values are held as is read off that field, and it is described the way every type which
+            // is read out of the metadata is.
+            Assert.That(enumHandler.UnderlyingType, Is.TypeOf<ReferencedType>());
+            Assert.That(enumHandler.UnderlyingType.GetTypeName(), Is.EqualTo(typeof(byte).ToIType().GetTypeName()));
+        });
     }
 
     [Test]

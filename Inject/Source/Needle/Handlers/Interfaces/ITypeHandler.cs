@@ -286,9 +286,12 @@ public interface IEnumHandler : ITypeHandler
     EnumFlags Flags { get; }
 
     /// <summary>
-    /// Gets the underlying type of the enum (e.g., int, byte, etc.).
+    /// Type which the values of the enum are held as, which is the type of the field named <c>value__</c> which every
+    /// enum declares: <c>int</c>, <c>byte</c> and the like.<para/>
+    /// The type is read off the definition, so it is described the way the type of any other member of the assembly
+    /// being woven is: see <see cref="ReferencedType"/>.
     /// </summary>
-    Type UnderlyingType { get; }
+    IType UnderlyingType { get; }
 
     /// <summary>
     /// Adds an enum value to the enum type with the specified name and value.

@@ -15,7 +15,7 @@ internal class EnumHandler(AssemblyHandler assemblyHandler, TypeDefinition sourc
     public EnumFlags Flags => Source.ToEnumFlags();
 
     /// <inheritdoc/>
-    public Type UnderlyingType { get; } = Type.GetType(underlyingType.FullName)!;
+    public IType UnderlyingType { get; } = underlyingType.ToIType();
 
     /// <inheritdoc/>
     public void AddEnum(string enumName, object value)
