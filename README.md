@@ -24,8 +24,8 @@ dotnet add package Gneedle.Inject
 Or in the project file, where both lines name the version:
 
 ```xml
-<PackageReference Include="Gneedle.Aspect" Version="0.0.4"/>
-<PackageReference Include="Gneedle.Inject" Version="0.0.4"/>
+<PackageReference Include="Gneedle.Aspect" Version="0.0.5"/>
+<PackageReference Include="Gneedle.Inject" Version="0.0.5"/>
 ```
 
 ### Unity
@@ -37,8 +37,8 @@ The same two are packages of Unity under the names `com.gatongone.gneedle.inject
 ```json
 {
   "dependencies": {
-    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.4",
-    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.4"
+    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.5",
+    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.5"
   }
 }
 ```
@@ -59,8 +59,8 @@ Append following content to `Packages/manifest.json`:
     }
   ],
   "dependencies": {
-    "com.gatongone.gneedle.inject": "0.0.4",
-    "com.gatongone.gneedle.aspect": "0.0.4"
+    "com.gatongone.gneedle.inject": "0.0.5",
+    "com.gatongone.gneedle.aspect": "0.0.5"
   }
 }
 ```
@@ -86,8 +86,8 @@ Append following content to `Packages/manifest.json`:
     }
   ],
   "dependencies": {
-    "com.gatongone.gneedle.inject": "0.0.4",
-    "com.gatongone.gneedle.aspect": "0.0.4"
+    "com.gatongone.gneedle.inject": "0.0.5",
+    "com.gatongone.gneedle.aspect": "0.0.5"
   }
 }
 ```
