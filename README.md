@@ -12,11 +12,151 @@ An aspect weaver usually asks you to learn a language of its own to say what sho
 > [!IMPORTANT]
 > This project is still in the early stages of development, which means that I may break compatibility in order to fix major bugs or include critical features.
 
-## Inject
+## Install
+
+### NuGet
+
+```
+dotnet add package Gneedle.Aspect
+dotnet add package Gneedle.Inject
+```
+
+Or in the project file, where both lines name the version:
+
+```xml
+<PackageReference Include="Gneedle.Aspect" Version="0.0.4"/>
+<PackageReference Include="Gneedle.Inject" Version="0.0.4"/>
+```
+
+### Unity
+
+The same two are packages of Unity under the names `com.gatongone.gneedle.inject` and `com.gatongone.gneedle.aspect`. The Package Manager reads a package either out of a git repository or out of a registry.
+
+**From Repository:**
+
+```json
+{
+  "dependencies": {
+    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.4",
+    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.4"
+  }
+}
+```
+
+Both lines are written even where only one of the two is used, and it is the aspect weaver that is installed alone. A package that names another names a version of it, and that version is read out of a registry rather than along the path, so the weaver is installed beside the aspect weaver or not at all. This is a `Packages/manifest.json`, that the Package Manager window writes as well: *Add package from git URL* takes the one of the two that is wanted.
+
+**From OpenUPM:**
+
+Append following content to `Packages/manifest.json`:
+
+```json
+{
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": ["com.gatongone"]
+    }
+  ],
+  "dependencies": {
+    "com.gatongone.gneedle.inject": "0.0.4",
+    "com.gatongone.gneedle.aspect": "0.0.4"
+  }
+}
+```
+
+OpenUPM's own command line writes that registry into the manifest and takes the package in one step:
+
+```
+openupm add com.gatongone.gneedle.inject
+openupm add com.gatongone.gneedle.aspect
+```
+
+**From NPMJS:**
+
+Append following content to `Packages/manifest.json`:
+
+```json
+{
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://registry.npmjs.org",
+      "scopes": ["com.gatongone"]
+    }
+  ],
+  "dependencies": {
+    "com.gatongone.gneedle.inject": "0.0.4",
+    "com.gatongone.gneedle.aspect": "0.0.4"
+  }
+}
+```
+
+## Features
+
+An injector is an attribute that implements one of the interfaces of `Gneedle.Inject` and says what to do with the member it is put on. It is applied as the project that declares it is built, so the weaving needs no step of its own.
+
+
+```csharp
+using System;
+using System.Reflection;
+using Gneedle.Inject;
+
+public sealed class LogAttribute(string message) : Attribute, IMethodInjector
+{
+    public int Priority => 0;
+    public void Inject(MethodInfo method, IMethodHandler handler) => handler.AroundBody(() =>
+    {
+        Console.WriteLine($"start: {message}");
+        Proceed.Invoke();
+        Console.WriteLine($"end: {message}");
+    });
+}
+
+public class OrderService
+{
+    [Log("PlaceOrder")]
+    public void PlaceOrder(int id) => Console.WriteLine($"order {id} placed");
+}
+
+new OrderService().PlaceOrder(42);
+```
+
+Output: 
+
+```
+start: PlaceOrder
+order 42 placed
+end: PlaceOrder
+```
+
+`AroundBody` keeps the body that the method already had, moves it to a generated method named `<PlaceOrder>k__Proceed`, and weaves the template around it. `Proceed.Invoke()` is where the original body runs, which is why `order 42 placed` still appears — between the two lines the injector added.
+
+`"PlaceOrder"` was captured by the lambda, so what the lambda captured is read out of the delegate while the injector runs, and the member that is woven carries the string as a constant of its own rather than reaching for the instance the lambda was made from.
+
+The attribute did its work at build time, so nothing of it survives into the assembly you ship. See [What is left in the assembly](#what-is-left-in-the-assembly).
+
+> To replace the body rather than keep it, use `SetBody` instead of `AroundBody`. See [Replace a body instead of wrapping it](#replace-a-body-instead-of-wrapping-it).
+
+Two properties change what is done with a project: `<Aspect>disable</Aspect>` leaves a project out of the weaving entirely, and `<KeepWeaver>true</KeepWeaver>` keeps the attributes and the reference in the assembly. Both are described under [Project properties](#project-properties).
+
+## Concepts
+
+| Term | What it means |
+|------|---------------|
+| **template** | The ordinary C# method, or lambda, whose body is woven into the target. It is never meant to run as it is written. |
+| **placeholder** | `This`, `Base`, `Instance`, `Static`, `Proceed` — calls into `Gneedle.Inject` that *name* a member of the target. The weaver replaces each of them with the member it names. |
+| **injector** | An attribute that implements one of the interfaces of `Gneedle.Inject` and says what to do with the member it is put on. |
+| **target** | The member, or the type, that is being woven. |
+| **weaving** | Opening an assembly, reading and rewriting its metadata, and writing the result back. |
+| **proceed** | The body the member already held, which an around template reaches through `Proceed`. |
+| **stub** | A type declared with `[FromAssembly]` that stands in for a type of the assembly being built, which a template cannot reference yet. |
 
 The library is the weaver, and it is usable without the aspect weaver. An assembly is opened or created, its metadata is reached through the handlers, a body is woven from a template, and the result is written back.
 
-### Getting started
+## Recipes
+
+### Weaving from your own entry point
 
 Nothing of `Gneedle.Aspect` is needed to weave. An assembly that is already built is opened, its metadata is reached through the handlers, its `Compute` body is replaced by the template, and the result is written back over it:
 
@@ -38,10 +178,6 @@ assembly.SaveTo("path/to/AnAssembly.dll");
 
 An assembly is built the same way rather than read: `Assembly.Create("MyAssembly")` hands back one that holds nothing, whose types and members are described through the same handlers, and `Load()` loads it into the process once it is written. The same library therefore serves a generator that produces an assembly, a tool that rewrites one, and the build that the task drives.
 
-To drive the weaving from a build instead, install [the aspect weaver](#aspect) and put an attribute on the member — there is no entry point of your own to write.
-
-### Weaving from your own entry point
-
 `Injections.Apply` reads the injectors from the attributes of an assembly, applies each of them to the member it names, and hands back the image which holds the result — or, where an injector reported something, the image it was given, because a run which reported anything leaves an assembly woven in part, which no caller could tell from one which was woven whole:
 
 ```csharp
@@ -53,6 +189,8 @@ if (changed) File.WriteAllBytes("path/to/AnAssembly.dll", woven);
 The attributes and the reference to the weaver are taken out of the image by default, which is what leaves the woven assembly standing alone; `removesTheWeaver: false` keeps them.
 
 An assembly that no file holds — one an editor has just compiled in memory, or one loaded from a network stream — is given to the weaving through `AssemblyLoader.LoadFromBytes`, which loads the assembly from its image and remembers the bytes, and `Remember` does the same for an assembly the runtime loaded in another way. That image is what a type of such an assembly is resolved against, which is how a template names a type of it through [a stub](#referring-to-a-type-you-cannot-reference). The assemblies of the weaver are answered to such an assembly as well, and to one of those alone: the weaver that its templates were compiled against is resolved to the weaver which is weaving it, rather than to a copy that would have to lie beside the image.
+
+To drive the weaving from a build instead, install [the aspect weaver](#quick-start) and put an attribute on the member — there is no entry point of your own to write.
 
 ### Weaving a body from a template
 
@@ -82,6 +220,47 @@ host.AddMethod("Compute", MethodFlags.Public)
 ```
 
 A default body is asked for the same way, when no template is needed: `WithBody(DefaultMethodBody.ThrowException)`, `WithBody(DefaultMethodBody.WithDefaultReturn)`, or `WithBody(DefaultMethodBody.CallFromBase)` to hand the call to the type that the target derives from.
+
+### Replace a body instead of wrapping it
+
+`SetBody` discards the body the member already had, where `AroundBody` keeps it and lets the template `Proceed` into it:
+
+```csharp
+public sealed class ThrowBodyAttribute : Attribute, IMethodInjector
+{
+    public int Priority => 0;
+    public void Inject(MethodInfo method, IMethodHandler handler) => handler.SetBody(DefaultMethodBody.ThrowException);
+}
+
+public class Target
+{
+    [ThrowBody] public void Weave() => Console.WriteLine("the body ran unchanged");
+}
+```
+
+### Apply an injector to every method of a type
+
+A type-level injector is read once for the type, and reaches every member of it through the handler:
+
+```csharp
+public sealed class LogAllAttribute(string message) : Attribute, ITypeInjector
+{
+    public int Priority => 0;
+    public void Inject(Type type, ITypeHandler handler)
+    {
+        foreach (var method in handler.GetMethods())
+            method.AroundBody(() =>
+            {
+                Console.WriteLine(message);
+                Proceed.Invoke();
+            });
+    }
+}
+```
+
+A type-level injector can also add members, interfaces and nested types, which the `I*Handler` interfaces describe.
+
+## Reference
 
 ### Placeholders
 
@@ -168,35 +347,9 @@ host.GetMethod("Write", typeof(void).ToIType())!
 
 The delegate is what the weaving is given, so what the lambda captured is read out of it while the weaving runs, and the member that is woven carries `"Hello World"` as a string of its own rather than reaching for the instance the lambda was made from. What may be captured is settled by what the woven body can hold: a type, a string, an integer or a floating point number of any width, a character, a boolean, an enumeration, and a null of a reference type are written, and a capture of any other type is refused by name rather than woven into a member that would fail when it ran.
 
-### Referring to a type you cannot reference
-
-A template is compiled before the type it will be woven into exists, so it cannot name that type. A stub with the same full name, marked with the name of the assembly that declares the real one, is how the template names it: the weaver resolves the stub to the real type and leaves the assembly of the stub out of the produced one.
-
-```csharp
-[FromAssembly("MyAssembly")]
-public class Stub
-{
-    public int Value;
-}
-```
-
-A stub which is not written under that name names the real type itself, which is what the stubs of an assembly are written with where they are to stand in one namespace of their own:
-
-```csharp
-[FromAssembly("MyAssembly", "My.Namespace.Host")]
-public class HostStub
-{
-    public int Value;
-}
-```
-
-What is named there is the type, and the number of generic parameters the stub declares is added to it: a stub which declares one stands for `Host<T>`, since a type which declares any is named by that number wherever it is named. A type which is nested and whose declaring type declares parameters of its own is not named this way.
-
-## Aspect
+### Injectors
 
 The aspect weaver drives the library from the build that produces the assembly. It is added to a project as a package and needs no entry point of its own: it reads the injectors from the attributes that the assembly declares, applies them to it as it is built, and takes itself back out of the assembly once they have been applied.
-
-### Injectors
 
 An injector is an attribute that implements one of the interfaces of `Gneedle.Inject` and says what to do with the member it is put on. It is applied as the project that declares it is built, so the weaving needs no step of its own. Which member an interface is read for:
 
@@ -277,9 +430,33 @@ Two properties change what is done with a project, and they answer different que
 
 `Aspect` is read out of the project file itself, because the scan of a solution reads the projects that it walks without building them, and a property that comes from an imported file is not in a project's own file. A group of properties that the build reads under a condition is read for the same reason whatever the condition says, so a project that sets `disable` under a condition is a project which is left out of the weaving in every configuration it is built in. The value it is read for is `disable` alone, as the letters are written: any other value, down to another case of the same word, is a project which is woven. `KeepWeaver` is matched without regard to case, and it is passed to the task by the build, so it is an ordinary property: it is set on the command line as well as in the project file.
 
-Neither property is read by the IL post processor that a Unity project is given, so neither is set there; what a Unity project is woven by is under [Unity Editor](#unity-editor).
+Neither property is read by the IL post processor that a Unity project is given, so neither is set there; what a Unity project is woven by is under [Weaving in Unity](#weaving-in-unity).
 
-### Unity editor
+### Referring to a type you cannot reference
+
+A template is compiled before the type it will be woven into exists, so it cannot name that type. A stub with the same full name, marked with the name of the assembly that declares the real one, is how the template names it: the weaver resolves the stub to the real type and leaves the assembly of the stub out of the produced one.
+
+```csharp
+[FromAssembly("MyAssembly")]
+public class Stub
+{
+    public int Value;
+}
+```
+
+A stub which is not written under that name names the real type itself, which is what the stubs of an assembly are written with where they are to stand in one namespace of their own:
+
+```csharp
+[FromAssembly("MyAssembly", "My.Namespace.Host")]
+public class HostStub
+{
+    public int Value;
+}
+```
+
+What is named there is the type, and the number of generic parameters the stub declares is added to it: a stub which declares one stands for `Host<T>`, since a type which declares any is named by that number wherever it is named. A type which is nested and whose declaring type declares parameters of its own is not named this way.
+
+## Unity
 
 A Unity project is not built by MSBuild, so there the aspect weaver is an IL post processor instead of a build task. A post processor is a part of the compilation rather than a step beside it: Unity hands it the image of an assembly that it has just compiled, takes back the image that it answers with, and writes that one. So the weaving is the same for the editor and for a player, no target is written into anything, and nothing has to be run after the build.
 
@@ -316,94 +493,6 @@ A delegate which names a member that it does not describe — one which hands ba
 * **Nothing** of the weaver is needed by the assembly once it has been woven, so the weaver does not become a dependency of what you ship.
 
 Gneedle is built on [Mono.Cecil](https://github.com/jbevain/cecil), which reads the metadata of an assembly and writes it back. Gneedle decides what each instruction becomes; Mono.Cecil is what turns that into an assembly the runtime reads.
-
-## Install
-
-### NuGet
-
-```
-dotnet add package Gneedle.Aspect
-```
-
-`Gneedle.Inject` is a dependency of it, so the weaver that the task weaves with is installed along with it. It is also the package to reference on its own, and the only one, when you drive the weaving yourself or when you write an injector, because the interfaces that one implements are declared in it:
-
-```
-dotnet add package Gneedle.Inject
-```
-
-Or in the project file, where both lines name the version:
-
-```xml
-<PackageReference Include="Gneedle.Aspect" Version="0.0.4"/>
-<PackageReference Include="Gneedle.Inject" Version="0.0.4"/>
-```
-
-### Unity
-
-The same two are packages of Unity as well, under the names `com.gatongone.gneedle.inject` and `com.gatongone.gneedle.aspect`. The Package Manager reads a package either out of a git repository or out of a registry, and both of them are open to these two.
-
-**From the repository.** A package is installed by the path it lies at, and a revision may be named after that path, so that what is installed is held to that revision:
-
-```json
-{
-  "dependencies": {
-    "com.gatongone.gneedle.inject": "https://github.com/Gatongone/Gneedle.git?path=Inject/Unity#v0.0.4",
-    "com.gatongone.gneedle.aspect": "https://github.com/Gatongone/Gneedle.git?path=Aspect/Unity#v0.0.4"
-  }
-}
-```
-
-Both lines are written even where only one of the two is used, and it is the aspect weaver that is installed alone. A package that names another names a version of it, and that version is read out of a registry rather than along the path, so the weaver is installed beside the aspect weaver or not at all. This is a `Packages/manifest.json`, that the Package Manager window writes as well: *Add package from git URL* takes the one of the two that is wanted.
-
-**From npm or OpenUPM.** The same two are published to npm, and [OpenUPM](https://openupm.com/) builds a package out of the tags of the repository and serves what it builds from a registry of its own. Both are read through a scoped registry, and what is installed this way is held at the version that is named until another is, which is the difference between the two ways in: a package is taken from a registry by version, and from a repository by revision:
-
-```json
-{
-  "scopedRegistries": [
-    {
-      "name": "OpenUPM",
-      "url": "https://package.openupm.com",
-      "scopes": ["com.gatongone"]
-    }
-  ],
-  "dependencies": {
-    "com.gatongone.gneedle.inject": "0.0.4",
-    "com.gatongone.gneedle.aspect": "0.0.4"
-  }
-}
-```
-
-The same block with `NPMJS` in place of `OpenUPM`, and `https://registry.npmjs.org` in place of that URL, reads the two out of the registry of npm. OpenUPM's own command line writes that registry into the manifest and takes the package in one step:
-
-```
-openupm add com.gatongone.gneedle.inject
-openupm add com.gatongone.gneedle.aspect
-```
-
-## Test
-
-The tests of the weaver and of the build task are run with `dotnet test`, from the root of the repository, and each project is built for every framework it names:
-
-```
-dotnet test Inject/Tests/Gneedle.Inject.Test.csproj    # the weaver, built for net6.0 and net472
-dotnet test Aspect/Tests/Gneedle.Aspect.Test.csproj    # the build task, built for net472
-```
-
-The tests of the weaver are run on `net6.0` by the runtime they were built for. A machine that carries a newer one rather than the 6.0 runtime starts its host only when it is told to move forward to the runtime it holds:
-
-```
-DOTNET_ROLL_FORWARD=LatestMajor dotnet test Inject/Tests/Gneedle.Inject.Test.csproj
-```
-
-The tests read the templates back as the IL that the compiler wrote for them, and which IL it is depends on whether the build of the assembly of tests was optimized: a temporary which the optimizer folds into the use of it is no local of the body which stands before a call, and the read of it is not there to be counted. The shapes which the assertions name are the ones a build without the optimizer writes, which is what the project asks for in whichever configuration the tests are built; the shapes which a release build of a consumer holds are the ones the optimizer writes, which is what the same tests are run against a second time, with the symbols asked for because the configuration writes none and a build which carries none folds the temporaries of a template into the uses of them. Which of the two legs an assembly was built as is named in its metadata, and a test of the suite reads it back: a build which does not answer the flag, or one which was left behind by the other leg, is reported rather than passing as a shape which it does not hold:
-
-```
-DOTNET_ROLL_FORWARD=LatestMajor dotnet test Inject/Tests/Gneedle.Inject.Test.csproj -c Release -p:Optimize=true -p:DebugSymbols=true
-```
-
-The tests of the post processor are beside it in the package of Unity rather than here, because the compilation pipeline which those tests are written against is one which only an editor has; they are run by the test runner of an editor, which [the readme of that package](Aspect/Unity/README.md#tests) describes.
-
-The whole tree is built with `dotnet build Gneedle.sln -c Release`.
 
 ## License
 
