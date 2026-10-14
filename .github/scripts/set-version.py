@@ -1,7 +1,7 @@
 """Write the version which a release is being made of into the files which carry one, or read it back.
 
 A version is named by the tag of the release, and each file which carries one of its own is where its readers find it: a
-package of NuGet takes its version from `Build/Package.props`, a package of Unity takes its version from the
+package of NuGet takes its version from `Package.props`, a package of Unity takes its version from the
 `package.json` which is packed, which is the one OpenUPM reads out of the tree of the tag as well, and the readme of each
 says at which version to install it. So the version has to be in the tree of the tag before the tag is made, and this is
 what writes it there:
@@ -33,9 +33,9 @@ REGISTRY_PLACEHOLDER = r'("com\.gatongone\.gneedle\.(?:inject|aspect)"\s*:\s*")(
 
 # What a version is written into: the text before it, the version itself, and the text after it.
 VERSIONS = [
-    ("Build/Package.props", r"(<Version>)([^<]*)(</Version>)", "<Version>"),
-    ("Build/Package.props", r"(<AssemblyVersion>)([^<]*)(</AssemblyVersion>)", "<AssemblyVersion>"),
-    ("Build/Package.props", r"(<FileVersion>)([^<]*)(</FileVersion>)", "<FileVersion>"),
+    ("Package.props", r"(<Version>)([^<]*)(</Version>)", "<Version>"),
+    ("Package.props", r"(<AssemblyVersion>)([^<]*)(</AssemblyVersion>)", "<AssemblyVersion>"),
+    ("Package.props", r"(<FileVersion>)([^<]*)(</FileVersion>)", "<FileVersion>"),
     ("Inject/Unity/package.json", r'("version"\s*:\s*")([^"]*)(")', "package.json version"),
     ("Aspect/Unity/package.json", r'("version"\s*:\s*")([^"]*)(")', "package.json version"),
     # The aspect package names the inject one, and it names a version of it: a package which is installed with the

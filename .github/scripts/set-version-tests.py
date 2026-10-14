@@ -30,7 +30,7 @@ SCRIPT = REPOSITORY / ".github" / "scripts" / "set-version.py"
 
 # The files the script reads and writes, at the paths it reads them by.
 FILES = [
-    "Build/Package.props",
+    "Package.props",
     "Inject/Unity/package.json",
     "Aspect/Unity/package.json",
     "README.md",
@@ -43,7 +43,7 @@ READMES = ["README.md", "Inject/Unity/README.md", "Aspect/Unity/README.md"]
 
 # The version which the repository names today, which is read out of the file the packages of NuGet are packed from.
 CURRENT = re.search(r"<Version>([^<]*)</Version>",
-                    (REPOSITORY / "Build" / "Package.props").read_text(encoding="utf-8")).group(1)
+                    (REPOSITORY / "Package.props").read_text(encoding="utf-8")).group(1)
 
 # The script under test, which is imported so that the patterns it writes with are the ones the tests assert against.
 SPEC = importlib.util.spec_from_file_location("set_version", SCRIPT)
